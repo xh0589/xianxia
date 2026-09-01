@@ -1,0 +1,1690 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>仙路长青</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗡️</text></svg>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            disabled: true
+        }
+    </script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="p-2 md:p-4 min-h-screen">
+
+    <!-- ==================== 角色创建界面 ==================== -->
+    <div id="char-creation">
+        <div class="max-w-6xl mx-auto bg-gray-800 rounded-xl shadow-2xl border border-gray-700 overflow-hidden">
+            <!-- 头部 -->
+            <div class="bg-gray-900 px-6 py-4 border-b border-gray-700 flex justify-between items-center">
+                <h1 class="text-2xl font-bold text-yellow-500 tracking-widest">【登仙大典】修仙者资质录入</h1>
+                <button onclick="startGame()" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 font-bold py-2 px-8 rounded transition duration-200 text-lg tracking-wider">
+                    踏入仙途
+                </button>
+            </div>
+
+            <div class="p-6">
+                <!-- 姓名与性别 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                        <label class="block text-lg font-bold text-gray-300 mb-3">
+                            <span class="text-yellow-500 mr-2">✦</span>道号 / 姓名
+                        </label>
+                        <input type="text" id="char-name" placeholder="请输入修仙者之名…" maxlength="12"
+                            class="w-full bg-gray-900 border border-gray-600 rounded-lg px-4 py-3 text-white text-lg focus:outline-none focus:border-yellow-500 placeholder-gray-500">
+                        <p class="text-xs text-gray-500 mt-2">名讳将伴随您纵横仙途，最多12字</p>
+                    </div>
+                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                        <label class="block text-lg font-bold text-gray-300 mb-3">
+                            <span class="text-yellow-500 mr-2">✦</span>性别
+                        </label>
+                        <div class="flex gap-4">
+                            <div class="gender-option selected flex-1 bg-gray-800 border-2 border-gray-600 rounded-lg p-4 text-center" id="gender-male" onclick="selectGender('male')">
+                                <div class="gender-indicator mr-2 align-middle"></div>
+                                <span class="text-lg ml-1">♂ 男</span>
+                            </div>
+                            <div class="gender-option flex-1 bg-gray-800 border-2 border-gray-600 rounded-lg p-4 text-center" id="gender-female" onclick="selectGender('female')">
+                                <div class="gender-indicator mr-2 align-middle"></div>
+                                <span class="text-lg ml-1">♀ 女</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <!-- 第一列：主要属性 & 战斗技能 -->
+                    <div class="space-y-8">
+                        <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                            <h2 class="text-lg font-bold text-gray-300 mb-4 border-b border-gray-600 pb-2">主要属性 (Max 100)</h2>
+                            <div class="grid grid-cols-2 gap-4" id="main-attributes-container"></div>
+                        </div>
+                        <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                            <h2 class="text-lg font-bold text-gray-300 mb-4 border-b border-gray-600 pb-2">战斗技能 (Max 100)</h2>
+                            <div class="grid grid-cols-2 gap-4" id="combat-skills-container"></div>
+                        </div>
+                    </div>
+
+                    <!-- 第二列：生活技能 -->
+                    <div class="space-y-8">
+                        <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600 h-full">
+                            <h2 class="text-lg font-bold text-gray-300 mb-4 border-b border-gray-600 pb-2">生活技能 (Max 100)</h2>
+                            <div class="grid grid-cols-2 gap-4" id="life-skills-container"></div>
+                        </div>
+                    </div>
+
+                    <!-- 第三列：灵根系统 -->
+                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600 flex flex-col">
+                        <h2 class="text-lg font-bold text-yellow-500 mb-2 border-b border-gray-600 pb-2">先天灵根 (总和严格100%)</h2>
+                        <p class="text-xs text-gray-400 mb-4">拖动滑块分配占比，或在下方直接输入数字。属性为0时无法觉醒变异灵根。</p>
+                        
+                        <div class="root-slider-container" id="root-slider">
+                            <div class="root-segment bg-metal" id="seg-metal">金</div>
+                            <div class="slider-handle" id="handle-0" data-index="0"></div>
+                            <div class="root-segment bg-wood" id="seg-wood">木</div>
+                            <div class="slider-handle" id="handle-1" data-index="1"></div>
+                            <div class="root-segment bg-water" id="seg-water">水</div>
+                            <div class="slider-handle" id="handle-2" data-index="2"></div>
+                            <div class="root-segment bg-fire" id="seg-fire">火</div>
+                            <div class="slider-handle" id="handle-3" data-index="3"></div>
+                            <div class="root-segment bg-earth" id="seg-earth">土</div>
+                        </div>
+
+                        <div class="space-y-4 mt-4">
+                            <!-- 金 (雷) -->
+                            <div class="bg-gray-800 p-3 rounded border border-gray-700 relative overflow-hidden">
+                                <div class="absolute left-0 top-0 bottom-0 w-1 bg-yellow-500"></div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="font-bold text-yellow-500">金灵根</span>
+                                    <div class="flex items-center">
+                                        <input type="number" id="input-metal" class="root-input w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-center text-yellow-400 font-bold" data-index="0">
+                                        <span class="ml-1 text-gray-400">%</span>
+                                    </div>
+                                </div>
+                                <label class="flex items-center text-sm text-gray-300 cursor-pointer">
+                                    <input type="checkbox" id="mut-thunder" class="mr-2 form-checkbox h-4 w-4 text-purple-500 rounded focus:ring-purple-500 bg-gray-700 border-gray-600">
+                                    <span class="text-purple-400">觉醒异变：雷 (需金>0)</span>
+                                </label>
+                            </div>
+                            <!-- 木 (风) -->
+                            <div class="bg-gray-800 p-3 rounded border border-gray-700 relative overflow-hidden">
+                                <div class="absolute left-0 top-0 bottom-0 w-1 bg-green-500"></div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="font-bold text-green-500">木灵根</span>
+                                    <div class="flex items-center">
+                                        <input type="number" id="input-wood" class="root-input w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-center text-green-400 font-bold" data-index="1">
+                                        <span class="ml-1 text-gray-400">%</span>
+                                    </div>
+                                </div>
+                                <label class="flex items-center text-sm text-gray-300 cursor-pointer">
+                                    <input type="checkbox" id="mut-wind" class="mr-2 form-checkbox h-4 w-4 text-teal-400 rounded focus:ring-teal-500 bg-gray-700 border-gray-600">
+                                    <span class="text-teal-300">觉醒异变：风 (需木>0)</span>
+                                </label>
+                            </div>
+                            <!-- 水 (冰) -->
+                            <div class="bg-gray-800 p-3 rounded border border-gray-700 relative overflow-hidden">
+                                <div class="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="font-bold text-blue-500">水灵根</span>
+                                    <div class="flex items-center">
+                                        <input type="number" id="input-water" class="root-input w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-center text-blue-400 font-bold" data-index="2">
+                                        <span class="ml-1 text-gray-400">%</span>
+                                    </div>
+                                </div>
+                                <label class="flex items-center text-sm text-gray-300 cursor-pointer">
+                                    <input type="checkbox" id="mut-ice" class="mr-2 form-checkbox h-4 w-4 text-cyan-300 rounded focus:ring-cyan-500 bg-gray-700 border-gray-600">
+                                    <span class="text-cyan-200">觉醒异变：冰 (需水>0)</span>
+                                </label>
+                            </div>
+                            <!-- 火 -->
+                            <div class="bg-gray-800 p-3 rounded border border-gray-700 relative overflow-hidden">
+                                <div class="absolute left-0 top-0 bottom-0 w-1 bg-red-500"></div>
+                                <div class="flex justify-between items-center">
+                                    <span class="font-bold text-red-500">火灵根</span>
+                                    <div class="flex items-center">
+                                        <input type="number" id="input-fire" class="root-input w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-center text-red-400 font-bold" data-index="3">
+                                        <span class="ml-1 text-gray-400">%</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 土 -->
+                            <div class="bg-gray-800 p-3 rounded border border-gray-700 relative overflow-hidden">
+                                <div class="absolute left-0 top-0 bottom-0 w-1 bg-amber-700"></div>
+                                <div class="flex justify-between items-center">
+                                    <span class="font-bold text-amber-600">土灵根</span>
+                                    <div class="flex items-center">
+                                        <input type="number" id="input-earth" class="root-input w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-center text-amber-500 font-bold" data-index="4">
+                                        <span class="ml-1 text-gray-400">%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== 游戏世界界面 ==================== -->
+    <div id="game-world" class="max-w-7xl mx-auto h-[calc(100vh-2rem)] flex bg-gray-800 rounded-xl shadow-2xl border border-gray-700 overflow-hidden">
+        <!-- 左侧导航栏 -->
+        <div class="w-48 flex-shrink-0 bg-gray-900 border-r border-gray-700 flex flex-col">
+            <div class="px-4 py-5 border-b border-gray-700 text-center">
+                <h2 class="text-lg font-bold text-yellow-500 tracking-widest" id="display-name">修仙者</h2>
+                <p class="text-xs text-gray-500 mt-1" id="display-gender">--</p>
+            </div>
+            <nav class="flex-1 py-2 space-y-1 overflow-y-auto">
+                <div class="nav-item active flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="character" onclick="switchPanel('character')">
+                    <span class="text-lg mr-3">🧙</span>人物
+                </div>
+                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="map" onclick="switchPanel('map')">
+                    <span class="text-lg mr-3">🗺️</span>地图
+                </div>
+                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="equipment" onclick="switchPanel('equipment')">
+                    <span class="text-lg mr-3">⚔️</span>装备
+                </div>
+                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="inventory" onclick="switchPanel('inventory')">
+                    <span class="text-lg mr-3">🎒</span>背包
+                </div>
+                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="skills" onclick="switchPanel('skills')">
+                    <span class="text-lg mr-3">📜</span>功法
+                </div>
+                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="quests" onclick="switchPanel('quests')">
+                    <span class="text-lg mr-3">📋</span>任务
+                </div>
+                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="factions" onclick="switchPanel('factions')">
+                    <span class="text-lg mr-3">🏴</span>势力
+                </div>
+                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="beasts" onclick="switchPanel('beasts')">
+                    <span class="text-lg mr-3">🐾</span>灵兽
+                </div>
+                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="house" onclick="switchPanel('house')">
+                    <span class="text-lg mr-3">🏡</span>洞府
+                </div>
+                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="party" onclick="switchPanel('party')">
+                    <span class="text-lg mr-3">👥</span>队伍
+                </div>
+                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="activities" onclick="switchPanel('activities')">
+                    <span class="text-lg mr-3">🎣</span>活动
+                </div>
+                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="calendar" onclick="switchPanel('calendar')">
+                    <span class="text-lg mr-3">📅</span>日程
+                </div>
+                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="settings" onclick="switchPanel('settings')">
+                    <span class="text-lg mr-3">⚙️</span>设置
+                </div>
+            </nav>
+            <div class="px-4 py-3 border-t border-gray-700">
+                <button onclick="backToCreation()" class="w-full text-sm text-gray-500 hover:text-yellow-500 transition py-2">
+                    ↩ 返回创建
+                </button>
+            </div>
+        </div>
+
+        <!-- 主内容区域 -->
+        <div class="flex-1 overflow-y-auto p-6">
+            
+            <!-- ===== 任务追踪栏（v10.0 新增） ===== -->
+            <div id="quest-tracker-bar" class="hidden bg-gray-850 border border-gray-700 rounded-lg p-2 mb-2 flex flex-wrap items-center gap-2 text-xs">
+                <span class="text-yellow-500 font-bold text-sm">📌 追踪</span>
+                <div id="quest-tracker-content" class="flex flex-wrap gap-2 flex-1">
+                    <!-- 动态生成 -->
+                </div>
+                <button onclick="document.getElementById('quest-tracker-bar').classList.add('hidden')" class="text-gray-500 hover:text-white text-lg leading-none">&times;</button>
+            </div>
+            
+            <!-- ===== 人物面板 ===== -->
+            <div id="panel-character" class="panel-content fade-in">
+                <!-- 子标签 -->
+                <div class="flex gap-6 border-b border-gray-700 mb-6">
+                    <div class="sub-tab active pb-2 text-gray-300 font-bold" data-sub="status" onclick="switchSubTab('status')">状态</div>
+                    <div class="sub-tab pb-2 text-gray-300 font-bold" data-sub="attr" onclick="switchSubTab('attr')">属性</div>
+                    <div class="sub-tab pb-2 text-gray-300" data-sub="relations" onclick="switchSubTab('relations')">关系</div>
+                    <div class="sub-tab pb-2 text-gray-300" data-sub="karma" onclick="switchSubTab('karma')">声誉</div>
+                </div>
+
+                <!-- 状态子面板 -->
+                <div id="sub-status" class="sub-content fade-in">
+                    <!-- 状态概览条（v13.2：血量条移至躯体SVG旁，此处不再重复） -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 text-center">
+                            <p class="text-xs text-gray-400 mb-1">⚡ 精力</p>
+                            <div class="w-full h-3 bg-gray-600 rounded overflow-hidden mb-1">
+                                <div class="h-full bg-yellow-400 rounded transition-all duration-300" id="stamina-bar" style="width:100%"></div>
+                            </div>
+                            <span class="text-yellow-400 font-bold text-sm" id="stamina-text">100/100</span>
+                        </div>
+                        <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 text-center">
+                            <p class="text-xs text-gray-400 mb-1">🌀 真气</p>
+                            <div class="w-full h-3 bg-gray-600 rounded overflow-hidden mb-1">
+                                <div class="h-full bg-cyan-400 rounded transition-all duration-300" id="qi-bar" style="width:100%"></div>
+                            </div>
+                            <span class="text-cyan-400 font-bold text-sm" id="qi-text">100/100</span>
+                            <p class="text-xs text-gray-500 mt-1" id="realm-qi-limit"></p>
+                        </div>
+                        <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 text-center">
+                            <p class="text-xs text-gray-400 mb-1">😊 心情</p>
+                            <div class="w-full h-3 bg-gray-600 rounded overflow-hidden mb-1">
+                                <div class="h-full bg-pink-400 rounded transition-all duration-300" id="mood-bar" style="width:80%"></div>
+                            </div>
+                            <span class="text-pink-400 font-bold text-sm" id="mood-text">80/100</span>
+                        </div>
+                        <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 text-center">
+                            <p class="text-xs text-gray-400 mb-1">🏆 境界</p>
+                            <p class="text-yellow-500 font-bold text-lg" id="realm-text">炼气一层</p>
+                            <p class="text-xs text-gray-500" id="realm-essence-display">真元: 0/30</p>
+                            <p class="text-xs text-gray-500" id="realm-tempering-display">历练: 0/5</p>
+                            <p class="text-xs text-purple-400 mt-1" id="char-abilities-display">绝技: 无</p><!-- v13.1 绝技行 -->
+                        </div>
+                        <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 text-center">
+                            <p class="text-xs text-gray-400 mb-1">📍 所在地</p>
+                            <p class="text-blue-400 font-bold text-sm" id="current-location-display">未选择</p>
+                            <button onclick="showCityTravelUI()" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded mt-1">前往城市</button>
+                        </div>
+                        <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 text-center">
+                            <p class="text-xs text-gray-400 mb-1">🕐 时间</p>
+                            <p class="text-orange-400 font-bold text-sm" id="time-display">第1天</p>
+                            <p class="text-xs text-gray-500" id="season-display">春季</p>
+                        </div>
+                        <!-- 飞鸽传书入口（v12.0） -->
+                        <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 text-center relative">
+                            <p class="text-xs text-gray-400 mb-1">📜 飞鸽传书</p>
+                            <p class="text-amber-400 font-bold text-sm" id="mail-quick-status">无新信</p>
+                            <button id="mailInboxBtn" onclick="if(window.MailSystemUI)window.MailSystemUI.openInbox(); else if(window.showMessage)showMessage('飞鸽传书系统未加载','warning');" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-2 py-1 rounded mt-1 relative">打开收件箱</button>
+                        </div>
+                        <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 text-center">
+                            <p class="text-xs text-gray-400 mb-1">👥 队伍</p>
+                            <p class="text-purple-400 font-bold text-sm" id="party-member-count">0/4</p>
+                            <button onclick="window.partySystem.showPartyPanel()" class="text-xs bg-purple-600 hover:bg-purple-500 text-white px-2 py-1 rounded mt-1">管理队伍</button>
+                        </div>
+                        <!-- v18.9 世界日程·角标：距下次拍卖 -->
+                        <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 text-center">
+                            <p class="text-xs text-gray-400 mb-1">📅 日程</p>
+                            <p class="font-bold text-sm" id="calendar-next-auction-badge">无拍卖</p>
+                            <button onclick="switchPanel('calendar')" class="text-xs bg-yellow-600 hover:bg-yellow-500 text-white px-2 py-1 rounded mt-1">查看日程</button>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-6 flex-col lg:flex-row">
+                        <!-- 左侧：人体形态SVG -->
+                        <div class="lg:w-56 flex-shrink-0 flex items-center justify-center">
+                            <div class="bg-gray-700/20 rounded-lg border border-gray-600 p-3">
+                                <!-- v13.2：血量条+伤势摘要移至躯体SVG上方 -->
+                                <div class="flex items-center gap-2 mb-2">
+                                    <span class="text-xs text-gray-400 whitespace-nowrap">❤️ 血量</span>
+                                    <div class="flex-1 h-2.5 bg-gray-600 rounded overflow-hidden">
+                                        <div class="h-full bg-red-400 rounded transition-all duration-300" id="health-bar" style="width:100%"></div>
+                                    </div>
+                                    <span class="text-red-400 font-bold text-xs whitespace-nowrap" id="health-text">100/100</span>
+                                </div>
+                                <p id="wound-status-line" class="text-xs mb-2" style="color:#94a3b8;"></p>
+                                <svg viewBox="0 0 200 420" class="body-svg" id="body-svg">
+<defs>
+                                        <!-- 唯美发光滤镜 -->
+                                        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                                            <feGaussianBlur stdDeviation="2" result="blur"></feGaussianBlur>
+                                            <feMerge>
+                                                <feMergeNode in="blur"></feMergeNode>
+                                                <feMergeNode in="blur" opacity="0.5"></feMergeNode>
+                                                <feMergeNode in="SourceGraphic"></feMergeNode>
+                                            </feMerge>
+                                        </filter>
+                                        <!-- 柔和的渐变背景光晕 -->
+                                        <radialGradient id="bgGlow" cx="50%" cy="40%" r="50%">
+                                            <stop offset="0%" stop-color="#2d4a3d" stop-opacity="0.3"></stop>
+                                            <stop offset="100%" stop-color="transparent"></stop>
+                                        </radialGradient>
+                                    </defs>
+<!-- ===== 躯体SVG v15：木人桩参考图像素边精确描摹·22分区（生成器 temp_trace_mannequin.py）===== -->
+<defs><clipPath id="clipHead"><path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z"/></clipPath><clipPath id="clipTorso"><path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z"/></clipPath><clipPath id="clipAbd"><path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z"/></clipPath></defs>
+<!-- 背景 -->
+<rect width="200" height="420" fill="#0f1724" rx="12"></rect>
+<rect width="200" height="420" fill="url(#bgGlow)" rx="12"></rect>
+<!-- v15 木人桩参考图·像素边精确轮廓·22分区 -->
+<path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z" fill="#22c55e" stroke="none"/>
+<path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z" fill="#22c55e" stroke="none"/>
+<path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z" fill="#22c55e" stroke="none"/>
+<path d="M79.9,173.6 L120.3,173.6 L109.3,198.7 L105.0,203.8 L101.1,204.9 L96.3,204.4 L92.0,200.4 L79.9,173.9Z M67.8,188.3 L71.7,171.9 L78.8,173.3 L92.6,201.8 L76.0,190.5 L67.8,188.6Z M107.6,201.8 L112.1,194.8 L117.4,179.5 L122.0,173.0 L128.2,171.6 L132.4,188.3 L122.2,191.7 L107.6,202.1Z" fill="#22c55e" stroke="none"/>
+<path d="M89.2,72.0 L91.2,63.3 L99.1,68.1 L109.0,63.5 L111.2,72.3 L108.7,78.5 L101.9,82.4 L93.2,80.2 L89.2,72.3Z" fill="#22c55e" stroke="none"/>
+<path d="M57.0,96.6 L59.0,87.5 L63.5,81.0 L70.0,78.8 L77.6,79.9 L74.3,90.6 L67.2,98.8 L57.3,102.5 L57.0,96.8Z M48.0,136.3 L56.5,102.8 L61.6,102.8 L67.8,99.4 L70.6,113.8 L60.7,140.9 L53.1,140.6 L48.0,136.6Z" fill="#22c55e" stroke="none"/>
+<path d="M122.5,79.9 L130.1,78.8 L137.2,81.3 L141.1,87.2 L143.4,98.5 L143.1,102.2 L140.6,102.5 L132.1,98.0 L125.3,89.5 L122.5,80.2Z M129.6,114.1 L132.4,99.4 L138.6,102.8 L143.7,102.8 L152.1,135.8 L148.5,140.0 L139.7,141.1 L129.6,114.3Z" fill="#22c55e" stroke="none"/>
+<path d="M43.2,150.5 L47.7,138.0 L54.2,141.7 L60.2,142.3 L57.6,155.0 L48.0,153.6 L43.2,150.7Z M34.8,192.2 L42.9,151.9 L57.3,156.1 L42.9,195.6 L36.7,195.0 L34.8,192.5Z" fill="#22c55e" stroke="none"/>
+<path d="M140.0,142.6 L148.2,140.9 L152.7,138.0 L156.9,149.9 L152.4,153.6 L142.8,155.0 L140.0,142.8Z M142.8,156.4 L157.5,152.1 L165.4,191.9 L162.6,195.3 L156.9,195.0 L142.8,156.7Z" fill="#22c55e" stroke="none"/>
+<path d="M29.4,218.5 L34.5,194.2 L42.1,196.5 L44.6,204.9 L44.1,219.3 L41.2,217.6 L39.6,209.7 L35.6,214.0 L34.5,222.4 L37.3,233.1 L35.0,234.6 L33.3,233.4 L29.4,223.3 L29.4,218.7Z" fill="#22c55e" stroke="none"/>
+<path d="M155.5,204.9 L158.1,196.5 L165.7,194.2 L170.5,213.4 L170.5,224.1 L165.1,234.6 L162.6,232.9 L165.4,223.0 L164.6,214.5 L160.6,209.7 L158.9,217.9 L156.1,219.0 L155.5,205.2Z" fill="#22c55e" stroke="none"/>
+<path d="M65.8,209.7 L68.6,189.7 L77.1,191.9 L96.6,205.2 L91.5,261.4 L83.6,264.2 L76.2,263.6 L71.4,261.1 L65.8,210.0Z" fill="#22c55e" stroke="none"/>
+<path d="M103.6,205.5 L122.2,192.5 L129.6,189.7 L132.7,190.2 L134.4,204.6 L134.1,219.9 L128.7,261.1 L120.8,264.2 L108.7,261.4 L103.6,205.8Z" fill="#22c55e" stroke="none"/>
+<path d="M71.7,263.1 L82.4,265.0 L91.2,262.5 L90.1,283.9 L81.9,287.6 L76.2,286.8 L71.7,283.4 L71.7,263.3Z M69.7,297.5 L71.4,284.5 L78.5,288.2 L83.9,288.2 L89.8,285.3 L90.9,298.9 L87.5,344.6 L87.5,368.6 L81.6,363.2 L78.2,364.1 L74.8,368.3 L75.1,348.8 L69.7,297.8Z" fill="#22c55e" stroke="none"/>
+<path d="M108.7,263.6 L109.5,262.5 L120.0,265.0 L128.4,262.8 L128.4,283.4 L119.7,287.6 L113.5,286.5 L110.1,283.9 L108.7,263.9Z M109.0,303.7 L110.4,285.3 L116.3,288.2 L122.0,288.2 L128.4,284.5 L130.4,296.9 L129.9,312.7 L125.3,345.2 L125.1,368.0 L122.0,364.1 L118.3,363.2 L112.6,368.6 L112.4,339.0 L109.0,304.0Z" fill="#22c55e" stroke="none"/>
+<path d="M68.6,396.3 L74.8,370.6 L77.4,365.8 L81.9,364.1 L85.3,366.1 L87.8,371.7 L91.2,397.4 L86.7,404.2 L79.3,405.3 L71.2,401.9 L68.6,396.5Z" fill="#22c55e" stroke="none"/>
+<path d="M109.0,397.4 L112.6,370.9 L114.9,366.1 L118.0,364.1 L122.2,365.2 L125.1,369.7 L131.5,396.0 L131.3,399.4 L128.7,402.2 L121.1,405.3 L113.2,403.9 L109.5,400.5 L109.0,397.7Z" fill="#22c55e" stroke="none"/>
+<path class="part" id="body-upperArmL" d="M57.0,96.6 L59.0,87.5 L63.5,81.0 L70.0,78.8 L77.6,79.9 L74.3,90.6 L67.2,98.8 L57.3,102.5 L57.0,96.8Z M48.0,136.3 L56.5,102.8 L61.6,102.8 L67.8,99.4 L70.6,113.8 L60.7,140.9 L53.1,140.6 L48.0,136.6Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左上臂</title></path>
+<path class="part" id="body-upperArmR" d="M122.5,79.9 L130.1,78.8 L137.2,81.3 L141.1,87.2 L143.4,98.5 L143.1,102.2 L140.6,102.5 L132.1,98.0 L125.3,89.5 L122.5,80.2Z M129.6,114.1 L132.4,99.4 L138.6,102.8 L143.7,102.8 L152.1,135.8 L148.5,140.0 L139.7,141.1 L129.6,114.3Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右上臂</title></path>
+<path class="part" id="body-forearmL" d="M43.2,150.5 L47.7,138.0 L54.2,141.7 L60.2,142.3 L57.6,155.0 L48.0,153.6 L43.2,150.7Z M34.8,192.2 L42.9,151.9 L57.3,156.1 L42.9,195.6 L36.7,195.0 L34.8,192.5Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左前臂</title></path>
+<path class="part" id="body-forearmR" d="M140.0,142.6 L148.2,140.9 L152.7,138.0 L156.9,149.9 L152.4,153.6 L142.8,155.0 L140.0,142.8Z M142.8,156.4 L157.5,152.1 L165.4,191.9 L162.6,195.3 L156.9,195.0 L142.8,156.7Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右前臂</title></path>
+<path class="part" id="body-handL" d="M29.4,218.5 L34.5,194.2 L42.1,196.5 L44.6,204.9 L44.1,219.3 L41.2,217.6 L39.6,209.7 L35.6,214.0 L34.5,222.4 L37.3,233.1 L35.0,234.6 L33.3,233.4 L29.4,223.3 L29.4,218.7Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左手</title></path>
+<path class="part" id="body-handR" d="M155.5,204.9 L158.1,196.5 L165.7,194.2 L170.5,213.4 L170.5,224.1 L165.1,234.6 L162.6,232.9 L165.4,223.0 L164.6,214.5 L160.6,209.7 L158.9,217.9 L156.1,219.0 L155.5,205.2Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右手</title></path>
+<path class="part" id="body-thighL" d="M65.8,209.7 L68.6,189.7 L77.1,191.9 L96.6,205.2 L91.5,261.4 L83.6,264.2 L76.2,263.6 L71.4,261.1 L65.8,210.0Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左大腿</title></path>
+<path class="part" id="body-thighR" d="M103.6,205.5 L122.2,192.5 L129.6,189.7 L132.7,190.2 L134.4,204.6 L134.1,219.9 L128.7,261.1 L120.8,264.2 L108.7,261.4 L103.6,205.8Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右大腿</title></path>
+<path class="part" id="body-calfL" d="M71.7,263.1 L82.4,265.0 L91.2,262.5 L90.1,283.9 L81.9,287.6 L76.2,286.8 L71.7,283.4 L71.7,263.3Z M69.7,297.5 L71.4,284.5 L78.5,288.2 L83.9,288.2 L89.8,285.3 L90.9,298.9 L87.5,344.6 L87.5,368.6 L81.6,363.2 L78.2,364.1 L74.8,368.3 L75.1,348.8 L69.7,297.8Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左小腿</title></path>
+<path class="part" id="body-calfR" d="M108.7,263.6 L109.5,262.5 L120.0,265.0 L128.4,262.8 L128.4,283.4 L119.7,287.6 L113.5,286.5 L110.1,283.9 L108.7,263.9Z M109.0,303.7 L110.4,285.3 L116.3,288.2 L122.0,288.2 L128.4,284.5 L130.4,296.9 L129.9,312.7 L125.3,345.2 L125.1,368.0 L122.0,364.1 L118.3,363.2 L112.6,368.6 L112.4,339.0 L109.0,304.0Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右小腿</title></path>
+<path class="part" id="body-footL" d="M68.6,396.3 L74.8,370.6 L77.4,365.8 L81.9,364.1 L85.3,366.1 L87.8,371.7 L91.2,397.4 L86.7,404.2 L79.3,405.3 L71.2,401.9 L68.6,396.5Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左脚</title></path>
+<path class="part" id="body-footR" d="M109.0,397.4 L112.6,370.9 L114.9,366.1 L118.0,364.1 L122.2,365.2 L125.1,369.7 L131.5,396.0 L131.3,399.4 L128.7,402.2 L121.1,405.3 L113.2,403.9 L109.5,400.5 L109.0,397.7Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右脚</title></path>
+<path class="part" id="body-neck" d="M89.2,72.0 L91.2,63.3 L99.1,68.1 L109.0,63.5 L111.2,72.3 L108.7,78.5 L101.9,82.4 L93.2,80.2 L89.2,72.3Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>颈（要害）</title></path>
+<path class="part" id="body-pelvis" d="M79.9,173.6 L120.3,173.6 L109.3,198.7 L105.0,203.8 L101.1,204.9 L96.3,204.4 L92.0,200.4 L79.9,173.9Z M67.8,188.3 L71.7,171.9 L78.8,173.3 L92.6,201.8 L76.0,190.5 L67.8,188.6Z M107.6,201.8 L112.1,194.8 L117.4,179.5 L122.0,173.0 L128.2,171.6 L132.4,188.3 L122.2,191.7 L107.6,202.1Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>盆骨</title></path>
+<path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z" fill="#22c55e" stroke="none"/>
+<path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z" fill="#22c55e" stroke="none"/>
+<path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z" fill="#22c55e" stroke="none"/>
+<path class="part" id="body-brain" d="M40,15.0 L160,15.0 L160,38.355000000000004 L40,38.355000000000004 Z" fill="#22c55e" clip-path="url(#clipHead)" stroke="none"><title>脑（要害）</title></path>
+<path class="part" id="body-head" d="M40,38.355000000000004 L160,38.355000000000004 L160,54.444 L40,54.444 Z" fill="#22c55e" clip-path="url(#clipHead)" stroke="none"><title>头</title></path>
+<path class="part" id="body-eyes-left" d="M90.3,43.5 Q92.8,40.9 96.9,43.5 Q92.8,45.2 90.3,43.5 Z" fill="#22c55e" stroke="#353535" stroke-width="0.5" clip-path="url(#clipHead)"><title>眼</title></path>
+<path class="part" id="body-eyes-right" d="M103.5,43.5 Q106.0,40.9 110.1,43.5 Q106.0,45.2 103.5,43.5 Z" fill="#22c55e" stroke="#353535" stroke-width="0.5" clip-path="url(#clipHead)"><title>眼</title></path>
+<path class="part" id="body-jaw" d="M40,54.444 L160,54.444 L160,68.9 L40,68.9 Z" fill="#22c55e" clip-path="url(#clipHead)" stroke="none"><title>下颌</title></path>
+<path class="part" id="body-chest" d="M40,80.2 L160,80.2 L160,148.2 L40,148.2 Z" fill="#22c55e" clip-path="url(#clipTorso)" stroke="none"><title>胸（要害联动）</title></path>
+<path class="part" id="body-abdomen" d="M40,146.8 L160,146.8 L160,164.488 L40,164.488 Z" fill="#22c55e" clip-path="url(#clipAbd)" stroke="none"><title>腹</title></path>
+<path class="part" id="body-waist" d="M40,164.488 L160,164.488 L160,175.6 L40,175.6 Z" fill="#22c55e" clip-path="url(#clipAbd)" stroke="none"><title>腰</title></path>
+<ellipse class="part" id="body-dantian" cx="100" cy="158.86" rx="8" ry="10" fill="#22c55e" stroke="#4a5a75" stroke-width="1.4" clip-path="url(#clipAbd)"><title>丹田</title></ellipse>
+<path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
+<path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
+<path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
+<path d="M79.9,173.6 L120.3,173.6 L109.3,198.7 L105.0,203.8 L101.1,204.9 L96.3,204.4 L92.0,200.4 L79.9,173.9Z M67.8,188.3 L71.7,171.9 L78.8,173.3 L92.6,201.8 L76.0,190.5 L67.8,188.6Z M107.6,201.8 L112.1,194.8 L117.4,179.5 L122.0,173.0 L128.2,171.6 L132.4,188.3 L122.2,191.7 L107.6,202.1Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
+</svg>
+                            </div>
+                        </div>
+
+                        <!-- 右侧：部位耐久列表 -->
+                        <div class="flex-1">
+                            <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                                <h3 class="text-yellow-500 font-bold mb-4 border-b border-gray-600 pb-2">🩻 躯体耐久</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="body-durability-list">
+                                    <!-- 动态生成 -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 属性子面板 -->
+                <div id="sub-attr" class="sub-content fade-in hidden">
+                    <div class="flex gap-6 flex-col lg:flex-row">
+                        <!-- 左侧：战斗属性 + 回避优先级 -->
+                        <div class="lg:w-72 flex-shrink-0 space-y-6">
+                            <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                                <h3 class="text-red-500 font-bold mb-4 border-b border-gray-600 pb-2">⚔️ 战斗属性</h3>
+                                <div class="space-y-2" id="char-combat-stats"></div>
+                            </div>
+                            <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                                <h3 class="text-orange-500 font-bold mb-3 border-b border-gray-600 pb-2">🛡️ 回避优先级</h3>
+                                <p class="text-xs text-gray-500 mb-3">从上到下依次触发，成功回避后停止判定。后续回避有惩罚累加。</p>
+                                <div class="space-y-2" id="avoidance-priority-list">
+                                    <!-- 动态生成 -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 右侧：原有属性 -->
+                        <div class="flex-1">
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                                    <h3 class="text-yellow-500 font-bold mb-4 border-b border-gray-600 pb-2">主要属性</h3>
+                                    <div class="space-y-3" id="char-main-attr"></div>
+                                </div>
+                                <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                                    <h3 class="text-green-500 font-bold mb-4 border-b border-gray-600 pb-2">战斗技能</h3>
+                                    <div class="space-y-3" id="char-combat-attr"></div>
+                                </div>
+                                <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                                    <h3 class="text-blue-500 font-bold mb-4 border-b border-gray-600 pb-2">生活技能</h3>
+                                    <div class="space-y-3" id="char-life-attr"></div>
+                                </div>
+                                <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                                    <h3 class="text-purple-500 font-bold mb-4 border-b border-gray-600 pb-2">灵根资质</h3>
+                                    <div class="root-slider-container" id="char-root-bar" style="height:28px; margin-bottom:12px;">
+                                        <div class="root-segment bg-metal" id="char-seg-metal">金</div>
+                                        <div class="root-segment bg-wood" id="char-seg-wood">木</div>
+                                        <div class="root-segment bg-water" id="char-seg-water">水</div>
+                                        <div class="root-segment bg-fire" id="char-seg-fire">火</div>
+                                        <div class="root-segment bg-earth" id="char-seg-earth">土</div>
+                                    </div>
+                                    <div class="space-y-1" id="char-roots"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 关系子面板 -->
+                <div id="sub-relations" class="sub-content fade-in hidden">
+                    <div class="space-y-6">
+                        <!-- 门派信息 -->
+                        <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                            <div class="flex justify-between items-center mb-4 border-b border-gray-600 pb-2">
+                                <h3 class="text-yellow-500 font-bold">🏛️ 门派信息</h3>
+                                <div class="flex gap-2">
+                                    <button onclick="openSectTaskUI()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-sm">门派任务</button>
+                                    <button onclick="openFacilityUI()" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-sm">门派设施</button>
+                                    <button onclick="openJoinSectUI()" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-3 py-1 rounded text-sm font-bold">加入门派</button>
+                                </div>
+                            </div>
+                            <div id="sect-info">
+                                <!-- 动态生成 -->
+                            </div>
+                        </div>
+                        
+                        <!-- 人脉关系 -->
+                        <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                            <div class="flex justify-between items-center mb-3 border-b border-gray-600 pb-2">
+                                <h3 class="text-yellow-500 font-bold">👥 人脉关系</h3>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-xs text-gray-500" id="relations-count">共 0 人</span>
+                                    <select id="relations-filter" onchange="renderRelationsPanel()" class="text-xs bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-300">
+                                        <option value="all">全部</option>
+                                        <option value="high">好感优先</option>
+                                        <option value="low">好感最低</option>
+                                        <option value="sect">按门派</option>
+                                        <option value="location">按所在地</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <!-- 搜索框 -->
+                            <div class="mb-3">
+                                <input type="text" id="relations-search" placeholder="🔍 搜索姓名/身份/地点..." oninput="onRelationsSearch(this.value)"
+                                    class="w-full text-sm bg-gray-800 border border-gray-600 rounded px-3 py-1.5 text-gray-200 placeholder-gray-500 focus:border-blue-500 focus:outline-none">
+                            </div>
+                            <!-- 快速筛选标签 -->
+                            <div class="flex flex-wrap gap-1.5 mb-3" id="relations-filter-tags">
+                                <button class="relations-filter-btn text-xs px-2 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 transition"
+                                    data-filter-key="sameLocation" onclick="toggleRelationsFilter('sameLocation')">📍同地点</button>
+                                <button class="relations-filter-btn text-xs px-2 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 transition"
+                                    data-filter-key="canInteract" onclick="toggleRelationsFilter('canInteract')">💬可互动</button>
+                                <button class="relations-filter-btn text-xs px-2 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 transition"
+                                    data-filter-key="hasNewEvents" onclick="toggleRelationsFilter('hasNewEvents')">📜有新事件</button>
+                                <button class="relations-filter-btn text-xs px-2 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 transition"
+                                    data-filter-key="hasRequests" onclick="toggleRelationsFilter('hasRequests')">🙏有请求</button>
+                                <button class="relations-filter-btn text-xs px-2 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 transition"
+                                    data-filter-key="isCompanion" onclick="toggleRelationsFilter('isCompanion')">👫同行</button>
+                                <button class="relations-filter-btn text-xs px-2 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 transition"
+                                    data-filter-key="specialRelation" onclick="toggleRelationsFilter('specialRelation')">💕特殊关系</button>
+                            </div>
+                            <div id="relations-npc-list" class="space-y-2">
+                                <!-- 动态渲染 -->
+                            </div>
+                            <p class="text-sm text-gray-500 mt-4 italic">踏入仙途后，您将在此记录与各方修士、凡人、妖族的恩怨情仇。</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 声誉子面板（善恶值 + 秩序值 + 名气值，标签已改为"声誉"） -->
+                <div id="sub-karma" class="sub-content fade-in hidden">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <!-- 善恶值 -->
+                        <div class="bg-gray-700/30 p-6 rounded-lg border border-gray-600">
+                            <h3 class="text-yellow-500 font-bold mb-4 border-b border-gray-600 pb-2">⚖️ 善恶值</h3>
+                            <div class="text-center mb-4">
+                                <span class="text-4xl font-bold" id="karma-value">0</span>
+                                <p class="text-sm text-gray-400 mt-1" id="karma-label">中立</p>
+                            </div>
+                            <div class="karma-bar relative">
+                                <div class="karma-indicator" id="karma-indicator" style="left:50%"></div>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                <span class="text-red-400">-100 大恶</span>
+                                <span class="text-gray-400">0 中立</span>
+                                <span class="text-green-400">+100 大善</span>
+                            </div>
+                            <p class="text-sm text-gray-400 mt-4 leading-relaxed">
+                                行善积德或为非作歹，皆在一念之间。善恶值将影响NPC对您的态度、可接取的任务以及部分功法修炼。
+                            </p>
+                        </div>
+
+                        <!-- 秩序值 -->
+                        <div class="bg-gray-700/30 p-6 rounded-lg border border-gray-600">
+                            <h3 class="text-yellow-500 font-bold mb-4 border-b border-gray-600 pb-2">📜 秩序值</h3>
+                            <div class="text-center mb-4">
+                                <span class="text-4xl font-bold" id="order-value">0</span>
+                                <p class="text-sm text-gray-400 mt-1" id="order-label">中庸</p>
+                            </div>
+                            <div class="karma-bar relative">
+                                <div class="karma-indicator" id="order-indicator" style="left:50%"></div>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                <span class="text-red-400">-100 混乱</span>
+                                <span class="text-gray-400">0 中庸</span>
+                                <span class="text-blue-400">+100 秩序</span>
+                            </div>
+                            <p class="text-sm text-gray-400 mt-4 leading-relaxed">
+                                    遵循天道秩序或打破常规，秩序值影响宗门关系、坊市折扣以及部分奇遇触发条件。
+                                </p>
+                            </div>
+    
+                            <!-- 名气值 -->
+                            <div class="bg-gray-700/30 p-6 rounded-lg border border-gray-600">
+                                <h3 class="text-yellow-500 font-bold mb-4 border-b border-gray-600 pb-2">📢 名气值</h3>
+                                <div class="text-center mb-4">
+                                    <span class="text-3xl font-bold" id="fame-value">0</span>
+                                    <p class="text-sm text-gray-400 mt-1" id="fame-label">无名之辈</p>
+                                </div>
+                                <div class="w-full h-3 bg-gray-600 rounded overflow-hidden mb-1">
+                                    <div class="h-full bg-purple-500 rounded transition-all duration-300" id="fame-bar" style="width:0%"></div>
+                                </div>
+                                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                                    <span class="text-gray-400">0 无名</span>
+                                    <span class="text-purple-400">50 小有名气</span>
+                                    <span class="text-yellow-400">100 天下皆知</span>
+                                </div>
+                                <p class="text-sm text-gray-400 mt-4 leading-relaxed">
+                                    完成任务、击败强敌可提升名气。名气越高，门派对你的态度越认真。
+                                </p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+            <!-- ===== v18.9 世界日程面板 ===== -->
+            <div id="panel-calendar" class="panel-content fade-in hidden">
+                <h2 class="text-xl font-bold text-yellow-500 mb-2">📅 世界日程</h2>
+                <p class="text-xs text-gray-500 mb-6">第 <span id="calendar-current-day">--</span> 天 · 未来 60 日共 <span id="calendar-upcoming-count">0</span> 项</p>
+                <div id="calendar-list"></div>
+            </div>
+
+            <!-- ===== 队伍面板 ===== -->
+            <div id="panel-party" class="panel-content fade-in hidden">
+                <h2 class="text-2xl font-bold text-yellow-400 mb-6">👥 队伍管理</h2>
+                
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div>
+                        <p class="text-sm text-gray-400">队员数量</p>
+                        <p class="text-lg text-white"><span id="party-member-count-display">0</span> / <span id="party-max-members-display">4</span></p>
+                    </div>
+                    <div id="party-power-display" class="text-lg text-white">总战力: 0</div>
+                </div>
+                
+                <!-- 阵型选择 -->
+                <div class="mb-4">
+                    <label class="block text-sm text-gray-400 mb-2">选择阵型</label>
+                    <select id="formation-select" onchange="changeFormation(this.value)"
+                            class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white">
+                    </select>
+                </div>
+                
+                <!-- 队员列表 -->
+                <div class="mb-4">
+                    <h3 class="text-lg font-bold text-blue-400 mb-2">队员列表</h3>
+                    <div id="party-members-list"></div>
+                </div>
+                
+                <!-- 战斗日志 -->
+                <div>
+                    <h3 class="text-lg font-bold text-purple-400 mb-2">战斗日志</h3>
+                    <div id="party-battle-log" class="max-h-40 overflow-y-auto bg-gray-800 p-2 rounded text-sm text-gray-300">
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== 地图面板 ===== -->
+            <div id="panel-map" class="panel-content fade-in hidden">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold text-yellow-500">🗺️ 仙侠大陆 · 九州舆图</h2>
+                    <div class="text-sm text-gray-400" id="map-info">点击省份或城市查看详情</div>
+                </div>
+                
+                <div class="flex gap-4 flex-col lg:flex-row">
+                    <!-- 左侧：地区/门派列表 -->
+                    <div class="lg:w-64 flex-shrink-0">
+                        <div class="bg-gray-700/30 rounded-lg border border-gray-600 p-3">
+                            <div class="flex items-center gap-2 mb-3 border-b border-gray-600 pb-2">
+                                <h3 class="text-sm font-bold text-yellow-500 flex-1" id="list-title">📍 地区列表</h3>
+                                <button id="btn-mode-region" onclick="switchListMode('region')" class="text-xs bg-yellow-600 text-gray-900 font-bold px-2 py-1 rounded transition">地区</button>
+                                <button id="btn-mode-sect" onclick="switchListMode('sect')" class="text-xs bg-gray-600 text-gray-300 font-bold px-2 py-1 rounded transition">门派</button>
+                            </div>
+                            <div class="space-y-1" id="region-list">
+                                <!-- 动态生成 -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右侧：SVG 地图 -->
+                    <div class="flex-1">
+                    <div class="bg-gray-700/20 rounded-lg border border-gray-600 p-4 relative" style="min-height: 500px;">
+                    <svg viewBox="0 0 800 600" class="w-full" id="world-map">
+                        <!-- 背景 -->
+                        <rect width="800" height="600" fill="#1a1f2e" rx="8"/>
+                        
+                        <!-- 中州 (中部) -->
+                        <polygon class="map-province" id="prov-zhongzhou" points="320,200 480,200 520,280 480,360 320,360 280,280"
+                            fill="#3b4a3b" data-province="中州" onclick="selectProvince('中州')"/>
+                        <text x="400" y="285" fill="#d1d5db" font-size="16" text-anchor="middle" pointer-events="none" font-weight="bold">中州</text>
+                        <g class="map-city" onclick="selectCity('帝都 · 长安', '中州')">
+                            <circle cx="400" cy="250" r="5" fill="#fbbf24"/>
+                            <text x="400" y="238" fill="#fbbf24" font-size="10" text-anchor="middle">长安</text>
+                        </g>
+                        <g class="map-city" onclick="selectCity('洛水城', '中州')">
+                            <circle cx="340" cy="310" r="4" fill="#d1d5db"/>
+                            <text x="340" y="298" fill="#d1d5db" font-size="9" text-anchor="middle">洛水城</text>
+                        </g>
+                        <g class="map-city" onclick="selectCity('太虚山', '中州')">
+                            <circle cx="450" cy="320" r="4" fill="#d1d5db"/>
+                            <text x="450" y="308" fill="#d1d5db" font-size="9" text-anchor="middle">太虚山</text>
+                        </g>
+
+                        <!-- 东荒 (东部) -->
+                        <polygon class="map-province" id="prov-donghuang" points="520,200 720,160 760,280 680,380 520,360"
+                            fill="#2d4a2d" data-province="东荒" onclick="selectProvince('东荒')"/>
+                        <text x="610" y="275" fill="#d1d5db" font-size="16" text-anchor="middle" pointer-events="none" font-weight="bold">东荒</text>
+                        <g class="map-city" onclick="selectCity('青木城', '东荒')">
+                            <circle cx="590" cy="230" r="5" fill="#4ade80"/>
+                            <text x="590" y="218" fill="#4ade80" font-size="10" text-anchor="middle">青木城</text>
+                        </g>
+                        <g class="map-city" onclick="selectCity('蓬莱仙岛', '东荒')">
+                            <circle cx="700" cy="190" r="5" fill="#60a5fa"/>
+                            <text x="700" y="178" fill="#60a5fa" font-size="10" text-anchor="middle">蓬莱岛</text>
+                        </g>
+                        <g class="map-city" onclick="selectCity('东海龙宫', '东荒')">
+                            <circle cx="730" cy="250" r="4" fill="#d1d5db"/>
+                            <text x="730" y="238" fill="#d1d5db" font-size="9" text-anchor="middle">龙宫</text>
+                        </g>
+
+                        <!-- 南疆 (南部) -->
+                        <polygon class="map-province" id="prov-nanjiang" points="280,360 520,360 560,480 440,540 240,520"
+                            fill="#4a2d2d" data-province="南疆" onclick="selectProvince('南疆')"/>
+                        <text x="380" y="445" fill="#d1d5db" font-size="16" text-anchor="middle" pointer-events="none" font-weight="bold">南疆</text>
+                        <g class="map-city" onclick="selectCity('炎城', '南疆')">
+                            <circle cx="370" cy="400" r="5" fill="#f87171"/>
+                            <text x="370" y="388" fill="#f87171" font-size="10" text-anchor="middle">炎城</text>
+                        </g>
+                        <g class="map-city" onclick="selectCity('万毒谷', '南疆')">
+                            <circle cx="290" cy="460" r="4" fill="#d1d5db"/>
+                            <text x="290" y="448" fill="#d1d5db" font-size="9" text-anchor="middle">万毒谷</text>
+                        </g>
+                        <g class="map-city" onclick="selectCity('凤凰巢', '南疆')">
+                            <circle cx="460" cy="470" r="4" fill="#d1d5db"/>
+                            <text x="460" y="458" fill="#d1d5db" font-size="9" text-anchor="middle">凤凰巢</text>
+                        </g>
+
+                        <!-- 西漠 (西部) -->
+                        <polygon class="map-province" id="prov-ximo" points="40,200 280,200 320,360 280,360 120,440 40,380"
+                            fill="#4a402d" data-province="西漠" onclick="selectProvince('西漠')"/>
+                        <text x="170" y="285" fill="#d1d5db" font-size="16" text-anchor="middle" pointer-events="none" font-weight="bold">西漠</text>
+                        <g class="map-city" onclick="selectCity('金城', '西漠')">
+                            <circle cx="160" cy="240" r="5" fill="#fbbf24"/>
+                            <text x="160" y="228" fill="#fbbf24" font-size="10" text-anchor="middle">金城</text>
+                        </g>
+                        <g class="map-city" onclick="selectCity('大漠孤城', '西漠')">
+                            <circle cx="100" cy="320" r="4" fill="#d1d5db"/>
+                            <text x="100" y="308" fill="#d1d5db" font-size="9" text-anchor="middle">大漠孤城</text>
+                        </g>
+                        <g class="map-city" onclick="selectCity('佛国遗址', '西漠')">
+                            <circle cx="220" cy="380" r="4" fill="#d1d5db"/>
+                            <text x="220" y="368" fill="#d1d5db" font-size="9" text-anchor="middle">佛国遗址</text>
+                        </g>
+
+                        <!-- 北冥 (北部) -->
+                        <polygon class="map-province" id="prov-beiming" points="40,200 320,200 280,80 160,40 60,80"
+                            fill="#2d3d4a" data-province="北冥" onclick="selectProvince('北冥')"/>
+                        <text x="175" y="145" fill="#d1d5db" font-size="16" text-anchor="middle" pointer-events="none" font-weight="bold">北冥</text>
+                        <g class="map-city" onclick="selectCity('冰原城', '北冥')">
+                            <circle cx="160" cy="120" r="5" fill="#93c5fd"/>
+                            <text x="160" y="108" fill="#93c5fd" font-size="10" text-anchor="middle">冰原城</text>
+                        </g>
+                        <g class="map-city" onclick="selectCity('极寒之地', '北冥')">
+                            <circle cx="100" cy="80" r="4" fill="#d1d5db"/>
+                            <text x="100" y="68" fill="#d1d5db" font-size="9" text-anchor="middle">极寒之地</text>
+                        </g>
+                        <g class="map-city" onclick="selectCity('万剑宗', '北冥')">
+                            <circle cx="240" cy="90" r="4" fill="#d1d5db"/>
+                            <text x="240" y="78" fill="#d1d5db" font-size="9" text-anchor="middle">万剑宗</text>
+                        </g>
+
+                        <!-- 蜀地 (西南) -->
+                        <polygon class="map-province" id="prov-shudi" points="120,380 240,360 280,480 160,520 80,480"
+                            fill="#3a2d3a" data-province="蜀地" onclick="selectProvince('蜀地')"/>
+                        <text x="175" y="440" fill="#d1d5db" font-size="14" text-anchor="middle" pointer-events="none" font-weight="bold">蜀地</text>
+                        <g class="map-city" onclick="selectCity('剑阁', '蜀地')">
+                            <circle cx="160" cy="410" r="5" fill="#c084fc"/>
+                            <text x="160" y="398" fill="#c084fc" font-size="10" text-anchor="middle">剑阁</text>
+                        </g>
+                        <g class="map-city" onclick="selectCity('青城山', '蜀地')">
+                            <circle cx="210" cy="450" r="4" fill="#d1d5db"/>
+                            <text x="210" y="438" fill="#d1d5db" font-size="9" text-anchor="middle">青城山</text>
+                        </g>
+
+                        <!-- 东南海域 -->
+                        <polygon class="map-province" id="prov-dongnan" points="680,380 760,280 800,320 800,480 600,520 560,480"
+                            fill="#1e3a4a" data-province="东南海域" onclick="selectProvince('东南海域')"/>
+                        <text x="690" y="430" fill="#d1d5db" font-size="13" text-anchor="middle" pointer-events="none" font-weight="bold">东南海域</text>
+                        <g class="map-city" onclick="selectCity('碧落仙宫', '东南海域')">
+                            <circle cx="680" cy="400" r="5" fill="#34d399"/>
+                            <text x="680" y="388" fill="#34d399" font-size="10" text-anchor="middle">碧落仙宫</text>
+                        </g>
+                        <g class="map-city" onclick="selectCity('鲛人镇', '东南海域')">
+                            <circle cx="740" cy="440" r="4" fill="#d1d5db"/>
+                            <text x="740" y="428" fill="#d1d5db" font-size="9" text-anchor="middle">鲛人镇</text>
+                        </g>
+
+                        <!-- 门派标记点（v10.0 按地区分配）-->
+                        <!-- ===== 中州 ===== -->
+                        <g class="map-sect" onclick="selectSect('少林寺')" style="cursor:pointer"><circle cx="390" cy="230" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="390" y="215" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">少林寺</text></g>
+                        <g class="map-sect" onclick="selectSect('嵩山派')" style="cursor:pointer"><circle cx="400" cy="240" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text x="400" y="225" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">嵩山派</text></g>
+                        <g class="map-sect" onclick="selectSect('大旗门')" style="cursor:pointer"><circle cx="430" cy="250" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="430" y="235" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">大旗门</text></g>
+                        <g class="map-sect" onclick="selectSect('恒山派')" style="cursor:pointer"><circle cx="380" cy="210" r="6" fill="#fb7185" stroke="#fff" stroke-width="2"/><text x="380" y="195" fill="#fb7185" font-size="9" text-anchor="middle" font-weight="bold">恒山派</text></g>
+                        <g class="map-sect" onclick="selectSect('全真教')" style="cursor:pointer"><circle cx="350" cy="290" r="6" fill="#34d399" stroke="#fff" stroke-width="2"/><text x="350" y="275" fill="#34d399" font-size="9" text-anchor="middle" font-weight="bold">全真教</text></g>
+                        <g class="map-sect" onclick="selectSect('华山派')" style="cursor:pointer"><circle cx="460" cy="270" r="6" fill="#f472b6" stroke="#fff" stroke-width="2"/><text x="460" y="255" fill="#f472b6" font-size="9" text-anchor="middle" font-weight="bold">华山派</text></g>
+                        <g class="map-sect" onclick="selectSect('武当派')" style="cursor:pointer"><circle cx="420" cy="280" r="6" fill="#60a5fa" stroke="#fff" stroke-width="2"/><text x="420" y="265" fill="#60a5fa" font-size="9" text-anchor="middle" font-weight="bold">武当派</text></g>
+                        <g class="map-sect" onclick="selectSect('侠隐阁')" style="cursor:pointer"><circle cx="450" cy="290" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="450" y="275" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">侠隐阁</text></g>
+                        <g class="map-sect" onclick="selectSect('天涯海阁')" style="cursor:pointer"><circle cx="440" cy="310" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="440" y="295" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">天涯海阁</text></g>
+                        <!-- ===== 东荒 ===== -->
+                        <g class="map-sect" onclick="selectSect('泰山派')" style="cursor:pointer"><circle cx="520" cy="240" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="520" y="225" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">泰山派</text></g>
+                        <g class="map-sect" onclick="selectSect('药王谷')" style="cursor:pointer"><circle cx="530" cy="260" r="6" fill="#34d399" stroke="#fff" stroke-width="2"/><text x="530" y="245" fill="#34d399" font-size="9" text-anchor="middle" font-weight="bold">药王谷</text></g>
+                        <g class="map-sect" onclick="selectSect('神机门')" style="cursor:pointer"><circle cx="560" cy="240" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text x="560" y="225" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">神机门</text></g>
+                        <g class="map-sect" onclick="selectSect('霹雳堂')" style="cursor:pointer"><circle cx="590" cy="280" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="590" y="265" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">霹雳堂</text></g>
+                        <g class="map-sect" onclick="selectSect('茅山派')" style="cursor:pointer"><circle cx="620" cy="260" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text x="620" y="245" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">茅山派</text></g>
+                        <g class="map-sect" onclick="selectSect('大隐阁')" style="cursor:pointer"><circle cx="600" cy="220" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="600" y="205" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">大隐阁</text></g>
+                        <g class="map-sect" onclick="selectSect('天书阁')" style="cursor:pointer"><circle cx="580" cy="200" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text x="580" y="185" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">天书阁</text></g>
+                        <g class="map-sect" onclick="selectSect('蓬莱派')" style="cursor:pointer"><circle cx="700" cy="190" r="6" fill="#60a5fa" stroke="#fff" stroke-width="2"/><text x="700" y="175" fill="#60a5fa" font-size="9" text-anchor="middle" font-weight="bold">蓬莱派</text></g>
+                        <!-- ===== 南疆 ===== -->
+                        <g class="map-sect" onclick="selectSect('衡山派')" style="cursor:pointer"><circle cx="360" cy="380" r="6" fill="#22d3ee" stroke="#fff" stroke-width="2"/><text x="360" y="365" fill="#22d3ee" font-size="9" text-anchor="middle" font-weight="bold">衡山派</text></g>
+                        <g class="map-sect" onclick="selectSect('丐帮')" style="cursor:pointer"><circle cx="380" cy="360" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="380" y="345" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">丐帮</text></g>
+                        <g class="map-sect" onclick="selectSect('铁掌帮')" style="cursor:pointer"><circle cx="370" cy="390" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="370" y="375" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">铁掌帮</text></g>
+                        <g class="map-sect" onclick="selectSect('百花谷')" style="cursor:pointer"><circle cx="340" cy="410" r="6" fill="#f472b6" stroke="#fff" stroke-width="2"/><text x="340" y="395" fill="#f472b6" font-size="9" text-anchor="middle" font-weight="bold">百花谷</text></g>
+                        <g class="map-sect" onclick="selectSect('五仙教')" style="cursor:pointer"><circle cx="300" cy="460" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text x="300" y="445" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">五仙教</text></g>
+                        <g class="map-sect" onclick="selectSect('修罗宫')" style="cursor:pointer"><circle cx="420" cy="440" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text x="420" y="425" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">修罗宫</text></g>
+                        <g class="map-sect" onclick="selectSect('阎罗殿')" style="cursor:pointer"><circle cx="400" cy="470" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text x="400" y="455" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">阎罗殿</text></g>
+                        <!-- ===== 西漠 ===== -->
+                        <g class="map-sect" onclick="selectSect('昆仑派')" style="cursor:pointer"><circle cx="120" cy="280" r="6" fill="#60a5fa" stroke="#fff" stroke-width="2"/><text x="120" y="265" fill="#60a5fa" font-size="9" text-anchor="middle" font-weight="bold">昆仑派</text></g>
+                        <g class="map-sect" onclick="selectSect('金刚宗')" style="cursor:pointer"><circle cx="90" cy="320" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="90" y="305" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">金刚宗</text></g>
+                        <g class="map-sect" onclick="selectSect('天龙教')" style="cursor:pointer"><circle cx="140" cy="220" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text x="140" y="205" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">天龙教</text></g>
+                        <g class="map-sect" onclick="selectSect('烈日教')" style="cursor:pointer"><circle cx="80" cy="200" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text x="80" y="185" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">烈日教</text></g>
+                        <!-- ===== 北冥 ===== -->
+                        <g class="map-sect" onclick="selectSect('天山派')" style="cursor:pointer"><circle cx="180" cy="120" r="6" fill="#60a5fa" stroke="#fff" stroke-width="2"/><text x="180" y="105" fill="#60a5fa" font-size="9" text-anchor="middle" font-weight="bold">天山派</text></g>
+                        <g class="map-sect" onclick="selectSect('逍遥派')" style="cursor:pointer"><circle cx="200" cy="100" r="6" fill="#22d3ee" stroke="#fff" stroke-width="2"/><text x="200" y="85" fill="#22d3ee" font-size="9" text-anchor="middle" font-weight="bold">逍遥派</text></g>
+                        <g class="map-sect" onclick="selectSect('血手门')" style="cursor:pointer"><circle cx="300" cy="140" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text x="300" y="125" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">血手门</text></g>
+                        <!-- ===== 蜀地 ===== -->
+                        <g class="map-sect" onclick="selectSect('青城派')" style="cursor:pointer"><circle cx="210" cy="400" r="6" fill="#34d399" stroke="#fff" stroke-width="2"/><text x="210" y="385" fill="#34d399" font-size="9" text-anchor="middle" font-weight="bold">青城派</text></g>
+                        <g class="map-sect" onclick="selectSect('峨眉派')" style="cursor:pointer"><circle cx="180" cy="370" r="6" fill="#f472b6" stroke="#fff" stroke-width="2"/><text x="180" y="355" fill="#f472b6" font-size="9" text-anchor="middle" font-weight="bold">峨眉派</text></g>
+                        <g class="map-sect" onclick="selectSect('唐门')" style="cursor:pointer"><circle cx="250" cy="390" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text x="250" y="375" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">唐门</text></g>
+                        <!-- ===== 东南海域 ===== -->
+                        <g class="map-sect" onclick="selectSect('铸剑山庄')" style="cursor:pointer"><circle cx="730" cy="380" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="730" y="365" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">铸剑山庄</text></g>
+                        <g class="map-sect" onclick="selectSect('飞蝎坞')" style="cursor:pointer"><circle cx="660" cy="460" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text x="660" y="445" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">飞蝎坞</text></g>
+                    </svg>
+
+                    <!-- 选中信息弹窗（城市/门派设施列表） -->
+                    <div id="map-detail" class="bg-gray-800 border border-yellow-600 rounded-lg p-4 mt-4 hidden">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 class="text-yellow-500 font-bold text-lg" id="map-detail-title">--</h3>
+                                <p class="text-sm text-gray-400 mt-1" id="map-detail-sub">--</p>
+                            </div>
+                            <button onclick="document.getElementById('map-detail').classList.add('hidden')" class="text-gray-500 hover:text-white">✕</button>
+                        </div>
+                        <p class="text-sm text-gray-300 mb-4" id="map-detail-desc">--</p>
+                        
+                        <!-- 设施列表 -->
+                        <div id="facilities-list" class="space-y-2">
+                            <!-- 动态生成 -->
+                        </div>
+                    </div>
+
+                    <!-- 门派详情弹窗（含设施列表） -->
+                    <div id="sect-detail" class="bg-gray-800 border-2 border-yellow-500 rounded-lg p-5 mt-4 hidden max-w-2xl">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 class="text-2xl font-bold text-yellow-500" id="sect-detail-name">--</h3>
+                                <span class="inline-block px-3 py-1 rounded-full text-xs font-bold mt-2" id="sect-detail-type">--</span>
+                            </div>
+                            <button onclick="document.getElementById('sect-detail').classList.add('hidden')" class="text-gray-500 hover:text-white text-2xl leading-none">&times;</button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4 text-sm mb-4">
+                            <div class="bg-gray-700/50 p-3 rounded">
+                                <p class="text-gray-400 text-xs">所在地区</p>
+                                <p class="text-white font-bold" id="sect-detail-location">--</p>
+                            </div>
+                            <div class="bg-gray-700/50 p-3 rounded">
+                                <p class="text-gray-400 text-xs">势力规模</p>
+                                <p class="text-white font-bold" id="sect-detail-power">--</p>
+                            </div>
+                            <div class="bg-gray-700/50 p-3 rounded">
+                                <p class="text-gray-400 text-xs">精通武器</p>
+                                <p class="text-white" id="sect-detail-weapons">--</p>
+                            </div>
+                            <div class="bg-gray-700/50 p-3 rounded">
+                                <p class="text-gray-400 text-xs">门派定位</p>
+                                <p class="text-white" id="sect-detail-desc">--</p>
+                            </div>
+                        </div>
+                        
+                    </div>
+                    </div>
+                    </div>
+                    <!-- 随机地图区域 -->
+                    <div id="random-map-section" class="mt-4 hidden">
+                        <div class="flex justify-between items-center mb-3">
+                            <h3 class="text-lg font-bold text-yellow-500" id="random-map-title">📍 当前区域 · 随机地图</h3>
+                            <div class="flex gap-2">
+                                <button onclick="regenerateMap()" class="text-xs bg-gray-600 hover:bg-gray-500 text-gray-300 px-3 py-1 rounded transition">🔄 重新生成</button>
+                                <button onclick="closeRandomMap()" class="text-xs bg-gray-600 hover:bg-gray-500 text-gray-300 px-2 py-1 rounded transition">✕</button>
+                            </div>
+                        </div>
+                        <div class="flex gap-4 flex-col lg:flex-row">
+                            <!-- 左侧：SVG地图 -->
+                            <div class="flex-1">
+                                <div class="bg-gray-700/20 rounded-lg border border-gray-600 p-3 overflow-x-auto">
+                                    <svg id="random-map-svg" viewBox="0 0 640 320" class="w-full" style="min-height:320px;"></svg>
+                                    <div class="mt-3 text-xs text-gray-500" id="random-map-info">点击地块移动 · 右键查看实体</div>
+                                </div>
+                            </div>
+                            <!-- 右侧：实体菜单 -->
+                            <div class="lg:w-64 flex-shrink-0">
+                                <div class="bg-gray-700/30 rounded-lg border border-gray-600 p-3">
+                                    <h3 class="text-sm font-bold text-yellow-500 mb-3 border-b border-gray-600 pb-2">📍 当前区域实体</h3>
+                                    <div id="entity-menu" class="space-y-2">
+                                        <p class="text-xs text-gray-500 text-center">移动至某个地块查看实体</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== 装备面板 ===== -->
+            <div id="panel-equipment" class="panel-content fade-in hidden">
+                <h2 class="text-xl font-bold text-yellow-500 mb-6">⚔️ 装备与功法</h2>
+                
+                <div class="mb-4">
+                    <button onclick="openEnhancementUI()" class="bg-orange-600 hover:bg-orange-500 text-white py-2 px-4 rounded text-sm">
+                        ⚒️ 装备强化
+                    </button>
+                </div>
+                
+                <!-- v9.8：攻击/防御/速度/负荷实时显示 -->
+                <div id="equip-combat-summary" class="mb-4 grid grid-cols-2 md:grid-cols-4 gap-2">
+                    <div class="bg-gray-800/80 p-2 rounded border border-gray-600 text-center">
+                        <div class="text-xs text-gray-400">攻击</div>
+                        <div id="equip-stat-attack" class="text-lg font-bold text-red-400">—</div>
+                    </div>
+                    <div class="bg-gray-800/80 p-2 rounded border border-gray-600 text-center">
+                        <div class="text-xs text-gray-400">防御</div>
+                        <div id="equip-stat-defense" class="text-lg font-bold text-blue-400">—</div>
+                    </div>
+                    <div class="bg-gray-800/80 p-2 rounded border border-gray-600 text-center">
+                        <div class="text-xs text-gray-400">速度</div>
+                        <div id="equip-stat-speed" class="text-lg font-bold text-green-400">—</div>
+                    </div>
+                    <div class="bg-gray-800/80 p-2 rounded border border-gray-600 text-center">
+                        <div class="text-xs text-gray-400">负荷</div>
+                        <div class="flex items-center justify-center gap-1">
+                            <div id="equip-stat-load" class="text-sm font-bold text-yellow-400">—</div>
+                            <div id="equip-stat-load-detail" class="text-xs text-gray-500"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex gap-6 flex-col lg:flex-row">
+                    <!-- 装备栏：槽内直接选择背包装备 -->
+                    <div class="flex-1 min-w-0">
+                        <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                            <h3 class="text-yellow-500 font-bold mb-3 border-b border-gray-600 pb-2">🛡️ 装备栏</h3>
+                            <p class="text-xs text-gray-500 mb-2">点击槽位「选择」从背包装备</p>
+                            <div class="space-y-2" id="equipment-slots">
+                                <!-- 动态生成：各槽可展开选择列表 -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 运功栏：槽内直接选择已学功法 -->
+                    <div class="flex-1 min-w-0">
+                        <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                            <h3 class="text-purple-500 font-bold mb-3 border-b border-gray-600 pb-2">📖 运功栏</h3>
+                            <p class="text-xs text-gray-500 mb-2">点击槽位「选择」装备已学功法 · <span id="skill-page-indicator">内功/身法/绝技</span></p>
+                            <div class="space-y-2" id="skill-slots-container">
+                                <!-- 动态生成：内功 / 身法 / 绝技，槽内展开 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- 兼容旧 id（隐藏，避免外部脚本报错） -->
+                <div id="skill-browse-grid" class="hidden" aria-hidden="true"></div>
+                <div id="equip-select-panel" class="hidden" aria-hidden="true"></div>
+            </div>
+
+            <!-- ===== 背包面板（v10.0 增强） ===== -->
+                        <div id="panel-inventory" class="panel-content fade-in hidden">
+                            <h2 class="text-xl font-bold text-yellow-500 mb-4">🎒 乾坤袋</h2>
+                            
+                            <!-- 货币显示 -->
+                            <div class="grid grid-cols-2 gap-4 mb-4">
+                                <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600">
+                                    <p id="inventory-gold" class="text-lg">💰 0</p>
+                                </div>
+                                <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600">
+                                    <p id="inventory-spirit-stones" class="text-lg">💎 0</p>
+                                </div>
+                            </div>
+
+                            <!-- 容量显示 -->
+                            <div class="text-xs text-gray-400 mb-2 text-right">
+                                容量: <span id="inventory-capacity">0/30</span>
+                            </div>
+
+                            <!-- 搜索栏 -->
+                            <div class="flex items-center gap-2 mb-3">
+                                <input type="text" id="inventory-search" placeholder="🔍 搜索物品名称/描述..."
+                                    class="flex-1 bg-gray-700 text-white px-3 py-2 rounded border border-gray-600 focus:border-yellow-500 outline-none text-sm"
+                                    oninput="setSearchQuery(this.value)">
+                                <span id="search-result-info" class="text-xs text-gray-500 whitespace-nowrap">共 0 / 0 件</span>
+                            </div>
+                            
+                            <!-- 物品分类筛选 -->
+                            <div class="flex flex-wrap gap-1 mb-2">
+                                <button onclick="filterInventory('all')" data-category="all" class="filter-btn bg-yellow-600 hover:bg-yellow-500 text-gray-900 font-bold py-1 px-2 rounded text-xs">全部</button>
+                                <button onclick="filterInventory('weapon')" data-category="weapon" class="filter-btn bg-gray-600 hover:bg-gray-500 text-white py-1 px-2 rounded text-xs">武器</button>
+                                <button onclick="filterInventory('armor')" data-category="armor" class="filter-btn bg-gray-600 hover:bg-gray-500 text-white py-1 px-2 rounded text-xs">防具</button>
+                                <button onclick="filterInventory('accessory')" data-category="accessory" class="filter-btn bg-gray-600 hover:bg-gray-500 text-white py-1 px-2 rounded text-xs">饰品</button>
+                                <button onclick="filterInventory('consumable')" data-category="consumable" class="filter-btn bg-gray-600 hover:bg-gray-500 text-white py-1 px-2 rounded text-xs">消耗品</button>
+                                <button onclick="filterInventory('material')" data-category="material" class="filter-btn bg-gray-600 hover:bg-gray-500 text-white py-1 px-2 rounded text-xs">材料</button>
+                                <button onclick="filterInventory('secret_art')" data-category="secret_art" class="filter-btn bg-gray-600 hover:bg-gray-500 text-white py-1 px-2 rounded text-xs">秘籍</button>
+                            </div>
+                            
+                            <!-- 品质筛选 + 排序栏 -->
+                            <div class="flex flex-wrap items-center gap-1 mb-3">
+                                <span class="text-xs text-gray-400">品质：</span>
+                                <button onclick="setQualityFilter('all')" data-quality="all" class="quality-filter-btn bg-yellow-600 text-gray-900 font-bold py-1 px-2 rounded text-xs">全部</button>
+                                <button onclick="setQualityFilter('COMMON')" data-quality="COMMON" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">凡品</button>
+                                <button onclick="setQualityFilter('UNCOMMON')" data-quality="UNCOMMON" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">良品</button>
+                                <button onclick="setQualityFilter('RARE')" data-quality="RARE" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">珍品</button>
+                                <button onclick="setQualityFilter('EPIC')" data-quality="EPIC" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">极品</button>
+                                <button onclick="setQualityFilter('LEGENDARY')" data-quality="LEGENDARY" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">仙品</button>
+                                <button onclick="setQualityFilter('MYTHIC')" data-quality="MYTHIC" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">神品</button>
+                                <span class="text-xs text-gray-400 ml-2">排序：</span>
+                                <button id="sort-toggle-btn" onclick="cycleSortOrder()" class="bg-gray-600 hover:bg-gray-500 text-white py-1 px-2 rounded text-xs">📊 排序</button>
+                            </div>
+                            
+                            <!-- 背包网格 -->
+                            <div id="inventory-grid" class="grid grid-cols-6 md:grid-cols-10 gap-1.5">
+                                <!-- 动态生成 -->
+                            </div>
+                            
+                            <!-- 功能按钮 -->
+                            <div class="flex flex-wrap gap-2 mt-3">
+                                <button onclick="openCraftingUI()" class="bg-orange-600 hover:bg-orange-500 text-white py-2 px-3 rounded text-xs">
+                                    ⚒️ 物品合成
+                                </button>
+                                <button onclick="expandInventory()" class="bg-blue-600 hover:bg-blue-500 text-white py-2 px-3 rounded text-xs">
+                                    扩展背包 (+10格)
+                                </button>
+                                <button id="batch-sell-btn" onclick="toggleBatchSellMode()" class="bg-red-600 hover:bg-red-500 text-white py-2 px-3 rounded text-xs">
+                                    📦 批量出售
+                                </button>
+                                <button id="execute-batch-sell-btn" onclick="executeBatchSell()" class="bg-green-600 hover:bg-green-500 text-white py-2 px-3 rounded text-xs">
+                                    确认出售
+                                </button>
+                            </div>
+                        </div>
+
+            <!-- ===== 功法面板 ===== -->
+            <div id="panel-skills" class="panel-content fade-in hidden">
+                <h2 class="text-xl font-bold text-yellow-500 mb-6">📜 修行功法</h2>
+                
+                <div class="mb-4 flex gap-2">
+                    <button onclick="startCultivation()" class="bg-indigo-600 hover:bg-indigo-500 text-white py-2 px-4 rounded text-sm">
+                        🧘 打坐修炼（真元）
+                    </button>
+                    <button onclick="openCultivationUI()" class="bg-purple-600 hover:bg-purple-500 text-white py-2 px-4 rounded text-sm">
+                        📜 功法修炼
+                    </button>
+                </div>
+                
+                <!-- 功法列表 -->
+                <div class="bg-gray-700/30 p-6 rounded-lg border border-gray-600 text-center mb-6">
+                    <p class="text-5xl mb-4">📜</p>
+                    <p class="text-gray-400">尚未习得任何功法。</p>
+                    <p class="text-sm text-gray-600 mt-2">拜入宗门或奇遇可得无上功法。</p>
+                </div>
+
+            </div>
+            
+            <!-- ===== 设置面板 ===== -->
+            <div id="panel-settings" class="panel-content fade-in hidden">
+                <h2 class="text-xl font-bold text-yellow-500 mb-6">⚙️ 设置</h2>
+                
+                <div class="bg-gray-700/30 p-6 rounded-lg border border-gray-600 mb-6">
+                    <h3 class="text-lg font-bold text-yellow-500 mb-4 border-b border-gray-600 pb-2">💾 存档管理</h3>
+                    <div class="flex flex-wrap gap-3 mb-6">
+                        <button onclick="saveGame()" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 font-bold py-2 px-6 rounded">💾 保存存档</button>
+                        <button onclick="exportSave()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 px-6 rounded">📤 导出存档(.sav)</button>
+                        <button onclick="document.getElementById('import-file').click()" class="bg-green-600 hover:bg-green-500 text-white font-bold py-2 px-6 rounded">📥 导入存档(.sav)</button>
+                        <input type="file" id="import-file" accept=".sav" onchange="importSave(event)" class="hidden">
+                        <button onclick="deleteSave()" class="bg-red-600 hover:bg-red-500 text-white font-bold py-2 px-6 rounded">🗑️ 删除存档</button>
+                    </div>
+                    <div id="save-slots" class="space-y-3">
+                        <p class="text-gray-500 text-sm text-center">暂无存档记录</p>
+                    </div>
+                </div>
+
+                <div class="bg-gray-700/30 p-6 rounded-lg border border-gray-600">
+                    <h3 class="text-lg font-bold text-yellow-500 mb-4 border-b border-gray-600 pb-2">🎮 游戏设置</h3>
+                    <div class="space-y-4">
+                        <label class="flex items-center justify-between text-sm text-gray-300 cursor-pointer">
+                            <span>进城时显示城市介绍</span>
+                            <input type="checkbox" id="setting-city-intro" checked onchange="toggleCityIntro()" class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-600">
+                        </label>
+                        <p class="text-xs text-gray-600">关闭后进入城市不再弹出黑屏介绍</p>
+                        <div class="border-t border-gray-600 pt-4 mt-4">
+                            <label class="flex items-center justify-between text-sm text-gray-300 cursor-pointer">
+                                <span>自动保存（每5分钟）</span>
+                                <input type="checkbox" id="auto-save" checked class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-600">
+                            </label>
+                            <p class="text-xs text-gray-600 mt-1" id="last-save-time">上次保存: --</p>
+                        </div>
+                        <!-- v12.4 战斗难度条件栏（点击展开三档详情） -->
+                        <div class="border-t border-gray-600 pt-4 mt-4">
+                            <div class="flex items-center justify-between text-sm text-gray-300 cursor-pointer select-none" onclick="toggleDifficultyDetail()">
+                                <span>⚔️ 战斗难度</span>
+                                <span class="flex items-center gap-2">
+                                    <span id="difficulty-current-label" class="text-xs text-gray-400">标准 🔵</span>
+                                    <span id="difficulty-expand-arrow" class="text-xs text-gray-500">▶</span>
+                                </span>
+                            </div>
+                            <div id="difficulty-detail" class="hidden mt-3">
+                                <p class="text-xs text-gray-500 mb-2">影响敌方伤害、危急救治窗口与要害部位伤害，切换后立即生效并保存。</p>
+                                <div id="difficulty-cards" class="grid grid-cols-1 sm:grid-cols-3 gap-2"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ===== 调试面板（Admin 专属，角色名为 admin 时显示） ===== -->
+                <div id="debug-panel" class="bg-gray-800/50 p-6 rounded-lg border border-red-800 mt-6" style="display:none;">
+                    <h3 class="text-lg font-bold text-red-400 mb-4 border-b border-red-800 pb-2">🐛 调试模式</h3>
+                    <div id="debug-panel-content"></div>
+                </div>
+            </div>
+            
+            <!-- ===== 任务面板 ===== -->
+            <div id="panel-quests" class="panel-content fade-in hidden">
+                <h2 class="text-xl font-bold text-yellow-500 mb-6">📋 任务日志</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                        <h3 class="text-lg font-bold text-blue-400 mb-3">📌 主线任务</h3>
+                        <div id="main-quest-list" class="space-y-2"></div>
+                    </div>
+                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                        <h3 class="text-lg font-bold text-green-400 mb-3">📋 活跃任务</h3>
+                        <div id="active-quest-list" class="space-y-2"></div>
+                    </div>
+                </div>
+                <div class="mt-6 bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                    <h3 class="text-lg font-bold text-purple-400 mb-3">✅ 已完成任务</h3>
+                    <div id="completed-quest-list" class="space-y-1 max-h-48 overflow-y-auto"></div>
+                </div>
+            </div>
+            
+            <!-- ===== 势力面板 ===== -->
+            <div id="panel-factions" class="panel-content fade-in hidden">
+                <h2 class="text-xl font-bold text-yellow-500 mb-6">🏴 势力一览</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="faction-list">
+                    <!-- 由JS动态生成 -->
+                </div>
+                <div class="mt-6 bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                    <h3 class="text-lg font-bold text-red-400 mb-3">⚔️ 当前冲突</h3>
+                    <div id="active-conflicts" class="space-y-2">
+                        <p class="text-gray-500 text-sm">暂无冲突</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ===== 灵兽面板 ===== -->
+            
+            <!-- ===== 灵兽面板 ===== -->
+            <div id="panel-beasts" class="panel-content fade-in hidden">
+                <h2 class="text-xl font-bold text-yellow-500 mb-6">🐾 灵兽</h2>
+                <div id="beast-tide-banner" class="mb-4"></div>
+                <div id="beast-scout-report" class="mb-4"></div>
+                <div id="beast-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- 由JS动态生成 -->
+                </div>
+                <div class="mt-6 bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                    <h3 class="text-lg font-bold text-emerald-400 mb-3">🏡 灵兽园</h3>
+                    <div id="beast-garden-panel" class="text-sm text-gray-400">尚未修建灵兽园。</div>
+                </div>
+                <div class="mt-6 bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                    <h3 class="text-lg font-bold text-amber-400 mb-3">📖 可捕捉灵兽图鉴</h3>
+                    <div id="beast-templates" class="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        <!-- 由JS动态生成 -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ===== 洞府面板 ===== -->
+            <div id="panel-house" class="panel-content fade-in hidden">
+                <h2 class="text-xl font-bold text-yellow-500 mb-6">🏡 洞府</h2>
+                <div id="house-status" class="bg-gray-700/30 p-4 rounded-lg border border-gray-600 mb-4">
+                    <p class="text-gray-400 text-sm">尚未拥有洞府。</p>
+                </div>
+                <div id="house-shop" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- 由JS动态生成 -->
+                </div>
+            </div>
+            
+            <!-- ===== 活动面板 ===== -->
+            <div id="panel-activities" class="panel-content fade-in hidden">
+                <h2 class="text-xl font-bold text-yellow-500 mb-6">🎣 休闲活动</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                        <h3 class="text-lg font-bold text-blue-400 mb-3">🎣 钓鱼</h3>
+                        <p class="text-sm text-gray-400 mb-3">选择水域开始钓鱼，消耗10精力30分钟。</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="goFishing('river')" class="bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded text-sm">🏞️ 河流钓鱼</button>
+                            <button onclick="goFishing('lake')" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded text-sm">🌊 湖泊钓鱼</button>
+                            <button onclick="goFishing('sea')" class="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-2 rounded text-sm">🌅 海域钓鱼</button>
+                        </div>
+                    </div>
+                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                        <h3 class="text-lg font-bold text-amber-400 mb-3">⛏️ 采集</h3>
+                        <p class="text-sm text-gray-400 mb-3">采集资源，消耗精力。</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="mineOre()" class="bg-orange-600 hover:bg-orange-500 text-white px-3 py-2 rounded text-sm">⛏️ 采矿</button>
+                            <button onclick="gatherHerbs()" class="bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded text-sm">🌿 采药</button>
+                            <button onclick="chopWood()" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded text-sm">🪓 伐木</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                        <h3 class="text-lg font-bold text-yellow-400 mb-3">🌍 世界事态</h3>
+                        <div id="world-events-panel" class="text-sm text-gray-400">加载中…</div>
+                        <button onclick="refreshWorldEventsPanel()" class="mt-2 text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded">刷新</button>
+                    </div>
+                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                        <h3 class="text-lg font-bold text-blue-400 mb-3">🏅 城市声望</h3>
+                        <div id="reputation-panel" class="text-sm text-gray-400">加载中…</div>
+                    </div>
+                </div>
+                <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                        <h3 class="text-lg font-bold text-cyan-400 mb-3">🌊 修炼与探索</h3>
+                        <p class="text-sm text-gray-400 mb-3">引导灵气、强化、隐藏商店、山贼巢穴。</p>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="if(window.openGuideQiMiniGame)openGuideQiMiniGame();else if(window.guideQiCultivation)guideQiCultivation();" class="bg-cyan-700 hover:bg-cyan-600 text-white px-3 py-2 rounded text-sm">🌊 引导灵气</button>
+                            <button onclick="if(window.openEnhancementHall)openEnhancementHall();else if(window.openForgingShop)openForgingShop();" class="bg-orange-700 hover:bg-orange-600 text-white px-3 py-2 rounded text-sm">⚒️ 铁匠强化</button>
+                            <button onclick="if(window.openBanditDen)openBanditDen();else if(window.showMessage)showMessage('尚未发现巢穴','info');" class="bg-red-800 hover:bg-red-700 text-white px-3 py-2 rounded text-sm">🏴 黑风寨</button>
+                            <button onclick="if(window.openHiddenShop)openHiddenShop();" class="bg-purple-700 hover:bg-purple-600 text-white px-3 py-2 rounded text-sm">🏪 隐藏商店</button>
+                            <button onclick="if(window.openSpecialQuests)openSpecialQuests();" class="bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm">📋 专属任务</button>
+                        </div>
+                        <p id="lifespan-display" class="text-xs text-gray-500 mt-3">⌛ 寿元</p>
+                    </div>
+                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                        <h3 class="text-lg font-bold text-purple-400 mb-3">🔄 二周目</h3>
+                        <p class="text-sm text-gray-400 mb-3">通关后开启新游戏+，继承部分属性重新开始。</p>
+                        <button onclick="startNewGamePlus()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded text-sm">🌟 开启新游戏+</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 战斗模态框 -->
+    <!-- v19.14 转世模态 -->
+    <div id="reincarnation-modal" class="hidden fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
+        <div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-3xl w-full max-h-[80vh] overflow-y-auto mx-4">
+            <h2 class="text-2xl font-bold text-yellow-400 mb-4">🔁 轮回转世</h2>
+            <div id="reincarnation-summary"></div>
+            <div id="reincarnation-options" class="grid grid-cols-1 gap-3 mt-4"></div>
+            <div class="mt-4 flex justify-between items-center">
+                <span id="reincarnation-points" class="text-sm text-gray-400"></span>
+                <div>
+                    <button onclick="window.ReincarnationIntegration.closeReincarnationModal()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 rounded">取消</button>
+                    <button onclick="window.ReincarnationIntegration.confirmReincarnation()" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-500 text-gray-900 rounded ml-2">转世</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="battle-modal" class="fixed inset-0 flex items-center justify-center bg-black/70 z-50 hidden">
+        <div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto mx-4">
+            <h2 class="text-2xl font-bold text-yellow-500 mb-4">⚔️ 战斗</h2>
+            <div id="battle-status" class="flex justify-between mb-4 gap-4">
+                <div id="battle-player-status" class="text-left flex-1 bg-gray-700/50 p-3 rounded">
+                    <p class="text-white font-bold" id="battle-player-name">玩家</p>
+                    <div class="flex items-center gap-2 mt-1">
+                        <span class="text-sm"><span class="text-green-400">耐久:</span> <span id="battle-player-hp">0/0</span></span>
+                        <button onclick="toggleBattleBodyView()" class="text-xs bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-2 py-0.5 rounded">👁️ 查看人体</button>
+                    </div>
+                </div>
+                <div id="battle-enemy-status" class="text-right flex-1 bg-gray-700/50 p-3 rounded">
+                    <p class="text-white font-bold" id="battle-enemy-name">敌人</p>
+                    <div class="flex items-center gap-2 mt-1 justify-end">
+                        <span class="text-sm"><span class="text-red-400">耐久:</span> <span id="battle-enemy-hp">0/0</span></span>
+                        <button onclick="toggleEnemyBodyView()" class="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-0.5 rounded">👁️ 查看敌人</button>
+                    </div>
+                </div>
+            </div>
+            <!-- ===== 机体扩展v8.0：生理状态条 ===== -->
+            <div id="battle-physiology" class="grid grid-cols-2 gap-2 mb-2 text-xs">
+                <!-- 玩家生理状态 -->
+                <div class="bg-gray-700/30 p-2 rounded">
+                    <div class="text-gray-400 mb-1">🧍 <span id="battle-phys-player-type">人形</span></div>
+                    <div id="battle-phys-player-health" class="flex items-center gap-1 mb-0.5">
+                        <span class="w-8 text-gray-500">血量</span>
+                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
+                        <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
+                    </div>
+                    <div id="battle-phys-player-circulation" class="flex items-center gap-1 mb-0.5">
+                        <span class="w-8 text-gray-500">循环</span>
+                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
+                        <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
+                    </div>
+                    <div id="battle-phys-player-pain" class="flex items-center gap-1 mb-0.5">
+                        <span class="w-8 text-gray-500">疼痛</span>
+                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:0%"></div></div>
+                        <span class="phys-bar-text w-12 text-right text-gray-300">0/100</span>
+                    </div>
+                    <div id="battle-phys-player-consciousness" class="flex items-center gap-1">
+                        <span class="w-8 text-gray-500">意识</span>
+                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
+                        <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
+                    </div>
+                </div>
+                <!-- 敌人生理状态 -->
+                <div class="bg-gray-700/30 p-2 rounded">
+                    <div class="text-gray-400 mb-1">👹 <span id="battle-phys-enemy-type">人形</span></div>
+                    <div id="battle-phys-enemy-health" class="flex items-center gap-1 mb-0.5">
+                        <span class="w-8 text-gray-500">血量</span>
+                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
+                        <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
+                    </div>
+                    <div id="battle-phys-enemy-circulation" class="flex items-center gap-1 mb-0.5">
+                        <span class="w-8 text-gray-500">循环</span>
+                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
+                        <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
+                    </div>
+                    <div id="battle-phys-enemy-pain" class="flex items-center gap-1 mb-0.5">
+                        <span class="w-8 text-gray-500">疼痛</span>
+                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:0%"></div></div>
+                        <span class="phys-bar-text w-12 text-right text-gray-300">0/100</span>
+                    </div>
+                    <div id="battle-phys-enemy-consciousness" class="flex items-center gap-1">
+                        <span class="w-8 text-gray-500">意识</span>
+                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
+                        <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
+                    </div>
+                </div>
+            </div>
+            <!-- 队友状态栏（有队员时显示） -->
+            <div id="battle-party-status" class="hidden mb-2">
+                <div class="text-xs text-gray-400 mb-1">👥 队伍成员</div>
+                <div id="party-status-list" class="space-y-1">
+                    <!-- 动态生成 -->
+                </div>
+            </div>
+            <div id="battle-log" class="bg-gray-700/50 p-3 rounded h-32 overflow-y-auto text-sm text-gray-300 mb-2">
+                <!-- 战斗日志 -->
+            </div>
+            <div id="battle-actions" class="flex flex-wrap gap-1 mb-2">
+                <!-- 部位选择按钮由JS动态生成 -->
+            </div>
+            <!-- ===== 机体扩展v8.0：医疗行动按钮 ===== -->
+            <div id="battle-medical-actions" class="hidden mb-2">
+                <div class="text-xs text-gray-400 mb-1">🩺 医疗行动（消耗1回合）：</div>
+                <div class="flex flex-wrap gap-1 mb-2">
+                    <button onclick="battleMedicalAction('bandage')" class="text-xs bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded" title="稳定度+40">🩹 包扎</button>
+                    <button onclick="battleMedicalAction('hemostatic')" class="text-xs bg-purple-700 hover:bg-purple-600 text-white px-2 py-1 rounded" title="外出血减半，内出血停止">💊 止血药</button>
+                    <button onclick="battleMedicalAction('pressure')" class="text-xs bg-orange-700 hover:bg-orange-600 text-white px-2 py-1 rounded" title="临时止血50%">✋ 按压止血</button>
+                    <button onclick="battleMedicalAction('willpower')" class="text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-2 py-1 rounded" title="疼痛-20">🧘 意志压制</button>
+                </div>
+                <!-- v4.2：使用背包中的医疗物品 -->
+                <div class="text-xs text-gray-400 mb-1">🎒 使用物品（消耗背包物品）：</div>
+                <div id="battle-medical-items" class="flex flex-wrap gap-1">
+                    <!-- 由JS动态生成 -->
+                </div>
+            </div>
+            <!-- v4.2：查看伤势按钮 -->
+            <div class="flex gap-1 mb-2">
+                <button onclick="toggleWoundInspection()" class="text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded">🩻 查看伤势</button>
+            </div>
+            <!-- v4.2：伤口详情面板 -->
+            <div id="battle-wound-panel" class="hidden mb-2 bg-gray-800/50 rounded p-2 text-xs border border-gray-600">
+                <div class="text-gray-400 font-bold mb-1">🩻 伤势详情</div>
+                <div id="battle-wound-content" class="max-h-40 overflow-y-auto">
+                    <!-- 由JS动态生成 -->
+                </div>
+            </div>
+            <div id="battle-result" class="hidden mt-4 text-center">
+                <p class="text-xl font-bold" id="battle-result-text"></p>
+                <button onclick="closeBattle()" class="mt-2 bg-yellow-600 hover:bg-yellow-500 px-6 py-2 rounded text-gray-900 font-bold">继续</button>
+            </div>
+
+            <!-- ===== 人体查看覆盖层（默认隐藏） ===== -->
+            <div id="battle-body-view" class="hidden mt-4 border-t border-gray-600 pt-4" style="min-height:200px;">
+                <div class="flex justify-between items-center mb-2">
+                    <h4 class="text-yellow-500 font-bold" id="body-view-title">🧍 玩家躯体状态</h4>
+                    <div class="flex gap-2">
+                        <button onclick="switchBodyView('player')" id="btn-view-player" class="text-xs bg-yellow-600 text-gray-900 px-2 py-0.5 rounded">玩家</button>
+                        <button onclick="switchBodyView('enemy')" id="btn-view-enemy" class="text-xs bg-gray-600 text-gray-300 px-2 py-0.5 rounded">敌人</button>
+                        <div id="party-body-view-buttons" class="inline-flex gap-1"></div>
+                        <button onclick="toggleBattleBodyView()" class="text-gray-400 hover:text-white text-sm">✕ 关闭</button>
+                    </div>
+                </div>
+                <div class="flex flex-col md:flex-row gap-4">
+                    <!-- 左侧：SVG人体图（玩家或敌人） -->
+                    <div class="flex-shrink-0 flex justify-center">
+                        <div id="player-body-svg-wrapper">
+                            <svg viewBox="0 0 200 420" class="body-svg" id="battle-body-svg" style="width:160px; height:auto;">
+<defs>
+                                <filter id="battle-glow" x="-20%" y="-20%" width="140%" height="140%">
+                                    <feGaussianBlur stdDeviation="2" result="blur"></feGaussianBlur>
+                                    <feMerge>
+                                        <feMergeNode in="blur"></feMergeNode>
+                                        <feMergeNode in="blur" opacity="0.5"></feMergeNode>
+                                        <feMergeNode in="SourceGraphic"></feMergeNode>
+                                    </feMerge>
+                                </filter>
+                                <radialGradient id="battle-bgGlow" cx="50%" cy="40%" r="50%">
+                                    <stop offset="0%" stop-color="#2d4a3d" stop-opacity="0.3"></stop>
+                                    <stop offset="100%" stop-color="transparent"></stop>
+                                </radialGradient>
+                            </defs>
+<!-- ===== 躯体SVG v15：木人桩参考图像素边精确描摹·22分区（生成器 temp_trace_mannequin.py）===== -->
+<defs><clipPath id="battle-clipHead"><path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z"/></clipPath><clipPath id="battle-clipTorso"><path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z"/></clipPath><clipPath id="battle-clipAbd"><path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z"/></clipPath></defs>
+<!-- 背景 -->
+<rect width="200" height="420" fill="#0f1724" rx="12"></rect>
+<rect width="200" height="420" fill="url(#battle-bgGlow)" rx="12"></rect>
+<!-- v15 木人桩参考图·像素边精确轮廓·22分区 -->
+<path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z" fill="#22c55e" stroke="none"/>
+<path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z" fill="#22c55e" stroke="none"/>
+<path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z" fill="#22c55e" stroke="none"/>
+<path d="M79.9,173.6 L120.3,173.6 L109.3,198.7 L105.0,203.8 L101.1,204.9 L96.3,204.4 L92.0,200.4 L79.9,173.9Z M67.8,188.3 L71.7,171.9 L78.8,173.3 L92.6,201.8 L76.0,190.5 L67.8,188.6Z M107.6,201.8 L112.1,194.8 L117.4,179.5 L122.0,173.0 L128.2,171.6 L132.4,188.3 L122.2,191.7 L107.6,202.1Z" fill="#22c55e" stroke="none"/>
+<path d="M89.2,72.0 L91.2,63.3 L99.1,68.1 L109.0,63.5 L111.2,72.3 L108.7,78.5 L101.9,82.4 L93.2,80.2 L89.2,72.3Z" fill="#22c55e" stroke="none"/>
+<path d="M57.0,96.6 L59.0,87.5 L63.5,81.0 L70.0,78.8 L77.6,79.9 L74.3,90.6 L67.2,98.8 L57.3,102.5 L57.0,96.8Z M48.0,136.3 L56.5,102.8 L61.6,102.8 L67.8,99.4 L70.6,113.8 L60.7,140.9 L53.1,140.6 L48.0,136.6Z" fill="#22c55e" stroke="none"/>
+<path d="M122.5,79.9 L130.1,78.8 L137.2,81.3 L141.1,87.2 L143.4,98.5 L143.1,102.2 L140.6,102.5 L132.1,98.0 L125.3,89.5 L122.5,80.2Z M129.6,114.1 L132.4,99.4 L138.6,102.8 L143.7,102.8 L152.1,135.8 L148.5,140.0 L139.7,141.1 L129.6,114.3Z" fill="#22c55e" stroke="none"/>
+<path d="M43.2,150.5 L47.7,138.0 L54.2,141.7 L60.2,142.3 L57.6,155.0 L48.0,153.6 L43.2,150.7Z M34.8,192.2 L42.9,151.9 L57.3,156.1 L42.9,195.6 L36.7,195.0 L34.8,192.5Z" fill="#22c55e" stroke="none"/>
+<path d="M140.0,142.6 L148.2,140.9 L152.7,138.0 L156.9,149.9 L152.4,153.6 L142.8,155.0 L140.0,142.8Z M142.8,156.4 L157.5,152.1 L165.4,191.9 L162.6,195.3 L156.9,195.0 L142.8,156.7Z" fill="#22c55e" stroke="none"/>
+<path d="M29.4,218.5 L34.5,194.2 L42.1,196.5 L44.6,204.9 L44.1,219.3 L41.2,217.6 L39.6,209.7 L35.6,214.0 L34.5,222.4 L37.3,233.1 L35.0,234.6 L33.3,233.4 L29.4,223.3 L29.4,218.7Z" fill="#22c55e" stroke="none"/>
+<path d="M155.5,204.9 L158.1,196.5 L165.7,194.2 L170.5,213.4 L170.5,224.1 L165.1,234.6 L162.6,232.9 L165.4,223.0 L164.6,214.5 L160.6,209.7 L158.9,217.9 L156.1,219.0 L155.5,205.2Z" fill="#22c55e" stroke="none"/>
+<path d="M65.8,209.7 L68.6,189.7 L77.1,191.9 L96.6,205.2 L91.5,261.4 L83.6,264.2 L76.2,263.6 L71.4,261.1 L65.8,210.0Z" fill="#22c55e" stroke="none"/>
+<path d="M103.6,205.5 L122.2,192.5 L129.6,189.7 L132.7,190.2 L134.4,204.6 L134.1,219.9 L128.7,261.1 L120.8,264.2 L108.7,261.4 L103.6,205.8Z" fill="#22c55e" stroke="none"/>
+<path d="M71.7,263.1 L82.4,265.0 L91.2,262.5 L90.1,283.9 L81.9,287.6 L76.2,286.8 L71.7,283.4 L71.7,263.3Z M69.7,297.5 L71.4,284.5 L78.5,288.2 L83.9,288.2 L89.8,285.3 L90.9,298.9 L87.5,344.6 L87.5,368.6 L81.6,363.2 L78.2,364.1 L74.8,368.3 L75.1,348.8 L69.7,297.8Z" fill="#22c55e" stroke="none"/>
+<path d="M108.7,263.6 L109.5,262.5 L120.0,265.0 L128.4,262.8 L128.4,283.4 L119.7,287.6 L113.5,286.5 L110.1,283.9 L108.7,263.9Z M109.0,303.7 L110.4,285.3 L116.3,288.2 L122.0,288.2 L128.4,284.5 L130.4,296.9 L129.9,312.7 L125.3,345.2 L125.1,368.0 L122.0,364.1 L118.3,363.2 L112.6,368.6 L112.4,339.0 L109.0,304.0Z" fill="#22c55e" stroke="none"/>
+<path d="M68.6,396.3 L74.8,370.6 L77.4,365.8 L81.9,364.1 L85.3,366.1 L87.8,371.7 L91.2,397.4 L86.7,404.2 L79.3,405.3 L71.2,401.9 L68.6,396.5Z" fill="#22c55e" stroke="none"/>
+<path d="M109.0,397.4 L112.6,370.9 L114.9,366.1 L118.0,364.1 L122.2,365.2 L125.1,369.7 L131.5,396.0 L131.3,399.4 L128.7,402.2 L121.1,405.3 L113.2,403.9 L109.5,400.5 L109.0,397.7Z" fill="#22c55e" stroke="none"/>
+<path class="part" id="battle-upperArmL" d="M57.0,96.6 L59.0,87.5 L63.5,81.0 L70.0,78.8 L77.6,79.9 L74.3,90.6 L67.2,98.8 L57.3,102.5 L57.0,96.8Z M48.0,136.3 L56.5,102.8 L61.6,102.8 L67.8,99.4 L70.6,113.8 L60.7,140.9 L53.1,140.6 L48.0,136.6Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左上臂</title></path>
+<path class="part" id="battle-upperArmR" d="M122.5,79.9 L130.1,78.8 L137.2,81.3 L141.1,87.2 L143.4,98.5 L143.1,102.2 L140.6,102.5 L132.1,98.0 L125.3,89.5 L122.5,80.2Z M129.6,114.1 L132.4,99.4 L138.6,102.8 L143.7,102.8 L152.1,135.8 L148.5,140.0 L139.7,141.1 L129.6,114.3Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右上臂</title></path>
+<path class="part" id="battle-forearmL" d="M43.2,150.5 L47.7,138.0 L54.2,141.7 L60.2,142.3 L57.6,155.0 L48.0,153.6 L43.2,150.7Z M34.8,192.2 L42.9,151.9 L57.3,156.1 L42.9,195.6 L36.7,195.0 L34.8,192.5Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左前臂</title></path>
+<path class="part" id="battle-forearmR" d="M140.0,142.6 L148.2,140.9 L152.7,138.0 L156.9,149.9 L152.4,153.6 L142.8,155.0 L140.0,142.8Z M142.8,156.4 L157.5,152.1 L165.4,191.9 L162.6,195.3 L156.9,195.0 L142.8,156.7Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右前臂</title></path>
+<path class="part" id="battle-handL" d="M29.4,218.5 L34.5,194.2 L42.1,196.5 L44.6,204.9 L44.1,219.3 L41.2,217.6 L39.6,209.7 L35.6,214.0 L34.5,222.4 L37.3,233.1 L35.0,234.6 L33.3,233.4 L29.4,223.3 L29.4,218.7Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左手</title></path>
+<path class="part" id="battle-handR" d="M155.5,204.9 L158.1,196.5 L165.7,194.2 L170.5,213.4 L170.5,224.1 L165.1,234.6 L162.6,232.9 L165.4,223.0 L164.6,214.5 L160.6,209.7 L158.9,217.9 L156.1,219.0 L155.5,205.2Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右手</title></path>
+<path class="part" id="battle-thighL" d="M65.8,209.7 L68.6,189.7 L77.1,191.9 L96.6,205.2 L91.5,261.4 L83.6,264.2 L76.2,263.6 L71.4,261.1 L65.8,210.0Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左大腿</title></path>
+<path class="part" id="battle-thighR" d="M103.6,205.5 L122.2,192.5 L129.6,189.7 L132.7,190.2 L134.4,204.6 L134.1,219.9 L128.7,261.1 L120.8,264.2 L108.7,261.4 L103.6,205.8Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右大腿</title></path>
+<path class="part" id="battle-calfL" d="M71.7,263.1 L82.4,265.0 L91.2,262.5 L90.1,283.9 L81.9,287.6 L76.2,286.8 L71.7,283.4 L71.7,263.3Z M69.7,297.5 L71.4,284.5 L78.5,288.2 L83.9,288.2 L89.8,285.3 L90.9,298.9 L87.5,344.6 L87.5,368.6 L81.6,363.2 L78.2,364.1 L74.8,368.3 L75.1,348.8 L69.7,297.8Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左小腿</title></path>
+<path class="part" id="battle-calfR" d="M108.7,263.6 L109.5,262.5 L120.0,265.0 L128.4,262.8 L128.4,283.4 L119.7,287.6 L113.5,286.5 L110.1,283.9 L108.7,263.9Z M109.0,303.7 L110.4,285.3 L116.3,288.2 L122.0,288.2 L128.4,284.5 L130.4,296.9 L129.9,312.7 L125.3,345.2 L125.1,368.0 L122.0,364.1 L118.3,363.2 L112.6,368.6 L112.4,339.0 L109.0,304.0Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右小腿</title></path>
+<path class="part" id="battle-footL" d="M68.6,396.3 L74.8,370.6 L77.4,365.8 L81.9,364.1 L85.3,366.1 L87.8,371.7 L91.2,397.4 L86.7,404.2 L79.3,405.3 L71.2,401.9 L68.6,396.5Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左脚</title></path>
+<path class="part" id="battle-footR" d="M109.0,397.4 L112.6,370.9 L114.9,366.1 L118.0,364.1 L122.2,365.2 L125.1,369.7 L131.5,396.0 L131.3,399.4 L128.7,402.2 L121.1,405.3 L113.2,403.9 L109.5,400.5 L109.0,397.7Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右脚</title></path>
+<path class="part" id="battle-neck" d="M89.2,72.0 L91.2,63.3 L99.1,68.1 L109.0,63.5 L111.2,72.3 L108.7,78.5 L101.9,82.4 L93.2,80.2 L89.2,72.3Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>颈（要害）</title></path>
+<path class="part" id="battle-pelvis" d="M79.9,173.6 L120.3,173.6 L109.3,198.7 L105.0,203.8 L101.1,204.9 L96.3,204.4 L92.0,200.4 L79.9,173.9Z M67.8,188.3 L71.7,171.9 L78.8,173.3 L92.6,201.8 L76.0,190.5 L67.8,188.6Z M107.6,201.8 L112.1,194.8 L117.4,179.5 L122.0,173.0 L128.2,171.6 L132.4,188.3 L122.2,191.7 L107.6,202.1Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>盆骨</title></path>
+<path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z" fill="#22c55e" stroke="none"/>
+<path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z" fill="#22c55e" stroke="none"/>
+<path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z" fill="#22c55e" stroke="none"/>
+<path class="part" id="battle-brain" d="M40,15.0 L160,15.0 L160,38.355000000000004 L40,38.355000000000004 Z" fill="#22c55e" clip-path="url(#battle-clipHead)" stroke="none"><title>脑（要害）</title></path>
+<path class="part" id="battle-head" d="M40,38.355000000000004 L160,38.355000000000004 L160,54.444 L40,54.444 Z" fill="#22c55e" clip-path="url(#battle-clipHead)" stroke="none"><title>头</title></path>
+<path class="part" id="battle-eyes-left" d="M90.3,43.5 Q92.8,40.9 96.9,43.5 Q92.8,45.2 90.3,43.5 Z" fill="#22c55e" stroke="#353535" stroke-width="0.5" clip-path="url(#battle-clipHead)"><title>眼</title></path>
+<path class="part" id="battle-eyes-right" d="M103.5,43.5 Q106.0,40.9 110.1,43.5 Q106.0,45.2 103.5,43.5 Z" fill="#22c55e" stroke="#353535" stroke-width="0.5" clip-path="url(#battle-clipHead)"><title>眼</title></path>
+<path class="part" id="battle-jaw" d="M40,54.444 L160,54.444 L160,68.9 L40,68.9 Z" fill="#22c55e" clip-path="url(#battle-clipHead)" stroke="none"><title>下颌</title></path>
+<path class="part" id="battle-chest" d="M40,80.2 L160,80.2 L160,148.2 L40,148.2 Z" fill="#22c55e" clip-path="url(#battle-clipTorso)" stroke="none"><title>胸（要害联动）</title></path>
+<path class="part" id="battle-abdomen" d="M40,146.8 L160,146.8 L160,164.488 L40,164.488 Z" fill="#22c55e" clip-path="url(#battle-clipAbd)" stroke="none"><title>腹</title></path>
+<path class="part" id="battle-waist" d="M40,164.488 L160,164.488 L160,175.6 L40,175.6 Z" fill="#22c55e" clip-path="url(#battle-clipAbd)" stroke="none"><title>腰</title></path>
+<ellipse class="part" id="battle-dantian" cx="100" cy="158.86" rx="8" ry="10" fill="#22c55e" stroke="#4a5a75" stroke-width="1.4" clip-path="url(#battle-clipAbd)"><title>丹田</title></ellipse>
+<path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
+<path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
+<path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
+<path d="M79.9,173.6 L120.3,173.6 L109.3,198.7 L105.0,203.8 L101.1,204.9 L96.3,204.4 L92.0,200.4 L79.9,173.9Z M67.8,188.3 L71.7,171.9 L78.8,173.3 L92.6,201.8 L76.0,190.5 L67.8,188.6Z M107.6,201.8 L112.1,194.8 L117.4,179.5 L122.0,173.0 L128.2,171.6 L132.4,188.3 L122.2,191.7 L107.6,202.1Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
+</svg>
+                        </div>
+                        <div id="enemy-body-svg-wrapper" class="hidden"></div>
+                        <div id="party-body-svg-container" class="hidden">
+                            <div id="party-body-svg-list" class="flex flex-wrap gap-2 justify-center">
+                                <!-- 动态生成 -->
+                            </div>
+                        </div>
+                    </div>
+                    <!-- 右侧：部位耐久列表 -->
+                    <div class="flex-1">
+                        <div class="grid grid-cols-2 gap-1 text-xs" id="battle-body-durability-list">
+                            <!-- 动态生成 -->
+                        </div>
+                        <!-- 机体扩展v8.0：伤口信息 -->
+                        <div class="mt-2 border-t border-gray-600 pt-2">
+                            <p class="text-xs text-gray-400 mb-1">🩸 伤口状态：</p>
+                            <div id="battle-wound-info" class="space-y-0.5">
+                                <div class="text-xs text-gray-500">无伤口</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 实体交互面板 -->
+    <div id="entity-interaction" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden">
+        <div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto mx-4">
+            <div class="flex justify-between items-start mb-4">
+                <h3 class="text-xl font-bold text-yellow-500" id="interaction-title">实体</h3>
+                <button onclick="closeInteraction()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            <div id="interaction-content">
+                <!-- 动态内容 -->
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================ -->
+    <!-- 加载顺序：按依赖关系分层排列     -->
+    <!-- ================================ -->
+
+    <!-- 第0层：全局工具函数（必须先于所有其他文件加载，解决跨文件依赖） -->
+    <script src="js/global-utils.js"></script>
+    <script src="js/core/balance-config.js"></script>
+    <script src="js/core/state-registry.js"></script>
+    <script src="js/core/panel-lifecycle.js"></script>
+    <!-- 第0.5层：统一 GameState（存档/新游戏/角色键清理） -->
+    <script src="js/core/game-state.js"></script>
+
+    <!-- v12.4 战斗难度条件栏（依赖 StateRegistry，须在 game-state.js 之后、battle.js 之前） -->
+    <script src="js/core/difficulty-config.js"></script>
+
+    <!-- 第1层：核心数据（无依赖，最优先） -->
+    <script src="js/data.js"></script>
+    <script src="js/regions.js"></script>
+    <script src="js/sects/sects.js"></script>
+    <script src="js/items.js"></script>
+
+    <!-- 第2层：命名系统（必须在randomMap、battle之前） -->
+    <script src="js/npcs/name-generator.js"></script>
+
+    <!-- 第3层：生理系统配置（在battle.js之前加载） -->
+    <script src="js/physiology-config.js"></script>
+
+    <!-- 第4层：地图与战斗 -->
+    <script src="js/qi-environment.js"></script>
+    <script src="js/map/randomMap.js"></script>
+    <script src="js/battle.js"></script>
+    <script src="js/combat-stats.js"></script>
+    <script src="js/battle-injuries.js"></script>
+
+    <!-- 第3.5层：战利品系统（在battle.js之后，依赖battle的敌人生成逻辑） -->
+    <script src="js/loot-system.js"></script>
+
+    <!-- 第4层：扩展物品（依赖items.js） -->
+    <script src="js/items-extended/01-pills.js"></script>
+    <script src="js/items-extended/02-weapons.js"></script>
+    <script src="js/items-extended/03-armor.js"></script>
+    <script src="js/items-extended/04-materials.js"></script>
+    <script src="js/items-extended/05-talismans.js"></script>
+    <script src="js/items-extended/06-arts.js"></script>
+    <script src="js/items-extended/07-food.js"></script>
+    <script src="js/items-extended/08-special.js"></script>
+    <script src="js/items-extended.js"></script>
+    <!-- B2：审查报告缺失物品 ID 补齐（在 itemById 合并之后） -->
+    <script src="js/items-extended/13-missing-ids.js"></script>
+    <!-- v13.1：绝技秘籍（玩家可学 COMBAT_ABILITIES 绝技的研读渠道，自注册进物品库） -->
+    <script src="js/items-extended/14-ability-manuals.js"></script>
+
+    <!-- 第5层：知识系统 + 背包与装备（knowledge 须在 equipment 前） -->
+    <script src="js/core/knowledge-system.js"></script>
+    <script src="js/inventory.js"></script>
+    <script src="js/economy/economy-transaction.js"></script>
+    <script src="js/core/reward-service.js"></script>
+    <script src="js/equipment.js"></script>
+
+    <!-- 第6层：核心游戏系统 -->
+    <script src="js/status-effects.js"></script>
+    <script src="js/poison-system.js"></script>
+    <script src="js/time-system.js"></script>
+    <script src="js/event-system.js"></script>
+    <!-- P1：统一事件总线（在 quest-system 之前，供任务系统订阅事件） -->
+    <script src="js/core/event-bus.js"></script>
+    <!-- v18.9 世界日历（WorldCalendar）：依赖 EventBus；镜像确定性事件/支持"闭关至事件" -->
+    <script src="js/core/world-calendar.js"></script>
+    <!-- v18.9 世界日历 UI 渲染：依赖 world-calendar.js -->
+    <script src="js/core/world-calendar-ui.js"></script>
+    <!-- v19.0 P0-3 批次 C：年度宗门目标 5 选 1（依赖 sects-system / sect-internal） -->
+    <script src="js/sects/sect-year-goal.js"></script>
+    <!-- v19.1 P0-4：宗门大比与同门竞争（依赖 sect-year-goal 的 addTournamentWin 钩） -->
+    <script src="js/sects/sect-tournament.js"></script>
+    <!-- v19.2 P0-5：NPC 自主人生（每日 5~20 NPC 抽样行动；依赖 npc-life-system 寿元 hooks） -->
+    <script src="js/npcs/npc-life-actor.js"></script>
+    <!-- v19.3 P0-6：NPC 婚姻/后代/衣钵（依赖 npc-life-actor 的 newDay 钩子） -->
+    <script src="js/npcs/npc-lineage.js"></script>
+    <script src="js/core/game-scheduler.js"></script>
+    <script src="js/quest/quest-system.js"></script>
+    <script src="js/crafting.js"></script>
+    <script src="js/crafting/alchemy-compound.js"></script>
+    <script src="js/crafting/forging-compound.js"></script>
+    <script src="js/enhancement.js"></script>
+    <script src="js/cultivation/cultivation.js"></script>
+    <script src="js/cultivation/breakthrough-system.js"></script>
+    <script src="js/cultivation/long-retreat.js"></script>
+    <script src="js/party-system.js"></script>
+    <script src="js/location-system.js"></script>
+    <script src="js/travel-system.js"></script>
+    <script src="js/building-effects.js"></script>
+    <script src="js/achievement-system.js"></script>
+    <script src="js/map/map-markers.js"></script>
+    <script src="js/enhanced-shop.js"></script>
+    <script src="js/economy/auction-service.js"></script>
+
+    <!-- 第6.5层：门派深度数据（必须在NPC系统之前，确保秘密数据就绪） -->
+    <script src="js/sects/sects-deep-data.js"></script>
+
+    <!-- 第7层：NPC系统 -->
+    <script src="js/npcs/special-npcs.js"></script>
+    <script src="js/npcs/item-tags.js"></script>
+    <script src="js/npcs/npc-system.js"></script>
+    <script src="js/npcs/npc-borrow-service.js"></script>
+    <!-- P2：NPC故事线系统（v12.6：旧 npc-storylines.js 已废弃移除，重写为 storylines-v2） -->
+    <script src="js/npcs/data.js"></script>
+
+    <!-- 第8层：NPC扩展（依赖NPC系统） -->
+    <script src="js/npcs/npc-emotions.js"></script>
+    <script src="js/npcs/npc-daily-life.js"></script>
+    <script src="js/npcs/npc-life-system.js"></script>
+    <script src="js/npcs/npc-personal-events.js"></script>
+    <!-- v12.6 故事线v2·第一批：清虚道人/灵素/铁山（NPC_PERSONAL_EVENTS 格式五段线，须在 npc-personal-events.js 之后） -->
+    <script src="js/npcs/storylines-v2/batch1.js"></script>
+    <script src="js/npcs/storylines-v2/batch2.js"></script>
+    <script src="js/npcs/storylines-v2/batch3.js"></script>
+    <!-- v13.6 秘密系统2.0·筹码骨架（须在 DEEP_TALK_CATEGORIES/DEEP_TALK_REAL_HANDLERS 与 StateRegistry 之后） -->
+    <script src="js/npcs/secret-leverage.js"></script>
+    <!-- v13.9 物品与NPC联动·行囊系统（须在 StateRegistry 之后；包装 app.js 的赠礼函数，延迟到 DOMContentLoaded） -->
+    <script src="js/npcs/npc-inventory.js"></script>
+    <!-- v14.0 社交页扩展：话题/情报真实数据驱动 + 动态问候（包装最外层getGreeting） -->
+    <script src="js/npcs/social-content.js"></script>
+    <!-- v14.2 16Personalities 五维性格（连续倾向条 + 16型池 + Big5双向桥接；包装 npcManager.getNPC） -->
+    <script src="js/npcs/personality16.js"></script>
+    <!-- v12.3 温蘅（百花谷主）感情线：主线事件 / 日常接近事件 / 结局与自动触发系统 -->
+    <script src="js/npcs/baihua-events-main.js"></script>
+    <script src="js/npcs/baihua-events-extra.js"></script>
+    <script src="js/npcs/baihua-personal-events.js"></script>
+    <script src="js/relations-panel.js"></script>
+    <!-- 飞鸽传书系统 v12.0 -->
+    <script src="js/mail-system.js"></script>
+    <script src="js/mail-system-ui.js"></script>
+    <script src="js/mail-system-styles.js"></script>
+
+    <!-- 第9层：门派系统 -->
+    <script src="js/sects/sects-system.js"></script>
+    <script src="js/sects/sect-facilities.js"></script>
+    <script src="js/sects/sect-internal.js"></script>
+    <script src="js/sects/sect-join-flow.js"></script>
+    <script src="js/sects/sect-visit.js"></script>
+    <script src="js/sects/sect-specialties.js"></script>
+    <script src="js/sects/sect-events.js"></script>
+    <script src="js/sects/dao-companion-deep.js"></script>
+    <script src="js/sects/sects-deep-ui.js"></script>
+    <script src="js/sects/sect-wudang-deep.js"></script>
+
+    <!-- 第10层：v6.0+ 新增系统 -->
+    <script src="js/reputation-system.js"></script>
+    <script src="js/factions/factions.js"></script>
+    <script src="js/factions/faction-stance.js"></script>
+    <script src="js/gameplay/protection-system.js"></script>
+    <script src="js/factions/faction-invasion.js"></script>
+    <script src="js/beast-taming.js"></script>
+    <script src="js/house-system.js"></script>
+    <script src="js/weather-effects.js"></script>
+    <script src="js/world-events.js"></script>
+    <script src="js/map/landmark-explore.js"></script>
+
+    <!-- 第11层：v7.0 深度扩展系统 -->
+    <script src="js/quest/scene-performance.js"></script>
+    <script src="js/quest/choice-memory.js"></script>
+    <script src="js/cultivation/cultivation-bottleneck.js"></script>
+    <script src="js/ui-immersive.js"></script>
+
+    <!-- 第12层：扩展物品补丁（依赖各自的系统，使用setTimeout延迟合并） -->
+    <!-- 09-loot-sources.js 已废弃：战利品系统移至 js/loot-system.js -->
+    <!-- <script src="js/items-extended/09-loot-sources.js"></script> -->
+    <script src="js/items-extended/10-crafting-extensions.js"></script>
+    <script src="js/items-extended/11-event-extensions.js"></script>
+    <script src="js/items-extended/12-quest-extensions.js"></script>
+    <script src="js/core/content-validator.js"></script>
+
+    <!-- 第13层：主逻辑与后置系统 -->
+    <script src="js/gameplay/arena-system.js"></script>
+    <script src="js/gameplay/talisman-system.js"></script>
+    <script src="js/extensions/talisman-advanced.js"></script>
+    <script src="js/extensions/formation-system.js"></script>
+    <script src="js/extensions/puppet-system.js"></script>
+    <script src="js/extensions/dungeon-dynamic.js"></script>
+    <script src="js/extensions/resource-points.js"></script>
+    <script src="js/extensions/market-dynamic.js"></script>
+    <script src="js/extensions/beast-ecosystem.js"></script>
+    <script src="js/extensions/reincarnation.js"></script>
+    <script src="js/extensions/reincarnation-integration.js"></script>
+    <script src="js/extensions/narrative-consequence.js"></script>
+    <script src="js/extensions/cave-facilities.js"></script>
+    <script src="js/extensions/codex-tutorial.js"></script>
+    <script src="js/extensions/player-sect.js"></script>
+    <script src="js/extensions/beast-evolution.js"></script>
+    <script src="js/extensions/beast-tide.js"></script>
+    <script src="js/core/world-loop.js"></script>
+    <!-- P0-5 死亡仙侠化：神魂/残魂系统（依赖运行时对象，须在 app.js 之前） -->
+    <script src="js/core/soul-state.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/cultivation/breakthrough-ritual.js"></script>
+    <script src="js/lifespan-system.js"></script>
+    
+    <!-- 第14层：v9.0 情境引擎 + 第二批设施 -->
+    <script src="js/core/scenario-engine.js"></script>
+    <script src="js/city-facilities/facility-batch2.js"></script>
+    
+    <!-- 第15层：v9.9 日常事件系统（在 event-system 之后，依赖 showMessage/addItem 等） -->
+    <script src="js/core/daily-events.js"></script>
+
+    <!-- 第16层：调试面板（Admin 专属，依赖 app.js 中的 currentCharData） -->
+    <script src="js/debug-panel.js"></script>
+</body>
+</html>
