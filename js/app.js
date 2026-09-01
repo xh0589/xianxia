@@ -146,25 +146,48 @@ function initRootSystem() {
             let newValue = parseFloat(e.target.value);
             if (isNaN(newValue) || newValue < 0) newValue = 0;
             if (newValue > 100) newValue = 100;
+            // BUG-5 修复：用整数比例分配 + 最后一项吃差值，保证总和严格=100
+            newValue = Math.round(newValue);
             let diff = newValue - rootValues[index];
             if (diff === 0) return;
-            rootValues[index] = newValue;
             let otherIndices = [0, 1, 2, 3, 4].filter(i => i !== index);
-            let sumOthers = otherIndices.reduce((sum, i) => sum + rootValues[i], 0);
-            if (sumOthers === 0) {
-                otherIndices.forEach(i => rootValues[i] = -diff / 4);
-            } else {
-                otherIndices.forEach(i => {
-                    let proportion = rootValues[i] / sumOthers;
-                    rootValues[i] -= diff * proportion;
-                    if (rootValues[i] < 0.01) rootValues[i] = 0;
+            // 其他 4 项需要凑出的目标总和（整数运算）
+            let othersTarget = 100 - newValue;
+            let currentOthers = otherIndices.reduce((s, i) => s + rootValues[i], 0);
+            if (currentOthers < 0.01) {
+                // 其他都是 0，平均分配，最后一项吃 round 误差
+                let each = Math.floor(othersTarget / 4);
+                let lastVal = othersTarget - each * 3;
+                otherIndices.forEach((i, idx) => {
+                    rootValues[i] = idx === 3 ? lastVal : each;
                 });
+            } else {
+                // 按比例缩放（整数），最后一项吸收差值
+                let allocated = 0;
+                for (let k = 0; k < 3; k++) {
+                    let i = otherIndices[k];
+                    let proportion = rootValues[i] / currentOthers;
+                    rootValues[i] = Math.round(othersTarget * proportion);
+                    allocated += rootValues[i];
+                }
+                // 最后一项 = 目标 - 已分配（保证总和精确 = 100）
+                rootValues[otherIndices[3]] = othersTarget - allocated;
+                if (rootValues[otherIndices[3]] < 0) {
+                    // 极端情况：已分配 > 目标，需要从已分配的项中扣回
+                    // 简单保护：把超出按比例从已分配中减回
+                    let excess = -rootValues[otherIndices[3]];
+                    for (let k = 0; k < 3 && excess > 0; k++) {
+                        let i = otherIndices[k];
+                        if (rootValues[i] > 0) {
+                            let take = Math.min(rootValues[i], excess);
+                            rootValues[i] -= take;
+                            excess -= take;
+                        }
+                    }
+                    rootValues[otherIndices[3]] = 0;
+                }
             }
-            let finalSum = rootValues.reduce((a, b) => a + b, 0);
-            if (finalSum !== 100) {
-                let lastOther = otherIndices[otherIndices.length - 1];
-                rootValues[lastOther] += (100 - finalSum);
-            }
+            rootValues[index] = newValue;
             updateRootUI();
         });
     });
@@ -7105,6 +7128,10 @@ function onDungeonBattleResolved(won) {
         currentCharData.dungeonProgress = currentCharData.dungeonProgress || {};
         currentCharData.dungeonProgress[dungeonState.id] = 1;
         dungeonState.active = false;
+        // F-1.2 重构：补全 dungeon:completed 事件 emit（仅通关最终层时）
+        if (window.EventBus && typeof window.EventBus.emit === 'function') {
+            try { window.EventBus.emit('dungeon:completed', { dungeonId: dungeonState.id, dungeonName: dungeonState.name }); } catch (e) {}
+        }
         showMessage(dungeonState.name + '通关！获得 ' + clearBonus + ' 灵石与稀有装备', 'success');
         if (window.updateCurrencyUI) window.updateCurrencyUI();
         if (window.updateInventoryUI) window.updateInventoryUI();
@@ -7269,6 +7296,10 @@ function exploreDungeonFloor() {
         var clearItems = ['iron_sword', 'foundation_pill', 'mat_lingzhi']; var clearItem = clearItems[Math.floor(Math.random() * clearItems.length)];
         if (typeof window.addItem === 'function') window.addItem(clearItem, 1);
         currentCharData.dungeonProgress = currentCharData.dungeonProgress || {}; currentCharData.dungeonProgress[dungeonState.id] = 1; dungeonState.active = false;
+        // F-1.2 重构：补全 dungeon:completed 事件 emit
+        if (window.EventBus && typeof window.EventBus.emit === 'function') {
+            try { window.EventBus.emit('dungeon:completed', { dungeonId: dungeonState.id, dungeonName: dungeonState.name }); } catch (e) {}
+        }
         showMessage(dungeonState.name + '通关！获得 ' + clearBonus + ' 灵石与' + (window.itemById?.[clearItem]?.name || clearItem), 'success');
         if (window.updateCurrencyUI) window.updateCurrencyUI(); if (window.updateInventoryUI) window.updateInventoryUI(); return;
     }

@@ -142,37 +142,10 @@ class Shop {
         return Math.max(1, price);
     }
     
-    // 出售物品给商店（接入真实背包）
-    sellItem(templateId, quantity = 1) {
-        if (!window.inventory?.slots) {
-            showMessage('背包系统未初始化', 'error');
-            return false;
-        }
-        const slot = window.inventory.slots.find(s => s && s.templateId === templateId && s.count > 0);
-        if (!slot || slot.count < quantity) {
-            showMessage('物品不足', 'error');
-            return false;
-        }
-        const tpl = window.itemById?.[templateId] || {};
-        const basePrice = tpl.price || tpl.basePrice || 20;
-        const sellPrice = Math.max(1, Math.round(basePrice * 0.5 * quantity));
+    // F-7 重构：删除死代码 sellItem（v10.5 起物品出售统一走 inventory.js sellItem → markForSale → TradeService.executeSell），
+    // 原 sellItem 固定 basePrice*0.5 绕过 TradeService 真回购率（0.25-0.35），可刷钱，且无人调用（grep 整个 js/ 无 .sellItem() 调用方）。
+    // 物品出售链路现在统一为：UI → inventory.sellItem(uid) → markForSale → 商铺 TradeService.quoteSell / executeSell。
 
-        slot.count -= quantity;
-        if (slot.count <= 0) {
-            const idx = window.inventory.slots.indexOf(slot);
-            if (idx >= 0) window.inventory.slots[idx] = null;
-        }
-
-        if (!window.inventory.currency) window.inventory.currency = { copper: 0, spiritStones: 0 };
-        window.inventory.currency.spiritStones = (window.inventory.currency.spiritStones || 0) + sellPrice;
-
-        if (window.gameLog?.add) window.gameLog.add(`向${this.name}出售了 ${quantity}x ${slot.name || templateId}，获得 ${sellPrice} 灵石`, 'info');
-        showMessage(`出售成功，获得 ${sellPrice} 灵石`, 'success');
-        if (window.updateInventoryUI) window.updateInventoryUI();
-        if (window.updateCurrencyUI) window.updateCurrencyUI();
-        return true;
-    }
-    
     // 购买物品（扣 inventory.currency.spiritStones，写入真实背包）
     buyItem(itemId, quantity = 1) {
         const item = this.inventory.find(i => i.id === itemId);
@@ -745,7 +718,17 @@ const TradeService = {
         
         var template = slot.getTemplate();
         if (!template) return false;
-        
+
+        // F-8 修复：之前在扣减后生成快照，归零时 slots[slotIdx]=null，count 变 0 → 回购数量错。
+        // 现在先快照再扣减，并把 currency 传给 _addToBuyback（之前 currency 从未写入，回购永远按 spiritStones 扣款）。
+        var itemSnapshot = null;
+        if (slot && typeof slot.toJSON === 'function') {
+            try { itemSnapshot = slot.toJSON(); } catch(e) {}
+        } else if (slot) {
+            try { itemSnapshot = JSON.parse(JSON.stringify(slot)); } catch(e) {}
+        }
+        var buybackCurrency = quote.currency;
+
         // 扣除物品
         slot.count -= quote.quantity;
         if (slot.count <= 0) {
@@ -766,8 +749,8 @@ const TradeService = {
             }
         }
         
-        // 物品进入商店回购列表
-        this._addToBuyback(quote.shopId, slot, template, quote.quantity, quote.totalPrice);
+        // 物品进入商店回购列表（用预扣减快照 + currency）
+        this._addToBuyback(quote.shopId, itemSnapshot, template, quote.quantity, quote.totalPrice, buybackCurrency);
         
         // 清理报价
         delete this._quotes[quoteId];
@@ -785,27 +768,23 @@ const TradeService = {
     },
     
     // 添加到回购列表
-    _addToBuyback: function(shopId, slot, template, quantity, sellPrice) {
+    // F-8 修复：itemSnapshot 改为外部传入（executeSell 在扣减前生成），避免归零时 count=0；
+    // 增加 currency 参数（之前 currency 从未写入，回购永远按 spiritStones 扣款——铜钱物品出售得铜钱，回购却扣灵石）
+    _addToBuyback: function(shopId, itemSnapshot, template, quantity, sellPrice, currency) {
         if (!this._buybackItems[shopId]) {
             this._buybackItems[shopId] = [];
         }
         // 回购价格 = 出售价的120%
         var buybackPrice = Math.floor(sellPrice * 1.2);
-        // P1-8: 保存完整物品实例（含强化/耐久/词条）
-        var itemSnapshot = null;
-        if (slot && typeof slot.toJSON === 'function') {
-            try { itemSnapshot = slot.toJSON(); } catch(e) {}
-        } else if (slot) {
-            try { itemSnapshot = JSON.parse(JSON.stringify(slot)); } catch(e) {}
-        }
         this._buybackItems[shopId].push({
             uid: 'buyback_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
-            templateId: slot ? slot.templateId : (template ? template.id : 'unknown'),
+            templateId: itemSnapshot ? (itemSnapshot.templateId || (template ? template.id : 'unknown')) : (template ? template.id : 'unknown'),
             name: template ? (template.name || template.id) : '未知物品',
             icon: template ? (template.icon || '📦') : '📦',
             quantity: quantity,
             sellPrice: sellPrice,
             buybackPrice: buybackPrice,
+            currency: currency || 'spiritStones', // F-8 修复：保存出售时所用货币，回购按相同货币扣款
             timestamp: Date.now(),
             itemSnapshot: itemSnapshot
         });

@@ -101,9 +101,13 @@ function addReputation(cityName, amount) {
         else console.log(msg);
     }
 
-    // 每次都同步一次：调试/导入直接改数值时也不会出现“数值够了但功能没解锁”。
+    // 每次都同步一次：调试/导入直接改数值时也不会出现"数值够了但功能没解锁"。
     syncUnlockedFeatures(cityName, { notify: newLevel > oldLevel });
     saveReputation();
+    // F-1.2 重构：补全 reputation 事件 emit。quest-system.js 事件桥监听此事件推进 reputation objective
+    if (window.EventBus && typeof window.EventBus.emit === 'function') {
+        try { window.EventBus.emit('reputation:changed', { cityName: cityName, amount: Number(amount) || 0, total: cityReputation[cityName].value }); } catch (e) {}
+    }
     return cityReputation[cityName].value;
 }
 

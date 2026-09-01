@@ -308,6 +308,10 @@ function joinSect(sectId, evalResult) {
     }
     // v19.2 收尾：入宗成功 → 弹"年度目标选择"
     try { _promptYearGoalAfterJoin(); } catch (e0) {}
+    // F-1.2 重构：通过事件总线发 join_sect 事件，让 quest-system.js 的事件桥统一处理（不再补丁式直接调 updateQuestObjective）
+    if (window.EventBus && typeof window.EventBus.emit === 'function') {
+        try { window.EventBus.emit('sect:joined', { sectId: sectId, rank: discipleState.rank }); } catch (e) {}
+    }
     return true;
 }
 
@@ -1294,7 +1298,22 @@ if (window.StateRegistry) {
                 level: Number(ds.level) || 1,
                 tasksCompleted: Number(ds.tasksCompleted) || 0,
                 joinTime: ds.joinTime || null,
-                _gbFaction: ds._gbFaction || null
+                _gbFaction: ds._gbFaction || null,
+                // F-6 修复：师徒/侍妾/藏经阁参悟/门派事件/任务日/发薪日等下划线字段
+                // 之前未导出，存读档后师徒关系丢失可重拜、藏经阁参悟归零、侍妾变杂役、晋升按钮重出
+                _masterId: ds._masterId || null,
+                _masterName: ds._masterName || null,
+                _masterSect: ds._masterSect || null,
+                _masterBlessDay: ds._masterBlessDay || null,
+                _leftMasters: ds._leftMasters ? JSON.parse(JSON.stringify(ds._leftMasters)) : {},
+                _chushiDone: !!ds._chushiDone,
+                artInsights: ds.artInsights ? JSON.parse(JSON.stringify(ds.artInsights)) : {},
+                isConcubine: !!ds.isConcubine,
+                concubineFavor: Number(ds.concubineFavor) || 0,
+                _sectEventDay: ds._sectEventDay || null,
+                _pendingSectEvent: ds._pendingSectEvent ? JSON.parse(JSON.stringify(ds._pendingSectEvent)) : null,
+                _sectTaskDay: ds._sectTaskDay || null,
+                _lastSalaryDay: ds._lastSalaryDay || null
             };
         },
         import: function(data) {
@@ -1312,6 +1331,20 @@ if (window.StateRegistry) {
             ds.tasksCompleted = Number(data.tasksCompleted) || 0;
             ds.joinTime = data.joinTime || null;
             ds._gbFaction = data._gbFaction || null;
+            // F-6 修复：恢复师徒/侍妾/藏经阁/门派事件/任务日/发薪日
+            ds._masterId = data._masterId || null;
+            ds._masterName = data._masterName || null;
+            ds._masterSect = data._masterSect || null;
+            ds._masterBlessDay = data._masterBlessDay || null;
+            ds._leftMasters = data._leftMasters ? JSON.parse(JSON.stringify(data._leftMasters)) : {};
+            ds._chushiDone = !!data._chushiDone;
+            ds.artInsights = data.artInsights ? JSON.parse(JSON.stringify(data.artInsights)) : {};
+            ds.isConcubine = !!data.isConcubine;
+            ds.concubineFavor = Number(data.concubineFavor) || 0;
+            ds._sectEventDay = data._sectEventDay || null;
+            ds._pendingSectEvent = data._pendingSectEvent ? JSON.parse(JSON.stringify(data._pendingSectEvent)) : null;
+            ds._sectTaskDay = data._sectTaskDay || null;
+            ds._lastSalaryDay = data._lastSalaryDay || null;
             try {
                 if (typeof window.updateSectUI === 'function') window.updateSectUI();
             } catch (e) {}
@@ -1329,6 +1362,20 @@ if (window.StateRegistry) {
             ds.tasksCompleted = 0;
             ds.joinTime = null;
             ds._gbFaction = null;
+            // F-6 修复：reset 也要清这些字段
+            ds._masterId = null;
+            ds._masterName = null;
+            ds._masterSect = null;
+            ds._masterBlessDay = null;
+            ds._leftMasters = {};
+            ds._chushiDone = false;
+            ds.artInsights = {};
+            ds.isConcubine = false;
+            ds.concubineFavor = 0;
+            ds._sectEventDay = null;
+            ds._pendingSectEvent = null;
+            ds._sectTaskDay = null;
+            ds._lastSalaryDay = null;
         }
     });
 }

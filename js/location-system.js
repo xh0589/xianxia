@@ -310,6 +310,10 @@ function enterCity(cityName) {
     if (window.currentCharData) {
         window.currentCharData.location = cityName;
     }
+    // F-1.2 重构：补全 location:visited 事件 emit。quest-system.js 事件桥监听此事件推进 visit objective
+    if (window.EventBus && typeof window.EventBus.emit === 'function') {
+        try { window.EventBus.emit('location:visited', { locationId: cityName, locationName: cityName }); } catch (e) {}
+    }
     saveLocationData();
     
     showMessage(`来到了 ${cityName}：${city.desc}`, 'info');
@@ -348,10 +352,29 @@ function checkAccessRequirement(requirement, playerRealm, playerLayer) {
 
 // ============ 渲染城市建筑列表 ============
 function renderCityBuildings(cityName) {
+    if (!cityName) { console.warn('[renderCityBuildings] cityName is empty, skip'); return; }
     var normalizedName = cityName.replace(/\s+/g, '');
     const city = cityData[normalizedName] || cityData[cityName];
     if (!city) return;
-    
+
+    // ===== 关键：先确保 cityPanel 存在（及其占位 DOM 节点），再更新文本 =====
+    // 修复 BUG-2：原顺序在「先更新 textContent → 再 createCityPanel」时，
+    // createCityPanel 会用模板 innerHTML 重建 #city-current-location-display 节点，
+    // 导致 line 359-363 的更新被覆盖（首次进入城市看到占位符）。
+    let cityPanel = document.getElementById('city-panel');
+    if (!cityPanel) {
+        cityPanel = createCityPanel();
+        const mapPanel = document.getElementById('panel-map');
+        if (mapPanel) {
+            mapPanel.appendChild(cityPanel);
+        } else {
+            const gameInterface = document.getElementById('game-world') || document.querySelector('main') || document.body;
+            if (gameInterface) {
+                gameInterface.appendChild(cityPanel);
+            }
+        }
+    }
+
     // 更新当前位置显示
     const locationDisplay = document.getElementById('current-location-display');
     if (locationDisplay) locationDisplay.textContent = cityName;
@@ -377,21 +400,6 @@ function renderCityBuildings(cityName) {
         try { repMini.innerHTML = window.getReputationPanelHtml(cityName); } catch (e) { repMini.innerHTML = ''; }
     } else if (repMini) {
         repMini.innerHTML = '';
-    }
-    
-    // 查找或创建城市面板（插入到 panel-map 区域，替代地图位置）
-    let cityPanel = document.getElementById('city-panel');
-    if (!cityPanel) {
-        cityPanel = createCityPanel();
-        const mapPanel = document.getElementById('panel-map');
-        if (mapPanel) {
-            mapPanel.appendChild(cityPanel);
-        } else {
-            const gameInterface = document.getElementById('game-world') || document.querySelector('main') || document.body;
-            if (gameInterface) {
-                gameInterface.appendChild(cityPanel);
-            }
-        }
     }
     
     cityPanel.style.display = 'block';
@@ -482,7 +490,7 @@ function createCityPanel() {
         </div>
         
         <div id="city-current-location-display" class="mb-2 p-3 bg-gray-800 rounded">
-            <span class="text-gray-500">当前所在地：--</span>
+            <span class="text-gray-500">前往城市后将显示当前所在地</span>
         </div>
         <div id="city-panel-desc" class="mb-2 text-sm text-gray-400"></div>
         <div id="city-panel-meta" class="mb-4 text-xs text-gray-500 flex flex-wrap gap-2"></div>

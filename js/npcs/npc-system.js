@@ -1268,7 +1268,10 @@ class NPC {
                 totalAttacks: this.memory.totalAttacks || 0,
                 totalRefusals: this.memory.totalRefusals || 0,
                 firstMetDay: this.memory.firstMetDay || 0,
-                _unlockedSecretDialogues: this.memory._unlockedSecretDialogues ? [...this.memory._unlockedSecretDialogues] : []
+                _unlockedSecretDialogues: this.memory._unlockedSecretDialogues ? [...this.memory._unlockedSecretDialogues] : [],
+                // F-5 修复：爱情线冷却与告白承诺标志之前未序列化，读档冷却清零 + 前置承诺丢失，可绕过冷却直接 bond_dao
+                _loveCd: this.memory._loveCd ? {...this.memory._loveCd} : {},
+                _loveAccepted_confess: this.memory._loveAccepted_confess || false
             } : null,
             state: this.state ? {
                 mood: this.state.mood ?? 50,
@@ -1411,7 +1414,10 @@ class NPC {
                 totalAttacks: data.memory.totalAttacks || 0,
                 totalRefusals: data.memory.totalRefusals || 0,
                 firstMetDay: data.memory.firstMetDay || 0,
-                _unlockedSecretDialogues: data.memory._unlockedSecretDialogues || []
+                _unlockedSecretDialogues: data.memory._unlockedSecretDialogues || [],
+                // F-5 修复：恢复爱情线冷却与告白承诺标志，否则读档后可绕过冷却直接 bond_dao
+                _loveCd: data.memory._loveCd || {},
+                _loveAccepted_confess: data.memory._loveAccepted_confess || false
             };
         }
         if (data.state) {
@@ -3137,6 +3143,10 @@ function showNPCDialog(npcId, screen = 'main') {
         if (!npc.memory.firstMet) npc.recordPlayerAction('first_meet', 'neutral');
         npc.recordPlayerAction('greet', 'neutral');
         markNPCMetNow(npc);
+        // F-1.2 重构：补全 npc:talked 事件 emit。quest-system.js 事件桥监听此事件推进 talk_to_npc/talk objective
+        if (window.EventBus && typeof window.EventBus.emit === 'function') {
+            try { window.EventBus.emit('npc:talked', { npcId: npcId, npcName: npc.name }); } catch (e) {}
+        }
     }
     const occAction = OCCUPATION_SPECIFIC_ACTIONS[npc.occupation] || null;
     let occHtml = '';

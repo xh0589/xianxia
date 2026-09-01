@@ -76,7 +76,7 @@ const mainQuestChain = [
         description: '你踏上了修仙之路，首先需要前往一个门派拜师学艺。',
         objectives: [
             { type: 'visit', location: '门派列表', count: 1, completed: false },
-            { type: 'join_sect', sectId: null, completed: false }
+            { type: 'join_sect', sectId: null, count: 1, completed: false }
         ],
         rewards: {
             exp: 100,
@@ -93,9 +93,9 @@ const mainQuestChain = [
         type: QUEST_TYPES.MAIN,
         priority: QUEST_PRIORITIES.CRITICAL,
         description: '修炼功法，突破到炼气期三层，为筑基做准备。',
-        objectives: [
-            { type: 'cultivation_realm', realm: '炼气', layer: 3, completed: false }
-        ],
+          objectives: [
+              { type: 'cultivation_realm', realm: '炼气', layer: 3, count: 1, completed: false }
+          ],
         rewards: {
             exp: 300,
             spiritStones: 300,
@@ -130,7 +130,7 @@ const mainQuestChain = [
         priority: QUEST_PRIORITIES.CRITICAL,
         description: '使用筑基丹尝试突破到筑基期。',
         objectives: [
-            { type: 'breakthrough_realm', fromRealm: '炼气', toRealm: '筑基', completed: false }
+            { type: 'breakthrough_realm', fromRealm: '炼气', toRealm: '筑基', count: 1, completed: false }
         ],
         rewards: {
             exp: 1000,
@@ -148,7 +148,7 @@ const mainQuestChain = [
         priority: QUEST_PRIORITIES.CRITICAL,
         description: '在九州大陆建立自己的声望，成为知名修士。',
         objectives: [
-            { type: 'reputation', amount: 500, completed: false },
+            { type: 'reputation', amount: 500, count: 500, completed: false },
             { type: 'complete_quests', count: 20, completed: false }
         ],
         rewards: {
@@ -438,6 +438,10 @@ function acceptQuest(questId) {
     
     showMessage(`接取任务：${quest.title}`, 'success');
     updateQuestUI();
+    // BUG-12 修复：主线/日常列表由独立渲染函数负责，接取后必须一并刷新，
+    // 否则已接取状态要等切面板（showQuestPanel → updateMainQuestUI）才显示。
+    updateMainQuestUI();
+    updateDailyQuestUI();
     return true;
 }
 
@@ -609,7 +613,10 @@ function checkEndingCondition() {
     var questProgress = window.playerQuestProgress;
     var completedMainQuests = (questProgress && questProgress.completedQuests) ?
         questProgress.completedQuests.filter(function(qid) { return qid.indexOf('main_') === 0; }).length : 0;
-    var allCompleted = completedMainQuests >= 35;
+    // F-1 修复：原条件 completedMainQuests >= 35，但实际主线只有 5(quest-system.js) + 15(12-quest-extensions.js) = 20 个
+    // main_006-020 完全缺失，35 步要求让 5 结局（飞升/入魔/隐退/轮回/混沌之主）全部不可达 → 结局系统是死代码
+    // 改为 20：完成所有已有主线即可触发结局
+    var allCompleted = completedMainQuests >= 20;
     
     // 检查混沌之主（最难达成）
     if (allCompleted && killCount >= 50 && killCount <= 150 && hasDaoCompanion) {
@@ -800,6 +807,11 @@ function turnInQuest(questId) {
     
     playerQuestProgress.totalCompleted++;
     saveQuestProgress();
+
+    // F-1.2 重构：补全 quest:completed 事件 emit。quest-system.js 事件桥监听此事件推进 complete_quests objective
+    if (window.EventBus && typeof window.EventBus.emit === 'function') {
+        try { window.EventBus.emit('quest:completed', { questId: questId, questType: quest.type }); } catch (e) {}
+    }
     
     // v12.4：交付后移除该任务的 🎯 目标标记，并重绘剩余活跃任务标记
     if (typeof window.removeQuestTargetMarkers === 'function') {
@@ -811,6 +823,9 @@ function turnInQuest(questId) {
     
     showMessage('交付任务：' + quest.title + '，获得奖励！', 'success');
     updateQuestUI();
+    // BUG-12 修复：交付后主线/日常列表也要立即刷新
+    updateMainQuestUI();
+    updateDailyQuestUI();
     
     // 检查是否是主线最后一环（main_035），触发结局
     if (questId === 'main_035') {
@@ -956,6 +971,9 @@ function updateQuestObjective(questId, objectiveType, extraData) {
     
     saveQuestProgress();
     updateQuestUI();
+    // BUG-12 修复：任务进度推进（含完成）后主线/日常列表也要刷新
+    updateMainQuestUI();
+    updateDailyQuestUI();
 }
 
 // ============ 获取活跃任务列表 ============
@@ -1018,14 +1036,17 @@ function restorePlayerQi(amount) {
 
 // ============ 更新任务UI ============
 function updateQuestUI() {
-    const questPanel = document.getElementById('quest-panel');
+    // BUG-10 修复：HTML 任务面板容器是 panel-quests，旧守卫查的 quest-panel（幽灵面板）不存在，
+    // 导致 updateQuestUI 永远提前 return，活跃/已完成任务列表从不渲染。
+    // 改为：优先 panel-quests，兼容旧 quest-panel。
+    const questPanel = document.getElementById('panel-quests') || document.getElementById('quest-panel');
     if (!questPanel) return;
     // B4：CSSStyleDeclaration 无 contains；用 display 判断
     try {
         var disp = (window.getComputedStyle ? getComputedStyle(questPanel).display : questPanel.style.display);
         if (disp === 'none') return;
     } catch (e) {}
-    
+
     // 更新任务列表显示
     const activeList = document.getElementById('active-quest-list');
     if (activeList) {
@@ -1360,6 +1381,11 @@ function questEventText(value) {
 function questObjectiveMatches(obj, eventType, data) {
     data = data || {};
     if (!obj) return false;
+    // F-1.2 重构：完整事件→objective 匹配。
+    // 之前只处理 enemy:defeated / item:obtained / item:crafted / npc:talked / location:visited /
+    // dungeon:completed / arena:won / escort:completed / cultivation:completed，9 种；
+    // 缺：join_sect / breakthrough_realm / cultivation_realm / reputation / complete_quests / talk_to_npc / cultivate。
+    // 现在 13 类事件全有匹配，桥也全有监听。
     if (eventType === 'enemy:defeated') {
         if (obj.type !== 'kill' && obj.type !== 'combat') return false;
         var target = questEventText(obj.target || obj.enemyId || obj.enemyType).toLowerCase();
@@ -1374,15 +1400,45 @@ function questObjectiveMatches(obj, eventType, data) {
         return obj.type === 'craft' && (!obj.item || obj.item === data.itemId || obj.item === data.name);
     }
     if (eventType === 'npc:talked') {
-        return obj.type === 'talk' && (!obj.npcId && !obj.npcName || obj.npcId === data.npcId || obj.npcName === data.name);
+        // 同时匹配 talk / talk_to_npc
+        if (obj.type !== 'talk' && obj.type !== 'talk_to_npc') return false;
+        return !obj.npcId && !obj.npcName || obj.npcId === data.npcId || obj.npcName === data.npcName;
     }
     if (eventType === 'location:visited') {
-        return obj.type === 'visit' && (!obj.locationId && !obj.locationName || obj.locationId === data.locationId || obj.locationName === data.name);
+        if (obj.type !== 'visit') return false;
+        return !obj.locationId && !obj.locationName && !obj.location || obj.locationId === data.locationId || obj.locationName === data.locationName || obj.location === data.locationName;
     }
-    if (eventType === 'dungeon:completed') return (obj.type === 'explore' || obj.type === 'explore_dungeon') && (!obj.dungeonId && !obj.dungeon || obj.dungeonId === data.dungeonId || obj.dungeon === data.dungeonId || obj.dungeon === data.name);
+    if (eventType === 'dungeon:completed') {
+        return (obj.type === 'explore' || obj.type === 'explore_dungeon') && (!obj.dungeonId && !obj.dungeon || obj.dungeonId === data.dungeonId || obj.dungeon === data.dungeonId || obj.dungeon === data.dungeonName);
+    }
     if (eventType === 'arena:won') return obj.type === 'arenaWin' || obj.type === 'arena_win';
     if (eventType === 'escort:completed') return obj.type === 'escort';
-    if (eventType === 'cultivation:completed') return obj.type === 'meditate' || obj.type === 'practice';
+    if (eventType === 'cultivation:completed') return obj.type === 'meditate' || obj.type === 'practice' || obj.type === 'cultivate';
+    if (eventType === 'cultivation:breakthrough') {
+        if (obj.type === 'breakthrough_realm') {
+            if (obj.fromRealm && obj.fromRealm !== data.fromRealm) return false;
+            if (obj.toRealm && obj.toRealm !== data.toRealm) return false;
+            return true;
+        }
+        if (obj.type === 'cultivation_realm') {
+            if (obj.realm && obj.realm !== data.toRealm) return false;
+            if (obj.layer != null && Number(obj.layer) !== Number(data.toLayer)) return false;
+            return true;
+        }
+        return false;
+    }
+    if (eventType === 'sect:joined') {
+        if (obj.type !== 'join_sect') return false;
+        return !obj.sectId || obj.sectId === data.sectId;
+    }
+    if (eventType === 'reputation:changed') {
+        if (obj.type !== 'reputation') return false;
+        if (obj.city && obj.city !== data.cityName) return false;
+        return true;
+    }
+    if (eventType === 'quest:completed') {
+        return obj.type === 'complete_quests';
+    }
     return false;
 }
 
@@ -1404,19 +1460,61 @@ function advanceQuestObjectivesFromEvent(eventType, eventData) {
     if (changed) {
         saveQuestProgress();
         updateQuestUI();
+        // BUG-12 修复：事件推进任务进度后主线/日常列表也要刷新
+        updateMainQuestUI();
+        updateDailyQuestUI();
         try { updateQuestTracker(); } catch (e) {}
     }
 }
 
 function registerQuestEventBridge() {
     if (!window.EventBus || typeof window.EventBus.on !== 'function') return false;
-    ['enemy:defeated','item:obtained','item:crafted','npc:talked','location:visited','dungeon:completed','arena:won','escort:completed','cultivation:completed']
-        .forEach(function(type) {
-            window.EventBus.on(type, function(data) { advanceQuestObjectivesFromEvent(type, data || {}); });
-        });
+    // F-1.2 重构：完整事件桥。
+    // 之前只听 9 类事件，且 location:visited / npc:talked / dungeon:completed 全工程无任何 emit，
+    // breakthrough-system.js emit 的是 cultivation:breakthrough 而桥听 cultivation:completed（错位），
+    // join_sect 完全没有事件。
+    // 重构后：所有相关系统（location-system/npc-system/app/reputation-system/quest 自身）在操作成功时 emit，
+    // 桥统一监听 + questObjectiveMatches 统一匹配。
+    var types = [
+        'enemy:defeated',     // 战斗
+        'item:obtained',      // 拾取
+        'item:crafted',       // 合成
+        'npc:talked',         // 与NPC对话（npc-system.js showNPCDialog 已 emit）
+        'location:visited',   // 抵达城市（location-system.js enterCity 已 emit）
+        'dungeon:completed',  // 秘境通关（app.js dungeon 通关点已 emit）
+        'arena:won',          // 竞技场胜
+        'escort:completed',   // 护送
+        'cultivation:completed',
+        'cultivation:breakthrough', // 突破（breakthrough-system.js emit 的事件名）
+        'sect:joined',        // 加入门派（sects-system.js joinSect 已 emit）
+        'reputation:changed', // 声望变化（reputation-system.js addReputation 已 emit）
+        'quest:completed'     // 任务交付（quest-system.js turnInQuest 自身 emit）
+    ];
+    types.forEach(function(type) {
+        window.EventBus.on(type, function(data) { advanceQuestObjectivesFromEvent(type, data); });
+    });
     return true;
 }
 
 registerQuestEventBridge();
 window.advanceQuestObjectivesFromEvent = advanceQuestObjectivesFromEvent;
+
+// F-11 重构：trackedQuests 注册到 StateRegistry，由 StateRegistry.exportAll/importAll 接管存档
+// 之前用 localStorage('xianxia_tracked_quests')，game-state.js collect 不收 → 读档清零
+if (window.StateRegistry && typeof window.StateRegistry.register === 'function') {
+    window.StateRegistry.register('trackedQuests', {
+        version: 1,
+        export: function() { return JSON.parse(JSON.stringify(_trackedQuests || [])); },
+        import: function(data) {
+            if (!Array.isArray(data)) return;
+            _trackedQuests.length = 0;
+            _trackedQuests.push.apply(_trackedQuests, data);
+            window._trackedQuests = _trackedQuests;
+        },
+        reset: function() {
+            _trackedQuests.length = 0;
+            window._trackedQuests = _trackedQuests;
+        }
+    });
+}
 

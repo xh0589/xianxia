@@ -1067,18 +1067,22 @@ function processPostBattleRelationships(battle) {
 }
 
 // ==================== 增强 PartyMember 类以支持战斗伤害追踪 ====================
-const originalPartyMemberConstructor = PartyMember.constructor;
-PartyMember.prototype = {
-    ...PartyMember.prototype,
-    takeDamage: function(amount) {
+// 修复 F-4：之前用对象展开 {...PartyMember.prototype} 重写原型，
+// class 定义的方法是 non-enumerable，展开不复制，导致 isAlive/gainExp/levelUp/restore 全丢；
+// 新 takeDamage 又依赖从未赋值的 this.originalTakeDamage，队友实际无敌。
+// 修复：保留原 takeDamage 引用，只在原型上覆写一个方法，不再替换整个 prototype 对象。
+if (!PartyMember.prototype.__patchedBattleTracking) {
+    const __origTakeDamage = PartyMember.prototype.takeDamage;
+    PartyMember.prototype.takeDamage = function(amount) {
         // 记录本次伤害，用于战后关系计算
         this.battleCurrentAmount = (this.battleCurrentAmount || 0) + amount;
-        // 调用原始的 takeDamage
-        if (this.originalTakeDamage) {
-            this.originalTakeDamage(amount);
+        // 调用原始 takeDamage
+        if (typeof __origTakeDamage === 'function') {
+            __origTakeDamage.call(this, amount);
         }
-    }
-};
+    };
+    PartyMember.prototype.__patchedBattleTracking = true;
+}
 
 // ==================== 导出到全局 ====================
 window.partySystem = {

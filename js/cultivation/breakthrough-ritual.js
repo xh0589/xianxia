@@ -98,8 +98,8 @@ const BREAKTHROUGH_SIDE_EFFECTS = [
 const BREAKTHROUGH_MATERIALS = {
     '炼气→筑基': { items: [{ id: 'pill_foundation', name: '筑基丹', count: 1 }], minEnergy: 60, minQi: 50 },
     '筑基→金丹': { items: [{ id: 'pill_golden_core', name: '凝金丹', count: 1 }], minEnergy: 70, minQi: 60 },
-    '金丹→元婴': { items: [{ id: 'pill_婴变', name: '婴变丹', count: 1 }], minEnergy: 80, minQi: 70 },
-    '元婴→化神': { items: [{ id: 'pill_化神', name: '化神丹', count: 1 }], minEnergy: 85, minQi: 80 },
+    '金丹→元婴': { items: [{ id: 'pill_primordial', name: '元婴丹', count: 1 }], minEnergy: 80, minQi: 70 },
+    '元婴→化神': { items: [{ id: 'pill_divine', name: '化神丹', count: 1 }], minEnergy: 85, minQi: 80 },
     'default': { items: [], minEnergy: 50, minQi: 40 }
 };
 

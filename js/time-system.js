@@ -127,11 +127,12 @@ function advanceTime(minutes, actionName) {
     gameTime.currentMinute = totalMinutesInDay % 60;
     
     // 新的一天
-    const daysPassed = Math.floor(gameTime.totalMinutes / 1440);
-    if (daysPassed > gameTime.currentDay - 1) {
-        const newDay = daysPassed + 1;
-        if (newDay > gameTime.currentDay) {
-            onNewDay(gameTime.currentDay, newDay);
+    // F-10 修复：之前只调一次 onNewDay(oldDay, newDay)，跨多天时漏触发中间天的每日重置/收入/恢复/商店刷新。
+    // 修复：按 oldDay+1..newDay 循环触发，保证每个被跨越的天都跑 onNewDay。
+    const newDay = Math.floor(gameTime.totalMinutes / 1440) + 1;
+    if (newDay > gameTime.currentDay) {
+        for (var _d = gameTime.currentDay + 1; _d <= newDay; _d++) {
+            onNewDay(_d - 1, _d);
         }
         gameTime.currentDay = newDay;
     }

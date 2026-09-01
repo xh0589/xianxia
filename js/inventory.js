@@ -65,6 +65,33 @@ class ItemInstance {
     getTemplate() {
         return window.itemById?.[this.templateId] || null;
     }
+
+    // F-7 重构：标记出售的物品不可使用/装备/丢弃（与 UI 提示"已标记为待售"一致）。
+    // 抽到 ItemInstance 内部，所有调用方统一问"canBe*"，避免守卫散落多处。
+    isMarkedForSale() {
+        return !!this.markedForSale || (window.inventory && window.inventory.markedForSale && window.inventory.markedForSale.has(this.uid));
+    }
+    canBeUsed(reason) {
+        if (this.isMarkedForSale()) {
+            if (typeof window.showMessage === 'function') window.showMessage('该物品已标记为待售，无法使用' + (reason ? '（' + reason + '）' : ''), 'warning');
+            return false;
+        }
+        return true;
+    }
+    canBeEquipped() {
+        if (this.isMarkedForSale()) {
+            if (typeof window.showMessage === 'function') window.showMessage('该物品已标记为待售，无法装备', 'warning');
+            return false;
+        }
+        return true;
+    }
+    canBeDiscarded() {
+        if (this.isMarkedForSale()) {
+            if (typeof window.showMessage === 'function') window.showMessage('该物品已标记为待售，请先取消标记或到商铺完成交易', 'warning');
+            return false;
+        }
+        return true;
+    }
     
     // 增加数量
     addCount(add) {
@@ -1160,6 +1187,11 @@ function markForSale(uid, qty) {
             if (!inventory.slots[i]) { emptyIdx = i; break; }
         }
         if (emptyIdx < 0) {
+            // F-7 修复：之前不查 maxSlots 直接 push(null)，背包满时部分标记会突破 maxSlots 上限
+            if ((inventory.slots || []).length >= (inventory.maxSlots || 30)) {
+                if (window.showMessage) window.showMessage('背包已满，无法标记更多物品为待售', 'error');
+                return false;
+            }
             emptyIdx = inventory.slots.length;
             inventory.slots.push(null);
         }
@@ -1234,7 +1266,10 @@ function clearAllMarkedForSale() {
 function equipItemFromInventory(uid) {
     const slot = inventory.slots.find(s => s && s.uid === uid);
     if (!slot) return false;
-    
+
+    // F-7 重构：用 ItemInstance.canBeEquipped 统一守卫（之前手写散落 3 处）
+    if (typeof slot.canBeEquipped === 'function' && !slot.canBeEquipped()) return false;
+
     const template = slot.getTemplate();
     if (!template) return false;
     
@@ -1469,7 +1504,10 @@ function getCombatBonuses(baseBonuses) {
 function showDiscardConfirm(uid) {
     const slot = inventory.slots.find(s => s && s.uid === uid);
     if (!slot) return;
-    
+
+    // F-7 重构：用 ItemInstance.canBeDiscarded 统一守卫
+    if (typeof slot.canBeDiscarded === 'function' && !slot.canBeDiscarded()) return;
+
     const template = slot.getTemplate();
     if (!template) return;
     

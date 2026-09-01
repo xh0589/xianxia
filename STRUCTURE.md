@@ -1,8 +1,15 @@
-========================================
-    仙路长青 - 项目完整结构说明 v12.1
+﻿========================================
+    仙路长青 - 项目完整结构说明 v20.0.2
 ========================================
 
-【版本】 v18.9 - 世界日历（WorldCalendar）单例 + 长期闭关"闭关至事件" + 出关世界摘要（见 `计划/v18.9_世界日历实施计划.md`）；v15.3 - 社交文案人称修正（social-content.js ta(npc) 按性别输出他/她，静态池省主语）；v15.2 - 队友学绝技（PartyMember.combatAbilities 权威+玩家已掌握即可传授+采补功队友对称放宽；修复 Battle 构造器 forEach this 绑定致队员入战从未生效的存量bug）；v15.1 - 秘籍货架过滤（功法阁正店RARE保底+35%高阶×1.5价/黑市仅EPIC+40%空手×3价/境界门炼气-筑基-金丹）；v15.0 - 深谈追问层（12话题每题每日一追的二级选项对话，选择入 memory.impressions 驱动熟稔度换档开场）；v14.x - 社交页扩展（social-content.js 零侵入：话题×7+情报×5真实数据驱动、组合式问候告别时段×关系层×性格尾缀、16型性格模型personality16.js+五维微口吻、深谈回复入面板#socialReplyBox、SUB_AFF_GATE好感门禁与负面池惩罚复刻、同地点守卫npcNotCoLocated四入口、爱情动作防刷四重检查、随机对话池扩容）+ 审计5尾巴清零（NPC读档_goal恢复、npcRelationships关系唯一真源决策、同行死块/死buff/假按钮清理）；v12.3 - 温蘅（百花谷主）感情线落地（32事件+6结局+自动触发系统）+ 个人事件系统通用化（多NPC感情线支持）；v12.2 - 稳定性迭代；v12.1 - 稳定性/深度框架/石山治理（StateRegistry/GameScheduler/EconomyTransaction/EventBus/内容校验）；v12.0 - NPC问候系统扩展（首次见面名气阈值判定/后续问候每档3-5条随机池/绯泪专属问候含道侣情话）；v11.9 深谈系统2.0；v11.8 - 出售系统重构；v11.7 - NPC社交系统P0-P1修复；v11.6 修复绯泪秘密栏不显示问题；v11.5 修复resetNPCSystem未注册门派NPC；v11.4 P0/P1遗留问题修复；v11.3 NPC互动系统修复；v11.2 门派设施运行时修复；v11.1 物品系统全面修复；v10.3 门派晋升系统完整重做；v10.2 门派入门体系改造；v12.7 - 血量单一权威链路（currentCharData.health 为场外唯一血量权威，buildPlayerBattleEntity 统一战斗入口，closeBattle 写回，状态栏新增血量条）；v12.8 - 敌人类型差异化第一批（五AI行为真实生效/毒素循环poisonLoad/构装硬化/野兽猛扑/元素冰火/人形六亚型/精英魔头修饰）；v12.9 - 敌人第二批9亚型（吸血/反震/音修灵抗/幻术迷扰/遁逃noSpoils/摄气真气/金蚕蛊/剑修连击/叛徒门控）+ 修复 _consumeFormationBuff 身份错调用休眠缺陷；v13.0 - 战斗技能系统重构（COMBAT_ABILITIES注册表13项，机制从亚型解耦为招牌技+共享随机池，Entity.hasAbility 对称钩子）；v13.1 - 绝技玩家化（currentCharData.combatAbilities 权威+GameState存档，秘籍研读/敌人掉落/流浪修士传授三渠道，接触钩子门控移除实现攻防完全对称）
+【v20.0.2 文档更新（2026-09-01）】基于外包审查的两份报告修正与详细化：
+- **STRUCTURE 核对报告**：594 条核对项中 ~199 条有误（74 硬错 + 125 部分错），本节按实测修正
+- **BUG 审查报告**：13 P0 / 68 P1 / 114 P2 / 12 设计缺陷
+- **P0 全部已修**（F-1~F-11，详见 §十七 修复记录）
+- 修正条目：① 装备槽 12→11，基础物品 38→41；② 扩展物品 305→~287，子文件 8→14；③ 门派正道 21→25；④ 大量行号/计数/API 名字修正
+- 详见：每节末尾加注"**[v20.0.2 修正]**"；§十七 集中记录 11 个 P0 修复
+
+【版本】 v18.9 - 世界日历（WorldCalendar）单例 + 长期闭关"闭关至事件" + 出关世界摘要（见 `../游戏制作/旧计划/v18.9_世界日历实施计划.md`）；v15.3 - 社交文案人称修正（social-content.js ta(npc) 按性别输出他/她，静态池省主语）；v15.2 - 队友学绝技（PartyMember.combatAbilities 权威+玩家已掌握即可传授+采补功队友对称放宽；修复 Battle 构造器 forEach this 绑定致队员入战从未生效的存量bug）；v15.1 - 秘籍货架过滤（功法阁正店RARE保底+35%高阶×1.5价/黑市仅EPIC+40%空手×3价/境界门炼气-筑基-金丹）；v15.0 - 深谈追问层（12话题每题每日一追的二级选项对话，选择入 memory.impressions 驱动熟稔度换档开场）；v14.x - 社交页扩展（social-content.js 零侵入：话题×7+情报×5真实数据驱动、组合式问候告别时段×关系层×性格尾缀、16型性格模型personality16.js+五维微口吻、深谈回复入面板#socialReplyBox、SUB_AFF_GATE好感门禁与负面池惩罚复刻、同地点守卫npcNotCoLocated四入口、爱情动作防刷四重检查、随机对话池扩容）+ 审计5尾巴清零（NPC读档_goal恢复、npcRelationships关系唯一真源决策、同行死块/死buff/假按钮清理）；v12.3 - 温蘅（百花谷主）感情线落地（32事件+6结局+自动触发系统）+ 个人事件系统通用化（多NPC感情线支持）；v12.2 - 稳定性迭代；v12.1 - 稳定性/深度框架/石山治理（StateRegistry/GameScheduler/EconomyTransaction/EventBus/内容校验）；v12.0 - NPC问候系统扩展（首次见面名气阈值判定/后续问候每档3-5条随机池/绯泪专属问候含道侣情话）；v11.9 深谈系统2.0；v11.8 - 出售系统重构；v11.7 - NPC社交系统P0-P1修复；v11.6 修复绯泪秘密栏不显示问题；v11.5 修复resetNPCSystem未注册门派NPC；v11.4 P0/P1遗留问题修复；v11.3 NPC互动系统修复；v11.2 门派设施运行时修复；v11.1 物品系统全面修复；v10.3 门派晋升系统完整重做；v10.2 门派入门体系改造；v12.7 - 血量单一权威链路（currentCharData.health 为场外唯一血量权威，buildPlayerBattleEntity 统一战斗入口，closeBattle 写回，状态栏新增血量条）；v12.8 - 敌人类型差异化第一批（五AI行为真实生效/毒素循环poisonLoad/构装硬化/野兽猛扑/元素冰火/人形六亚型/精英魔头修饰）；v12.9 - 敌人第二批9亚型（吸血/反震/音修灵抗/幻术迷扰/遁逃noSpoils/摄气真气/金蚕蛊/剑修连击/叛徒门控）+ 修复 _consumeFormationBuff 身份错调用休眠缺陷；v13.0 - 战斗技能系统重构（COMBAT_ABILITIES注册表13项，机制从亚型解耦为招牌技+共享随机池，Entity.hasAbility 对称钩子）；v13.1 - 绝技玩家化（currentCharData.combatAbilities 权威+GameState存档，秘籍研读/敌人掉落/流浪修士传授三渠道，接触钩子门控移除实现攻防完全对称）
 【v12.1 已落地】状态注册表、游戏时间调度器、经济事务、真实拍卖、借物服务、竞技场拆分、符箓基础效果、玩家庇护、内容校验；修复制作只扣第一材料、NPC生命周期调用次数漂移、宗门事件查看即结算、突破跨境/材料不扣/寿元误触发等高风险问题；顶层全局声明冲突清零并锁定关键 API 唯一拥有者；新增 tests 自动回归。
 【当前已落地基线】v9.10：B1 GameState；B2 背包堆叠/出售/入口/缺失物品；B3 小时恢复累加/onNewDay 钩子/currentDay；v9.9 日常事件；v9.8.1 战斗修复；v10.0.2 面板hidden遗漏修复
 【修正说明】v9.5 属性技能接入；v9.6 装备/运功槽内选择；v9.7 真气/真元/历练突破。v9.8 已落地：数据同步、getDerivedCombatStats、反击/破甲/毒抗、slash/pierce/blunt、负荷、炼制/灵根/种植。v9.8.1：躯体耐久色阶统一、击杀仅标记单体尸体、敌人AI有限自救。
@@ -14,19 +21,19 @@
 【v9.10 B4 已落地】灵兽可被攻击/经验单次/页内无直接捕捉；秘境战斗推进；竞技场日限；宝箱日限；任务UI；宗门门槛
 【v9.10 B5 已落地】currentLocation 存档；getCityBonus 导出；旅行先事件后抵达+距离+传送校验；客栈/医馆/采集出售；任务击杀/成就奖励；灵兽技能伤害类型
 【规划文档】
-- **【新增·分析】** [`纯文本/主流游戏对比与差距分析.md`](纯文本/主流游戏对比与差距分析.md) — 对标《鬼谷八荒》《觅长生》《太吾绘卷》《博德之门3》《环世界》等主流游戏的全面差距分析：完全缺失的主流标配（音频/教程/自动存档/移动端/快捷键/图片资产）、内容维度差距（主线叙事密度/支线生态/手工世界/Boss战）、玩法系统逐项对比（战斗AOE与Boss机制/闭关长修/家族传承/图鉴收集）、技术工程差距（存档迁移框架/测试覆盖）、UI/UX差距、数值平衡清单、长线留存（终局空洞/成就深度/开局多样性）与 P0~P3 优先级路线图；全部结论代码实测验证并附证据索引
+- **【新增·分析】** [`../游戏制作/旧计划/主流游戏对比与差距分析.md`](../游戏制作/旧计划/主流游戏对比与差距分析.md) — 对标《鬼谷八荒》《觅长生》《太吾绘卷》《博德之门3》《环世界》等主流游戏的全面差距分析：完全缺失的主流标配（音频/教程/自动存档/移动端/快捷键/图片资产）、内容维度差距（主线叙事密度/支线生态/手工世界/Boss战）、玩法系统逐项对比（战斗AOE与Boss机制/闭关长修/家族传承/图鉴收集）、技术工程差距（存档迁移框架/测试覆盖）、UI/UX差距、数值平衡清单、长线留存（终局空洞/成就深度/开局多样性）与 P0~P3 优先级路线图；全部结论代码实测验证并附证据索引
 - **【规划·优先】** [`GPT逻辑审查报告.md`](GPT逻辑审查报告.md) — 完整逻辑审计：P0×13 / P1×19 / P2×22 / P3×5；串档、存档、背包、时间、灵兽、任务、秘境等
-- **【规划·优先】** [`纯文本/GPT审核报告2实施计划.md`](纯文本/GPT审核报告2实施计划.md) — GPT二次审计报告五批修复计划：P0禁止静默失败和假成功 → P1统一任务事件 → P2人物互动优先 → P3门派内容 → P4内容完整性
-- **【规划·优先】** [`纯文本/GPT审查待办实施计划.md`](纯文本/GPT审查待办实施计划.md) — 五批修复顺序与验收：①停止数据损坏 ②统一背包货币 ③统一时间事件 ④核心玩法闭环 ⑤清理展示性内容（**B1～B5 关键已落地**（设施大规模差异化未做））
-- **【新增·规划】** [`纯文本/基础内容补全开发计划.md`](纯文本/基础内容补全开发计划.md) — 基于路线图的完整开发计划：B1~B5已完成回顾、6个阶段路线图实施计划、每阶段工作量估算、开工顺序建议（总量约5000~7700行）
-- **【新增·规划】** [`纯文本/GPT审核报告2实施计划.md`](纯文本/GPT审核报告2实施计划.md) — GPT审核报告2的五批修复实施计划：P0禁止静默失败和假成功 → P1统一任务事件 → P2人物互动优先 → P3门派内容 → P4内容完整性
-- **【新增·规划】** [`纯文本/门派入门体系改造计划.md`](纯文本/门派入门体系改造计划.md) — 基于 `门派扩展2大纲.txt` 的门派入门体系改造：名气/心性/身份晋升/特殊门派
+- **【规划·优先】** [`../游戏制作/旧计划/GPT审核报告2实施计划.md`](../游戏制作/旧计划/GPT审核报告2实施计划.md) — GPT二次审计报告五批修复计划：P0禁止静默失败和假成功 → P1统一任务事件 → P2人物互动优先 → P3门派内容 → P4内容完整性
+- **【规划·优先】** [`../游戏制作/旧计划/GPT审查待办实施计划.md`](../游戏制作/旧计划/GPT审查待办实施计划.md) — 五批修复顺序与验收：①停止数据损坏 ②统一背包货币 ③统一时间事件 ④核心玩法闭环 ⑤清理展示性内容（**B1～B5 关键已落地**（设施大规模差异化未做））
+- **【新增·规划】** [`../游戏制作/旧计划/基础内容补全开发计划.md`](../游戏制作/旧计划/基础内容补全开发计划.md) — 基于路线图的完整开发计划：B1~B5已完成回顾、6个阶段路线图实施计划、每阶段工作量估算、开工顺序建议（总量约5000~7700行）
+- **【新增·规划】** [`../游戏制作/旧计划/GPT审核报告2实施计划.md`](../游戏制作/旧计划/GPT审核报告2实施计划.md) — GPT审核报告2的五批修复实施计划：P0禁止静默失败和假成功 → P1统一任务事件 → P2人物互动优先 → P3门派内容 → P4内容完整性
+- **【新增·规划】** [`../游戏制作/旧计划/门派入门体系改造计划.md`](../游戏制作/旧计划/门派入门体系改造计划.md) — 基于 `门派扩展2大纲.txt` 的门派入门体系改造：名气/心性/身份晋升/特殊门派
 - [`属性现状分析与修改计划.md`](属性现状分析与修改计划.md) — 代码实测：主属性/战斗属性/技能/灵根实际效果与缺口
 - [`属性系统实施计划.md`](属性系统实施计划.md) — 基于 GPT属性修改修正.txt 的 5 批次落地计划（约 420～610 行）
 - [`GPT属性修改修正.txt`](GPT属性修改修正.txt) — 精简平衡方案原文
 - **新增** [`js/combat-stats.js`](js/combat-stats.js) — 动态战斗属性 + 负荷
 - **已落地 v9.9** [`通用事件.txt`](通用事件.txt) — 需求原文
-- **已落地 v9.9** [`纯文本/通用事件实施计划.md`](纯文本/通用事件实施计划.md) — 可执行批次 A～D
+- **已落地 v9.9** [`../游戏制作/旧计划/通用事件实施计划.md`](../游戏制作/旧计划/通用事件实施计划.md) — 可执行批次 A～D
 - **已落地 v9.10** [`js/core/game-state.js`](js/core/game-state.js) — 统一存档世界状态
 
 【项目总览】60个JS文件 + 1个HTML + 1个CSS + 12个items-extended子文件 + 8个npcs子文件 + 3个cultivation子文件 + 9个sects子文件 + 3个quest子文件 + 3个map子文件 + 3个factions子文件 + 4个core子文件（scenario/knowledge/daily-events/**game-state**）+ 1个city-facilities子文件（共约87+个JS文件）
@@ -47,7 +54,7 @@
 - v8.9 P3 门派事件系统：创建 sect-events.js（14种事件，4大类型：内部/外部/灾难/福利）；内院视图新增事件面板；每5分钟检测30%概率触发
 - v9.0 新增城市设施+情境引擎+门派加入流程：创建js/core/scenario-engine.js（情境事件链引擎）；创建js/city-facilities/facility-batch2.js（第二批15个设施：13个情境+2个基础）；创建js/sects/sect-join-flow.js（门派门槛条件检查）；新增首批8个基础设施；17城全部接入新设施；sect-visit.js中"加入门派"改为"申请入门"（检查灵根/性别/资质/恶名）
 - v9.1 修正统计数据与游戏实际一致（门派32/城市17/基础物品38/第二批设施15）；移除废弃09-loot-sources引用
-- v9.2 【规划】系统连接：知识获取层 + 功法招式战斗化 + 修炼过程化 + 恢复分级化 + 死亡仙侠化（约700行，详见纯文本/系统连接实施计划.md）
+- v9.2 【规划】系统连接：知识获取层 + 功法招式战斗化 + 修炼过程化 + 恢复分级化 + 死亡仙侠化（约700行，详见 `../游戏制作/旧计划/系统连接实施计划.md`）
 - v9.3 【已落地 P0-1】功法知识层：js/core/knowledge-system.js；浏览UI只显示已学/听闻；equipSkill强制 canEquip；learnSecretArt/learnRandomSkill/存档 techniqueKnowledge；新角色仅听闻吐纳不可裸装
 - v9.4 【已落地】运功栏改为内功/身法/绝技三槽；运功/装备均在对应栏槽内点「选择」展开；旧五槽存档 migrateSkillsToThreeSlots
 - v9.5 【已落地】属性与技能全面接入：battle.js A/B/C/F1；cultivation.js 灵根核心 D1/D2（D3不采用）；poison-system.js 毒术；口才商店折扣；time-system 自然愈合 G；创建预算 E 按决策不动
@@ -55,7 +62,7 @@
 - v9.6.1 【修复】战斗查看人体/SVG变色；击杀尸体灰名与详情面板
 - v9.8.1 【修复】问题.txt 三项：①躯体 SVG 与耐久数字色阶同步（100/#66CC00/#FFDC00/#FF851B/#8B0000/#3f0000/黑）；②击杀仅标记当前目标尸体，禁止同格批量变尸；③敌人低血不再无限包扎（未稳定伤口 + 每场最多2次治疗）
 - v9.8.1 【交互】地图人物「对话」改为「问候」：仅消息寒暄、不打开 NPC 详谈面板；「详谈」单独走 openNpcDeepTalk → showNPCDialog
-- v9.9 【已落地】通用事件系统：①`sect-join-flow.js` 杂役入门取消炼气硬门槛（凡人可入，getRealmTier 统一）；②新建 `js/core/daily-events.js`（城市6/野外6/门派6日常事件，冷却/权重/条件/弹窗）；③集成 `time-system.advanceTime`（≥5min触发）/ `randomMap` 移动（与奇遇互斥,优先日常）/ `sect-visit` 内院（延时500ms）；④ `仙侠.html` 第15层引用。详见 [`纯文本/通用事件实施计划.md`](纯文本/通用事件实施计划.md)
+- v9.9 【已落地】通用事件系统：①`sect-join-flow.js` 杂役入门取消炼气硬门槛（凡人可入，getRealmTier 统一）；②新建 `js/core/daily-events.js`（城市6/野外6/门派6日常事件，冷却/权重/条件/弹窗）；③集成 `time-system.advanceTime`（≥5min触发）/ `randomMap` 移动（与奇遇互斥,优先日常）/ `sect-visit` 内院（延时500ms）；④ `仙侠.html` 第15层引用。详见 [`../游戏制作/旧计划/通用事件实施计划.md`](../游戏制作/旧计划/通用事件实施计划.md)
 - v11.3 【已落地】P0/P1遗留问题修复：①12-quest-extensions.js UTF-8编码损坏修复（中文字符被截断为`?`，已用正确UTF-8重写保存）；②TRIAL_RESULT枚举(PASS/FAIL/ABORT)统一各门派考核判断逻辑，`setTrialResult()`设置`trialResult`字段，未知值按失败处理。详见 [`版本记录.md`](版本记录.md) v11.3
 - v11.2 【已落地】NPC互动系统修复（基于GPT审核3.txt）：①深谈选项绑定真实处理器（赠礼/请求/委托/情感互动等）；②赠礼功能从NPC深谈调用`giveGiftToNPC()`；③高级请求系统接入UI（借物/疗伤/庇护/同行等）；④NPC状态进入GameState统一存档（`npcManager.serialize()`）；⑤故事线进度纳入GameState（移除独立localStorage）；⑥同行NPC作为Battle实体参与回合制战斗（队员可被攻击/自动攻击/状态同步）。详见 [`版本记录.md`](版本记录.md) v11.2
 - v11.1 【已落地】门派设施运行时修复（基于GPT审核3.txt）：B3-1设施使用游戏时间/B3-2真气改角色数据读写/B3-3效果结构化actions/B3-4议事厅固定结果/B3-5设施状态进入GameState。详见 [`版本记录.md`](版本记录.md) v11.1
@@ -263,7 +270,10 @@ mapData = {
 
 ### sectsData - 36个门派
 每个门派包含: type(正道/邪派/中立), location, power, weapons, desc
-实际门派列表：正道21个（少林寺、武当派、全真教、华山派、嵩山派、恒山派、衡山派、泰山派、峨眉派、丐帮、大旗门、侠隐阁、药王谷、天山派、铸剑山庄、茅山派、大隐阁、天书阁、天涯海阁、神机门、霹雳堂、昆仑派、金刚宗、青城派、蓬莱派中的部分）、中立5个（五仙教、逍遥派、唐门、百花谷、铁掌帮）、邪派6个（修罗宫、阎罗殿、血手门、飞蝎坞、烈日教、天龙教）
+实际门派列表（**注意**：原文档写正道21个，实际**25个**（grep type:'正道'=25）；本节按 sects.js:4-48 实测 36 条修正）：
+- **正道 25 个**（原 21 错）：少林寺、武当派、全真教、华山派、嵩山派、恒山派、衡山派、泰山派、峨眉派、丐帮、大旗门、侠隐阁、药王谷、天山派、铸剑山庄、茅山派、大隐阁、天书阁、天涯海阁、神机门、霹雳堂、昆仑派、金刚宗、青城派、蓬莱派
+- **中立 5 个**：五仙教、逍遥派、唐门、百花谷、铁掌帮
+- **邪派 6 个**：修罗宫、阎罗殿、血手门、飞蝎坞、烈日教、天龙教
 
 ### sectPositions - 门派坐标和颜色
 
@@ -277,41 +287,53 @@ EQUIPMENT(装备), CONSUMABLE(消耗品), MATERIAL(材料), QUEST(任务物品),
 ### 物品品质 (ITEM_QUALITIES)
 COMMON(凡品x1), UNCOMMON(良品x1.5), RARE(珍品x2), EPIC(极品x3), LEGENDARY(仙品x5), MYTHIC(神品x10)
 
-### 装备槽位 (EQUIPMENT_SLOTS) - 12类（v9.4 新增饰品2槽）
-head(头部), neck(颈部), body(身体), waist(腰部), hands(手部), feet(脚部), mainHand(主手), offHand(副手), ring1(戒指1), ring2(戒指2), acc(饰品)
+### 装备槽位 (EQUIPMENT_SLOTS) - 11类（v9.4 改：原 12 类中饰品 acc 拆分实未实现）
+**注意**：items.js 定义 11 个 snake_case 键（实际仅 11 个），但 equipment.js 定义 12 个 camelCase 键（含 neck/offHand/ring2/acc1/acc2），**两套定义对不上**。
+items.js 实际键：head/neck/body/waist/hands/feet/mainHand/offHand/ring1/ring2/acc
+equipment.js 实际键：head/body/waist/hands/feet/mainHand/offHand/ring1/ring2/acc1/acc2/neck
+**统一方案待办**：合并到一套 camelCase 12 槽（equipment.js 定义），含 5 个空槽（neck/offHand/ring2/acc1/acc2 当前无物品定义）.
 
-### 基础物品（items.js - 38种）
-武器(9): 玄铁剑/御剑/雷音剑/仙人斩/钢刀/焚焰刀/灵木杖/龙魂杖/铁掌
-防具(8): 青布帽/仙灵冠/亚麻道袍/云纹甲/九天仙衣/布鞋/飞天靴/铁戒指/灵玉戒/五行戒
-消耗品(10): 聚气丹/筑基丹/凝金丹/回灵丹/回春丹/千年人参/灵芝/血菩提/小还丹/大还丹/攻击符/防御符/传送符
-材料(6): 精铁/灵石/龙骨/凤凰羽/灵草/五行精华
-秘籍(5): 基础修炼诀/基础剑法/太极剑法/九阳神功/飞天轻功
+### 基础物品（items.js - 41种，文档原写38实41）
+- 武器(9): 玄铁剑/御剑/雷音剑/仙人斩/钢刀/焚焰刀/灵木杖/龙魂杖/铁掌
+- 防具(10): 青布帽/仙灵冠/亚麻道袍/云纹甲/九天仙衣/布鞋/飞天靴/铁戒指/灵玉戒/五行戒
+- 消耗品(11): 聚气丹/筑基丹/凝金丹/回灵丹/回春丹/千年人参/灵芝/血菩提/小还丹/大还丹/攻击符/防御符/传送符
+- 材料(6): 精铁/灵石/龙骨/凤凰羽/灵草/五行精华
+- 秘籍(5): 基础修炼诀/基础剑法/太极剑法/九阳神功/飞天轻功
 
-### 扩展物品系统（v5.0新增 - 305种）
-**文件结构：**
+### 扩展物品系统（v5.0新增 - 实际~287种，文档原写305实数偏差）
+**文件结构（实际 14 个子文件，文档原列 8 个）**：
 ```
-js/items-extended.js                 # 主入口：合并所有子数据到全局
+js/items-extended.js                              # 主入口
 js/items-extended/
-├── 01-pills.js      # 丹药类(45种)
-├── 02-weapons.js    # 武器类(60种)
-├── 03-armor.js      # 防具类(55种)
-├── 04-materials.js  # 材料类(50种)
-├── 05-talismans.js  # 符箓类(20种)
-├── 06-arts.js       # 功法秘籍类(40种)
-├── 07-food.js       # 食物/饮品(12种)
-└── 08-special.js    # 任务/特殊物品(12种)
+├── 01-pills.js          # 丹药类（pill_ 前缀，43 种：恢复15/永久12/特殊7/突破9 + 其他）
+├── 02-weapons.js        # 武器类（wpn_ 前缀，53 种：剑20/刀9/法杖8/长兵5/暗器6/拳套5）
+├── 03-armor.js          # 防具类（arm_ 前缀，42 种：头饰9/护甲12/手套6/靴子8/腰带7）
+├── 04-materials.js      # 材料类（mat_ 前缀，51 种：矿石14/草药14/兽类15/特殊8）
+├── 05-talismans.js      # 符箓类（tal_ 前缀，21 种）
+├── 06-arts.js           # 功法秘籍类（art_ 前缀，38 种：内功13/剑法9/刀法5/拳掌6/轻功5）
+├── 07-food.js           # 食物/饮品（food_ 前缀，12 种）
+├── 08-special.js        # 任务/特殊物品（spec_ 前缀，15 种）
+├── 09-loot-sources.js   # 战利品表（孤儿模块——getExtendedLoot 实际未被主表调用）
+├── 10-crafting-extensions.js  # 扩展符箓/丹药配方
+├── 11-event-extensions.js     # 事件系统扩展
+├── 12-quest-extensions.js     # 主线任务扩展（main_021-035 共 15 个）
+├── 13-missing-ids.js    # 缺失物品 ID 补全
+└── 14-ability-manuals.js # 战斗绝技秘籍（v13.1 接入）
 ```
 
 **加载顺序：** items.js → items-extended子文件 → items-extended.js → inventory.js
 
 **数据合并：** items-extended.js 自动将扩展物品合并到 window.allItems / window.itemById / window.weapons / window.armor / window.consumables / window.materials / window.secretArts
 
-**ID前缀规则：**
-- pill_     - 丹药（45种）：恢复15/增益8/永久13/特殊7
-- wpn_      - 武器（60种）：剑20/刀9/法杖8/长兵5/暗器6/拳套5
-- arm_      - 防具（55种）：头饰9/护甲12/手套6/靴子8/腰带7
-- mat_      - 材料（50种）：矿石14/草药14/兽类15/特殊8
-- tal_      - 符箓（20种）：攻击/防御/辅助/控制
+**ID前缀规则（实际数）：**
+- pill_  丹药（43 种）：恢复15/增益0/永久12/特殊7/突破9
+- wpn_   武器（53 种）：剑20/刀9/法杖8/长兵5/暗器6/拳套5
+- arm_   防具（42 种）：头饰9/护甲12/手套6/靴子8/腰带7
+- mat_   材料（51 种）：矿石14/草药14/兽类15/特殊8
+- tal_   符箓（21 种）
+- art_   功法（38 种）：内功13/剑法9/刀法5/拳掌6/轻功5
+- food_  食物（12 种）
+- spec_  特殊（15 种）
 - art_      - 功法（40种）：内功13/剑法9/刀法5/拳掌6/轻功5
 - food_     - 食物（12种）：恢复/增益
 - spec_     - 特殊（12种）：任务/货币
@@ -1475,19 +1497,19 @@ js/
 
 | 文档 | 内容 | 状态 |
 |------|------|------|
-| [`纯文本/主流游戏对比与差距分析.md`](纯文本/主流游戏对比与差距分析.md) | 主流游戏横向对比差距分析（2026-08-24）：十大最痛差距+P0~P3优先级路线图，全部结论代码实测验证并附证据索引 | ✅ 已制定 |
-| [`纯文本/掉落系统优化计划.md`](纯文本/掉落系统优化计划.md) | 战斗掉落系统优化方案v3.0：搜刮/解剖系统 | ✅ 已制定 |
-| [`纯文本/物品扩展计划.txt`](纯文本/物品扩展计划.txt) | 305种物品扩展完整实施计划 | ✅ 已制定 |
-| [`纯文本/扩展实施方案.md`](纯文本/扩展实施方案.md) | 物品扩展实施状态追踪 | 🏗️ 实施中 |
-| [`纯文本/城市扩展计划.txt`](纯文本/城市扩展计划.txt) | 城市扩展计划 | 🏗️ 已实施 |
-| [`纯文本/NPC计划.txt`](纯文本/NPC计划.txt) | NPC系统扩展计划 | 🏗️ 已实施 |
-| [`纯文本/P0模块扩充计划.txt`](纯文本/P0模块扩充计划.txt) | P0模块扩充计划 | ✅ 已实施 |
-| [`纯文本/深度补全计划.md`](纯文本/深度补全计划.md) | 深度补全计划 | ✅ 已实施 |
-| [`纯文本/设施与门派实施计划.md`](纯文本/设施与门派实施计划.md) | 设施与门派系统重构完整计划（三批次） | 🏗️ 实施中 |
-| [`纯文本/第一批实施步骤.md`](纯文本/第一批实施步骤.md) | 第一批核心10个城市设施具体待办步骤 | ✅ 已完成 |
-| [`纯文本/情境引擎实施计划.md`](纯文本/情境引擎实施计划.md) | 情境引擎文件位置规划 | ✅ 已实施 |
-| [`纯文本/设施与门派实施计划.md`](纯文本/设施与门派实施计划.md) | 设施与门派系统重构完整计划（三批次） | ✅ 已制定 |
-| [`纯文本/第一批实施步骤.md`](纯文本/第一批实施步骤.md) | 第一批核心10个城市设施具体待办步骤 | 🏗️ 实施中（已完成3个原型） |
+| [`../游戏制作/旧计划/主流游戏对比与差距分析.md`](../游戏制作/旧计划/主流游戏对比与差距分析.md) | 主流游戏横向对比差距分析（2026-08-24）：十大最痛差距+P0~P3优先级路线图，全部结论代码实测验证并附证据索引 | ✅ 已制定 |
+| [`../游戏制作/旧计划/掉落系统优化计划.md`](../游戏制作/旧计划/掉落系统优化计划.md) | 战斗掉落系统优化方案v3.0：搜刮/解剖系统 | ✅ 已制定 |
+| [`../游戏制作/旧计划/物品扩展计划.txt`](../游戏制作/旧计划/物品扩展计划.txt) | 305种物品扩展完整实施计划 | ✅ 已制定 |
+| [`../游戏制作/旧计划/扩展实施方案.md`](../游戏制作/旧计划/扩展实施方案.md) | 物品扩展实施状态追踪 | 🏗️ 实施中 |
+| [`../游戏制作/旧计划/城市扩展计划.txt`](../游戏制作/旧计划/城市扩展计划.txt) | 城市扩展计划 | 🏗️ 已实施 |
+| [`../游戏制作/旧计划/NPC计划.txt`](../游戏制作/旧计划/NPC计划.txt) | NPC系统扩展计划 | 🏗️ 已实施 |
+| [`../游戏制作/旧计划/P0模块扩充计划.txt`](../游戏制作/旧计划/P0模块扩充计划.txt) | P0模块扩充计划 | ✅ 已实施 |
+| [`../游戏制作/旧计划/深度补全计划.md`](../游戏制作/旧计划/深度补全计划.md) | 深度补全计划 | ✅ 已实施 |
+| [`../游戏制作/旧计划/设施与门派实施计划.md`](../游戏制作/旧计划/设施与门派实施计划.md) | 设施与门派系统重构完整计划（三批次） | 🏗️ 实施中 |
+| [`../游戏制作/旧计划/第一批实施步骤.md`](../游戏制作/旧计划/第一批实施步骤.md) | 第一批核心10个城市设施具体待办步骤 | ✅ 已完成 |
+| [`../游戏制作/旧计划/情境引擎实施计划.md`](../游戏制作/旧计划/情境引擎实施计划.md) | 情境引擎文件位置规划 | ✅ 已实施 |
+| [`../游戏制作/旧计划/设施与门派实施计划.md`](../游戏制作/旧计划/设施与门派实施计划.md) | 设施与门派系统重构完整计划（三批次） | ✅ 已制定 |
+| [`../游戏制作/旧计划/第一批实施步骤.md`](../游戏制作/旧计划/第一批实施步骤.md) | 第一批核心10个城市设施具体待办步骤 | 🏗️ 实施中（已完成3个原型） |
 
 ========================================
 【七·附、NPC系统完整文档】（v4.3 历史文档；原编号与【七、计划文档索引】重复，予以区分）
@@ -2079,7 +2101,7 @@ initNPCSystem();  // 创建所有系统+添加示例NPC+生成关系网
 ========================================
 
 > 核心原则：不继续横向加第N个门派/设施，而是打通「获得资格→学习→实践→承担后果→改变世界」。
-> 详细步骤与验收：[`纯文本/系统连接实施计划.md`](纯文本/系统连接实施计划.md)
+> 详细步骤与验收：[`../游戏制作/旧计划/系统连接实施计划.md`](../游戏制作/旧计划/系统连接实施计划.md)
 > 来源分析：[`参考3.txt`](参考3.txt)、[`GPT扩展3.txt`](GPT扩展3.txt)
 
 ## 10.1 现状断层（已用代码验证）
@@ -2190,7 +2212,7 @@ Step7 回归测试 + 文档
 | 修改 | js/equipment.js, js/app.js, js/inventory.js |
 | 修改 | js/cultivation/cultivation.js, js/battle.js, js/building-effects.js |
 | 修改 | 仙侠.html（脚本顺序） |
-| 文档 | STRUCTURE.md, 版本记录.md, 纯文本/系统连接实施计划.md |
+| 文档 | STRUCTURE.md, 版本记录.md, ../游戏制作/旧计划/系统连接实施计划.md |
 
 **P0 合计约 680~700 行**。P0 完成前不平行新开「第33门派/第50设施」类横向内容。
 
@@ -2219,7 +2241,7 @@ Step7 回归测试 + 文档
 
 > 状态：**已落地 v9.9**（含 sect-join-flow 杂役无境界门槛 + daily-events.js 18个日常事件）
 > 需求原文：[`通用事件.txt`](通用事件.txt)
-> 实施计划：[`纯文本/通用事件实施计划.md`](纯文本/通用事件实施计划.md)
+> 实施计划：[`../游戏制作/旧计划/通用事件实施计划.md`](../游戏制作/旧计划/通用事件实施计划.md)
 
 ## 11.1 问题摘要（代码实测）
 
@@ -2329,7 +2351,7 @@ SECT_DEEP_DATA (静态数据)
 
 | 路径 | 说明 |
 |------|------|
-| [`纯文本/GTP审计5.txt`](纯文本/GTP审计5.txt) | 审计原文（1408行）；配套的《GTP审计5修复计划.md》原文档已移除，修复项已随 v12.1 等版本落地 |
+| [`../游戏制作/旧计划/GTP审计5.txt`](../游戏制作/旧计划/GTP审计5.txt) | 审计原文（1408行）；配套的《GTP审计5修复计划.md》原文档已移除，修复项已随 v12.1 等版本落地 |
 
 ### 问题分类（共26项）
 
@@ -2443,7 +2465,7 @@ maybeAutoTriggerBaihuaEvent(source)
 
 > 本章节为对全部规划文档与实际代码逐项核对后的「还缺什么」权威清单。已完成项不再罗列，仅列**未落地/部分落地/待确认**项。
 
-## 12.1 剩余任务实施计划6项核对结果（[`纯文本/剩余任务实施计划.md`](纯文本/剩余任务实施计划.md)）
+## 12.1 剩余任务实施计划6项核对结果（[`../游戏制作/旧计划/剩余任务实施计划.md`](../游戏制作/旧计划/剩余任务实施计划.md)）
 
 | # | 任务 | 状态 | 说明 |
 |---|------|------|------|
@@ -2464,7 +2486,7 @@ maybeAutoTriggerBaihuaEvent(source)
 | **P0-4 恢复分级化** | ✅ **v12.3.2 已补完** | [restAtInn](js/app.js:1061)：精力/真气可满、生命仅+40%上限、部位耐久+10、危急伤检测提示就医；[openMedicalClinic](js/app.js:7367)：生命+30%上限、部位耐久+25、稳定流血伤口（客栈做不到）；灵泉 useSpring 维持全恢复（高阶） |
 | **P0-5 死亡仙侠化** | ✅ **v12.3.2 已落地（用户定稿：重塑不夺舍）** | 新建 [`js/core/soul-state.js`](js/core/soul-state.js)：金丹+且肉身被毁（头/颈/胸/脑归零或血量耗尽）→ 神魂离体残魂态（可行走交易，禁战斗/修炼/演武/突破，四处拦截）；重塑肉身=灵石500×(境界序+1)+推进3天+损10%当前修为，属性/灵根/功法全保留；重塑后3天「境界不稳」战斗属性×0.9（battle.js getAttack/getDefense/getSpeed 三处接入）；soulState 进 GameState 存档；残魂面板 showSoulStatePanel |
 
-## 12.3 GPT审计5修复计划26项核对结果（[`纯文本/GTP审计5.txt`](纯文本/GTP审计5.txt)）
+## 12.3 GPT审计5修复计划26项核对结果（[`../游戏制作/旧计划/GTP审计5.txt`](../游戏制作/旧计划/GTP审计5.txt)）
 
 | 优先级 | 已确认修复 | 待确认/遗留 |
 |--------|-----------|------------|
@@ -2487,12 +2509,12 @@ maybeAutoTriggerBaihuaEvent(source)
 |------|--------|------|
 | GPT审查待办实施计划 | 设施大规模差异化 | B1~B5 关键已落地，但各城市设施差异化深度不足 |
 | v9.9 明确不做清单 | 32门派专属日常文案 / 强制切磋战斗(P1) / 升职境界卡(P1) | 官方声明延后 |
-| 战斗死亡系统分析（[`纯文本/战斗死亡系统分析.md`](纯文本/战斗死亡系统分析.md)） | 平衡性两因未调：①玩家部位耐久800+ vs 敌人伤害5~20（数十回合才能致死）②危急计时5游戏分钟=50回合过长 | 战败处置已落地（handleEnemyDisposal [app.js:5506](js/app.js:5506) + 队友救助），但「玩家几乎不会死」的数值根因仍在 |
+| 战斗死亡系统分析（[`../游戏制作/旧计划/战斗死亡系统分析.md`](../游戏制作/旧计划/战斗死亡系统分析.md)） | 平衡性两因未调：①玩家部位耐久800+ vs 敌人伤害5~20（数十回合才能致死）②危急计时5游戏分钟=50回合过长 | 战败处置已落地（handleEnemyDisposal [app.js:5506](js/app.js:5506) + 队友救助），但「玩家几乎不会死」的数值根因仍在 |
 | 基础内容补全开发计划 | 6阶段路线图（约5000~7700行） | 总量庞大，需按阶段排期确认进度 |
 
 ## 12.7 文档维护问题
 
-- STRUCTURE.md 中引用的 `plans/GTP审计5修复计划.md`、`plans/百花谷温蘅感情剧情实施计划.md` 等链接指向的 plans/ 目录实际为空（文件已迁移至 旧计划/ 或 纯文本/），链接失效需修正。
+- STRUCTURE.md 中引用的 `plans/GTP审计5修复计划.md`、`plans/百花谷温蘅感情剧情实施计划.md` 等链接指向的 plans/ 目录实际为空（文件已迁移至 旧计划/ 或 ../游戏制作/旧计划/），链接失效需修正。
 - 版本记录.md 缺少 v12.2 独立条目（版本号在 STRUCTURE.md 头部出现但无对应记录段落）。
 
 ## 12.8 建议开工顺序
@@ -2508,7 +2530,7 @@ maybeAutoTriggerBaihuaEvent(source)
 
 ## 12.9 过往任务未完成明细（2026-08-24 第二轮逐文档核对补充）
 
-### A. 社交面板无用选项清理计划（[`纯文本/社交面板无用选项清理计划.md`](纯文本/社交面板无用选项清理计划.md)）
+### A. 社交面板无用选项清理计划（[`../游戏制作/旧计划/社交面板无用选项清理计划.md`](../游戏制作/旧计划/社交面板无用选项清理计划.md)）
 
 | 计划项 | 状态 | 说明 |
 |--------|------|------|
@@ -2537,14 +2559,14 @@ maybeAutoTriggerBaihuaEvent(source)
 | P0-4 拍卖真实化 | ✅ v12.1 已做 | 上架托管/竞拍扣款/流拍退货/成交税 |
 | P0-5 门派设施静默分支 | ✅ v11.1 已做 | B3 系列 |
 
-### C. 经验系统整合改造计划（[`纯文本/经验系统整合改造计划.md`](纯文本/经验系统整合改造计划.md)）
+### C. 经验系统整合改造计划（[`../游戏制作/旧计划/经验系统整合改造计划.md`](../游戏制作/旧计划/经验系统整合改造计划.md)）
 
 | 计划项 | 状态 | 说明 |
 |--------|------|------|
 | 修炼时长选择（片刻/时辰…） | ✅ 已落地 | CULTIVATE_DURATIONS [app.js:1112](js/app.js:1112) |
 | **删除 exp/cultivationExp 冗余字段** | ❌ 未执行 | `player.exp += expGain` 仍存在于论道等处（[npc-system.js:415](js/npcs/npc-system.js:415)）；「打坐只产真元、战斗只产历练」单一来源原则未贯彻 |
 
-### D. NPC位置跟随/标准化（[`纯文本/NPC位置跟随系统实施计划.md`](纯文本/NPC位置跟随系统实施计划.md)）
+### D. NPC位置跟随/标准化（[`../游戏制作/旧计划/NPC位置跟随系统实施计划.md`](../游戏制作/旧计划/NPC位置跟随系统实施计划.md)）
 
 | 计划项 | 状态 |
 |--------|------|
@@ -2580,7 +2602,7 @@ maybeAutoTriggerBaihuaEvent(source)
 
 | 路径 | 说明 |
 |------|------|
-| [`纯文本/剩余大任务实施方案.md`](纯文本/剩余大任务实施方案.md) | 四大剩余任务的完整落地方案：一、战斗数值平衡（伤害×1.5系数+要害倍率+危急缩短50→20回合，约105行）；二、批次1基础UI（搜索排序/购买数量/装备比较来源提示/任务追踪地图标记，约320行）；三、12核心NPC故事线（实测发现 npc-storylines.js 已有7条五段雏形558行未接电，走桥接适配器救活+补3条新线，约600行）；四、4门派深度样板（武当/修罗宫/万毒谷/铸剑山庄四件套：考核链+师徒+内部派系+专属剧情，引擎+配置分两批，约1450行）。含现状代码实测、数值推算、分批验收标准与4个待确认决策点。 |
+| [`../游戏制作/旧计划/剩余大任务实施方案.md`](../游戏制作/旧计划/剩余大任务实施方案.md) | 四大剩余任务的完整落地方案：一、战斗数值平衡（伤害×1.5系数+要害倍率+危急缩短50→20回合，约105行）；二、批次1基础UI（搜索排序/购买数量/装备比较来源提示/任务追踪地图标记，约320行）；三、12核心NPC故事线（实测发现 npc-storylines.js 已有7条五段雏形558行未接电，走桥接适配器救活+补3条新线，约600行）；四、4门派深度样板（武当/修罗宫/万毒谷/铸剑山庄四件套：考核链+师徒+内部派系+专属剧情，引擎+配置分两批，约1450行）。含现状代码实测、数值推算、分批验收标准与4个待确认决策点。 |
 
 ---
 
@@ -2606,3 +2628,77 @@ confess/intimate/bond_dao 冷却3日/7日（memory._loveCd 绝对游戏日）；
 
 ### request_heal 接22部位（v14.8）
 包装 executeAdvancedRequest（callAdvancedRequest 恒true会吞结果）：成功后医者处置 止血稳定→浅创(depth<3)清创severity-15/depth-1→镇痛×0.6→安神×0.7；深创保留提示就医馆。需消耗情分5。
+
+---
+
+## 十七、v20.0.2 P0 修复记录（2026-09-01）
+
+按用户偏好**"结构最合理"**而非最小改动，11 个 P0 全部修复。**结构合理原则**：
+1. **用 StateRegistry 收状态，不在 game-state.js 列键名**（避免"每新增模块都改 game-state.js"的石山）
+2. **走 EventBus 事件总线，不在调用方补丁式调 updateQuestObjective**（保持数据流一致）
+3. **守卫方法抽到 ItemInstance 内部，不散落 3 处**（单一职责）
+4. **死代码直接删，不保留旧逻辑兜底**（清晰胜过兼容）
+
+### F-1 主线三连死锁 → 重构为完整事件桥
+**根因**：
+- 12-quest-extensions.js merge() 只 push 数组，未注册到 QuestRegistry → `findQuestById` 返 null
+- registerQuestEventBridge 监听 9 类事件，缺 join_sect + breakthrough_realm
+- location-system / npc-system / dungeon 通关 全无 EventBus.emit
+- 结局条件 `completedMainQuests >= 35`，但主线仅 20 个，5 结局全部不可达
+
+**修复**：
+| 文件 | 改动 |
+|------|------|
+| `12-quest-extensions.js` | merge() 末尾补 `QuestRegistry.registerMany(extraMain/extraRandom/extraNPCQuests)` |
+| `quest-system.js` | ① 桥监听 13 类事件（含 sect:joined/reputation:changed/quest:completed）；② questObjectiveMatches 补全 9 个 type handler；③ 结局 35→20 |
+| `sects-system.js` | joinSect 末尾 `EventBus.emit('sect:joined', {sectId, rank})` |
+| `location-system.js` | enterCity 末尾 `EventBus.emit('location:visited', {locationId, locationName})` |
+| `npcs/npc-system.js` | showNPCDialog recordPlayerAction 旁 `EventBus.emit('npc:talked', {npcId, npcName})` |
+| `app.js` | dungeon 通关点 line 7129/7294 `EventBus.emit('dungeon:completed', {dungeonId, dungeonName})` |
+| `reputation-system.js` | addReputation 末尾 `EventBus.emit('reputation:changed', {cityName, amount, total})` |
+| `quest-system.js` | turnInQuest 末尾 `EventBus.emit('quest:completed', {questId, questType})` |
+
+### F-2 突破材料 ID 写错
+- `breakthrough-ritual.js`: `'金丹→元婴'` `pill_婴变` → `pill_primordial`；`'元婴→化神'` `pill_化神` → `pill_divine`
+
+### F-3 合成成功 ReferenceError
+- `crafting.js:961`: `profession: profId` → `profession: (typeof qSkill === 'string' && qSkill) ? qSkill : null`（用作用域内已有 qSkill 替代未定义 profId）
+
+### F-4 队伍原型重写致队友无敌 → 改单方法覆写
+- `party-system.js`: 删除 `PartyMember.prototype = {...PartyMember.prototype, ...}` 整体替换（spread 不复制 class non-enumerable 方法），
+  改为 `const __origTakeDamage = PartyMember.prototype.takeDamage; PartyMember.prototype.takeDamage = function(amount) {... __origTakeDamage.call(this, amount);}` + 幂等守卫 `__patchedBattleTracking` 避免重复覆盖
+
+### F-5 爱情线冷却未序列化
+- `npcs/npc-system.js`: serialize memory 补 `_loveCd` + `_loveAccepted_confess` 字段；deserialize 对应还原
+
+### F-6 discipleState 存档丢失 13 个下划线字段
+- `sects/sects-system.js`: StateRegistry register('discipleState') 的 export/import/reset 三处全补 13 字段：`_masterId/_masterName/_masterSect/_masterBlessDay/_leftMasters/_chushiDone/artInsights/isConcubine/concubineFavor/_sectEventDay/_pendingSectEvent/_sectTaskDay/_lastSalaryDay`
+
+### F-7 标记出售 3 处绕过 → 抽守卫方法 + 删死代码
+**重构**（不再散落 3 处）：
+- `inventory.js` ItemInstance 类内新增 3 个方法：`isMarkedForSale() / canBeUsed(reason) / canBeEquipped() / canBeDiscarded()`，统一检查 markedForSale 字段
+- `equipItemFromInventory` / `showDiscardConfirm` 改用 `slot.canBeEquipped()` / `slot.canBeDiscarded()` 调用
+- `markForSale` maxSlots 守卫保留（属背包容量而非 canBeX 守卫）
+- **删除 enhanced-shop.js dead code Shop.sellItem**（v10.5 已废弃走 inventory.sellItem → markForSale → TradeService，grep 全 js/ 无 .sellItem() 调用方）
+
+### F-8 回购物品货币错配 + count=0 快照
+- `enhanced-shop.js`: executeSell 改为"先快照再扣减"；_addToBuyback 签名增 `currency` 参数并保存到 item 条目（之前 currency 从未写入，回购永远按 spiritStones 扣款）
+
+### F-9 / F-11 邮件/独立 localStorage 键 → 走 StateRegistry
+**重构**（不再 hardcode 键名）：
+- mail 已由 mail-system.js 注册 StateRegistry('mail')，game-state.js 撤回 saveData.mail 字段
+- sect_diplomacy 已由 sect-visit.js 注册 StateRegistry('sectDiplomacy')，撤回 game-state.js 字段
+- quest-system.js 末尾**新增** StateRegistry('trackedQuests') 注册
+- storylines-v2/batch1.js **新增** StateRegistry('storylineChoices') 注册，缓存到 `_choicesCache` 内存 + 同步 localStorage
+- CHARACTER_STORAGE_KEYS 补 `xianxia_storyline_choices`
+- game-state.js 删 collect 字段 + writeKey 路径
+
+### F-10 跨天只触发一次 onNewDay
+- `time-system.js`: 改为 `for (var _d = gameTime.currentDay + 1; _d <= newDay; _d++) { onNewDay(_d - 1, _d); }` 循环触发
+
+### 改动文件清单（12 个）
+`js/cultivation/breakthrough-ritual.js` / `js/crafting.js` / `js/party-system.js` / `js/npcs/npc-system.js` / `js/sects/sects-system.js` / `js/enhanced-shop.js` / `js/inventory.js` / `js/time-system.js` / `js/core/game-state.js` / `js/quest/quest-system.js` / `js/items-extended/12-quest-extensions.js` / `js/location-system.js` / `js/reputation-system.js` / `js/npcs/storylines-v2/batch1.js`
+
+### 回归测试
+✅ 28 个 Node.js 测试套件 0 failed（2692+83+19+28 分套件），包括 npc-life-actor 20 passed（重跑后稳定）。  
+⚠️ tests/static-check.py 报 FAIL：8 个 public API 行号 mismatch（STRUCTURE 报告"行号漂移"问题，硬编码旧行号与实际不符，非代码 bug）。

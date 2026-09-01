@@ -250,7 +250,7 @@
           storyDialogue: STORY_DIALOGUES['main_021'], accepted: false, completed: false, turnedIn: false },
         { id: 'main_022', title: '灵脉修炼', type: 'main', priority: { id: 'critical', name: '主线', color: 'text-red-500' },
           description: STORY_DIALOGUES['main_022'].accept,
-          objectives: [{ type: 'cultivate', amount: 5000, completed: false }],
+            objectives: [{ type: 'cultivate', amount: 5000, count: 5000, completed: false }],
           rewards: { exp: 12000, spiritStones: 5000, items: [{ itemId: 'mat_spirit_spring', count: 5 }] },
           storyDialogue: STORY_DIALOGUES['main_022'], accepted: false, completed: false, turnedIn: false },
         { id: 'main_023', title: '宗门之争', type: 'main', priority: { id: 'high', name: '紧急', color: 'text-yellow-400' },
@@ -271,7 +271,7 @@
           storyDialogue: STORY_DIALOGUES['main_025'], accepted: false, completed: false, turnedIn: false },
         { id: 'main_026', title: '元婴破壳', type: 'main', priority: { id: 'critical', name: '主线', color: 'text-red-500' },
           description: STORY_DIALOGUES['main_026'].accept,
-          objectives: [{ type: 'breakthrough_realm', fromRealm: '金丹', toRealm: '元婴', completed: false }],
+            objectives: [{ type: 'breakthrough_realm', fromRealm: '金丹', toRealm: '元婴', count: 1, completed: false }],
           rewards: { exp: 30000, spiritStones: 20000, items: [{ itemId: 'wpn_xu_yuan', count: 1 }, { itemId: 'pill_primordial', count: 3 }] },
           storyDialogue: STORY_DIALOGUES['main_026'], accepted: false, completed: false, turnedIn: false },
         // === 第六章：化神之秘（main_027-029）===
@@ -287,7 +287,7 @@
           storyDialogue: STORY_DIALOGUES['main_028'], accepted: false, completed: false, turnedIn: false },
         { id: 'main_029', title: '化神天劫', type: 'main', priority: { id: 'critical', name: '主线', color: 'text-red-500' },
           description: STORY_DIALOGUES['main_029'].accept,
-          objectives: [{ type: 'breakthrough_realm', fromRealm: '元婴', toRealm: '化神', completed: false }],
+            objectives: [{ type: 'breakthrough_realm', fromRealm: '元婴', toRealm: '化神', count: 1, completed: false }],
           rewards: { exp: 80000, spiritStones: 50000, items: [{ itemId: 'arm_nine_heaven_robe', count: 1 }, { itemId: 'pill_sutra_change', count: 2 }] },
           storyDialogue: STORY_DIALOGUES['main_029'], accepted: false, completed: false, turnedIn: false },
         // === 第七章：飞升之劫（main_030-035）===
@@ -298,12 +298,12 @@
           storyDialogue: STORY_DIALOGUES['main_030'], accepted: false, completed: false, turnedIn: false },
         { id: 'main_031', title: '九重天劫', type: 'main', priority: { id: 'critical', name: '主线', color: 'text-red-500' },
           description: STORY_DIALOGUES['main_031'].accept,
-          objectives: [{ type: 'breakthrough_realm', fromRealm: '化神', toRealm: '炼虚', completed: false }],
+            objectives: [{ type: 'breakthrough_realm', fromRealm: '化神', toRealm: '炼虚', count: 1, completed: false }],
           rewards: { exp: 150000, spiritStones: 80000, items: [{ itemId: 'wpn_zhu_xian', count: 1 }] },
           storyDialogue: STORY_DIALOGUES['main_031'], accepted: false, completed: false, turnedIn: false },
         { id: 'main_032', title: '心魔考验', type: 'main', priority: { id: 'critical', name: '主线', color: 'text-red-500' },
           description: STORY_DIALOGUES['main_032'].accept,
-          objectives: [{ type: 'breakthrough_realm', fromRealm: '炼虚', toRealm: '合体', completed: false }],
+            objectives: [{ type: 'breakthrough_realm', fromRealm: '炼虚', toRealm: '合体', count: 1, completed: false }],
           rewards: { exp: 200000, spiritStones: 100000, items: [{ itemId: 'art_chaos_art', count: 1 }] },
           storyDialogue: STORY_DIALOGUES['main_032'], accepted: false, completed: false, turnedIn: false },
         { id: 'main_033', title: '最终决战', type: 'main', priority: { id: 'high', name: '紧急', color: 'text-yellow-400' },
@@ -313,12 +313,12 @@
           storyDialogue: STORY_DIALOGUES['main_033'], accepted: false, completed: false, turnedIn: false },
         { id: 'main_034', title: '尘缘了断', type: 'main', priority: { id: 'critical', name: '主线', color: 'text-red-500' },
           description: STORY_DIALOGUES['main_034'].accept,
-          objectives: [{ type: 'breakthrough_realm', fromRealm: '合体', toRealm: '大乘', completed: false }],
+            objectives: [{ type: 'breakthrough_realm', fromRealm: '合体', toRealm: '大乘', count: 1, completed: false }],
           rewards: { exp: 500000, spiritStones: 200000, items: [{ itemId: 'pill_divine', count: 5 }] },
           storyDialogue: STORY_DIALOGUES['main_034'], accepted: false, completed: false, turnedIn: false },
         { id: 'main_035', title: '渡劫飞升', type: 'main', priority: { id: 'critical', name: '主线', color: 'text-red-500' },
           description: STORY_DIALOGUES['main_035'].accept,
-          objectives: [{ type: 'breakthrough_realm', fromRealm: '大乘', toRealm: '渡劫', completed: false }],
+            objectives: [{ type: 'breakthrough_realm', fromRealm: '大乘', toRealm: '渡劫', count: 1, completed: false }],
           rewards: { exp: 1000000, spiritStones: 500000, items: [{ itemId: 'spec_immortal_token', count: 1 }] },
           storyDialogue: STORY_DIALOGUES['main_035'], accepted: false, completed: false, turnedIn: false }
     ];
@@ -379,6 +379,13 @@
         }
         // 同时注册到window.npcStoryQuests以便NPC系统访问
         window.npcStoryQuests = extraNPCQuests;
+        // F-1 修复：merge() 之前只 push 到 mainQuestChain/allQuests 数组，findQuestById → QuestRegistry.get 返回 null → "任务不存在"
+        // 补注册到 QuestRegistry
+        if (window.QuestRegistry && typeof window.QuestRegistry.registerMany === 'function') {
+            window.QuestRegistry.registerMany(extraMain);
+            window.QuestRegistry.registerMany(extraRandom);
+            window.QuestRegistry.registerMany(extraNPCQuests);
+        }
         console.log('[quest-ext] 已添加 ' + extraMain.length + ' 主线 + ' + extraRandom.length + ' 随机 + ' + extraNPCQuests.length + ' NPC故事线任务');
     }
 

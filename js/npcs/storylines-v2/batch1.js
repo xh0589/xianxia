@@ -14,18 +14,46 @@
     'use strict';
 
     // ============ 抉择记录（跨会话持久化，供终章读取） ============
+    // F-11 重构：从"每次读 localStorage"改为"内存缓存 + 同步 localStorage"，
+    // 状态来源由 StateRegistry 接管，localStorage 仅作旧版兼容。
     var LS_KEY = 'xianxia_storyline_choices';
+    var _choicesCache = null;
 
     function _loadChoices() {
-        try { return JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch (e) { return {}; }
+        if (_choicesCache) return _choicesCache;
+        try { _choicesCache = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch (e) { _choicesCache = {}; }
+        if (!_choicesCache || typeof _choicesCache !== 'object') _choicesCache = {};
+        return _choicesCache;
+    }
+    function _persistChoices() {
+        try { localStorage.setItem(LS_KEY, JSON.stringify(_choicesCache || {})); } catch (e) {}
     }
     function recordStorylineChoice(npcId, choice) {
-        var all = _loadChoices();
-        all[npcId] = choice;
-        try { localStorage.setItem(LS_KEY, JSON.stringify(all)); } catch (e) {}
+        _loadChoices();
+        _choicesCache[npcId] = choice;
+        _persistChoices();
     }
     function getStorylineChoice(npcId) {
         return _loadChoices()[npcId] || null;
+    }
+    window.recordStorylineChoice = recordStorylineChoice;
+    window.getStorylineChoice = getStorylineChoice;
+
+    // F-11 重构：注册到 StateRegistry，存档与重置统一由注册表处理
+    if (window.StateRegistry && typeof window.StateRegistry.register === 'function') {
+        window.StateRegistry.register('storylineChoices', {
+            version: 1,
+            export: function() { return JSON.parse(JSON.stringify(_choicesCache || {})); },
+            import: function(data) {
+                if (!data || typeof data !== 'object') { _choicesCache = {}; return; }
+                _choicesCache = data;
+                _persistChoices();
+            },
+            reset: function() {
+                _choicesCache = {};
+                try { localStorage.removeItem(LS_KEY); } catch (e) {}
+            }
+        });
     }
     window.recordStorylineChoice = recordStorylineChoice;
     window.getStorylineChoice = getStorylineChoice;

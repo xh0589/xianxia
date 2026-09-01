@@ -10,6 +10,8 @@
     'use strict';
 
     /** 角色/世界进度键（新游戏与删档应清除；不得跨角色继承） */
+    // F-11 修复：之前漏列 xianxia_storyline_choices（既不清也不收，剧情抉择跨角色串档）
+    //           同时 xianxia_sect_diplomacy/xianxia_tracked_quests 在清单但 collect/apply 不收，读档丢失
     var CHARACTER_STORAGE_KEYS = [
         'xianxia_arena_ranking',
         'xianxia_beasts',
@@ -39,6 +41,7 @@
         'xianxia_sect_diplomacy',
         'xianxia_sect_join_state',
         'xianxia_social_cooldowns',
+        'xianxia_storyline_choices',
         'xianxia_tracked_quests',
         'xianxia_travel_data',
         'xianxia_world_events',
@@ -221,6 +224,8 @@
             trade: (window.TradeService && typeof window.TradeService.serialize === 'function')
                 ? window.TradeService.serialize()
                 : null,
+            // F-9 / F-11 撤回：mail / sectDiplomacy 已由对应模块通过 StateRegistry.register 暴露，StateRegistry.exportAll() 自动收。
+            // tracked_quests / storyline_choices 接下来由 quest-system.js / storylines-v2 注册到 StateRegistry，无需 game-state.js 列键名。
             // P1-11: 社交冷却与每日次数
             social: (typeof window.exportSocialCooldowns === 'function') ? window.exportSocialCooldowns() : null,
             // v12.1：模块自注册状态。以后新增模块无需继续膨胀 GameState。
@@ -906,6 +911,7 @@
         writeKey('xianxia_choices', saveData.choices);
         writeKey('xianxia_scenario_progress', saveData.scenarioProgress);
         writeKey('xianxia_sect_join_state', saveData.sectJoinState);
+        // F-11 撤回：sect_diplomacy / tracked_quests / storyline_choices 由对应模块的 StateRegistry.import 接管
         writeKey('xianxia_daily_events', saveData.dailyEvents);
         writeKey('xianxia_arena_ranking', saveData.arenaRanking);
         // P1-11: 社交冷却与每日次数存档
@@ -913,7 +919,9 @@
         // P2-10: NPC生死记录存档
         writeKey('xianxia_npc_records', window._npcRecords || { deceased: [], gone: [], protectionLevels: {} });
         // P2-10: 飞鸽传书存档
-        if (window.MailSystem && typeof window.MailSystem.saveMailData === 'function') {
+        // F-9 撤回：mail 模块已注册到 StateRegistry（mail-system.js），这里不再写脏数据也不再读回。StateRegistry.importAll 会自动处理。
+        // 保留独立键兼容旧存档
+        if (window.MailSystem && typeof window.MailSystem.saveMailData === 'function' && !window.StateRegistry) {
             window.MailSystem.saveMailData();
         }
         // 背包/灵兽/洞府/任务等已在内存，避免再被独立键覆盖：同步写一份兼容旧模块
@@ -1008,8 +1016,11 @@
         } catch (e) {}
 
         // P2-10: 恢复飞鸽传书数据
+        // F-9 撤回：mail 由 StateRegistry 接管。保留 MailSystem.loadMailData 作为旧存档兼容路径
         try {
-            if (window.MailSystem && typeof window.MailSystem.loadMailData === 'function') {
+            if (window.StateRegistry && saveData.modules && saveData.modules.mail) {
+                // StateRegistry.importAll 会处理
+            } else if (window.MailSystem && typeof window.MailSystem.loadMailData === 'function') {
                 window.MailSystem.loadMailData();
             } else {
                 var mailRaw = localStorage.getItem('xianxia_mail_system');

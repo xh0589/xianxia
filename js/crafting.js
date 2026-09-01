@@ -958,7 +958,7 @@ function executeCrafting(recipeId) {
             itemName: recipe.result.name || recipe.name,
             count: resultCount,
             quality: qualityName,
-            profession: profId
+            profession: (typeof qSkill === 'string' && qSkill) ? qSkill : null
         });
     }
     
