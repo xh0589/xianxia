@@ -1327,6 +1327,9 @@ class NPC {
             _wantedItems: this._wantedItems ? [...this._wantedItems] : null,
             introducedBy: this.introducedBy || null,
             firstImpression: this.firstImpression || null,
+            // F-19 修：v20.0 master-teach.js 字段显式持久化（旧版 serialize 逐字段列出漏了，读档后弟子培养进度全丢）
+            _cultivationProgress: Number(this._cultivationProgress) || 0,
+            _graduated: !!this._graduated,
             // P2-10: 生命周期系统存档
             protectionLevel: this._protectionLevel || null,
             criticalDays: this._criticalDays || 0,
@@ -1387,6 +1390,9 @@ class NPC {
         } else {
             npc._appliedSecretEffects = {};
         }
+        // F-19 修：v20.0 master-teach.js 字段还原（旧档→默认 0/false）
+        npc._cultivationProgress = Number(data._cultivationProgress) || 0;
+        npc._graduated = !!data._graduated;
         // v13.9 恢复行囊与装备（v11.8联动的存档补全）
         if (data.inventory && Array.isArray(data.inventory.items)) {
             npc.inventory = { items: JSON.parse(JSON.stringify(data.inventory.items)), maxSlots: data.inventory.maxSlots || 10 };
