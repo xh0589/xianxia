@@ -292,7 +292,16 @@ function collectCharacterData(name) {
         qi: 100, maxQi: 100,
         mood: 80, maxMood: 100,
         // 1.5 气运/机缘：luck 影响奇遇触发率与稀有度，fortune 可消耗破机缘
-        luck: 50, fortune: 0
+        luck: 50, fortune: 0,
+        // F-13 完整版：修真境界/层级/经验/道侣/子嗣/师父/天数/灵石/位置
+        // 此前靠散落 `|| '炼气'`/`|| 100` 兜底，集中初始化便于测试与存档
+        realm: '炼气', layer: 1, level: 1, exp: 0,
+        // 关系
+        bonds: {}, _children: [], _masterId: null,
+        // 时间/资源
+        day: 1, spiritStones: 100, copper: 50,
+        // 位置
+        currentMap: 'main'
     };
     document.querySelectorAll('#main-attributes-container input').forEach(input => {
         var attrName = input.dataset.attr;

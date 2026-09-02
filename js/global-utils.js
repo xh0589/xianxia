@@ -443,6 +443,17 @@ window.XianXia = window.XianXia || {};
         window.syncCharAttrsFromMain(data);
         // v13.1 绝技兜底：任何角色数据入口都保证 combatAbilities 为数组
         if (!Array.isArray(data.combatAbilities)) data.combatAbilities = [];
+        // F-13 完整版：旧存档字段兜底（新创建角色由 collectCharacterData 完整初始化）
+        if (!data.bonds) data.bonds = {};
+        if (!Array.isArray(data._children)) data._children = [];
+        if (typeof data.realm !== 'string') data.realm = '炼气';
+        if (!data.layer) data.layer = 1;
+        if (!data.level) data.level = 1;
+        if (data.exp == null) data.exp = 0;
+        if (data.spiritStones == null) data.spiritStones = 100;
+        if (data.day == null) data.day = 1;
+        if (typeof data._masterId === 'undefined') data._masterId = null;
+        if (!data.currentMap) data.currentMap = 'main';
         window.currentCharData = data;
         // 若 app 暴露了赋值钩子则同步（见 app.js）
         if (typeof window._setAppCurrentCharData === 'function') {
