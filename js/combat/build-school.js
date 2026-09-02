@@ -19,12 +19,17 @@ function getBuildSchool() {
                 if (!best || rec.m > best.m) best = { id: aid, m: rec.m };
             }
             if (best) {
-                // artId → SECT_SPECIFIC_ARTS 反查名称
-                var arts = (window.SECT_SPECIFIC_ARTS && ds.sectId) ? window.SECT_SPECIFIC_ARTS[ds.sectId] : null;
+                // artId → SECT_SPECIFIC_ARTS 反查名称（跨门派：玩家可带旧门派掌握度叛门）
                 var artName = best.id;
-                if (arts) {
-                    for (var i = 0; i < arts.length; i++) {
-                        if (arts[i].id === best.id) { artName = arts[i].name; break; }
+                var allArts = window.SECT_SPECIFIC_ARTS;
+                if (allArts) {
+                    for (var sectName in allArts) {
+                        var arts = allArts[sectName];
+                        if (!Array.isArray(arts)) continue;
+                        for (var i = 0; i < arts.length; i++) {
+                            if (arts[i].id === best.id) { artName = arts[i].name; break; }
+                        }
+                        if (artName !== best.id) break;
                     }
                 }
                 if (/(剑|刀|锋)/.test(artName)) return 'sword';
