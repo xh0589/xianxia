@@ -221,6 +221,16 @@ window.XianXia = window.XianXia || {};
                 charData.copper = Math.max(0, amount);
             }
         },
+        // F-19 补：v20.0.2 F-17 修复时漏了 addCopper/deductCopper → 铜钱写入单源致双源不一致
+        addCopper(amount) {
+            this.setCopper(this.getCopper() + amount);
+        },
+        deductCopper(amount) {
+            const cur = this.getCopper();
+            if (cur < amount) return false;
+            this.setCopper(cur - amount);
+            return true;
+        },
 
         // 获取玩家属性（统一从 currentCharData 读取）
         getCharAttr(key) {

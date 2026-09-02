@@ -483,6 +483,8 @@ function showBreakthroughResult() {
         charData.maxQi = window.getQiMax(nextIndex, 1);
         charData.qi = Math.min(charData.qi || 0, charData.maxQi);
     }
+    // v20.1 自动存档：突破成功是关键时刻，独立键不抢手动档
+    try { if (typeof window.doAutoSave === 'function') window.doAutoSave('breakthrough'); } catch (eAS) {}
 
     // 异象文本
     const phenomena = BREAKTHROUGH_PHENOMENA[nextRealm] || BREAKTHROUGH_PHENOMENA['default'];

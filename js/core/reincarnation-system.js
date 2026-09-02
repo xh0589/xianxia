@@ -58,6 +58,9 @@ function reincarnate() {
     // 功法清空（需重学，前世功法靠记忆 buff 重新修更快）
     if (window.currentSkills) { for (var s in window.currentSkills) window.currentSkills[s] = null; }
 
+    // v20.1 自动存档：转世是关键时刻，独立键不抢手动档
+    try { if (typeof window.doAutoSave === 'function') window.doAutoSave('reincarnation'); } catch (eAS) {}
+
     var _msg = '🔄 你转世重修，带着前世记忆重新踏上仙途。此为第 ' + cd._pastLifeMemory.incarnations + ' 世轮回。';
     if (cd._pastLifeMemory.incarnations >= 3) _msg += ' 宿慧初醒，前世记忆渐可回溯。';
     if (window.showMessage) window.showMessage(_msg, 'success');

@@ -365,6 +365,10 @@ function collectCharacterData(name) {
             data.attrs[am[cn]] = data.mainAttributes[cn] || 10;
         });
     }
+    // v20.1 开局出身+天赋：应用资源写入 cd + 存 origin/talent 标识
+    if (typeof window.applyOriginTalentToCharData === 'function') {
+        try { window.applyOriginTalentToCharData(data); } catch (e) {}
+    }
     return data;
 }
 
@@ -1408,6 +1412,9 @@ function cultivationMeditate(durationId) {
         // 1.7 前世记忆：主修功法是前世功法则修炼更快（+30%）
         var _plmMul = (typeof window.pastLifeSkillBonus === 'function') ? window.pastLifeSkillBonus(mainSkillId) : 1.0;
         if (_plmMul !== 1) essenceGain = Math.floor(essenceGain * _plmMul);
+        // v20.1 出身天赋：灵机真元 +10%
+        var _teMul = (typeof window.talentEssenceMul === 'function') ? window.talentEssenceMul(currentCharData) : 1.0;
+        if (_teMul !== 1) essenceGain = Math.floor(essenceGain * _teMul);
         // 1.9 丹毒惩罚：高丹毒降修炼效率（50丹毒-25%、100丹毒-50%）
         var _ppPen = (typeof window.getPillPoisonPenalty === 'function') ? window.getPillPoisonPenalty() : 0;
         if (_ppPen > 0) essenceGain = Math.floor(essenceGain * (1 - _ppPen));
@@ -1417,6 +1424,10 @@ function cultivationMeditate(durationId) {
             var _qdAdd = 0;
             if ((currentCharData.qi || 0) < 20) _qdAdd += 5;
             if (typeof window.getPillPoison === 'function' && window.getPillPoison() > 50) _qdAdd += 3;
+            // v20.1 出身天赋：道心走火 -30%
+            if (_qdAdd > 0 && typeof window.talentHeartDemonMul === 'function') {
+                _qdAdd = Math.max(0, Math.round(_qdAdd * window.talentHeartDemonMul(currentCharData)));
+            }
             if (_qdAdd > 0) window.addQiDeviation(_qdAdd);
         }
     }
@@ -4001,6 +4012,17 @@ function buildPlayerBattleEntity(level) {
     if (_daoComboBonus && playerEntity) {
         playerEntity._daoComboBonus = _daoComboBonus;
     }
+    // v20.1 出身天赋：剑骨 attack×1.10 / 铁骨 defense×1.10（注入玩家战斗实体）
+    try {
+        if (typeof window.talentAtkMul === 'function') {
+            var _taMul = window.talentAtkMul(currentCharData);
+            if (_taMul !== 1) playerEntity._talentAtkMul = _taMul;
+        }
+        if (typeof window.talentDefMul === 'function') {
+            var _tdMul = window.talentDefMul(currentCharData);
+            if (_tdMul !== 1) playerEntity._talentDefMul = _tdMul;
+        }
+    } catch (e) {}
     // 1.8 本命法宝：每阶 +5% 攻防（法宝等级→战斗加成）
     try {
         if (typeof window.artifactCombatMul === 'function') {
@@ -4390,6 +4412,10 @@ function showBattleUI(battle) {
             if (currentBattle._isRivalDuel && typeof window.settleRivalDuel === 'function') {
                 try { window.settleRivalDuel(true); } catch (eRiv) {}
             }
+            // v20.1 主线 Boss 多阶段：打完本阶段 → 结算（还有阶段出"下一阶段"按钮，最后阶段触发完整结算）
+            if (currentBattle._isMainStoryBoss && typeof window.settleMainStoryBoss === 'function') {
+                try { window.settleMainStoryBoss(true); } catch (eMSB) {}
+            }
 
             // B4：灵兽经验仅由 battle.js 结算一次，此处不再重复 onBeastBattleEnd
             if (typeof window.onDungeonBattleResolved === 'function') {
@@ -4482,6 +4508,10 @@ function showBattleUI(battle) {
             // v20.0 2.9 宿敌寻仇战败 → 重伤
             if (currentBattle && currentBattle._isRivalDuel && typeof window.settleRivalDuel === 'function') {
                 try { window.settleRivalDuel(false); } catch (eRivLose) {}
+            }
+            // v20.1 主线 Boss 战败 → Boss 退去可再战（主线不卡死）
+            if (currentBattle && currentBattle._isMainStoryBoss && typeof window.settleMainStoryBoss === 'function') {
+                try { window.settleMainStoryBoss(false); } catch (eMSBL) {}
             }
             // 时间跳半天（720分钟 = 12小时）
             if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
@@ -6723,7 +6753,6 @@ function checkNewGamePlus() {
             var data = JSON.parse(saved);
             if (data.ngPlus > 0) {
                 showMessage('🌟 新游戏+模式激活！继承上周目部分属性。', 'info');
-                return data;
             }
         } catch(e) {}
     }

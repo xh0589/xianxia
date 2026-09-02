@@ -178,6 +178,9 @@
             maxHealth: charData.maxHealth != null ? charData.maxHealth : 100,
             maxQi: charData.maxQi != null ? charData.maxQi : 100,
             maxEnergy: charData.maxEnergy != null ? charData.maxEnergy : 100,
+            // v20.1 出身+天赋：序列化保留（不选时为 null，旧档→null 默认寒门无天赋）
+            origin: charData.origin || null,
+            talent: charData.talent || null,
             bodyDurability: bodyDurability ? Object.assign({}, bodyDurability) : {},
             inventory: {
                 slots: serializeInventorySlots(inv && inv.slots),
@@ -657,7 +660,10 @@
             soulState: saveData.soulState || null,
             maxHealth: n(saveData.maxHealth, 100),
             maxQi: n(saveData.maxQi, 100),
-            maxEnergy: n(saveData.maxEnergy, 100)
+            maxEnergy: n(saveData.maxEnergy, 100),
+            // v20.1 出身+天赋：旧档→null（默认寒门无天赋），新档保留玩家选择
+            origin: saveData.origin || null,
+            talent: saveData.talent || null
         };
 
         if (typeof global.setCurrentCharData === 'function') {

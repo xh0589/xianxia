@@ -54,6 +54,51 @@
                     </div>
                 </div>
 
+                <!-- v20.1 开局出身 + 天赋（对标鬼谷八荒）-->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                        <label class="block text-lg font-bold text-gray-300 mb-3"><span class="text-yellow-500 mr-2">✦</span>出身</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="origin-option bg-gray-800 border-2 border-gray-600 rounded-lg p-3 cursor-pointer hover:border-yellow-500 transition" data-origin="humble" onclick="selectOrigin('humble')">
+                                <div class="text-2xl mb-1">🌾</div><div class="text-sm font-bold text-yellow-400">寒门子弟</div>
+                                <div class="text-xs text-gray-400 mt-1">铜钱+200 气运+5 历练+10</div>
+                            </div>
+                            <div class="origin-option bg-gray-800 border-2 border-gray-600 rounded-lg p-3 cursor-pointer hover:border-yellow-500 transition" data-origin="noble" onclick="selectOrigin('noble')">
+                                <div class="text-2xl mb-1">🏯</div><div class="text-sm font-bold text-yellow-400">世家子弟</div>
+                                <div class="text-xs text-gray-400 mt-1">灵石+300 铜钱+1000 名声+30</div>
+                            </div>
+                            <div class="origin-option bg-gray-800 border-2 border-gray-600 rounded-lg p-3 cursor-pointer hover:border-yellow-500 transition" data-origin="wanderer" onclick="selectOrigin('wanderer')">
+                                <div class="text-2xl mb-1">🌿</div><div class="text-sm font-bold text-yellow-400">散修传人</div>
+                                <div class="text-xs text-gray-400 mt-1">灵石+50 历练+30</div>
+                            </div>
+                            <div class="origin-option bg-gray-800 border-2 border-gray-600 rounded-lg p-3 cursor-pointer hover:border-yellow-500 transition" data-origin="exile" onclick="selectOrigin('exile')">
+                                <div class="text-2xl mb-1">⚔️</div><div class="text-sm font-bold text-yellow-400">弃徒之后</div>
+                                <div class="text-xs text-gray-400 mt-1">名声-20 历练+60</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                        <label class="block text-lg font-bold text-gray-300 mb-3"><span class="text-yellow-500 mr-2">✦</span>天赋（永久，选一）</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="talent-option bg-gray-800 border-2 border-gray-600 rounded-lg p-2 cursor-pointer hover:border-yellow-500 transition text-center" data-talent="sword" onclick="selectTalent('sword')">
+                                <div class="text-xl">🗡️</div><div class="text-xs font-bold text-yellow-400">剑骨</div><div class="text-[10px] text-gray-500">攻+10%</div>
+                            </div>
+                            <div class="talent-option bg-gray-800 border-2 border-gray-600 rounded-lg p-2 cursor-pointer hover:border-yellow-500 transition" data-talent="iron" onclick="selectTalent('iron')">
+                                <div class="text-xl">🛡️</div><div class="text-xs font-bold text-yellow-400">铁骨</div><div class="text-xs text-gray-500">防+10%</div>
+                            </div>
+                            <div class="talent-option bg-gray-800 border-2 border-gray-600 rounded-lg p-2 cursor-pointer hover:border-yellow-500 transition" data-talent="qi" onclick="selectTalent('qi')">
+                                <div class="text-xl">✨</div><div class="text-xs font-bold text-outline">灵机</div><div class="text-[10px] text-gray-500">真元+10%</div>
+                            </div>
+                            <div class="talent-option bg-gray-800 border-2 border-gray-600 rounded-lg p-2 cursor-pointer hover:border-yellow-500 transition" data-talent="dao" onclick="selectTalent('dao')">
+                                <div class="text-xl">🫣</div><div class="text-xs font-bold text-yellow-400">道心</div><div class="text-[10px] text-gray-500">走火-30%</div>
+                            </div>
+                            <div class="talent-option bg-gray-800 border-2 border-gray-600 rounded-lg p-2 cursor-pointer hover:border-yellow-500 transition" data-talent="luck" onclick="selectTalent('luck')">
+                                <div class="text-xl">🍀</div><div class="text-xs font-bold text-yellow-400">福星</div><div class="text-xs text-gray-500">气运+15</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <!-- 第一列：主要属性 & 战斗技能 -->
                     <div class="space-y-8">
@@ -1701,6 +1746,13 @@
     <script src="js/core/karma-retribution.js"></script>
     <script src="js/sects/master-teach.js"></script>
     <script src="js/world/solar-terms.js"></script>
+    <!-- v20.1 补充：市面对标补缺（自动存档+主线多阶段Boss+出身天赋+快捷键+火候QTE+音效+弟子培养重写）-->
+    <script src="js/core/auto-save.js"></script>
+    <script src="js/quest/main-storyline-arc.js"></script>
+    <script src="js/core/origin-talent.js"></script>
+    <script src="js/core/keyboard-shortcuts.js"></script>
+    <script src="js/crafting/fire-qte.js"></script>
+    <script src="js/core/audio-synth.js"></script>
     
     <!-- 第14层：v9.0 情境引擎 + 第二批设施 -->
     <script src="js/core/scenario-engine.js"></script>
