@@ -236,9 +236,10 @@ buildingEffectsRegistry['training'] = {
         showMessage(`在演武场训练获得 ${expGain} 点经验`, 'success');
         if (window.updateStatusPanel) window.updateStatusPanel();
         
-        // 更新战斗任务进度
+        // F-67 修复：updateQuestObjective 接 3 参数 (questId, objectiveType, extraData)，
+        // 此前 2 参数调用永远 obj.type !== objectiveType 失败，daily_003 切磋武艺任务无法完成
         if (window.questSystem) {
-            window.questSystem.updateQuestObjective('sparring', { amount: 1 });
+            window.questSystem.updateQuestObjective('daily_003', 'sparring', { amount: 1 });
         }
         
         return true;
