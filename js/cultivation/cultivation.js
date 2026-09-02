@@ -734,6 +734,20 @@ var REALM_UNIQUE_EFFECTS = {
         desc: '天劫对抗，飞升之门开启，千里感知，全属性大幅提升',
         icon: '⚡',
         bonuses: { attack: 1.5, defense: 1.5, block: 25, penetrate: 25 }
+    },
+    // F-43 v20.0 1.3 飞升后世界：飞升态获得仙灵加成
+    '飞升': {
+        name: '飞升仙界',
+        desc: '飞升仙界，灵力转化为仙元，全属性再大幅提升',
+        icon: '🌟',
+        bonuses: { attack: 2.0, defense: 2.0, health: 1.5, qi: 2.0, dodge: 30, crit: 25 }
+    },
+    // F-43 v20.0 1.3 飞升后世界：金仙为飞升后最高境界
+    '金仙': {
+        name: '金仙不朽',
+        desc: '金仙之境，万劫不磨，全属性达到极诣',
+        icon: '✨',
+        bonuses: { attack: 3.0, defense: 3.0, health: 2.0, qi: 3.0, dodge: 40, crit: 35, cultivate: 1.5 }
     }
 };
 
