@@ -265,10 +265,26 @@ function useItem(uid) {
     // 根据物品类型执行不同效果
     switch (template.type) {
         case 'consumable':
-            // 突破类物品：禁止在背包直接使用
+            // F-14：突破类物品——服用后累加到 _breakthroughPillBonus，下次突破成功率加成并消耗
+            // 此前直接拦截"只能在突破界面用"，但无此界面→8 种突破丹永无消费路径
             if (template.subtype === 'breakthrough') {
+                var _bbEff = template.effect && template.effect.breakthrough_bonus;
+                var _bbActual = 0;
+                if (typeof _bbEff === 'number') _bbActual = _bbEff;
+                else if (typeof _bbEff === 'string') _bbActual = 0.05 + Math.random() * 0.10; // 悟道丹"5~15%随机"
+                if (_bbActual > 0 && window.currentCharData) {
+                    var _cd = window.currentCharData;
+                    _cd._breakthroughPillBonus = (_cd._breakthroughPillBonus || 0) + _bbActual;
+                    slot.removeCount(1);
+                    if (slot.count <= 0) inventory.slots[inventory.slots.indexOf(slot)] = null;
+                    if (typeof window.showMessage === 'function') {
+                        window.showMessage('已服用 ' + template.name + '，下次突破成功率 +' + Math.round(_bbActual * 100) + '%', 'success');
+                    }
+                    if (typeof window.updateInventoryUI === 'function') window.updateInventoryUI();
+                    return true;
+                }
                 if (typeof window.showMessage === 'function') {
-                    window.showMessage('突破丹只能在突破准备界面使用', 'info');
+                    window.showMessage(template.name + ' 暂无法使用', 'info');
                 }
                 return false;
             }
@@ -288,6 +304,11 @@ function useItem(uid) {
             }
             // 所有可用的消耗品子类型统一处理（v13.1：+manual 绝技秘籍）
             if (['pill', 'buff_pill', 'perm_pill', 'special_pill', 'herb', 'fruit', 'food', 'talisman', 'special', 'manual'].includes(template.subtype)) {
+                // 1.9 丹毒积累：服丹按毒性累积丹毒值
+                if (['pill', 'buff_pill', 'perm_pill', 'special_pill'].indexOf(template.subtype) >= 0 &&
+                    typeof window.addPillPoison === 'function') {
+                    window.addPillPoison(slot.templateId || template.id, 1);
+                }
                 // 止血丹特殊处理：调用 hemostaticTreatment
                 if (template.subtype === 'pill' && template.effect && template.effect.hemostatic) {
                     if (typeof window.hemostaticTreatment === 'function') {
@@ -1334,30 +1355,43 @@ function equipItemFromInventory(uid) {
 // ============ 卸下装备到背包 ============
 function unequipItemToInventory(slotId) {
     if (!window.currentEquipment) return false;
-    
+
     const item = window.currentEquipment[slotId];
     if (!item) return false;
-    
-    // 尝试添加到背包
-    const result = addItem(item.id, 1);
-    if (result) {
-        // 从装备栏移除
-        window.currentEquipment[slotId] = null;
-        
-        // 更新属性缓存
-        updateEquippedStats();
-        
-        // 更新UI
-        if (typeof renderEquipmentPanel === 'function') {
-            renderEquipmentPanel();
-        }
-        updateInventoryUI();
-        
-        return true;
-    } else {
+
+    // F-29：还原装备时保留强化/耐久——此前 addItem(id) 新建实例读全局模板，
+    // 克隆修复后模板不再被 mutate，若不复制字段强化会丢失
+    var _newInstance = new ItemInstance(item.id || item.templateId, 1);
+    ['enhancementLevel', 'refineLevel', 'enchantType', 'armorDurability', 'durability'].forEach(function (f) {
+        if (item[f] !== undefined && item[f] !== null) _newInstance[f] = item[f];
+    });
+    // 找空槽放入（装备 maxStack 1，不堆叠以保留 per-instance 强化/耐久）
+    var _emptyIdx = -1;
+    for (var _i = 0; _i < inventory.slots.length; _i++) {
+        if (!inventory.slots[_i]) { _emptyIdx = _i; break; }
+    }
+    if (_emptyIdx < 0 && inventory.slots.length < inventory.maxSlots) {
+        _emptyIdx = inventory.slots.length;
+        inventory.slots.push(null);
+    }
+    if (_emptyIdx < 0) {
         alert('背包已满！无法卸下装备。');
         return false;
     }
+    inventory.slots[_emptyIdx] = _newInstance;
+    // 从装备栏移除
+    window.currentEquipment[slotId] = null;
+
+    // 更新属性缓存
+    updateEquippedStats();
+
+    // 更新UI
+    if (typeof renderEquipmentPanel === 'function') {
+        renderEquipmentPanel();
+    }
+    updateInventoryUI();
+
+    return true;
 }
 
 // ============ 计算装备属性加成 ============

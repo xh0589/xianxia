@@ -2702,3 +2702,95 @@ confess/intimate/bond_dao 冷却3日/7日（memory._loveCd 绝对游戏日）；
 ### 回归测试
 ✅ 28 个 Node.js 测试套件 0 failed（2692+83+19+28 分套件），包括 npc-life-actor 20 passed（重跑后稳定）。  
 ⚠️ tests/static-check.py 报 FAIL：8 个 public API 行号 mismatch（STRUCTURE 报告"行号漂移"问题，硬编码旧行号与实际不符，非代码 bug）。
+
+---
+
+## 二十、v20.0 内容扩展实施记录（2026-09-02，外包交付，本轮移植自 html-0bd3fb25-source/）
+
+### 二十.1 内容扩展（第0层/第1层/D-13/第2层/F-15/F项核查/机制设计原则）
+
+基于《计划/v20.0_内容扩展总计划.md》系统落地，端口 8000 全程验证通过，每项 node --check。
+
+### 第0层·接线（让既有死代码通电）
+- 0.2.1 境界质变：`buildPlayerBattleEntity` 读 `getRealmBonus(realm)` 注入 attack/defense/speed 乘数（app.js + battle.js getAttack/getDefense/getSpeed）
+- 0.2.2 灵根五行：① cultivationMeditate/cultivateQi 改单元素根倍率（`getRootSpeedMultiplier(roots, _getMainTechniqueElement())`）；② 组合技 `getSkillCombinationBonuses` 注入战斗（all_attr 落六维，attack/defense 作乘数）；③ 五行相克 `getElementalDamageMul` 对元素生物 ±15%；④ `canUseTechniqueByRoots` 已在 equipSkill 唯一入口硬校验（核查确认通）
+- 0.2.3 心魔+瓶颈：心魔 bonus 统一存 `currentCharData._heartDemonBonus`；`applyBottleneckEffect`/`attemptBreakBottleneck` 此前零调用→cultivationMeditate 末尾首次触发弹面板 + 修炼面板常驻"突破瓶颈"入口
+- 0.2.4 love四轨：`changeLove` 接入 5 个爱情互动成功分支（express_like+3/spend_time+4/confess+8/intimate+10/bond_dao+20）；`changeAffection` 调 `updateFavorMax`
+- 0.2.6 双修合击：`getDaoCompanionCombos` 注入 `buildPlayerBattleEntity`（_daoComboBonus，all→六维，attack/defense→乘数）
+- 0.2.7 loot/cultivateQi：UNDEAD/CONSTRUCT/ELEMENTAL 补 uncommon/rare；`generateEnemyInventory` 接通 `getExtendedLoot`（EXTENDED_LOOT_TABLES 断线修复）；`cultivateQi` 改单元素根 + 仙侠.html 加"运功炼气"按钮；scenario 续关+境界门控
+
+### 第1层·十大标志玩法（新建系统）
+| 项 | 文件 | 核心机制 |
+|---|---|---|
+| 1.1 天劫战 | `js/cultivation/heavenly-tribulation.js` | 渡劫期满多波雷劫(3-9波)+中段心魔劫+道侣护法减免30%+失败走残魂+成功飞升 |
+| 1.2 主动招式 | `js/battle.js` | 普攻回气(6+缺气比)+CD制(damageMult≥1.5→2回合/≥1.8→3)+UI灰显⏳ |
+| 1.3 飞升后 | `js/endgame/ascension-epilogue.js` | 香火(名气折算信徒)+每日回馈真元+二段飞升(金仙)+天界切磋 |
+| 1.4 NPC演化 | `js/npcs/npc-life-actor.js` | cultivate case 自主突破(progress≥10→layer++/升境) |
+| 1.5 气运机缘 | `js/app.js` | `luck`/`fortune` 字段+影响奇遇触发率+`getLuckChance`/`spendLuck` |
+| 1.6 玩家建宗 | 复用 `js/extensions/player-sect.js` | updateCultivationUI 建宗入口+_quickFoundSect+护宗战 |
+| 1.7 转世轮回 | `js/core/reincarnation-system.js` | 残魂态转世保留1功法+1羁绊+部分气运+前世功法+30%buff |
+| 1.8 本命法宝 | `js/equipment/bonded-artifact.js` | 金丹+炼制绑定+喂材料升级(每阶+5%攻防) |
+| 1.9 丹毒 | `js/crafting/pill-poison.js` | 服丹按毒性积累(0-100)+高丹毒降修炼(50→-25%/100→-50%)+解毒接口 |
+| 1.10 高位面+御剑 | `js/map/high-planes.js` | 筑基+御剑(耗真气减时)+元婴入灵界+化神入魔界 |
+
+### D-13 名声×善恶→门派考核（`js/sects/sect-join-flow.js` evaluateSectEntry）
+4档名声(<20冷淡杂役/20-50正常/50-90礼遇外门/>90掌门亲迎内门)+善恶相悖+低名声拒收有文案+相悖但有声望加严+中立不问善恶。不入新存档（fame/karma 既有）。
+
+### 第2层·深度内容（14项）
+- 2.1 走火入魔 `js/cultivation/qi-deviation.js`：紊乱0-100，>=80→-10%/>=95→-20%全六维
+- 2.3 悟道树 `js/cultivation/enlightenment-tree.js`：7节点消耗 insightPoints 解锁永久六维
+- 2.4 修仙延寿 `js/cultivation/breakthrough-ritual.js`：突破大境界自动延寿(筑基+100...渡劫+30000)
+- 2.5 build分化 `js/combat/build-school.js`：主功法判定流派(剑/体/法)→被动(法修攻+10%/体修防+15%)
+- 2.8 婚姻后代 `js/npcs/marriage-offspring.js`：道侣bond≥2诞育后代继承主功法+360天成年
+- 2.9 宿敌链 `js/npcs/rivalry-chain.js`：仇恨>60可寻仇决战+>90最终决战+胜负结算
+- 2.12 自创丹方 `js/crafting/craft-custom-pill.js`：消耗材料按毒性映射效果+图鉴+临时buff
+- 2.13 灵脉经营 `js/economy/spirit-vein.js`：金丹+占据灵脉每日产灵石+升级1-5阶
+- 2.15 图鉴 `js/core/collection-system.js`：派生统计(功法/物品/NPC/击杀)+6里程碑领气运
+- 2.18 节气 `js/world/solar-terms.js`：24节气日(每15天)luck+1+灵气流转
+- 2.19 天机占卜 `js/cultivation/divination.js`：元婴+占卜按气运5档buff/损运
+- 2.20 双修产真元 `js/sects/sects-system.js` dualCultivate：加 essence+=经验*0.5
+- 2.21 师徒传功 `js/sects/master-teach.js`：传功弟子好感+5/进度+5/玩家fame+3
+- 2.23 因果报应 `js/core/karma-retribution.js`：onNewDay karma>=50善报/<=-50恶报
+
+### F-15 装备槽补全（`js/items-extended/03-armor.js`）
+补13件饰品填5空槽：neck(玉项链/灵珠项链/龙凤项链)/ring1(铁戒/灵戒)/ring2(龙戒/混元戒)/acc1(玉佩/混沌护符)/acc2(灵符)/offHand(木盾/铁盾/灵盾)，覆盖COMMON~LEGENDARY。
+
+### F 项核查结论（F-12~F-41）
+- 已落地19项：F-12/13/14/15/17/18/19/21/23/24/29/31/33/35/36/37/38/39/40
+- 核查无需改6项：F-16(代码公式合理)/F-20(20%设计保持)/F-22(保持)/F-27(kill活路径)/F-30(无漏)/F-34(合理)
+- 无法做/跳过：F-25(tests删)/F-32(设计)/F-41(傀儡核查复杂)
+
+### 机制设计原则（用户要求）
+- 代码结构合理：复用既有兽潮多波模式/PlayerSect/StateRegistry/onNewDaySubscribe，不复制平行状态
+- 现实逻辑：交流不限制次数而模仿厌烦(赠礼疲劳/爱情冷却CD/瓶颈首次弹)、善恶有报应、修仙延寿、瓶颈自检
+- 机制平衡：境界门槛+灵石成本+CD+概率上限，无全局数值缩放、不读DOM作真值、不新增独立localStorage角色数据
+
+---
+
+### 二十.2 文档死链清单（2026-09-02 核查，待处理）
+
+STRUCTURE.md 内引用的 .md 文件中，以下为死链（仓库外路径或根级不存在）：
+
+### 仓库外路径（19个，`../游戏制作/旧计划/` 下，不在当前仓库）
+- GPT审查待办实施计划.md / GPT审核报告2实施计划.md / NPC位置跟随系统实施计划.md
+- 主流游戏对比与差距分析.md / 剩余任务实施计划.md / 剩余大任务实施方案.md
+- 基础内容补全开发计划.md / 情境引擎实施计划.md / 战斗死亡系统分析.md
+- 扩展实施方案.md / 掉落系统优化计划.md / 深度补全计划.md
+- 社交面板无用选项清理计划.md / 第一批实施步骤.md / 系统连接实施计划.md
+- 经验系统整合改造计划.md / 设施与门派实施计划.md / 通用事件实施计划.md / 门派入门体系改造计划.md
+
+### 根级不存在（3个）
+- GPT逻辑审查报告.md（STRUCTURE §规划文档引用，根级无此文件）
+- 属性现状分析与修改计划.md
+- 属性系统实施计划.md
+
+### 旧计划子目录（1个）
+- 旧计划/百花谷温蘅感情剧情实施计划.md
+
+### 活链（核查通过）
+- ✅ 版本记录.md（根级存在）
+
+**处理建议**（待用户确认范围后再动 STRUCTURE 既有正文）：
+1. 仓库外19个：去链接化（`[text](path)` → `text（仓库外·已迁出）`）或整行删除
+2. 根级3个：确认是否应补回文件，或从 STRUCTURE 移除该引用行
+3. 不影响代码运行，纯文档一致性问题

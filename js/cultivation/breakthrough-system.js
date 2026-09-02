@@ -288,8 +288,12 @@ function cultivateQi() {
     // 真元获得
     const realmIndex = getRealmIndex(charData.realm);
     const baseGain = getEssenceGainByRealm(realmIndex);
-    const rootBonus = getRootCultivationBonus();
-    const essenceGain = Math.floor(baseGain * rootBonus);
+    // 0.2.7：改用单元素根倍率（主修功法元素），与 cultivationMeditate 一致——
+    // 此前用 getRootCultivationBonus()（平均根），金灵根用金系/水系功法产出一样，灵根选型失效
+    var _roots = charData.spiritualRoots;
+    var _mainEl = (typeof window._getMainTechniqueElement === 'function') ? window._getMainTechniqueElement() : 'neutral';
+    var _rootMul = (typeof window.getRootSpeedMultiplier === 'function') ? window.getRootSpeedMultiplier(_roots, _mainEl) : 1.0;
+    const essenceGain = Math.floor(baseGain * _rootMul);
     charData.essence = (charData.essence || 0) + essenceGain;
 
     // 真气恢复（内功决定）

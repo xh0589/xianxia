@@ -193,15 +193,24 @@ function startBreakthroughRitual() {
 
     // 计算成功率
     let baseRate = 0.8 - (currentIndex * 0.05);
-    // 心魔战胜加成
-    if (window._heartDemonBonus) {
-        baseRate += window._heartDemonBonus;
-        window._heartDemonBonus = 0;
+    // 心魔战胜加成（0.2.3 统一读 charData._heartDemonBonus，与 standard 路径一致）
+    var _hdCd = window.currentCharData || charData;
+    if (_hdCd && _hdCd._heartDemonBonus) {
+        baseRate += _hdCd._heartDemonBonus;
+        _hdCd._heartDemonBonus = 0;
     }
     // 瓶颈期加成
     if (window._bottleneckBonus) {
         baseRate += window._bottleneckBonus;
         window._bottleneckBonus = 0;
+    }
+    // F-14：突破丹加成（服用时累加，此处读取并消耗——一次性，成败皆耗）
+    var _cd14 = window.currentCharData || charData;
+    if (_cd14) {
+        if (_cd14._breakthroughPillBonus) { baseRate += _cd14._breakthroughPillBonus; _cd14._breakthroughPillBonus = 0; }
+        // perm_pill 类突破丹（foundation/core/primordial/divine_bonus）按目标境界匹配读取（值 30/20/15/10 为百分点→/100）
+        var _realmBonusKey = { '筑基': '_foundationBonus', '金丹': '_coreBonus', '元婴': '_primordialBonus', '化神': '_divineBonus' }[nextRealm];
+        if (_realmBonusKey && _cd14[_realmBonusKey]) { baseRate += _cd14[_realmBonusKey] / 100; _cd14[_realmBonusKey] = 0; }
     }
     breakthroughState.successRate = Math.min(0.95, Math.max(0.1, baseRate));
 
@@ -462,6 +471,14 @@ function showBreakthroughResult() {
     charData.essence = 0;
     charData.realm = nextRealm;
     charData.layer = 1;
+    // 2.4 修仙延寿：突破大境界自动延寿（修仙本为延寿，此前突破与寿元脱钩）
+    try {
+        var _lifeByTier = [50, 100, 200, 500, 1000, 2000, 5000, 10000, 30000];
+        var _lifeYears = _lifeByTier[nextIndex] || 50;
+        if (_lifeYears > 0 && typeof window.extendLifespan === 'function') {
+            window.extendLifespan(_lifeYears, '境界突破·' + nextRealm);
+        }
+    } catch (eLife) {}
     if (typeof window.getQiMax === 'function') {
         charData.maxQi = window.getQiMax(nextIndex, 1);
         charData.qi = Math.min(charData.qi || 0, charData.maxQi);

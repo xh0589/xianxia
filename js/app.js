@@ -285,12 +285,21 @@ function collectCharacterData(name) {
         lifeSkills: {},
         spiritualRoots: {},
         mutatedRoots: {},
-        attrs: {}
+        attrs: {},
+        // F-13：新角色状态栏字段显式初始化（此前靠 ??100 兜底，mood 偶尔无）
+        health: 100, maxHealth: 100,
+        energy: 100, maxEnergy: 100,
+        qi: 100, maxQi: 100,
+        mood: 80, maxMood: 100,
+        // 1.5 气运/机缘：luck 影响奇遇触发率与稀有度，fortune 可消耗破机缘
+        luck: 50, fortune: 0
     };
     document.querySelectorAll('#main-attributes-container input').forEach(input => {
         var attrName = input.dataset.attr;
         var val = parseInt(input.value, 10);
         if (isNaN(val)) val = 10;
+        // F-12：属性 clamp [0,100]，防手输 999/-5 等非法值
+        val = Math.max(0, Math.min(100, val));
         // v9.8：创角界面「智力」写入为「神识」
         if (attrName === '智力') attrName = '神识';
         data.mainAttributes[attrName] = val;
@@ -313,6 +322,26 @@ function collectCharacterData(name) {
         fire: Math.round(rootValues[3]),
         earth: Math.round(rootValues[4])
     };
+    // F-12：灵根总和归一到 100（防滑块四舍五入致总和 99/101）
+    var _rSum = data.spiritualRoots.metal + data.spiritualRoots.wood
+        + data.spiritualRoots.water + data.spiritualRoots.fire + data.spiritualRoots.earth;
+    if (_rSum !== 100 && _rSum > 0) {
+        var _rKeys = ['metal', 'wood', 'water', 'fire', 'earth'];
+        var _scale = 100 / _rSum;
+        for (var _ri = 0; _ri < _rKeys.length; _ri++) {
+            data.spiritualRoots[_rKeys[_ri]] = Math.round(data.spiritualRoots[_rKeys[_ri]] * _scale);
+        }
+        // 四舍五入误差塞到最大项，保证总和精确=100
+        var _rAfter = data.spiritualRoots.metal + data.spiritualRoots.wood
+            + data.spiritualRoots.water + data.spiritualRoots.fire + data.spiritualRoots.earth;
+        if (_rAfter !== 100) {
+            var _mKey = _rKeys[0], _mVal = data.spiritualRoots[_mKey];
+            for (var _mj = 1; _mj < _rKeys.length; _mj++) {
+                if (data.spiritualRoots[_rKeys[_mj]] > _mVal) { _mVal = data.spiritualRoots[_rKeys[_mj]]; _mKey = _rKeys[_mj]; }
+            }
+            data.spiritualRoots[_mKey] += (100 - _rAfter);
+        }
+    }
     data.mutatedRoots = {
         thunder: mutThunder.checked,
         wind: mutWind.checked,
@@ -1361,17 +1390,34 @@ function cultivationMeditate(durationId) {
     if (typeof window.getEssenceGainByRealm === 'function' && typeof window.getRealmIndex === 'function') {
         const realmIndex = window.getRealmIndex(currentCharData.realm);
         const baseGain = window.getEssenceGainByRealm(realmIndex);
-        const rootBonus = typeof window.getRootCultivationBonus === 'function' ? window.getRootCultivationBonus() : 1.0;
+        // 0.2.2：灵根元素匹配——改用单元素根倍率（主修功法元素），替代平均根
+        // 此前 rootExpBase 算了单元素但 essenceGain 用 getRootCultivationBonus(平均)，金灵根100用金系/水系功法真元产出一样
+        // rootExpBase = 30 * getRootSpeedMultiplier(roots, 主修元素)，提取倍率
+        const rootMul = (rootExpBase && rootExpBase > 0) ? (rootExpBase / 30) : (typeof window.getRootCultivationBonus === 'function' ? window.getRootCultivationBonus() : 1.0);
         // P0-3 修复：季节/变异灵根/结拜/洞府/灵气环境/世界事件/主修功法加成此前计算后从未使用（假效果），现真实接入
-        essenceGain = Math.floor(baseGain * rootBonus * dur.multiplier * _bonusAll);
+        essenceGain = Math.floor(baseGain * rootMul * dur.multiplier * _bonusAll);
+        // 1.7 前世记忆：主修功法是前世功法则修炼更快（+30%）
+        var _plmMul = (typeof window.pastLifeSkillBonus === 'function') ? window.pastLifeSkillBonus(mainSkillId) : 1.0;
+        if (_plmMul !== 1) essenceGain = Math.floor(essenceGain * _plmMul);
+        // 1.9 丹毒惩罚：高丹毒降修炼效率（50丹毒-25%、100丹毒-50%）
+        var _ppPen = (typeof window.getPillPoisonPenalty === 'function') ? window.getPillPoisonPenalty() : 0;
+        if (_ppPen > 0) essenceGain = Math.floor(essenceGain * (1 - _ppPen));
         currentCharData.essence = (currentCharData.essence || 0) + essenceGain;
+        // 2.1 走火入魔：真气枯竭强行修炼/丹毒侵蚀→气机紊乱
+        if (typeof window.addQiDeviation === 'function') {
+            var _qdAdd = 0;
+            if ((currentCharData.qi || 0) < 20) _qdAdd += 5;
+            if (typeof window.getPillPoison === 'function' && window.getPillPoison() > 50) _qdAdd += 3;
+            if (_qdAdd > 0) window.addQiDeviation(_qdAdd);
+        }
     }
     // 时间推进
     if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
         window.timeSystem.advanceTime(dur.minutes, '打坐修炼');
     }
-    // 奇遇触发（根据时长概率）
-    if (Math.random() < 0.05 * dur.multiplier && window.eventSystem && typeof window.eventSystem.triggerRandomEvent === 'function') {
+    // 奇遇触发（根据时长概率 × 气运：luck 50→1.0倍，100→1.5倍，0→0.5倍）
+    var _lk = (currentCharData.luck != null ? currentCharData.luck : 50);
+    if (Math.random() < (0.05 * (0.5 + _lk / 100)) * dur.multiplier && window.eventSystem && typeof window.eventSystem.triggerRandomEvent === 'function') {
         window.eventSystem.triggerRandomEvent();
     }
     // P0-3：周天计数与主修功法熟练度增长（每半小时一个周天）
@@ -1385,9 +1431,19 @@ function cultivationMeditate(durationId) {
     }
     showMessage(`打坐修炼 ${dur.label} 完成，真元+${essenceGain}${cycleText}${mutationText ? '（' + mutationText.trim() + '）' : ''}`, 'success');
     if (window.updateCharacterStatus) window.updateCharacterStatus();
-    
+
     const modal = document.querySelector('.fixed.inset-0.bg-black\\/70');
     if (modal) modal.remove();
+
+    // 0.2.3 瓶颈接线：修炼后自检是否进入瓶颈（applyBottleneckEffect 此前零调用，瓶颈形同虚设）
+    // 仅在首次进入瓶颈时弹出突破方式面板，避免已在瓶颈中每次修炼都弹窗打扰
+    try {
+        var _wasIn = window.playerBottleneck && window.playerBottleneck.isInBottleneck;
+        if (typeof window.applyBottleneckEffect === 'function' && window.applyBottleneckEffect() &&
+            !_wasIn && typeof window.attemptBreakBottleneck === 'function') {
+            window.attemptBreakBottleneck();
+        }
+    } catch (e) {}
 }
 
 function useSpring() {
@@ -1581,7 +1637,12 @@ function visitTavern() {
         showMessage('需要20铜钱', 'error');
         return;
     }
-    currentCharData.copper -= 20;
+    // F-17：铜钱统一走 DataManager（此前 charData-only，读 inventory 致数值错）
+    if (window.XianXia && window.XianXia.DataManager && typeof window.XianXia.DataManager.deductCopper === 'function') {
+        window.XianXia.DataManager.deductCopper(20);
+    } else {
+        currentCharData.copper = Math.max(0, (currentCharData.copper || 0) - 20);
+    }
     // P1-2.2: 奇遇触发（30%概率）
     if (Math.random() < 0.3 && window.eventSystem && typeof window.eventSystem.triggerRandomEvent === 'function') {
         window.eventSystem.triggerRandomEvent();
@@ -1612,6 +1673,22 @@ function showTeleportUI() {
 }
 
 function teleportToCity(cityName) {
+    // F-40：传送扣 100 灵石（此前 showTeleportUI 显示成本但 teleportToCity 不扣）
+    var _tpCost = 100;
+    if (window.XianXia && window.XianXia.DataManager && typeof window.XianXia.DataManager.deductSpiritStones === 'function') {
+        if (!window.XianXia.DataManager.deductSpiritStones(_tpCost)) {
+            showMessage('灵石不足，传送需 ' + _tpCost + ' 灵石', 'error');
+            return;
+        }
+    } else if (window.inventory?.currency) {
+        if ((window.inventory.currency.spiritStones || 0) < _tpCost) { showMessage('灵石不足', 'error'); return; }
+        window.inventory.currency.spiritStones -= _tpCost;
+        if (currentCharData) currentCharData.spiritStones = window.inventory.currency.spiritStones;
+    } else if (currentCharData) {
+        if ((currentCharData.spiritStones || 0) < _tpCost) { showMessage('灵石不足', 'error'); return; }
+        currentCharData.spiritStones -= _tpCost;
+    }
+    if (window.updateCurrencyUI) window.updateCurrencyUI();
     // P1-2.1: 时间推进
     if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
         window.timeSystem.advanceTime(15, '传送');
@@ -3784,6 +3861,84 @@ function buildPlayerBattleEntity(level) {
                 : Object.assign({}, window._savedDurabilities);
         }
     } catch (e) {}
+    // 2.1 走火入魔：紊乱>=80 全六维 -10%（>=95 -20%）
+    try {
+        if (typeof window.getQiDeviationPenalty === 'function') {
+            var _qdPen = window.getQiDeviationPenalty();
+            if (_qdPen > 0) {
+                for (var _qdk in playerAttrs) {
+                    playerAttrs[_qdk] = Math.round(playerAttrs[_qdk] * (1 - _qdPen) * 10) / 10;
+                }
+            }
+        }
+    } catch (eQd) {}
+    // 2.3 悟道树：已领悟节点永久六维加成
+    try {
+        if (typeof window.getEnlightenmentBonus === 'function') {
+            var _enlB = window.getEnlightenmentBonus();
+            for (var _enk in _enlB) {
+                playerAttrs[_enk] = Math.round(((playerAttrs[_enk] || 10) + _enlB[_enk]) * 10) / 10;
+            }
+        }
+    } catch (eEnl) {}
+    // 2.12 自创丹方临时 buff：allAttr 全六维+，attack 存实体
+    try {
+        var _cpb = currentCharData._customPillBuff;
+        if (_cpb && _cpb.allAttr) {
+            for (var _cpk in playerAttrs) playerAttrs[_cpk] = Math.round((playerAttrs[_cpk] + _cpb.allAttr) * 10) / 10;
+        }
+        if (_cpb && _cpb.attack && playerEntity) playerEntity._customPillAtk = 1 + _cpb.attack / 100;
+    } catch (eCp) {}
+    // 2.5 build 分化：剑修连击/体修反震/法修元素——流派被动 buff
+    try {
+        if (typeof window.getSchoolBonus === 'function') {
+            var _sb = window.getSchoolBonus();
+            if (_sb) {
+                playerEntity._schoolBonus = _sb;
+                if (_sb.defenseMul) playerEntity._schoolDefMul = 1 + _sb.defenseMul;
+                if (_sb.attackMul) playerEntity._schoolAtkMul = 1 + _sb.attackMul;
+            }
+        }
+    } catch (eSb2) {}
+    // 0.2.2 #3 组合技接入战斗：已装备功法触发的组合加成作用于战斗实体
+    // 此前 SKILL_COMBINATIONS 的 8 套组合（阴阳融合/太极领域/万剑归宗…）只查不接，纯装饰
+    var _skillComboBonus = null;
+    try {
+        var _curSkills = currentCharData.currentSkills || currentCharData.skills || {};
+        if (_curSkills && typeof window.getSkillCombinationBonuses === 'function') {
+            _skillComboBonus = window.getSkillCombinationBonuses(_curSkills);
+            // all_attr（阴阳融合 +30%）：全六维百分比加成，直接并入 attrs
+            if (_skillComboBonus && _skillComboBonus.all_attr) {
+                var _aaMul = 1 + _skillComboBonus.all_attr / 100;
+                for (var _ak in playerAttrs) {
+                    playerAttrs[_ak] = Math.round(playerAttrs[_ak] * _aaMul * 10) / 10;
+                }
+            }
+        }
+    } catch (eSc) {}
+    // 0.2.6 道侣合击接线：getDaoCompanionCombos 此前只返回不接入，合击纯装饰
+    // 有道侣（bonds 含 dao_companion）即生效——道侣随行护持，全属性/攻防按 bond 等级提升
+    var _daoComboBonus = null;
+    try {
+        var _bonds = currentCharData.bonds || {};
+        var _daoNpcId = null;
+        for (var _bid in _bonds) {
+            if (_bonds[_bid] && _bonds[_bid].type === 'dao_companion') { _daoNpcId = _bid; break; }
+        }
+        if (_daoNpcId && typeof window.getDaoCompanionCombos === 'function') {
+            var _daoCombos = window.getDaoCompanionCombos(_daoNpcId) || [];
+            var _daoTotal = {};
+            for (var _dc = 0; _dc < _daoCombos.length; _dc++) {
+                var _db = _daoCombos[_dc].bonus || {};
+                for (var _dk in _db) _daoTotal[_dk] = (_daoTotal[_dk] || 0) + _db[_dk];
+            }
+            if (_daoTotal.all) {
+                var _daoAllMul = 1 + _daoTotal.all / 100;
+                for (var _daK in playerAttrs) playerAttrs[_daK] = Math.round(playerAttrs[_daK] * _daoAllMul * 10) / 10;
+            }
+            _daoComboBonus = _daoTotal;
+        }
+    } catch (eDc) {}
     var EntityCls = (typeof Entity !== 'undefined') ? Entity : window.Entity;
     if (!EntityCls) return null;
     var entityCfg = {
@@ -3815,6 +3970,33 @@ function buildPlayerBattleEntity(level) {
         if (cdBuff && cdBuff._buffs && cdBuff._buffs.combat_boost > 0 && playerEntity.combat) {
             playerEntity.combat.attack = Math.round((playerEntity.combat.attack || 0) * 1.05);
             cdBuff._buffs.combat_boost = 0;
+        }
+    } catch (e) {}
+    // 0.2.1 境界质变接入战斗：REALM_UNIQUE_EFFECTS 乘数（attack/defense/speed）注入玩家实体
+    // 升境不再纯数字递增——金丹 defense×1.15、化神 attack×1.2、合体攻防×1.3、渡劫×1.5 等肉眼可见
+    try {
+        var _rbRealm = (window.currentCharData && window.currentCharData.realm) || '';
+        if (_rbRealm && typeof window.getRealmBonus === 'function') {
+            playerEntity._realmCombatMul = {
+                attack: window.getRealmBonus(_rbRealm, 'attack'),
+                defense: window.getRealmBonus(_rbRealm, 'defense'),
+                speed: window.getRealmBonus(_rbRealm, 'speed')
+            };
+        }
+    } catch (e) {}
+    // 0.2.2 #3：组合技 attack/defense 乘数 + penetrate/block/crit/counter 等透传给战斗实体（battle.js 读取）
+    if (_skillComboBonus && playerEntity) {
+        playerEntity._skillComboBonus = _skillComboBonus;
+    }
+    // 0.2.6：道侣合击 attack/defense 乘数透传（情意绵绵 attack+20%、生死与共 defense+25%）
+    if (_daoComboBonus && playerEntity) {
+        playerEntity._daoComboBonus = _daoComboBonus;
+    }
+    // 1.8 本命法宝：每阶 +5% 攻防（法宝等级→战斗加成）
+    try {
+        if (typeof window.artifactCombatMul === 'function') {
+            var _baMul = window.artifactCombatMul();
+            if (_baMul !== 1) playerEntity._artifactMul = _baMul;
         }
     } catch (e) {}
     return playerEntity;
@@ -4173,6 +4355,10 @@ function showBattleUI(battle) {
         if (winner === 'player' && currentBattle && currentBattle._isBeastTideRaid && window._tideRaid && window._tideRaid.wave < window._tideRaid.waves) {
             actionsHtml += '<button onclick="continueBeastTideRaid()" class="bg-orange-600 hover:bg-orange-500 px-4 py-2 rounded text-white font-bold mt-2">下一波（' + (window._tideRaid.wave + 1) + '/' + window._tideRaid.waves + '）</button> ';
         }
+        // v20.0 1.1 天劫：渡劫期多波雷劫，胜利后出"迎接下一道天雷"按钮（仿兽潮多波）
+        if (winner === 'player' && currentBattle && currentBattle._isHeavenlyTribulation && window._trib && window._trib.wave < window._trib.waves) {
+            actionsHtml += '<button onclick="continueTribWave()" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded text-white font-bold mt-2">⚡ 迎接下一道天雷（' + (window._trib.wave + 1) + '/' + window._trib.waves + '）</button> ';
+        }
         actionsHtml += '<button onclick="closeBattle()" class="bg-yellow-600 hover:bg-yellow-500 px-6 py-2 rounded text-gray-900 font-bold">继续</button>';
         document.getElementById('battle-actions').innerHTML = actionsHtml;
         if (winner === 'player' && currentBattle) {
@@ -4186,6 +4372,14 @@ function showBattleUI(battle) {
             // v20.0：清剿兽潮打赢本波 → 结算（还有波则出"下一波"按钮）
             if (hasSpoils && currentBattle._isBeastTideRaid && typeof window.settleBeastTideRaid === 'function') {
                 try { window.settleBeastTideRaid(true); } catch (eTideWin) {}
+            }
+            // v20.0 1.1 天劫：打赢本道雷劫 → 结算（还有波出"下一道天雷"按钮，最后一波触发飞升）
+            if (currentBattle._isHeavenlyTribulation && typeof window.settleTribulation === 'function') {
+                try { window.settleTribulation(true); } catch (eTribWin) {}
+            }
+            // v20.0 2.9 宿敌寻仇：打赢降仇恨+灵石
+            if (currentBattle._isRivalDuel && typeof window.settleRivalDuel === 'function') {
+                try { window.settleRivalDuel(true); } catch (eRiv) {}
             }
 
             // B4：灵兽经验仅由 battle.js 结算一次，此处不再重复 onBeastBattleEnd
@@ -4272,6 +4466,14 @@ function showBattleUI(battle) {
             if (currentBattle && currentBattle._isBeastTideRaid && typeof window.settleBeastTideRaid === 'function') {
                 try { window.settleBeastTideRaid(false); } catch (eTideLose) {}
             }
+            // v20.0 1.1 天劫战败 → 标记天劫失败（残魂态/转世由下方 maybeEnterSoulState + handleDefeatRevival 既有流程接管）
+            if (currentBattle && currentBattle._isHeavenlyTribulation && typeof window.settleTribulation === 'function') {
+                try { window.settleTribulation(false); } catch (eTribLose) {}
+            }
+            // v20.0 2.9 宿敌寻仇战败 → 重伤
+            if (currentBattle && currentBattle._isRivalDuel && typeof window.settleRivalDuel === 'function') {
+                try { window.settleRivalDuel(false); } catch (eRivLose) {}
+            }
             // 时间跳半天（720分钟 = 12小时）
             if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
                 try { window.timeSystem.advanceTime(720, '战败昏迷'); } catch (e) {}
@@ -4312,6 +4514,8 @@ function _renderBattleActionsHTML() {
     var moves = (typeof window.getActiveAttackMoves === 'function') ? window.getActiveAttackMoves() : [];
     var quickMoves = (typeof window.getQuickMoves === 'function') ? window.getQuickMoves() : [];
     var allMoves = (typeof window.getAllLearnedMoves === 'function') ? window.getAllLearnedMoves() : [];
+    // 1.2 CD制：招式冷却中则 UI 灰显
+    var _cdMap = (currentBattle && currentBattle._moveCD) || {};
     var html = '<div class="w-full mb-2">';
 
     // 常用栏（优先显示）
@@ -4327,7 +4531,8 @@ function _renderBattleActionsHTML() {
                 if (moves[gi].moveId === m.moveId) { globalIdx = gi; break; }
             }
             if (globalIdx >= 0) {
-                html += '<button onclick="selectBattleMove(' + globalIdx + ')" class="text-xs px-2 py-1 rounded ' + (isSelected ? 'bg-yellow-600 text-gray-900' : 'bg-gray-700 text-white') + '">' + (m.icon || '⚔️') + ' ' + m.name + '</button>';
+                var _onCD = _cdMap[m.moveId] > 0;
+                html += '<button ' + (_onCD ? 'disabled' : 'onclick="selectBattleMove(' + globalIdx + ')"') + ' class="text-xs px-2 py-1 rounded ' + (isSelected ? 'bg-yellow-600 text-gray-900' : _onCD ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 text-white') + '">' + (m.icon || '⚔️') + ' ' + m.name + (_onCD ? ' ⏳' + _cdMap[m.moveId] : '') + '</button>';
             }
         });
         html += '</div>';
@@ -4344,7 +4549,8 @@ function _renderBattleActionsHTML() {
         }
         moves.forEach(function(m, i) {
             var isSelected = _selectedMove && _selectedMove.moveId === m.moveId;
-            html += '<button onclick="selectBattleMove(' + i + ')" class="text-xs px-2 py-1 rounded ' + (isSelected ? 'bg-yellow-600 text-gray-900' : 'bg-gray-700 text-white') + '">' + (m.icon || '⚔️') + ' ' + m.skillName + '·' + m.name + '</button>';
+            var _onCD2 = _cdMap[m.moveId] > 0;
+            html += '<button ' + (_onCD2 ? 'disabled' : 'onclick="selectBattleMove(' + i + ')"') + ' class="text-xs px-2 py-1 rounded ' + (isSelected ? 'bg-yellow-600 text-gray-900' : _onCD2 ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 text-white') + '">' + (m.icon || '⚔️') + ' ' + m.skillName + '·' + m.name + (_onCD2 ? ' ⏳' + _cdMap[m.moveId] : '') + '</button>';
         });
         html += '</div></details>';
     } else if (quickMoves.length === 0) {
@@ -4353,7 +4559,8 @@ function _renderBattleActionsHTML() {
         html += '<button onclick="selectBattleMove(null)" class="text-xs px-2 py-1 rounded ' + (!_selectedMove ? 'bg-yellow-600 text-gray-900' : 'bg-gray-700 text-white') + '" id="move-default">👊 普通攻击</button>';
         moves.forEach(function(m, i) {
             var isSelected = _selectedMove && _selectedMove.moveId === m.moveId;
-            html += '<button onclick="selectBattleMove(' + i + ')" class="text-xs px-2 py-1 rounded ' + (isSelected ? 'bg-yellow-600 text-gray-900' : 'bg-gray-700 text-white') + '">' + (m.icon || '⚔️') + ' ' + m.skillName + '·' + m.name + '</button>';
+            var _onCD2 = _cdMap[m.moveId] > 0;
+            html += '<button ' + (_onCD2 ? 'disabled' : 'onclick="selectBattleMove(' + i + ')"') + ' class="text-xs px-2 py-1 rounded ' + (isSelected ? 'bg-yellow-600 text-gray-900' : _onCD2 ? 'bg-gray-800 text-gray-500 cursor-not-allowed' : 'bg-gray-700 text-white') + '">' + (m.icon || '⚔️') + ' ' + m.skillName + '·' + m.name + (_onCD2 ? ' ⏳' + _cdMap[m.moveId] : '') + '</button>';
         });
         html += '</div>';
     }
@@ -5583,12 +5790,24 @@ function confirmGiftToNPC(npcId, slotIndex, gain) {
     }
 
     const totalGain = gain + bonus;
+    // F-18：现实式赠礼疲倦——非次数上限，而是随游戏日衰减的自身状态
+    // 连续送礼 → 疲倦累积 → 收益递减 → 过量反感；等几日 → 疲倦衰减 → 恢复
+    var _gToday = (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') ? window.timeSystem.getAbsoluteDay() : 0;
+    var _gMem = npc.memory = npc.memory || {};
+    var _gElapsed = Math.max(0, _gToday - (_gMem.lastGiftDay || 0));
+    _gMem.giftFatigue = Math.max(0, (_gMem.giftFatigue || 0) - _gElapsed); // 按经过游戏日衰减
+    var _gFatigue = _gMem.giftFatigue || 0;
+    var _gFatigueMul = Math.max(-0.3, 1 - 0.3 * _gFatigue); // 0→1.0 / 3→0.1 / 4→-0.2(反感)
+    var _gTraitMul = (typeof npc.getGiftMultiplier === 'function') ? npc.getGiftMultiplier() : 1; // 特质修正(贪婪0.7/慷慨1.3/寡言0.8)
+    var effectiveGain = Math.round(totalGain * _gFatigueMul * _gTraitMul);
     if (typeof npc.changeAffection === 'function') {
-        npc.changeAffection(totalGain);
+        npc.changeAffection(effectiveGain);
     } else {
         npc.relationship = npc.relationship || { affection: 0 };
-        npc.relationship.affection = Math.max(-100, Math.min(100, (npc.relationship.affection || 0) + totalGain));
+        npc.relationship.affection = Math.max(-100, Math.min(100, (npc.relationship.affection || 0) + effectiveGain));
     }
+    _gMem.giftFatigue = _gFatigue + 1;
+    _gMem.lastGiftDay = _gToday;
 
     // ===== v11.8 物品与NPC联动：赠送物品实际生效 =====
     var itemExtraMsg = '';
@@ -5713,8 +5932,13 @@ function confirmGiftToNPC(npcId, slotIndex, gain) {
     if (window.updateInventoryUI) window.updateInventoryUI();
 
     const levelInfo = getAffectionLevelInfo(aff);
-    const msg = npcResponse + '（好感度' + (totalGain >= 0 ? '+' : '') + totalGain + '，当前' + aff + '·' + levelInfo.name + '）' + itemExtraMsg + rewardMsg;
-    showMessage(msg, 'success');
+    // F-18：显示实际生效好感（含疲倦/特质），疲倦高时加提示
+    var _fNote = '';
+    if (_gFatigue >= 4) _fNote = '（对方已生厌烦，适可而止）';
+    else if (_gFatigue >= 3) _fNote = '（对方略显厌烦）';
+    else if (_gFatigue >= 1) _fNote = '（频繁送礼，收益递减）';
+    const msg = npcResponse + '（好感度' + (effectiveGain >= 0 ? '+' : '') + effectiveGain + '，当前' + aff + '·' + levelInfo.name + '）' + _fNote + itemExtraMsg + rewardMsg;
+    showMessage(msg, effectiveGain < 0 ? 'warning' : 'success');
 
     if (typeof npc.recordPlayerAction === 'function') {
         npc.recordPlayerAction('gift', bonus > 0 ? 'positive' : 'neutral');
@@ -7032,6 +7256,17 @@ const DUNGEON_DEFS = {
     cave: { id: 'cave', name: '幽暗洞穴', maxFloor: 3, cost: 30, icon: '🕳️' },
     mountain: { id: 'mountain', name: '仙山秘境', maxFloor: 7, cost: 100, icon: '🏔️' }
 };
+// F-23：秘境通关后灵气枯竭需时间复涌（现实逻辑——非"次数用完"计数器，而是世界本身的时间成本）
+const DUNGEON_COOLDOWN_DAYS = 7;
+function getDungeonCooldownLeft(dungeonId) {
+    if (!currentCharData || !currentCharData.dungeonClearedAt) return 0;
+    var clearedAt = currentCharData.dungeonClearedAt[dungeonId];
+    if (clearedAt == null) return 0; // 从未通关
+    var today = (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function')
+        ? window.timeSystem.getAbsoluteDay()
+        : ((window.timeSystem && window.timeSystem.gameTime) ? window.timeSystem.gameTime.currentDay : 0);
+    return Math.max(0, DUNGEON_COOLDOWN_DAYS - (today - clearedAt));
+}
 
 let dungeonState = {
     active: false,
@@ -7046,6 +7281,14 @@ function openDungeonEntrance(dungeonId = 'ruin') {
     const def = DUNGEON_DEFS[dungeonId] || DUNGEON_DEFS.ruin;
     const progress = currentCharData?.dungeonProgress?.[def.id] || 1;
     const stones = window.inventory?.currency?.spiritStones || currentCharData?.spiritStones || 0;
+    // F-23：灵气复涌冷却
+    const cdLeft = (typeof getDungeonCooldownLeft === 'function') ? getDungeonCooldownLeft(def.id) : 0;
+    const cooldownInfo = cdLeft > 0
+        ? `<p class="text-xs text-orange-400 mt-2">⚠ 灵气因你上次通关而枯竭，需 ${cdLeft} 日复涌。</p>`
+        : `<p class="text-xs text-gray-500 mt-2">每层可能遭遇怪物、宝箱或陷阱。可中途退出并保留进度。</p>`;
+    const enterBtn = cdLeft > 0
+        ? `<button disabled class="flex-1 bg-gray-700 text-gray-500 py-2 rounded cursor-not-allowed">🌀 灵气未复（${cdLeft}日）</button>`
+        : `<button onclick="enterDungeon('${def.id}'); this.closest('.fixed').remove();" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-2 rounded">进入秘境</button>`;
 
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50';
@@ -7061,10 +7304,10 @@ function openDungeonEntrance(dungeonId = 'ruin') {
                 <p><span class="text-gray-400">进入消耗：</span><span class="text-yellow-400">${def.cost} 灵石</span></p>
                 <p><span class="text-gray-400">历史进度：</span>第 ${progress} 层</p>
                 <p><span class="text-gray-400">当前灵石：</span>${stones}</p>
-                <p class="text-xs text-gray-500 mt-2">每层可能遭遇怪物、宝箱或陷阱。可中途退出并保留进度。</p>
+                ${cooldownInfo}
             </div>
             <div class="flex gap-2">
-                <button onclick="enterDungeon('${def.id}'); this.closest('.fixed').remove();" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white py-2 rounded">进入秘境</button>
+                ${enterBtn}
                 <button onclick="this.closest('.fixed').remove()" class="flex-1 bg-gray-600 hover:bg-gray-500 text-white py-2 rounded">离开</button>
             </div>
         </div>
@@ -7078,6 +7321,12 @@ function enterDungeon(dungeonId = 'ruin') {
         return;
     }
     const def = DUNGEON_DEFS[dungeonId] || DUNGEON_DEFS.ruin;
+    // F-23：灵气未复涌时拒绝进入（defense——即便绕过入口 modal 直接调 enterDungeon）
+    const cdLeft = (typeof getDungeonCooldownLeft === 'function') ? getDungeonCooldownLeft(def.id) : 0;
+    if (cdLeft > 0) {
+        showMessage(def.name + '灵气因上次通关而枯竭，距复涌尚需 ' + cdLeft + ' 日', 'warning');
+        return;
+    }
     const currency = window.inventory?.currency;
     const stones = currency ? (currency.spiritStones || 0) : (currentCharData.spiritStones || 0);
     if (stones < def.cost) {
@@ -7119,14 +7368,23 @@ function onDungeonBattleResolved(won) {
     // 通关判定
     if (dungeonState.floor >= dungeonState.maxFloor) {
         const clearBonus = 100 * dungeonState.maxFloor;
-        if (window.inventory && window.inventory.currency) {
+        // F-17：灵石统一走 DataManager（此前手动双写冗余，DataManager.setSpiritStones 已双源同步）
+        if (window.XianXia && window.XianXia.DataManager && typeof window.XianXia.DataManager.addSpiritStones === 'function') {
+            window.XianXia.DataManager.addSpiritStones(clearBonus);
+        } else if (window.inventory && window.inventory.currency) {
             window.inventory.currency.spiritStones = (window.inventory.currency.spiritStones || 0) + clearBonus;
+            if (currentCharData) currentCharData.spiritStones = window.inventory.currency.spiritStones;
         } else if (currentCharData) {
             currentCharData.spiritStones = (currentCharData.spiritStones || 0) + clearBonus;
         }
         if (typeof window.addItem === 'function') window.addItem('iron_sword', 1);
         currentCharData.dungeonProgress = currentCharData.dungeonProgress || {};
         currentCharData.dungeonProgress[dungeonState.id] = 1;
+        // F-23：记录通关日，开启灵气复涌倒计时
+        currentCharData.dungeonClearedAt = currentCharData.dungeonClearedAt || {};
+        currentCharData.dungeonClearedAt[dungeonState.id] = (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function')
+            ? window.timeSystem.getAbsoluteDay()
+            : ((window.timeSystem && window.timeSystem.gameTime) ? window.timeSystem.gameTime.currentDay : 0);
         dungeonState.active = false;
         // F-1.2 重构：补全 dungeon:completed 事件 emit（仅通关最终层时）
         if (window.EventBus && typeof window.EventBus.emit === 'function') {
@@ -7292,7 +7550,15 @@ function exploreDungeonFloor() {
     // 通关
     if (dungeonState.floor >= dungeonState.maxFloor) {
         var clearBonus = 100 * dungeonState.maxFloor;
-        if (window.inventory?.currency) { window.inventory.currency.spiritStones = (window.inventory.currency.spiritStones || 0) + clearBonus; } else { currentCharData.spiritStones = (currentCharData.spiritStones || 0) + clearBonus; }
+        // F-17：灵石统一走 DataManager
+        if (window.XianXia && window.XianXia.DataManager && typeof window.XianXia.DataManager.addSpiritStones === 'function') {
+            window.XianXia.DataManager.addSpiritStones(clearBonus);
+        } else if (window.inventory?.currency) {
+            window.inventory.currency.spiritStones = (window.inventory.currency.spiritStones || 0) + clearBonus;
+            if (currentCharData) currentCharData.spiritStones = window.inventory.currency.spiritStones;
+        } else {
+            currentCharData.spiritStones = (currentCharData.spiritStones || 0) + clearBonus;
+        }
         var clearItems = ['iron_sword', 'foundation_pill', 'mat_lingzhi']; var clearItem = clearItems[Math.floor(Math.random() * clearItems.length)];
         if (typeof window.addItem === 'function') window.addItem(clearItem, 1);
         currentCharData.dungeonProgress = currentCharData.dungeonProgress || {}; currentCharData.dungeonProgress[dungeonState.id] = 1; dungeonState.active = false;
@@ -7355,6 +7621,53 @@ window.enterDungeon = enterDungeon;
 window.exploreDungeonFloor = exploreDungeonFloor;
 window.openBattleWithEntity = openBattleWithEntity;
 window.buildPlayerBattleEntity = buildPlayerBattleEntity;
+// 1.5 气运系统：luck 影响奇遇触发/稀有度；fortune 可消耗破机缘（必成突破/必得宝物）
+window.getLuckChance = function(base) {
+    var lk = (window.currentCharData && window.currentCharData.luck != null) ? window.currentCharData.luck : 50;
+    return base * (0.5 + lk / 100);
+};
+window.spendLuck = function(amount) {
+    var cd = window.currentCharData;
+    if (!cd) return false;
+    amount = amount || 10;
+    if ((cd.luck || 0) < amount) return false;
+    cd.luck = Math.max(0, (cd.luck || 0) - amount);
+    return true;
+};
+window.getLuck = function() { var cd = window.currentCharData; return cd ? (cd.luck != null ? cd.luck : 50) : 50; };
+// 1.6 玩家建宗 UI helper：接通既有 PlayerSect 系统（此前 create 无 UI 入口）
+window._quickFoundSect = function() {
+    var cd = window.currentCharData;
+    if (!cd) return;
+    var cost = 500;
+    if (window.DataManager && window.DataManager.deductSpiritStones && !window.DataManager.deductSpiritStones(cost)) {
+        if (window.showMessage) window.showMessage('立宗需 ' + cost + ' 灵石安顿山门。', 'warning');
+        return;
+    }
+    var name = (cd.name || '无名') + '宗';
+    if (window.PlayerSect && typeof window.PlayerSect.create === 'function') {
+        var r = window.PlayerSect.create({ name: name });
+        if (r && r.ok) {
+            if (window.showMessage) window.showMessage('🏯 你开山立宗，「' + name + '」自此矗立修真界！', 'success');
+            if (window.updateCultivationUI) window.updateCultivationUI();
+        } else {
+            if (window.showMessage) window.showMessage('立宗失败。', 'error');
+        }
+    }
+};
+window._defendSectRaid = function() {
+    var cd = window.currentCharData;
+    if (!cd) return;
+    var tier = (typeof window.getRealmTier === 'function') ? window.getRealmTier(cd.realm) : 4;
+    var enemyData = {
+        name: '攻山妖兽', type: 'beast', species: 'beast', physiologyType: 'beast',
+        level: tier * 4 + 10,
+        attack: 40 + tier * 6, defense: 20 + tier * 3, speed: 25,
+        maxDurability: 120 + tier * 20, durabilities: { chest: 120 + tier * 20 },
+        combatAbilities: []
+    };
+    if (window.startBattle) window.startBattle(enemyData);
+};
 window.openInteraction = openInteraction;
 window.renderInteraction = renderInteraction;
 window.interactBuilding = interactBuilding;

@@ -349,7 +349,15 @@ function leaveSect(silent = false) {
         points: 0,
         level: 0,
         tasksCompleted: 0,
-        joinTime: null
+        joinTime: null,
+        // F-31：叛门/退派时清除师徒与派系运行时字段
+        // 此前不清 _masterId → 新门派拜师时 if(ds._masterId) 误判"已有师父"
+        _masterId: null,
+        _masterName: null,
+        _masterSect: null,
+        _masterBlessDay: null,
+        _gbFaction: null  // 退丐帮清派系，避免重入误判"已有门脉"
+        // 注：_leftMasters 是离师历史记录，跨退派保留，不清
     });
     
     // 更新UI
@@ -940,7 +948,9 @@ function dualCultivate(npcId) {
     if (typeof addPlayerExp === 'function') {
         addPlayerExp(totalExp);
     }
-    
+    // 2.20 道侣双修深化：双修亦产出真元（阴阳相济聚先天真元）
+    window.currentCharData.essence = (window.currentCharData.essence || 0) + Math.floor(totalExp * 0.5);
+
     // 好感度提升
     npc.changeAffection(2);
     

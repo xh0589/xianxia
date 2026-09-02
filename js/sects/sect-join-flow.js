@@ -2029,24 +2029,42 @@ function evaluateSectEntry(sectId, player) {
         return { result: '拒绝', reason: baseReq.msg, rank: null };
     }
     
-    // 名气判定
+    // D-13 名声×善恶→门派考核认出（4档名声 + 善恶契合，世界反应式非计数器）
     var fame = (player && player.fame) || 0;
+    var karma = (player && player.karma) || 0;
     var alignment = assessMomentaryAlignment(player);
     var sectAlignment = sect.type === '正道' ? ALIGNMENTS.GOOD :
                         sect.type === '邪派' ? ALIGNMENTS.EVIL :
                         ALIGNMENTS.NEUTRAL;
-    
-    // 有名气 → 按真实阵营
-    if (fame >= 50) {
-        if (alignment === sectAlignment) {
-            return makeEntryEval(ENTRY_RANK.OUTER, '久仰大名，请入外门');
-        } else {
-            return makeEntryEval(ENTRY_RANK.CHORE, '道不同，先从杂役做起观察');
-        }
+    // 善恶相悖：门派有倾向、玩家倾向相反且非中立
+    var _clash = (sectAlignment !== ALIGNMENTS.NEUTRAL &&
+                  alignment !== sectAlignment && alignment !== ALIGNMENTS.NEUTRAL);
+
+    // 善恶相悖 + 低名声 → 拒收有叙事文案（不弹"次数用完"，符合现实：考核者不信任你）
+    if (_clash && fame < 50) {
+        var _clashMsg = sectAlignment === ALIGNMENTS.GOOD
+            ? '考核者冷言：「你身上魔气隐现，与本门正道相悖，恕不接待。」'
+            : '魔头冷笑：「一身伪善正气，本座看不顺眼，滚。」';
+        return { result: '拒绝', reason: _clashMsg, rank: null };
     }
-    
-    // 没名气 → 给杂役身份
-    return makeEntryEval(ENTRY_RANK.CHORE, '还需观察你的品性，先从杂役做起');
+
+    // 名声 4 档门槛
+    if (fame > 90) {
+        // 久仰大名：掌门亲迎
+        if (!_clash) return makeEntryEval(ENTRY_RANK.INNER, '掌门亲迎：「久仰大名，请入内门！」');
+        return makeEntryEval(ENTRY_RANK.OUTER, '掌门审视良久：「声名赫赫，先入外门观察。」');
+    }
+    if (fame >= 50) {
+        // 小有名气：礼遇免考核直入外门
+        if (!_clash) return makeEntryEval(ENTRY_RANK.OUTER, '考核者礼遇：「久仰，请入外门。」');
+        return makeEntryEval(ENTRY_RANK.CHORE, '道不同，先从杂役做起观察');
+    }
+    if (fame >= 20) {
+        // 略有耳闻：正常考核
+        return makeEntryEval(ENTRY_RANK.CHORE, '考核者打量你一番，先从杂役做起考察品性。');
+    }
+    // 无名之辈：考核者不识，难度+1（杂役+冷淡），名门尤其
+    return makeEntryEval(ENTRY_RANK.CHORE, '考核者不识你，冷淡道：「先做杂役，做出名堂再说。」');
 }
 
 // ============ 名气系统 ============

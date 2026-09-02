@@ -267,8 +267,15 @@ const UNDEAD_LOOT = {
         { id: 'mat_bone_powder', weight: 60 },
         { id: 'mat_undead_essence', weight: 40 }
     ],
-    uncommon: [],
-    rare: [],
+    // 0.2.7：亡灵 uncommon/rare 此前为空，掉落单薄——补魂骨/寒铁
+    uncommon: [
+        { id: 'mat_demon_beast_bone', weight: 40 },
+        { id: 'mat_cold_iron', weight: 30 }
+    ],
+    rare: [
+        { id: 'mat_sky_iron', weight: 10 },
+        { id: 'mat_chaos_stone', weight: 5 }
+    ],
     minLevel: 1,
     spiritStones: { min: 0, max: 0 },
     spiritStoneChance: 0
@@ -282,7 +289,11 @@ const CONSTRUCT_LOOT = {
     uncommon: [
         { id: 'mat_spirit_crystal', weight: 30 }
     ],
-    rare: [],
+    // 0.2.7：构装体 rare 此前为空——高级构装掉天铁/星铁
+    rare: [
+        { id: 'mat_sky_iron', weight: 10 },
+        { id: 'mat_star_iron', weight: 8 }
+    ],
     minLevel: 1,
     spiritStones: { min: 0, max: 0 },
     spiritStoneChance: 0
@@ -293,11 +304,15 @@ const ELEMENTAL_LOOT = {
     common: [
         { id: 'mat_five_element_essence', weight: 80 }
     ],
+    // 0.2.7：元素 uncommon 仅1项，补五行晶类多样掉落
     uncommon: [
-        { id: 'mat_element_crystal', weight: 40 }
+        { id: 'mat_element_crystal', weight: 40 },
+        { id: 'mat_fire_crystal', weight: 30 },
+        { id: 'mat_wind_essence', weight: 25 }
     ],
     rare: [
-        { id: 'mat_chaos_stone', weight: 5 }
+        { id: 'mat_chaos_stone', weight: 5 },
+        { id: 'mat_space_crystal', weight: 4 }
     ],
     minLevel: 1,
     spiritStones: { min: 0, max: 0 },
@@ -510,6 +525,25 @@ function generateEnemyInventory(enemyData) {
             }
         }
     }
+
+    // 0.2.7 接通 EXTENDED_LOOT_TABLES：getExtendedLoot 此前定义从不调用，扩展掉落表形同虚设
+    // 对野兽/山贼/秘境类敌人追加掉落（覆盖武器/防具/材料），与主表叠加
+    try {
+        if (typeof window.getExtendedLoot === 'function') {
+            var _subMap = { beast:'beast', demon_beast:'elite_beast', boss_beast:'boss_beast',
+                bandit:'bandit', dungeon_guard:'dungeon_guard', dungeon_boss:'dungeon_boss' };
+            var _sub = _subMap[enemyType];
+            if (_sub) {
+                var _ext = window.getExtendedLoot(_sub, level);
+                if (_ext) {
+                    if (_ext.items && _ext.items.length) {
+                        for (var _ei = 0; _ei < _ext.items.length; _ei++) inventory.items.push(_ext.items[_ei]);
+                    }
+                    inventory.spiritStones += _ext.spiritStones || 0;
+                }
+            }
+        }
+    } catch (e) {}
 
     return inventory;
 }

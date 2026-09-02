@@ -153,7 +153,26 @@
                 if (Math.random() < 0.05 && npc.combat && typeof npc.combat.layer === 'number') {
                     // 写 _cultivationProgress 字段
                     npc._cultivationProgress = (Number(npc._cultivationProgress) || 0) + 1;
-                    summary = npc.name + ' 在 ' + (npc.location || '某地') + ' 修炼（小有进境）';
+                    // 1.4 NPC 自主突破：进度达阈值→升层/升境（世界不静止，玩家可观察老友突破）
+                    if ((npc._cultivationProgress || 0) >= 10) {
+                        npc._cultivationProgress = 0;
+                        var _orders = ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'];
+                        npc.combat.layer = (npc.combat.layer || 1) + 1;
+                        if ((npc.combat.layer || 1) > 9) {
+                            npc.combat.layer = 1;
+                            var _ri = _orders.indexOf(npc.combat.realm || '炼气');
+                            if (_ri >= 0 && _ri < _orders.length - 1) {
+                                npc.combat.realm = _orders[_ri + 1];
+                                summary = npc.name + ' 闭关突破，晋升 ' + npc.combat.realm + '！';
+                            } else {
+                                summary = npc.name + ' 修为已臻化境';
+                            }
+                        } else {
+                            summary = npc.name + ' 修炼突破，进境 ' + npc.combat.layer + ' 层';
+                        }
+                    } else {
+                        summary = npc.name + ' 在 ' + (npc.location || '某地') + ' 修炼（小有进境）';
+                    }
                 } else {
                     // 80% 概率 改为休息
                     actionType = 'rest';

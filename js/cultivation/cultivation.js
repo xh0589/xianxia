@@ -415,7 +415,182 @@ function updateCultivationUI() {
     if (html === '<div class="space-y-3">') {
         html += '<p class="text-gray-500 text-sm text-center">没有装备功法</p>';
     }
-    
+
+    // 0.2.3 瓶颈常驻入口：处瓶颈中时显示"突破瓶颈"按钮，否则玩家关掉首次弹窗后再无入口
+    try {
+        if (window.playerBottleneck && window.playerBottleneck.isInBottleneck &&
+            typeof window.attemptBreakBottleneck === 'function') {
+            var _bk = window.playerBottleneck;
+            html += '<div class="bg-red-900/30 p-3 rounded border border-red-600/50 flex items-center justify-between">' +
+                '<div><span class="text-lg">🔒</span><span class="font-bold text-red-400 ml-2">境界瓶颈</span>' +
+                '<span class="text-xs text-red-300 ml-2">' + _bk.bottleneckRealm + ' ' + _bk.bottleneckLayer + '层 · 修炼效率仅30%</span></div>' +
+                '<button onclick="window.attemptBreakBottleneck()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded text-xs">突破瓶颈</button>' +
+                '</div>';
+        }
+        // 1.7 残魂态转世入口：肉身已毁（残魂态）可转世重修，带前世记忆
+        if (typeof window._inSoulState === 'function' && window._inSoulState() && typeof window.reincarnate === 'function') {
+            var _inc2 = (window.currentCharData && window.currentCharData._pastLifeMemory && window.currentCharData._pastLifeMemory.incarnations) || 0;
+            html += '<div class="bg-gray-900/40 p-3 rounded border border-gray-600 flex items-center justify-between">' +
+                '<div><span class="text-lg">👻</span><span class="font-bold text-gray-400 ml-2">残魂态</span>' +
+                '<span class="text-xs text-gray-500 ml-2">' + (_inc2 > 0 ? '已历 ' + _inc2 + ' 世轮回' : '神魂离体，肉身已毁') + '</span></div>' +
+                '<button onclick="window.reincarnate()" class="bg-purple-700 hover:bg-purple-600 text-white px-3 py-1 rounded text-xs">转世重修</button>' +
+                '</div>';
+        }
+    } catch (e) {}
+
+    // 1.3 飞升后入口：飞升/金仙期显示二段飞升 + 天界切磋 + 香火信息
+    try {
+        var _cd = window.currentCharData || {};
+        if (_cd.realm === '飞升' || _cd.realm === '金仙') {
+            var _inc = _cd.incense || 0;
+            html += '<div class="bg-amber-900/30 p-3 rounded border border-amber-600/50 flex items-center justify-between">' +
+                '<div><span class="text-lg">🌅</span><span class="font-bold text-amber-400 ml-2">' + _cd.realm + '</span>' +
+                '<span class="text-xs text-amber-300 ml-2">香火·信徒 ' + _inc + ' 人 · 每日回馈真元</span></div>' +
+                '<div class="flex gap-2">' +
+                '<button onclick="window.tianjieSpar()" class="bg-blue-700 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs">天界切磋</button>' +
+                (_cd.realm === '飞升' ? '<button onclick="window.trySecondAscension()" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-3 py-1 rounded text-xs">二段飞升</button>' : '') +
+                '</div></div>';
+        }
+        // 1.6 玩家建宗入口：元婴+可开山立宗（既有 PlayerSect 系统，此前无 UI 入口）
+        var _tier = (typeof window.getRealmTier === 'function') ? window.getRealmTier(_cd.realm) : 0;
+        var _psMine = (window.PlayerSect && typeof window.PlayerSect.listMySects === 'function') ? (window.PlayerSect.listMySects() || []) : [];
+        if (_tier >= 4 && _cd.realm !== '飞升' && _cd.realm !== '金仙') {
+            if (_psMine.length === 0) {
+                html += '<div class="bg-indigo-900/30 p-3 rounded border border-indigo-600/50 flex items-center justify-between">' +
+                    '<div><span class="text-lg">🏯</span><span class="font-bold text-indigo-400 ml-2">开山立宗</span>' +
+                    '<span class="text-xs text-indigo-300 ml-2">元婴可分神操持，自立宗门</span></div>' +
+                    '<button onclick="window._quickFoundSect()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded text-xs">开山立宗</button>' +
+                    '</div>';
+            } else {
+                var _ps = _psMine[0];
+                var _dCount = (_ps.disciples && _ps.disciples.length) || 0;
+                html += '<div class="bg-indigo-900/30 p-3 rounded border border-indigo-600/50 flex items-center justify-between">' +
+                    '<div><span class="text-lg">🏯</span><span class="font-bold text-indigo-400 ml-2">' + (_ps.name || '本宗') + '</span>' +
+                    '<span class="text-xs text-indigo-300 ml-2">弟子 ' + _dCount + ' 人 · 声望 ' + (_ps.reputation || 0) + '</span></div>' +
+                    '<button onclick="window._defendSectRaid()" class="bg-red-700 hover:bg-red-600 text-white px-3 py-1 rounded text-xs">护宗战</button>' +
+                    '</div>';
+            }
+        }
+        // 1.8 本命法宝：金丹+可炼制，喂材料升级，战斗加成随等级
+        if (_tier >= 3) {
+            var _ba = window.currentCharData && window.currentCharData._bondedArtifact;
+            if (!_ba) {
+                html += '<div class="bg-yellow-900/30 p-3 rounded border border-yellow-600/50 flex items-center justify-between">' +
+                    '<div><span class="text-lg">🔱</span><span class="font-bold text-yellow-400 ml-2">本命法宝</span>' +
+                    '<span class="text-xs text-yellow-300 ml-2">金丹可凝聚，与性命相连</span></div>' +
+                    '<button onclick="window.forgeBondedArtifact()" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-3 py-1 rounded text-xs">凝聚炼制</button>' +
+                    '</div>';
+            } else {
+                html += '<div class="bg-yellow-900/30 p-3 rounded border border-yellow-600/50 flex items-center justify-between">' +
+                    '<div><span class="text-lg">🔱</span><span class="font-bold text-yellow-400 ml-2">' + _ba.name + '</span>' +
+                    '<span class="text-xs text-yellow-300 ml-2">' + _ba.level + '阶 · 经验' + (_ba.exp||0) + '/' + (_ba.expMax||50) + ' · 攻防+' + ((_ba.level-1)*5) + '%</span></div>' +
+                    '<button onclick="window.feedArtifact()" class="bg-yellow-700 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs">喂材料</button>' +
+                    '</div>';
+            }
+        }
+        // 1.10 高位面入口：元婴+入灵界、化神+入魔界（御剑飞行暴露供旅行系统接）
+        if (_tier >= 4 && typeof window.enterPlane === 'function') {
+            html += '<div class="bg-teal-900/30 p-3 rounded border border-teal-600/50 flex items-center justify-between">' +
+                '<div><span class="text-lg">🌀</span><span class="font-bold text-teal-400 ml-2">位面穿梭</span>' +
+                '<span class="text-xs text-teal-300 ml-2">' + (_tier >= 5 ? '灵界/魔界可达' : '灵界可达') + '</span></div>' +
+                '<div class="flex gap-2">' +
+                '<button onclick="window.enterPlane(\'灵界\')" class="bg-teal-600 hover:bg-teal-500 text-white px-3 py-1 rounded text-xs">前往灵界</button>' +
+                (_tier >= 5 ? '<button onclick="window.enterPlane(\'魔界\')" class="bg-purple-700 hover:bg-purple-600 text-white px-3 py-1 rounded text-xs">前往魔界</button>' : '') +
+                '</div></div>';
+        }
+        // 2.3 悟道树：消耗悟道点解锁永久属性节点
+        if (typeof window.ENLIGHTEN_NODES !== 'undefined' && typeof window.enlightenNode === 'function') {
+            var _enl = window.ENLIGHTEN_NODES || [];
+            var _done = (typeof window.getEnlightenedNodes === 'function') ? (window.getEnlightenedNodes() || []) : [];
+            var _ip = window.insightPoints || 0;
+            var _enlHtml = '<div class="bg-cyan-900/20 p-3 rounded border border-cyan-700/50"><div class="flex items-center gap-2 mb-2"><span class="text-lg">🌳</span><span class="font-bold text-cyan-400">悟道树</span><span class="text-xs text-cyan-300 ml-auto">悟道点 ' + _ip + '</span></div><div class="flex flex-wrap gap-1">';
+            for (var _ei = 0; _ei < _enl.length; _ei++) {
+                var _nd = _enl[_ei];
+                var _isDone = _done.indexOf(_nd.id) >= 0;
+                var _can = !_isDone && _ip >= _nd.cost;
+                _enlHtml += '<button ' + (_can ? 'onclick="window.enlightenNode(\'' + _nd.id + '\')"' : 'disabled') + ' title="' + _nd.desc + '" class="text-xs px-2 py-1 rounded ' + (_isDone ? 'bg-cyan-900 text-cyan-600 cursor-not-allowed' : _can ? 'bg-cyan-700 hover:bg-cyan-600 text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed') + '">' + (_nd.icon || '🌳') + _nd.name + (_isDone ? '✓' : '(' + _nd.cost + '点)') + '</button>';
+            }
+            _enlHtml += '</div></div>';
+            html += _enlHtml;
+        }
+        // 2.15 图鉴收集：派生统计 + 里程碑领取（气运奖励）
+        if (typeof window.getCollectionStats === 'function' && typeof window.COLLECTION_MILESTONES !== 'undefined') {
+            var _cs = window.getCollectionStats();
+            var _claimed = (typeof window.getCollectionClaimed === 'function') ? window.getCollectionClaimed() : {};
+            var _ms = window.COLLECTION_MILESTONES || [];
+            var _csHtml = '<div class="bg-emerald-900/20 p-3 rounded border border-emerald-700/50"><div class="flex items-center gap-2 mb-2"><span class="text-lg">📖</span><span class="font-bold text-emerald-400">图鉴</span><span class="text-xs text-emerald-300 ml-auto">功法' + _cs.skills + '/物' + _cs.items + '/识' + _cs.npcs + '/杀' + _cs.kills + '</span></div><div class="flex flex-wrap gap-1">';
+            for (var _mi = 0; _mi < _ms.length; _mi++) {
+                var _m = _ms[_mi];
+                var _done = _claimed[_m.id];
+                var _reach = (_cs[_m.stat] || 0) >= _m.target;
+                var _can = !_done && _reach;
+                _csHtml += '<button ' + (_can ? 'onclick="window.claimCollectionMilestone(\'' + _m.id + '\')"' : 'disabled') + ' class="text-xs px-2 py-1 rounded ' + (_done ? 'bg-emerald-900 text-emerald-600 cursor-not-allowed' : _can ? 'bg-emerald-700 hover:bg-emerald-600 text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed') + '">' + _m.label + (_done ? '✓' : '(气运+' + _m.reward + ')') + '</button>';
+            }
+            _csHtml += '</div></div>';
+            html += _csHtml;
+        }
+        // 2.13 灵脉经营：金丹+可占据灵脉，每日被动产灵石
+        if (_tier >= 3 && typeof window.claimSpiritVein === 'function') {
+            var _sv = window.currentCharData && window.currentCharData._spiritVein;
+            if (!_sv) {
+                html += '<div class="bg-emerald-900/30 p-3 rounded border border-emerald-600/50 flex items-center justify-between">' +
+                    '<div><span class="text-lg">💎</span><span class="font-bold text-emerald-400 ml-2">灵脉</span>' +
+                    '<span class="text-xs text-emerald-300 ml-2">金丹可布阵占据，日产灵石</span></div>' +
+                    '<button onclick="window.claimSpiritVein()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded text-xs">占据灵脉</button>' +
+                    '</div>';
+            } else {
+                html += '<div class="bg-emerald-900/30 p-3 rounded border border-emerald-600/50 flex items-center justify-between">' +
+                    '<div><span class="text-lg">💎</span><span class="font-bold text-emerald-400 ml-2">灵脉·' + _sv.tier + '阶</span>' +
+                    '<span class="text-xs text-emerald-300 ml-2">日产 ' + (_sv.dailyOutput||20) + ' 灵石</span></div>' +
+                    (_sv.tier < 5 ? '<button onclick="window.upgradeVein()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1 rounded text-xs">升级</button>' : '<span class="text-xs text-emerald-500">已臻极盛</span>') +
+                    '</div>';
+            }
+        }
+        // 2.8 婚姻后代：道侣 bond>=2 可诞育后代（继承玩家主功法）
+        if (typeof window.getDaoCompanionBond === 'function' && typeof window.haveChild === 'function') {
+            var _dc = window.getDaoCompanionBond();
+            if (_dc && (_dc.bond.level || 1) >= 2) {
+                var _kids = (window.currentCharData._children || []).length;
+                html += '<div class="bg-pink-900/30 p-3 rounded border border-pink-600/50 flex items-center justify-between">' +
+                    '<div><span class="text-lg">👶</span><span class="font-bold text-pink-400 ml-2">道侣子嗣</span>' +
+                    '<span class="text-xs text-pink-300 ml-2">已有 ' + _kids + ' 子嗣（上限3）</span></div>' +
+                    (_kids < 3 ? '<button onclick="window.haveChild()" class="bg-pink-600 hover:bg-pink-500 text-white px-3 py-1 rounded text-xs">诞育后代</button>' : '<span class="text-xs text-pink-500">子嗣已满</span>') +
+                    '</div>';
+            }
+        }
+        // 2.12 自创丹方：消耗材料+灵石炼制，按材料映射效果
+        if (typeof window.craftCustomPill === 'function') {
+            var _cpills = (window.currentCharData._customPills || []).length;
+            html += '<div class="bg-orange-900/30 p-3 rounded border border-orange-600/50 flex items-center justify-between">' +
+                '<div><span class="text-lg">⚗️</span><span class="font-bold text-orange-400 ml-2">自创丹方</span>' +
+                '<span class="text-xs text-orange-300 ml-2">已创 ' + _cpills + ' 方</span></div>' +
+                '<button onclick="window.craftCustomPill()" class="bg-orange-600 hover:bg-orange-500 text-white px-3 py-1 rounded text-xs">炼制丹方</button>' +
+                '</div>';
+        }
+        // 2.19 天机占卜：元婴+占卜气运/机缘
+        if (_tier >= 4 && typeof window.divineFortune === 'function') {
+            html += '<div class="bg-violet-900/30 p-3 rounded border border-violet-600/50 flex items-center justify-between">' +
+                '<div><span class="text-lg">🔮</span><span class="font-bold text-violet-400 ml-2">天机占卜</span>' +
+                '<span class="text-xs text-violet-300 ml-2">气运 ' + (window.currentCharData.luck != null ? window.currentCharData.luck : 50) + '</span></div>' +
+                '<button onclick="window.divineFortune()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1 rounded text-xs">占卜</button>' +
+                '</div>';
+        }
+        // 2.21 师徒传功：有宗门弟子可传功加速其突破
+        if (typeof window.teachFirstDisciple === 'function' && typeof window.PlayerSect === 'object') {
+            try {
+                var _mine = (window.PlayerSect.listMySects && window.PlayerSect.listMySects()) || [];
+                var _dCount = (_mine.length && _mine[0].disciples) ? _mine[0].disciples.length : 0;
+                if (_dCount > 0) {
+                    html += '<div class="bg-cyan-900/30 p-3 rounded border border-cyan-600/50 flex items-center justify-between">' +
+                        '<div><span class="text-lg">📖</span><span class="font-bold text-cyan-400 ml-2">师徒传功</span>' +
+                        '<span class="text-xs text-cyan-300 ml-2">弟子 ' + _dCount + ' 人</span></div>' +
+                        '<button onclick="window.teachFirstDisciple()" class="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1 rounded text-xs">传功讲道</button>' +
+                        '</div>';
+                }
+            } catch (e) {}
+        }
+    } catch (e) {}
+
     html += '</div>';
     
     container.innerHTML = html;
@@ -704,6 +879,18 @@ function getSkillCombinationBonuses(equippedSkills) {
     return totalBonus;
 }
 
+// 0.2.2 #2 五行相克伤害倍率：攻方元素克守方→1.15，被克→0.85，其余1.0
+// 中性/无属性/同元素不参与；为后续敌人五行扩展留统一入口
+function getElementalDamageMul(atkElement, defElement) {
+    if (!atkElement || !defElement) return 1.0;
+    if (atkElement === 'neutral' || defElement === 'neutral' || atkElement === '无' || defElement === '无') return 1.0;
+    if (atkElement === defElement) return 1.0;
+    var restrict = ELEMENT_INTERACTIONS.mutual_restriction;
+    if (restrict[atkElement] === defElement) return 1.15;
+    if (restrict[defElement] === atkElement) return 0.85;
+    return 1.0;
+}
+
 // 检查五行相性（两个功法之间）
 function getElementInteraction(skill1Name, skill2Name) {
     var elem1 = SKILL_ELEMENT_MAP[skill1Name];
@@ -969,8 +1156,8 @@ function resolveHeartDemonSuccess(demonId) {
     
     // 触发突破成功
     if (typeof window.performBreakthrough === 'function') {
-        // 心魔战胜后突破成功率提升
-        window._heartDemonBonus = 0.3;
+        // 0.2.3 心魔战胜加成写 charData._heartDemonBonus（统一 standard+ritual 两路径，此前写 window 全局只有 ritual 读、standard 已读 charData 致不一致）
+        if (window.currentCharData) window.currentCharData._heartDemonBonus = 0.3;
     }
 }
 
@@ -1176,6 +1363,8 @@ window.getRealmEffectDescription = getRealmEffectDescription;
 window.SKILL_COMBINATIONS = SKILL_COMBINATIONS;
 window.checkSkillCombinations = checkSkillCombinations;
 window.getSkillCombinationBonuses = getSkillCombinationBonuses;
+window.getElementalDamageMul = getElementalDamageMul;
+window._getMainTechniqueElement = _getMainTechniqueElement;
 window.getElementInteraction = getElementInteraction;
 window.mergeSkills = mergeSkills;
 window.HEART_DEMON_TYPES = HEART_DEMON_TYPES;

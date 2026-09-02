@@ -619,6 +619,30 @@ class Entity {
                 if (um !== 1) attack = Math.floor(attack * um);
             } catch (e) {}
         }
+        // 0.2.1 境界质变：化神 attack×1.2 / 合体×1.3 / 渡劫×1.5（buildPlayerBattleEntity 设 _realmCombatMul）
+        if (this.type === 'player' && this._realmCombatMul && this._realmCombatMul.attack && this._realmCombatMul.attack !== 1) {
+            attack = Math.floor(attack * this._realmCombatMul.attack);
+        }
+        // 0.2.2 #3 组合技：万剑归宗 attack+50%（百分比作乘数）
+        if (this.type === 'player' && this._skillComboBonus && this._skillComboBonus.attack) {
+            attack = Math.floor(attack * (1 + this._skillComboBonus.attack / 100));
+        }
+        // 0.2.6 道侣合击：情意绵绵 attack+20%、天作之合 all+30%（all 已并入 attrs）
+        if (this.type === 'player' && this._daoComboBonus && this._daoComboBonus.attack) {
+            attack = Math.floor(attack * (1 + this._daoComboBonus.attack / 100));
+        }
+        // 1.8 本命法宝：每阶 +5% 攻击
+        if (this.type === 'player' && this._artifactMul && this._artifactMul !== 1) {
+            attack = Math.floor(attack * this._artifactMul);
+        }
+        // 2.5 法修：元素凌厉 attack+10%
+        if (this.type === 'player' && this._schoolAtkMul && this._schoolAtkMul !== 1) {
+            attack = Math.floor(attack * this._schoolAtkMul);
+        }
+        // 2.12 自创丹方临时 attack buff
+        if (this.type === 'player' && this._customPillAtk && this._customPillAtk !== 1) {
+            attack = Math.floor(attack * this._customPillAtk);
+        }
         return attack;
     }
 
@@ -652,6 +676,26 @@ class Entity {
                     defense = Math.floor(defense * (1 + fb.def));
                 }
             } catch (e) {}
+        }
+        // 0.2.1 境界质变：金丹 defense×1.15 / 合体×1.3 / 渡劫×1.5
+        if (this.type === 'player' && this._realmCombatMul && this._realmCombatMul.defense && this._realmCombatMul.defense !== 1) {
+            defense = Math.floor(defense * this._realmCombatMul.defense);
+        }
+        // 0.2.2 #3 组合技：不动如山 defense+40%（百分比作乘数）
+        if (this.type === 'player' && this._skillComboBonus && this._skillComboBonus.defense) {
+            defense = Math.floor(defense * (1 + this._skillComboBonus.defense / 100));
+        }
+        // 0.2.6 道侣合击：生死与共 defense+25%
+        if (this.type === 'player' && this._daoComboBonus && this._daoComboBonus.defense) {
+            defense = Math.floor(defense * (1 + this._daoComboBonus.defense / 100));
+        }
+        // 1.8 本命法宝：每阶 +5% 防御
+        if (this.type === 'player' && this._artifactMul && this._artifactMul !== 1) {
+            defense = Math.floor(defense * this._artifactMul);
+        }
+        // 2.5 体修：反震硬抗 defense+15%
+        if (this.type === 'player' && this._schoolDefMul && this._schoolDefMul !== 1) {
+            defense = Math.floor(defense * this._schoolDefMul);
         }
         return defense;
     }
@@ -713,6 +757,10 @@ class Entity {
                 if (um !== 1) speed = Math.floor(speed * um);
             } catch (e) {}
         }
+        // 0.2.1 境界质变：筑基 speed×1.1 / 炼虚×1.2
+        if (this.type === 'player' && this._realmCombatMul && this._realmCombatMul.speed && this._realmCombatMul.speed !== 1) {
+            speed = Math.floor(speed * this._realmCombatMul.speed);
+        }
         return speed;
     }
 
@@ -727,6 +775,12 @@ class Entity {
             this._lastHitHardened = true;
         } else {
             this._lastHitHardened = false;
+        }
+        // F-21：defensive 守御姿态——_guardTurns>0 时本次受击伤害×0.6 并消耗
+        // 此前 enemyTurn 仅置 _guardTurns=1 但全库无读取点，守御=白送一回合
+        if (this._guardTurns > 0) {
+            damage = Math.max(1, Math.floor(damage * 0.6));
+            this._guardTurns = 0;
         }
         if (this.type === 'player' && window.TalismanSystem && typeof window.TalismanSystem.absorbDamage === 'function') {
             damage = window.TalismanSystem.absorbDamage(damage);
@@ -1977,9 +2031,19 @@ class Battle {
     }
 
     // 玩家攻击指定部位
+    // 1.2 招式 CD 递减（每回合开始流逝一回合冷却）
+    _tickMoveCD() {
+        if (!this._moveCD) return;
+        for (var k in this._moveCD) {
+            this._moveCD[k] -= 1;
+            if (this._moveCD[k] <= 0) delete this._moveCD[k];
+        }
+    }
+
     playerAttack(partId) {
         if (this.isFinished || !this.isPlayerTurn) return false;
         if (!this.enemy.isAlive) return false;
+        this._tickMoveCD();
         let damageType = 'blunt';
         try {
             if (typeof window.resolveWeaponDamageType === 'function') {
@@ -1993,6 +2057,14 @@ class Battle {
         } catch (e) {}
         const result = this._executeAttack(this.player, this.enemy, partId, damageType);
         this.log.push(result);
+        // 1.2 普攻回气：招式耗真气，普攻回气，逼玩家穿插普攻做资源博弈
+        try {
+            var _pcd = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
+            if (_pcd) {
+                var _qRec = 6 + Math.floor(Math.max(0, ((_pcd.maxQi || 100) - (_pcd.qi || 0))) / 20);
+                _pcd.qi = Math.min(_pcd.maxQi || 100, (_pcd.qi || 0) + _qRec);
+            }
+        } catch (e) {}
         if (window.TalismanSystem && typeof window.TalismanSystem.onPlayerAttackComplete === 'function') window.TalismanSystem.onPlayerAttackComplete();
         this.turn++;
         this._processRoundPhysiology();
@@ -2006,6 +2078,13 @@ class Battle {
     playerAttackWithMove(partId, move) {
         if (this.isFinished || !this.isPlayerTurn) return false;
         if (!this.enemy.isAlive) return false;
+        this._tickMoveCD();
+        // 1.2 CD制：强力招式用后有冷却，防刷
+        var _cdKey = move.moveId || move.id;
+        if (this._moveCD && this._moveCD[_cdKey] > 0) {
+            this.log.push({ msg: '⏳ ' + move.name + ' 冷却中（剩 ' + this._moveCD[_cdKey] + ' 回合）' });
+            return false;
+        }
         // 检查真气消耗
         if (move.qiCost > 0) {
             var charData = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
@@ -2050,6 +2129,11 @@ class Battle {
             result.msg = move.name + '：' + result.msg;
         }
         this.log.push(result);
+        // 1.2 用后置 CD：damageMult>=1.5 强招 2 回合，>=1.8 超强 3 回合（普攻无 CD）
+        if (!this._moveCD) this._moveCD = {};
+        var _mult = move.damageMult || 1.0;
+        if (_mult >= 1.8) this._moveCD[_cdKey] = 3;
+        else if (_mult >= 1.5) this._moveCD[_cdKey] = 2;
         this.turn++;
         this._processRoundPhysiology();
         if (this._checkEnd()) return true;
@@ -2577,6 +2661,18 @@ class Battle {
         penetratePct = Math.max(0, Math.min(40, penetratePct || 0));
         def = def * (1 - penetratePct / 100);
         let damage = Math.floor(atk - def * 0.3 + (Math.random() * 2 - 1));
+        // 0.2.2 #2 五行相克：玩家主功法元素 vs 敌人元素标（冰→水/火→火），±15%
+        if (attacker.type === 'player' && defender._elementType) {
+            try {
+                var _atkEl = (typeof window._getMainTechniqueElement === 'function') ? window._getMainTechniqueElement() : null;
+                var _defElMap = { ice: '水', fire: '火' };
+                var _defEl = _defElMap[defender._elementType];
+                if (_atkEl && _defEl && typeof window.getElementalDamageMul === 'function') {
+                    var _em = window.getElementalDamageMul(_atkEl, _defEl);
+                    if (_em !== 1) damage = Math.max(1, Math.floor(damage * _em));
+                }
+            } catch (e) {}
+        }
         return Math.max(1, damage);
     }
 
