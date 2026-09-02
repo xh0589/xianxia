@@ -1003,6 +1003,9 @@ class NPC {
     changeLove(amount) { this.relationship.love = clamp(this.relationship.love + amount, 0, 100); }
     changeFear(amount) { this.relationship.fear = clamp(this.relationship.fear + amount, 0, 100); }
     changeHatred(amount) { this.relationship.hatred = clamp(this.relationship.hatred + amount, 0, 100); }
+    // F-19 修复：changeTrust 此前未定义，第 3499/3588 行调用 throw TypeError
+    changeTrust(amount) { this.relationship.trust = clamp((this.relationship.trust || 0) + amount, -100, 100); }
+    changeRespect(amount) { this.relationship.respect = clamp((this.relationship.respect || 0) + amount, -100, 100); }
     
     updateRelationship() {
         const rel = this.relationship;
