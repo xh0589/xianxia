@@ -9,7 +9,6 @@ Thumbs.db
 # v20.0.x 临时备份（2026-09-01 修复期间生成，按需保留）
 *.bak.20260901
 # 测试与调试输出
-tests/
 evidence/
 *.pyc
 __pycache__/
