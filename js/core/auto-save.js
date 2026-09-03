@@ -11,8 +11,7 @@ var MAX_SLOTS = 5;        // 保留最近 5 个自动档
 
 var _lastAutoDay = 0;     // 上次按天自动存的绝对天数
 
-// F-20 改名：与 solar-terms.js 重复 _currentDay，static-check 报 duplicate top-level global
-function _autoSaveCurrentDay() {
+function _currentDay() {
     try {
         if (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') {
             return window.timeSystem.getAbsoluteDay();
@@ -81,7 +80,7 @@ function doAutoSave(trigger) {
 // 每日检查：逢 INTERVAL_DAYS 倍数的天数触发
 function tickAutoSaveDay() {
     try {
-        var day = _autoSaveCurrentDay();
+        var day = _currentDay();
         if (day <= 0) return;
         if (day === _lastAutoDay) return;          // 同一天内不重复
         if (day % INTERVAL_DAYS !== 0) return;       // 非 7 天倍数跳过

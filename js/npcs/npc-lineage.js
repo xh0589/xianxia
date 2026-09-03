@@ -147,38 +147,10 @@
             childRoots[k] = clamp(Math.round(base + noise), 0, 100);
         }
         // 总值上限：若超过 200 削峰
-        // F-68 修：旧版 Math.round 后总和仍可能 > 200（如 total=201 ratio=0.995 全部 round 5 次不变），
-        // 削峰后必须再算一次，超额时按大小排序递减收紧到 200
         var total = childRoots.metal + childRoots.wood + childRoots.water + childRoots.fire + childRoots.earth;
         if (total > 200) {
             var ratio = 200 / total;
-            var newMetal = Math.round(childRoots.metal * ratio);
-            var newWood = Math.round(childRoots.wood * ratio);
-            var newWater = Math.round(childRoots.water * ratio);
-            var newFire = Math.round(childRoots.fire * ratio);
-            var newEarth = Math.round(childRoots.earth * ratio);
-            var newTotal = newMetal + newWood + newWater + newFire + newEarth;
-            if (newTotal > 200) {
-                var arr = [
-                    { k: 'metal', v: newMetal },
-                    { k: 'wood', v: newWood },
-                    { k: 'water', v: newWater },
-                    { k: 'fire', v: newFire },
-                    { k: 'earth', v: newEarth }
-                ];
-                arr.sort(function (a, b) { return b.v - a.v; });
-                var idx = 0;
-                while (newTotal > 200 && idx < arr.length) {
-                    if (arr[idx].v > 0) { arr[idx].v -= 1; newTotal -= 1; }
-                    idx += 1;
-                }
-                newMetal = arr[0].v; newWood = arr[1].v; newWater = arr[2].v; newFire = arr[3].v; newEarth = arr[4].v;
-            }
-            childRoots.metal = newMetal;
-            childRoots.wood = newWood;
-            childRoots.water = newWater;
-            childRoots.fire = newFire;
-            childRoots.earth = newEarth;
+            for (var j = 0; j < ELEMENTS.length; j++) childRoots[ELEMENTS[j]] = Math.round(childRoots[ELEMENTS[j]] * ratio);
         }
         // 2) 变异灵根：30% 概率遗传
         var fMut = father.mutatedRoots || {};

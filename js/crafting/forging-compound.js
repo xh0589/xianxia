@@ -166,19 +166,8 @@
         for (var k = 0; k < candidates.length; k++) {
             if (!seen[candidates[k].key]) { seen[candidates[k].key] = 1; uniq.push(candidates[k]); }
         }
-        // F-25 修：原版 uniq.sort(Math.random-shuffle) 切前 maxCount 个，25% 失败率
-        // （龙血有 8 个候选含 2 long 词缀，切前 3 个不含 long 概率 1-C(6,3)/C(8,3)=36%）
-        // 修：按"标签匹配优先级 + 词缀属性值"稳定排序——专用标签词缀 > 通用（tag='*'），同级按 attrVal 倒序
-        // 不再用 Math.random()，让测试稳定
-        uniq.sort(function (a, b) {
-            var aSpecial = a.tag !== '*' ? 0 : 1;
-            var bSpecial = b.tag !== '*' ? 0 : 1;
-            if (aSpecial !== bSpecial) return aSpecial - bSpecial;
-            // 同级：按属性值倒序（高价值优先）
-            var aVal = a.attrVal != null ? Math.abs(a.attrVal) : 0;
-            var bVal = b.attrVal != null ? Math.abs(b.attrVal) : 0;
-            return bVal - aVal;
-        });
+        // 随机取 1~maxCount
+        uniq.sort(function () { return Math.random() - 0.5; });
         return uniq.slice(0, Math.min(maxCount, uniq.length));
     }
 

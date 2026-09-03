@@ -88,6 +88,8 @@ function loadGameTimeFromSave(data) {
     keys.forEach(k => {
         if (data[k] !== undefined && data[k] !== null) gameTime[k] = data[k];
     });
+    // F-36：读档重置分钟累加器，防跨会话残留致零碎时间恢复多触发一次
+    recoveryMinuteAcc = 0;
     syncTimeGlobals();
     updateTimeDisplay();
     return true;
@@ -347,7 +349,8 @@ function onNewDay(oldDay, newDay) {
 }
 
 function onNewDaySubscribe(fn) {
-    if (typeof fn === 'function') _newDayListeners.push(fn);
+    // F-35：同引用去重，防重复订阅致 onNewDay 重复执行同逻辑
+    if (typeof fn === 'function' && _newDayListeners.indexOf(fn) < 0) _newDayListeners.push(fn);
 }
 
 function getAbsoluteDay() {

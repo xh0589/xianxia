@@ -197,8 +197,15 @@
         var skill = 0;
         if (typeof window.getLifeSkill === 'function') skill = window.getLifeSkill('炼制');
         else if (cd && cd.lifeSkills) skill = cd.lifeSkills['炼制'] || 0;
-        var fireOffset = (Math.random() * 40 - 20); // ±20
-        var fire = Math.max(0, Math.min(100, skill + fireOffset));
+        // v20.1 火候试炼：玩家亲自控火得分替代随机火候；受炼制技能限制（不超过 skill+20，与原随机上限一致），防止低技能绕过
+        var fire;
+        if (typeof window._alchemyFireBonus === 'number' && window._alchemyFireBonus >= 0) {
+            fire = Math.max(0, Math.min(100, Math.min(window._alchemyFireBonus, skill + 20)));
+            window._alchemyFireBonus = null; // 消费
+        } else {
+            var fireOffset = (Math.random() * 40 - 20); // ±20
+            fire = Math.max(0, Math.min(100, skill + fireOffset));
+        }
         // 品质 = 0.6 * 评分归一 + 0.4 * 火候
         var finalScore = Math.max(0, Math.min(100, 0.6 * (totalScore / (materials.length * 100)) * 100 + 0.4 * fire));
         // 毒性均值

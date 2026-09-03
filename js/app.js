@@ -292,16 +292,7 @@ function collectCharacterData(name) {
         qi: 100, maxQi: 100,
         mood: 80, maxMood: 100,
         // 1.5 气运/机缘：luck 影响奇遇触发率与稀有度，fortune 可消耗破机缘
-        luck: 50, fortune: 0,
-        // F-13 完整版：修真境界/层级/经验/道侣/子嗣/师父/天数/灵石/位置
-        // 此前靠散落 `|| '炼气'`/`|| 100` 兜底，集中初始化便于测试与存档
-        realm: '炼气', layer: 1, level: 1, exp: 0,
-        // 关系
-        bonds: {}, _children: [], _masterId: null,
-        // 时间/资源
-        day: 1, spiritStones: 100, copper: 50,
-        // 位置
-        currentMap: 'main'
+        luck: 50, fortune: 0
     };
     document.querySelectorAll('#main-attributes-container input').forEach(input => {
         var attrName = input.dataset.attr;
@@ -364,10 +355,6 @@ function collectCharacterData(name) {
         Object.keys(am).forEach(function(cn) {
             data.attrs[am[cn]] = data.mainAttributes[cn] || 10;
         });
-    }
-    // v20.1 开局出身+天赋：应用资源写入 cd + 存 origin/talent 标识
-    if (typeof window.applyOriginTalentToCharData === 'function') {
-        try { window.applyOriginTalentToCharData(data); } catch (e) {}
     }
     return data;
 }
@@ -1412,9 +1399,6 @@ function cultivationMeditate(durationId) {
         // 1.7 前世记忆：主修功法是前世功法则修炼更快（+30%）
         var _plmMul = (typeof window.pastLifeSkillBonus === 'function') ? window.pastLifeSkillBonus(mainSkillId) : 1.0;
         if (_plmMul !== 1) essenceGain = Math.floor(essenceGain * _plmMul);
-        // v20.1 出身天赋：灵机真元 +10%
-        var _teMul = (typeof window.talentEssenceMul === 'function') ? window.talentEssenceMul(currentCharData) : 1.0;
-        if (_teMul !== 1) essenceGain = Math.floor(essenceGain * _teMul);
         // 1.9 丹毒惩罚：高丹毒降修炼效率（50丹毒-25%、100丹毒-50%）
         var _ppPen = (typeof window.getPillPoisonPenalty === 'function') ? window.getPillPoisonPenalty() : 0;
         if (_ppPen > 0) essenceGain = Math.floor(essenceGain * (1 - _ppPen));
@@ -1424,10 +1408,6 @@ function cultivationMeditate(durationId) {
             var _qdAdd = 0;
             if ((currentCharData.qi || 0) < 20) _qdAdd += 5;
             if (typeof window.getPillPoison === 'function' && window.getPillPoison() > 50) _qdAdd += 3;
-            // v20.1 出身天赋：道心走火 -30%
-            if (_qdAdd > 0 && typeof window.talentHeartDemonMul === 'function') {
-                _qdAdd = Math.max(0, Math.round(_qdAdd * window.talentHeartDemonMul(currentCharData)));
-            }
             if (_qdAdd > 0) window.addQiDeviation(_qdAdd);
         }
     }
@@ -2263,12 +2243,16 @@ function refreshSaveSlots() {
                 </div>
             </div>`;
     }).join('');
+    if (window.refreshAutoSaveSlots) window.refreshAutoSaveSlots();
 }
 
 
-function saveGame() {
+function saveGame(opts) {
+    opts = opts || {};
+    var _autoMode = !!opts.autoMode;
+    var _silent = !!opts.silent;
     if (!currentCharData) {
-        alert('请先创建角色进入游戏！');
+        if (!_silent) alert('请先创建角色进入游戏！');
         return;
     }
 
@@ -2325,7 +2309,7 @@ function saveGame() {
             eventFlags: window.eventFlags || {},
             achievementData: window.achievementData || null,
             proficiencyData: window.proficiencyData || null,
-            playerPhysiology: null
+            playerPhysiology: null,
         };
     }
 
@@ -2359,23 +2343,26 @@ function saveGame() {
         realm: meta.realm
     };
 
-    var replaced = false;
-    for (var si = saveSlots.length - 1; si >= 0; si--) {
-        var sn = (saveSlots[si].meta && saveSlots[si].meta.charName) || saveSlots[si].charName;
-        if (sn === saveData.charName) {
-            saveSlots[si] = slotEntry;
-            replaced = true;
-            break;
+    // 自动档模式：不写入手动档槽位（避免覆盖玩家手动档），静默不打扰玩家
+    if (!_autoMode) {
+        var replaced = false;
+        for (var si = saveSlots.length - 1; si >= 0; si--) {
+            var sn = (saveSlots[si].meta && saveSlots[si].meta.charName) || saveSlots[si].charName;
+            if (sn === saveData.charName) {
+                saveSlots[si] = slotEntry;
+                replaced = true;
+                break;
+            }
         }
-    }
-    if (!replaced) saveSlots.push(slotEntry);
-    if (saveSlots.length > 10) saveSlots = saveSlots.slice(-10);
-    localStorage.setItem('xianxia_saves', JSON.stringify(saveSlots));
+        if (!replaced) saveSlots.push(slotEntry);
+        if (saveSlots.length > 10) saveSlots = saveSlots.slice(-10);
+        localStorage.setItem('xianxia_saves', JSON.stringify(saveSlots));
 
-    var lastEl = document.getElementById('last-save-time');
-    if (lastEl) lastEl.textContent = '上次保存: ' + new Date().toLocaleString('zh-CN');
-    refreshSaveSlots();
-    showSaveToast('✅ 存档保存成功！');
+        var lastEl = document.getElementById('last-save-time');
+        if (lastEl) lastEl.textContent = '上次保存: ' + new Date().toLocaleString('zh-CN');
+        refreshSaveSlots();
+        if (!_silent) showSaveToast('✅ 存档保存成功！');
+    }
     return saveData;
 }
 
@@ -4012,17 +3999,6 @@ function buildPlayerBattleEntity(level) {
     if (_daoComboBonus && playerEntity) {
         playerEntity._daoComboBonus = _daoComboBonus;
     }
-    // v20.1 出身天赋：剑骨 attack×1.10 / 铁骨 defense×1.10（注入玩家战斗实体）
-    try {
-        if (typeof window.talentAtkMul === 'function') {
-            var _taMul = window.talentAtkMul(currentCharData);
-            if (_taMul !== 1) playerEntity._talentAtkMul = _taMul;
-        }
-        if (typeof window.talentDefMul === 'function') {
-            var _tdMul = window.talentDefMul(currentCharData);
-            if (_tdMul !== 1) playerEntity._talentDefMul = _tdMul;
-        }
-    } catch (e) {}
     // 1.8 本命法宝：每阶 +5% 攻防（法宝等级→战斗加成）
     try {
         if (typeof window.artifactCombatMul === 'function') {
@@ -4390,6 +4366,13 @@ function showBattleUI(battle) {
         if (winner === 'player' && currentBattle && currentBattle._isHeavenlyTribulation && window._trib && window._trib.wave < window._trib.waves) {
             actionsHtml += '<button onclick="continueTribWave()" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded text-white font-bold mt-2">⚡ 迎接下一道天雷（' + (window._trib.wave + 1) + '/' + window._trib.waves + '）</button> ';
         }
+        // v20.1 主线多阶段 Boss：中间阶段胜利 → 出"下一阶段"按钮（最后一阶段由 settle 结算）
+        if (winner === 'player' && currentBattle && currentBattle._isMainStoryBoss && typeof window.getMainBossProgress === 'function') {
+            var _msp = window.getMainBossProgress();
+            if (_msp && _msp.phase < _msp.phases - 1) {
+                actionsHtml += '<button onclick="continueBossPhase()" class="bg-red-700 hover:bg-red-600 px-4 py-2 rounded text-white font-bold mt-2">⚔️ 迎战下一阶段（' + (_msp.phase + 2) + '/' + _msp.phases + '）</button> ';
+            }
+        }
         actionsHtml += '<button onclick="closeBattle()" class="bg-yellow-600 hover:bg-yellow-500 px-6 py-2 rounded text-gray-900 font-bold">继续</button>';
         document.getElementById('battle-actions').innerHTML = actionsHtml;
         if (winner === 'player' && currentBattle) {
@@ -4412,9 +4395,9 @@ function showBattleUI(battle) {
             if (currentBattle._isRivalDuel && typeof window.settleRivalDuel === 'function') {
                 try { window.settleRivalDuel(true); } catch (eRiv) {}
             }
-            // v20.1 主线 Boss 多阶段：打完本阶段 → 结算（还有阶段出"下一阶段"按钮，最后阶段触发完整结算）
+            // v20.1 主线多阶段 Boss：全阶段通关结算（中间阶段由按钮接管，settle 返回 false 不影响）
             if (currentBattle._isMainStoryBoss && typeof window.settleMainStoryBoss === 'function') {
-                try { window.settleMainStoryBoss(true); } catch (eMSB) {}
+                try { window.settleMainStoryBoss(true); } catch (eBoss) {}
             }
 
             // B4：灵兽经验仅由 battle.js 结算一次，此处不再重复 onBeastBattleEnd
@@ -4509,9 +4492,9 @@ function showBattleUI(battle) {
             if (currentBattle && currentBattle._isRivalDuel && typeof window.settleRivalDuel === 'function') {
                 try { window.settleRivalDuel(false); } catch (eRivLose) {}
             }
-            // v20.1 主线 Boss 战败 → Boss 退去可再战（主线不卡死）
+            // v20.1 主线多阶段 Boss 战败 → 重伤，Boss 退去（可再战）
             if (currentBattle && currentBattle._isMainStoryBoss && typeof window.settleMainStoryBoss === 'function') {
-                try { window.settleMainStoryBoss(false); } catch (eMSBL) {}
+                try { window.settleMainStoryBoss(false); } catch (eBossLose) {}
             }
             // 时间跳半天（720分钟 = 12小时）
             if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
@@ -5507,7 +5490,7 @@ function showCityTravelUI() {
 // 更新状态面板（集成新系统数据）
 function updateCharacterStatus() {
     if (!currentCharData) return;
-    
+
     // 更新精力（从 charData 读取）
     const staminaBar = document.getElementById('stamina-bar');
     const staminaText = document.getElementById('stamina-text');
@@ -6753,6 +6736,7 @@ function checkNewGamePlus() {
             var data = JSON.parse(saved);
             if (data.ngPlus > 0) {
                 showMessage('🌟 新游戏+模式激活！继承上周目部分属性。', 'info');
+                return data;
             }
         } catch(e) {}
     }
@@ -8177,9 +8161,23 @@ function initSettings() {
             if (cb) cb.checked = !window._settings.disableCityIntro;
         }
     } catch(e) {}
+    // v20.3 感情维系衰减（默认关闭）
+    var decayCb = document.getElementById('setting-affection-decay');
+    if (decayCb) decayCb.checked = !!(window._settings && window._settings.affectionDecay === true);
+}
+
+// v20.3 感情维系衰减开关（写入既有 _settings 存储，非角色数据）
+function toggleAffectionDecay() {
+    var cb = document.getElementById('setting-affection-decay');
+    if (cb) {
+        window._settings.affectionDecay = !!cb.checked;
+        try { localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch(e) {}
+        if (window.showMessage) window.showMessage(cb.checked ? '💞 感情维系衰减已开启：久不联系（≥3天）好感会下降。' : '💞 感情维系衰减已关闭：好感不再因未联系而下降。', 'info');
+    }
 }
 
 window.toggleCityIntro = toggleCityIntro;
+window.toggleAffectionDecay = toggleAffectionDecay;
 window.initSettings = initSettings;
 
 // ==================== P0 修复：黑市交易函数 ====================

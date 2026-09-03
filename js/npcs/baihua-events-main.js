@@ -338,7 +338,7 @@ var BAIHUA_MAIN_EVENTS_C = {
         scenes: [
             { speaker: 'narrator', text: '议事厅外，你抱着药材正要进去，听到里面牡丹的声音。', type: 'description' },
             { speaker: 'npc', text: '「新药的试毒名单、花圃的正门木牌、连昨天的晚膳都是你亲自端的——谷主，你自己数数，这些待遇谷里谁能比？」' },
-            { speaker: 'npc', text: '「牡丹，他是弟子——」那是温蘅的声音。' },
+            { speaker: 'npc', text: '「牡丹，{playerTa}是弟子——」那是温蘅的声音。' },
             { speaker: 'npc', text: '「弟子？那你怎么不给我端饭？」' },
             { speaker: 'narrator', text: '你站在门口，进也不是退也不是。厅内安静了几息。', type: 'description' },
             { speaker: 'npc', text: '温蘅的声音很轻，但没有笑意：「……你说得对。是我失了分寸。」' },

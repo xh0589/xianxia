@@ -73,6 +73,11 @@ function renderRelationsPanel() {
             return aff >= 60 || aff <= -50; // 知己以上或仇人
         });
     }
+    // v20.2 情缘筛选：仅显示四位女主角（无论当前好感，便于追踪吃醋/和好状态）
+    if (activeFilter.isRomance) {
+        var roster = (window.HEROINE_ROSTER || []).map(function(h){ return h.id; });
+        allNPCs = allNPCs.filter(function(npc) { return roster.indexOf(npc.id) >= 0; });
+    }
 
     // 排序
     const filterMode = RELATIONS_FILTER_MODE;

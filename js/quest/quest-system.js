@@ -1412,6 +1412,7 @@ function questObjectiveMatches(obj, eventType, data) {
         return (obj.type === 'explore' || obj.type === 'explore_dungeon') && (!obj.dungeonId && !obj.dungeon || obj.dungeonId === data.dungeonId || obj.dungeon === data.dungeonId || obj.dungeon === data.dungeonName);
     }
     if (eventType === 'arena:won') return obj.type === 'arenaWin' || obj.type === 'arena_win';
+    if (eventType === 'sparring') return obj.type === 'sparring';
     if (eventType === 'escort:completed') return obj.type === 'escort';
     if (eventType === 'cultivation:completed') return obj.type === 'meditate' || obj.type === 'practice' || obj.type === 'cultivate';
     if (eventType === 'cultivation:breakthrough') {

@@ -277,8 +277,12 @@ function consumeBottleneckItem(itemId, count) {
     for (var i = 0; i < window.inventory.slots.length; i++) {
         var slot = window.inventory.slots[i];
         if (slot && slot.templateId === itemId) {
-            if (typeof window.inventory.removeItem === 'function') {
-                window.inventory.removeItem(slot.uid, count || 1);
+            // F-14：inventory 对象无 removeItem 方法（全局 removeItem 才是），原调用 typeof 检查失败静默跳过→瓶颈服丹从不消耗
+            if (typeof window.removeItem === 'function') {
+                window.removeItem(slot.uid, count || 1);
+            } else if (typeof slot.removeCount === 'function') {
+                slot.removeCount(count || 1);
+                if (slot.count <= 0) window.inventory.slots[i] = null;
             }
             return;
         }

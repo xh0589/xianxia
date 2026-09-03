@@ -28,38 +28,10 @@ function haveChild() {
         if (window.showMessage) window.showMessage('诞育灵胎需 ' + cost + ' 灵石调养。', 'warning');
         return false;
     }
-    // 继承玩家主修功法（F-62 v15.4 藏经阁接线：artInsights 掌握度最高的 art_xx）
+    // 继承玩家主修功法
     var skills = window.currentSkills || {};
     var inheritSkill = null;
     for (var s in skills) { if (skills[s]) { inheritSkill = { id: skills[s].id, name: skills[s].name }; break; } }
-    // F-62 v15.4 藏经阁：玩家没装备通用功法时，从 artInsights 找掌握度最高的 art_xx 跨门派反查
-    if (!inheritSkill) {
-        var ds = window.discipleState;
-        if (ds && ds.artInsights) {
-            var best = null;
-            for (var aid in ds.artInsights) {
-                var rec = ds.artInsights[aid];
-                if (!rec || !(rec.m > 0)) continue;
-                if (!best || rec.m > best.m) best = { id: aid, m: rec.m };
-            }
-            if (best) {
-                var allArts = window.SECT_SPECIFIC_ARTS;
-                if (allArts) {
-                    for (var sn in allArts) {
-                        var arr = allArts[sn];
-                        if (!Array.isArray(arr)) continue;
-                        for (var i = 0; i < arr.length; i++) {
-                            if (arr[i].id === best.id) {
-                                inheritSkill = { id: arr[i].id, name: arr[i].name };
-                                break;
-                            }
-                        }
-                        if (inheritSkill) break;
-                    }
-                }
-            }
-        }
-    }
     // 后代名（取父母名各一字 + 灵）
     var npc = window.npcManager && window.npcManager.getNPC(dc.id);
     var childName = (cd.name || '无').charAt(0) + ((npc && npc.name) || '侣').charAt(0) + '灵';

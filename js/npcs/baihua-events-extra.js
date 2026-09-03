@@ -192,7 +192,7 @@ var BAIHUA_APPROACH_EVENTS = {
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '跟上，讲路上的见闻', effect: 'talk', affection: 5 },
                 { text: '默默跟着走', effect: 'silent', affection: 3 },
-                { text: '说你不用等他', effect: 'point', affection: 1 }
+                { text: '说你不用等{playerTa}', effect: 'point', affection: 1 }
             ]}
         ],
         effects: function(npc, choice) { var aff = 0, msg = ''; switch(choice) {

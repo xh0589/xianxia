@@ -13,3 +13,10 @@ tests/
 evidence/
 *.pyc
 __pycache__/
+# vibex 源（外包交付工作区）
+html-0bd3fb25-source/
+# 临时备份
+_backup_pre_*/
+# 会话记录
+session-*.md
+对话记录.txt

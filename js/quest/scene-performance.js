@@ -111,8 +111,11 @@ function typewriterEffect(element, text, speed = 25, callback) {
     let index = 0;
     element.textContent = '';
     element.style.visibility = 'visible';
+    // F-39：取消令牌——每次新链自增；type 每轮校验令牌一致才写，避免连点"继续"致两条链并发追加乱码
+    const token = (element._typeToken = (element._typeToken || 0) + 1);
 
     function type() {
+        if (token !== element._typeToken) return; // 已被新链/关闭取消
         if (index < text.length) {
             element.textContent += text[index];
             index++;
@@ -433,6 +436,11 @@ function handleSceneChoice(choiceIndex, btnElement) {
 
 // ============ 关闭场景演出 ============
 function closeScenePerformance(modal) {
+    // F-39：关闭时取消正在跑的打字机链（bump token 使旧 type 失效，不再写已分离节点）
+    try {
+        var dt = modal && modal.querySelector ? modal.querySelector('#dialogue-text') : null;
+        if (dt) dt._typeToken = (dt._typeToken || 0) + 1;
+    } catch (e) {}
     if (modal) {
         modal.style.animation = 'perfFadeOut 0.2s ease';
         modal.style.opacity = '0';

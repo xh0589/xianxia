@@ -636,8 +636,15 @@ function executeAction(action, resultMsgs) {
             break;
         }
         case 'addSkillExp': {
-            // 技能经验无法直接写入 combatSkills（无经验字段），在结果中提示
-            resultMsgs.push(`・技能经验 +${action.value}`);
+            // F-33：此前只 push 文案不写数据（"技能经验+5"是空操作）。
+            // 接 addProficiencyExp 到玩家主修功法（currentSkills.skill_main），无主修则提示
+            var _mainSkill = window.currentSkills && window.currentSkills.skill_main;
+            if (_mainSkill && typeof window.addProficiencyExp === 'function') {
+                window.addProficiencyExp(_mainSkill, action.value);
+                resultMsgs.push(`・主修功法熟练度 +${action.value}`);
+            } else {
+                resultMsgs.push(`・需先装备主修功法方可参悟（技能经验 +${action.value} 未生效）`);
+            }
             break;
         }
         case 'rewardMaterials': {

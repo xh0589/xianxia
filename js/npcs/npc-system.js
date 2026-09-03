@@ -573,7 +573,7 @@ class NPC {
         this.followTarget = null;   // 跟随目标ID（通常是玩家）
         this.relationship = {
             affection: 0, hatred: 0, favor: 0, favorMax: 50, respect: 0,
-             love: 0, fear: 0, flags: new Set(), history: []
+             love: 0, fear: 0, trust: 0, flags: new Set(), history: []
         };
         this.statusEffects = new Map();
         this.dialogueTree = options.dialogueTree || this.generateDefaultDialogue();
@@ -587,7 +587,9 @@ class NPC {
         this.state = { mood: 50, energy: 100, health: 100, stress: 0, isBroken: false, breakType: null, location: options.location || 'unknown', currentActivity: '' };
         this.memory = {
             playerActions: [], impressions: {}, questsGiven: [], firstMet: false, meetCount: 0,
-            lastMeetTime: 0, lastMeetGameMinute: null, lastAction: null, lastActionTime: 0, lastActionGameMinute: null, totalGifts: 0, totalHelps: 0, totalAttacks: 0, totalRefusals: 0
+            lastMeetTime: 0, lastMeetGameMinute: null, lastAction: null, lastActionTime: 0, lastActionGameMinute: null, totalGifts: 0, totalHelps: 0, totalAttacks: 0, totalRefusals: 0,
+            // F-18：送礼疲倦（现实式厌烦——非次数上限，而是随游戏日衰减的自身状态）
+            giftFatigue: 0, lastGiftDay: 0
         };
         this.quirks = options.quirks || [];
         this.motivations = options.motivations || [{ type: 'wealth', weight: 0.3 }, { type: 'power', weight: 0.3 }, { type: 'knowledge', weight: 0.4 }];
@@ -839,7 +841,8 @@ class NPC {
     updateRelationshipFromAction(action, result) {
         let baseChange = 0;
         switch (action) {
-            case 'gift': baseChange = 3; break;
+            // F-18：gift 的好感由 confirmGiftToNPC 直接应用（含疲倦/特质），此处不再 +3（删双重计数）
+            case 'gift': baseChange = 0; break;
             case 'help': baseChange = 5; break;
             case 'talk': baseChange = 1; break;
             case 'deep_talk': baseChange = 2; break;
@@ -988,6 +991,7 @@ class NPC {
     changeAffection(amount) {
         const oldAffection = this.relationship.affection;
         this.relationship.affection = clamp(this.relationship.affection + amount, -100, 100);
+        this.updateFavorMax(); // 0.2.4：favorMax 随好感扩（此前定义从不调用，favorMax 永远 50）
         this.updateRelationship();
     }
     
@@ -1003,9 +1007,11 @@ class NPC {
     changeLove(amount) { this.relationship.love = clamp(this.relationship.love + amount, 0, 100); }
     changeFear(amount) { this.relationship.fear = clamp(this.relationship.fear + amount, 0, 100); }
     changeHatred(amount) { this.relationship.hatred = clamp(this.relationship.hatred + amount, 0, 100); }
-    // F-19 修复：changeTrust 此前未定义，第 3499/3588 行调用 throw TypeError
-    changeTrust(amount) { this.relationship.trust = clamp((this.relationship.trust || 0) + amount, -100, 100); }
-    changeRespect(amount) { this.relationship.respect = clamp((this.relationship.respect || 0) + amount, -100, 100); }
+    // F-19：trust（信任）轨——此前分支对话 trust 选项调 changeTrust 但方法未定义致 TypeError
+    changeTrust(amount) {
+        this.relationship.trust = clamp(this.relationship.trust + amount, 0, 100);
+        this.updateRelationship();
+    }
     
     updateRelationship() {
         const rel = this.relationship;
@@ -1274,7 +1280,10 @@ class NPC {
                 _unlockedSecretDialogues: this.memory._unlockedSecretDialogues ? [...this.memory._unlockedSecretDialogues] : [],
                 // F-5 修复：爱情线冷却与告白承诺标志之前未序列化，读档冷却清零 + 前置承诺丢失，可绕过冷却直接 bond_dao
                 _loveCd: this.memory._loveCd ? {...this.memory._loveCd} : {},
-                _loveAccepted_confess: this.memory._loveAccepted_confess || false
+                _loveAccepted_confess: this.memory._loveAccepted_confess || false,
+                // F-18：送礼疲倦持久化
+                giftFatigue: this.memory.giftFatigue || 0,
+                lastGiftDay: this.memory.lastGiftDay || 0
             } : null,
             state: this.state ? {
                 mood: this.state.mood ?? 50,
@@ -1327,9 +1336,6 @@ class NPC {
             _wantedItems: this._wantedItems ? [...this._wantedItems] : null,
             introducedBy: this.introducedBy || null,
             firstImpression: this.firstImpression || null,
-            // F-19 修：v20.0 master-teach.js 字段显式持久化（旧版 serialize 逐字段列出漏了，读档后弟子培养进度全丢）
-            _cultivationProgress: Number(this._cultivationProgress) || 0,
-            _graduated: !!this._graduated,
             // P2-10: 生命周期系统存档
             protectionLevel: this._protectionLevel || null,
             criticalDays: this._criticalDays || 0,
@@ -1350,6 +1356,8 @@ class NPC {
         const npc = new NPC(data.id, data.name, { gender: data.gender, age: data.age });
         npc.location = data.location;
         npc.relationship = { ...data.relationship, flags: new Set(data.relationship.flags || []), history: data.relationship.history || [] };
+        // F-19：旧存档无 trust 字段，载入补默认 0（信任轨）
+        if (npc.relationship.trust == null) npc.relationship.trust = 0;
         // 恢复NPC之间的关系网
         if (data.relationships && data.relationships.bonds) {
             if (!npc.relationships) npc.relationships = {};
@@ -1390,9 +1398,6 @@ class NPC {
         } else {
             npc._appliedSecretEffects = {};
         }
-        // F-19 修：v20.0 master-teach.js 字段还原（旧档→默认 0/false）
-        npc._cultivationProgress = Number(data._cultivationProgress) || 0;
-        npc._graduated = !!data._graduated;
         // v13.9 恢复行囊与装备（v11.8联动的存档补全）
         if (data.inventory && Array.isArray(data.inventory.items)) {
             npc.inventory = { items: JSON.parse(JSON.stringify(data.inventory.items)), maxSlots: data.inventory.maxSlots || 10 };
@@ -1426,7 +1431,10 @@ class NPC {
                 _unlockedSecretDialogues: data.memory._unlockedSecretDialogues || [],
                 // F-5 修复：恢复爱情线冷却与告白承诺标志，否则读档后可绕过冷却直接 bond_dao
                 _loveCd: data.memory._loveCd || {},
-                _loveAccepted_confess: data.memory._loveAccepted_confess || false
+                _loveAccepted_confess: data.memory._loveAccepted_confess || false,
+                // F-18：送礼疲倦恢复
+                giftFatigue: data.memory.giftFatigue || 0,
+                lastGiftDay: data.memory.lastGiftDay || 0
             };
         }
         if (data.state) {
@@ -2282,22 +2290,13 @@ function getGreeting(npc, player) {
     if (!npc || !player) return '你好。';
 
     // ====== 特殊NPC专属问候 ======
+    // v20.4：问候自动触发已移至 showNPCDialog 的非远程分支（见该处），
+    // 此处只负责生成问候语——远程查看不该触发「她叫住了你」的事件场景。
     if (npc.id === 'sect_leader_修罗宫') {
-        const feiLeiGreeting = getFeiLeiGreeting(npc, player);
-        // v12.3.1 绯泪线回灌：问候后概率自动弹出可触发的个人事件（世界驱动，与温蘅线一致）
-        if (typeof window.maybeAutoTriggerFeiLeiEvent === 'function') {
-            try { window.maybeAutoTriggerFeiLeiEvent('greet'); } catch (e) { console.warn('[绯泪线] 自动触发失败:', e); }
-        }
-        return feiLeiGreeting;
+        return getFeiLeiGreeting(npc, player);
     }
-    // v12.3 温蘅（百花谷主）专属问候 + 自动触发个人事件（世界驱动）
     if (npc.id === 'sect_leader_百花谷') {
-        const greeting = getWenHengGreeting(npc, player);
-        // 问候后概率自动弹出可触发的个人事件（延迟，模拟"她叫住了你"）
-        if (typeof window.maybeAutoTriggerBaihuaEvent === 'function') {
-            try { window.maybeAutoTriggerBaihuaEvent('greet'); } catch (e) { console.warn('[温蘅线] 自动触发失败:', e); }
-        }
-        return greeting;
+        return getWenHengGreeting(npc, player);
     }
 
     const affection = npc.relationship?.affection || 0;
@@ -2914,7 +2913,7 @@ if (cdD > 0) {
     npc.memory._loveCd[interactionType] = dayN;
 }
 if ((interactionType === 'intimate' || interactionType === 'bond_dao') && interactionType !== '__sect__') {
-    var isSectLeader = (npcId === 'sect_leader_修罗宫' || npcId === 'sect_leader_百花谷');
+    var isSectLeader = (npcId === 'sect_leader_修罗宫' || npcId === 'sect_leader_百花谷' || npcId === 'sect_leader_天山派' || npcId === 'sect_leader_五仙教' || npcId === 'sect_leader_铸剑山庄' || npcId === 'sect_leader_药王谷' || npcId === 'sect_leader_茅山派' || npcId === 'sect_leader_金刚宗');
     if (!isSectLeader && !npc.memory._loveAccepted_confess) {
         showMessage(name + ' 后退半步，眼神认真起来：「……我们还没到那一步。」', 'warning');
         return false;
@@ -2926,19 +2925,19 @@ if (interactionType === 'intimate') {
 }
 switch (interactionType) {
         case 'express_like':
-            if (aff >= 40) { showMessage('💕 ' + name + ' 脸微红：「你……你说什么呢。」好感度+2', 'success'); npc.changeAffection(2); }
+            if (aff >= 40) { showMessage('💕 ' + name + ' 脸微红：「你……你说什么呢。」好感度+2', 'success'); npc.changeAffection(2); npc.changeLove(3); }
             else { showMessage(name + ' 皱眉：「请不要开这种玩笑。」', 'warning'); }
             break;
         case 'spend_time':
-            if (aff >= 50) { showMessage('👫 你和' + name + '一起散步赏景，心情愉悦。好感度+3', 'success'); npc.changeAffection(3); if (npc.state) npc.state.mood = Math.min(100, (npc.state.mood || 50) + 5); }
+            if (aff >= 50) { showMessage('👫 你和' + name + '一起散步赏景，心情愉悦。好感度+3', 'success'); npc.changeAffection(3); npc.changeLove(4); if (npc.state) npc.state.mood = Math.min(100, (npc.state.mood || 50) + 5); }
             else { showMessage(name + ' 婉拒：「下次吧。」', 'warning'); }
             break;
         case 'confess':
-        if (aff >= 60) { showMessage('💕 ' + name + ' 怔住了，随后低声道：「我……我需要时间考虑。」好感度+5', 'success'); npc.changeAffection(5); npc.memory._loveAccepted_confess = true; }
+        if (aff >= 60) { showMessage('💕 ' + name + ' 怔住了，随后低声道：「我……我需要时间考虑。」好感度+5', 'success'); npc.changeAffection(5); npc.changeLove(8); npc.memory._loveAccepted_confess = true; }
         else { showMessage(name + ' 摇头：「我们不合适。」', 'warning'); }
         break;
         case 'intimate':
-            if (aff >= 70) { showMessage('💕 你轻轻握住' + name + '的手，她没有拒绝。好感度+5', 'success'); npc.changeAffection(5); }
+            if (aff >= 70) { showMessage('💕 你轻轻握住' + name + '的手，她没有拒绝。好感度+5', 'success'); npc.changeAffection(5); npc.changeLove(10); }
             else { showMessage(name + ' 后退一步：「请自重。」', 'warning'); }
             break;
         case 'bond_dao':
@@ -2952,7 +2951,37 @@ switch (interactionType) {
                 showMessage('温蘅眨了眨眼，笑容一如既往：「急什么呀。」', 'info');
                 break;
             }
-            if (aff >= 80) { showMessage('💕 ' + name + ' 郑重道：「天地为证，从今往后你我便是道侣！」好感度+10', 'success'); npc.changeAffection(10); npc.setFlag('dao_companion'); }
+            // v20.2 琤霄凌：关系走向由终章「霜鸣」决定
+            if (npcId === 'sect_leader_天山派') {
+                showMessage('琤霄凌按住霜鸣的剑鞘，看了你一眼：「……霜鸣认了人，再说不迟。」', 'info');
+                break;
+            }
+            // v20.2 蓝凤凰：关系走向由终章「蝶变」决定（心蛊未化蝶前不谈道侣）
+            if (npcId === 'sect_leader_五仙教') {
+                showMessage('蓝凤凰凤目一挑，指尖银蝶一颤：「……心蛊没认主前，谈这个，是嫌我命长？」', 'info');
+                break;
+            }
+            // v20.3 冶砚：关系走向由终章「一柄为你铸的剑」决定
+            if (npcId === 'sect_leader_铸剑山庄') {
+                showMessage('冶砚挠了挠额前那缕焦黄头发，虎牙露出来：「……剑还没铸成呢，急什么。」', 'info');
+                break;
+            }
+            // v20.3 芩木：关系走向由终章「一张为你开的方」决定
+            if (npcId === 'sect_leader_药王谷') {
+                showMessage('芩木温润地笑，眼底却不达底：「……方子还没改完呢，急什么。」', 'info');
+                break;
+            }
+            // v20.3 昴既明：关系走向由终章「一道为你画的符」决定
+            if (npcId === 'sect_leader_茅山派') {
+                showMessage('昴既明清冷地看你一眼，左眼银光微动：「……符还没画完，急什么。」', 'info');
+                break;
+            }
+            // v20.3 赫渊：关系走向由终章「为你破最后一戒」决定
+            if (npcId === 'sect_leader_金刚宗') {
+                showMessage('赫渊沉静地看你一眼，唇线紧抿——修闭口禅，不开口。', 'info');
+                break;
+            }
+            if (aff >= 80) { showMessage('💕 ' + name + ' 郑重道：「天地为证，从今往后你我便是道侣！」好感度+10', 'success'); npc.changeAffection(10); npc.changeLove(20); npc.setFlag('dao_companion'); }
             else { showMessage(name + ' 沉默片刻：「对不起，我还没准备好。」', 'warning'); }
             break;
     }
@@ -3145,13 +3174,23 @@ function showNPCDialog(npcId, screen = 'main') {
     const relStatus = (typeof npc.getRelationshipStatus === 'function') ? npc.getRelationshipStatus() : null;
     const quirkMod = (typeof npc.getDialogueModifier === 'function') ? npc.getDialogueModifier() : '';
     const playerName = window.currentCharData?.name || '道友';
+    // P1-6: 远程查看不记录见面/问候
+    var isRemote = screen === 'remote';
     let greeting = ''; try { greeting = getGreeting(npc, { name: playerName }); } catch (e) { greeting = '你好。'; }
+    if (!isRemote && typeof npc.recordPlayerAction === 'function') {
     // P1-6: 远程查看不记录见面/问候
     var isRemote = screen === 'remote';
     if (!isRemote && typeof npc.recordPlayerAction === 'function') {
         if (!npc.memory.firstMet) npc.recordPlayerAction('first_meet', 'neutral');
         npc.recordPlayerAction('greet', 'neutral');
         markNPCMetNow(npc);
+        // v20.4：问候自动触发只在亲至在场时进行——远程查看不该弹出「她叫住了你」的事件场景。
+        if (npc.id === 'sect_leader_修罗宫' && typeof window.maybeAutoTriggerFeiLeiEvent === 'function') {
+            try { window.maybeAutoTriggerFeiLeiEvent('greet'); } catch (e) { console.warn('[绯泪线] 自动触发失败:', e); }
+        }
+        if (npc.id === 'sect_leader_百花谷' && typeof window.maybeAutoTriggerBaihuaEvent === 'function') {
+            try { window.maybeAutoTriggerBaihuaEvent('greet'); } catch (e) { console.warn('[温蘅线] 自动触发失败:', e); }
+        }
         // F-1.2 重构：补全 npc:talked 事件 emit。quest-system.js 事件桥监听此事件推进 talk_to_npc/talk objective
         if (window.EventBus && typeof window.EventBus.emit === 'function') {
             try { window.EventBus.emit('npc:talked', { npcId: npcId, npcName: npc.name }); } catch (e) {}
@@ -3268,7 +3307,13 @@ function showNPCDialog(npcId, screen = 'main') {
         </div>
 
         <!-- 交互快捷栏（P1-6: 远程查看时隐藏互动按钮） -->
-        ${isRemote ? '<div class="text-center text-xs text-gray-500 py-2">📡 远程查看（NPC不在当前地点，部分功能不可用）</div>' : `
+        ${isRemote ? (function(){
+            var _homeLoc = npc.location || '';
+            var _hasLine = false;
+            try { for (var _k in (window.NPC_PERSONAL_EVENTS||{})) { if (window.NPC_PERSONAL_EVENTS[_k] && window.NPC_PERSONAL_EVENTS[_k].npcId === npcId) { _hasLine = true; break; } } } catch(e){}
+            var _hint = _hasLine && _homeLoc ? '私人线需亲至「' + _homeLoc + '」方有进展。' : '部分功能不可用。';
+            return '<div class="text-center text-xs text-gray-500 py-2">📡 远程查看（' + _hint + '）</div>';
+        })() : `
         <div class="flex gap-2 mb-3 flex-wrap">
             ${recruitBtnHtml}
             <button onclick="comfortNPC('${npcId}')" class="bg-green-700/50 hover:bg-green-600/50 px-3 py-1.5 rounded text-xs text-green-300 transition-colors">🤗 安慰</button>
@@ -4272,3 +4317,4 @@ if (typeof window !== 'undefined') {
     window.checkNPCStorylines = checkNPCStorylines;
     window.showStorylineDialogue = showStorylineDialogue;
     }
+}

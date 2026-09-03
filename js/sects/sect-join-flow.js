@@ -139,7 +139,10 @@ function _startJoinDialog(sectId) {
         if (isFemale) {
             extraLine += '<br>守卫颈项微垂：「入门需经过宫主考核，你可愿意？」';
         } else {
+            // 男玩家：明拒 + 暗示有苛刻破例路径（应宫主情伤之问，非恶名）——避免玩家以为死路
             extraLine += '<br>守卫愕然瞠目：「这……公子此言不妥，还是请回吧」';
+            extraLine += '<br><span class="text-amber-400 text-xs">守卫又压低声：「不过……宫主曾立过一条不成文的规矩——凡男子答得出宫主亲出的『情伤之问』者，宫主或肯破例收留。门槛比女子苛刻得多，但确有此路。」</span>';
+            extraLine += '<br><span class="text-pink-400 text-xs">（这条路靠的是答得出她的问，不是别的——公子可愿一试？）</span>';
         }
     } else if (sect.type === '正道') {
         guardDialogue = '山门守卫打量了你一番：「这位道友，来我' + sectId + '何事？」';
@@ -160,9 +163,10 @@ function _startJoinDialog(sectId) {
         html += '<p class="text-sm text-gray-300">你向守卫说明来意，想要加入' + sectId + '。</p>';
         html += '<p class="text-sm text-gray-400">守卫点头道：「入门需经过考核，你可愿意？」</p>';
     }
-    // 修罗宫男性只能离开
+    // 修罗宫男性：可应宫主情伤之问破例（非恶名，靠答得出考题），否则离开（但有提示）
     if (sectId === '修罗宫' && !isFemale) {
         html += '<div class="flex gap-2 justify-end mt-4">';
+        html += '<button onclick="xiuluoMaleTrialAttempt()" class="bg-pink-700 hover:bg-pink-600 text-white px-4 py-2 rounded text-sm font-bold">应宫主情伤之问（求见）</button>';
         html += '<button onclick="document.getElementById(\'xianxia-modal-overlay\').remove()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">离开</button>';
         html += '</div>';
     } else {
@@ -400,7 +404,43 @@ function xiuluoAnswer4(answer) {
     
     var responseText = responses[answer] || '';
     var reactionText = reactions[answer] || '修罗女打量着你。';
-    
+
+    // 男线破例：复用同一套情伤问答，但门槛更高（≥40 通过），且无侍妾（男不可侍妾）
+    if (window._xiuluoMaleApplicant) {
+        window._xiuluoMaleApplicant = false;
+        if (xiuluoScore >= 40) {
+            setTrialResult(TRIAL_RESULT.PASS);
+            xiuluoFinalResult = 'male_exception';
+            var mhtml = '<div class="space-y-4">';
+            mhtml += '<div class="bg-gray-800/60 p-3 rounded border-l-4 border-green-500">';
+            mhtml += '<p class="text-xs text-gray-400 mb-1">🚶 修罗女：</p>';
+            mhtml += '<p class="text-sm text-gray-200 italic">' + reactionText + '</p>';
+            mhtml += '<p class="text-sm text-green-300 mt-2 italic">「……四问，你答得出来。」她许久没说话，侧身让开一步，「修罗宫不收男人——但你可以，做我的试情弟子。宫规对你更苛，你受着。」</p>';
+            mhtml += '</div>';
+            mhtml += '<p class="text-sm text-gray-300">你以「试情弟子」身份入修罗宫。这条路比女子苛刻得多——但宫主的眼，对你不同。</p>';
+            mhtml += '<div class="flex gap-2 justify-end mt-4">';
+            mhtml += '<button onclick="finishXiuluoMaleJoin()" class="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded text-sm font-bold">正式入门</button>';
+            mhtml += '</div></div>';
+            if (typeof window.showModal === 'function') window.showModal('✅ 修罗宫 · 破例', mhtml);
+        } else {
+            setTrialResult(TRIAL_RESULT.FAIL);
+            xiuluoFinalResult = 'rejected';
+            var fhtml = '<div class="space-y-4">';
+            fhtml += '<div class="bg-gray-800/60 p-3 rounded border-l-4 border-red-500">';
+            fhtml += '<p class="text-xs text-gray-400 mb-1">🚶 修罗女：</p>';
+            fhtml += '<p class="text-sm text-gray-200 italic">' + reactionText + '</p>';
+            fhtml += '<p class="text-sm text-red-300 mt-2 italic">「答不出宫主的情伤之问，便不是我要找的人。」她转身，「男子的路本就苛刻——他日想清楚了，再来。我不杀送上门的人。」</p>';
+            fhtml += '</div>';
+            fhtml += '<p class="text-sm text-gray-400">你被拒之门外——但你知道了：这条路靠的是答得出她的问，不是别的。</p>';
+            fhtml += '<div class="flex gap-2 justify-end mt-4">';
+            fhtml += '<button onclick="document.getElementById(\'xianxia-modal-overlay\').remove()" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">离开</button>';
+            fhtml += '</div></div>';
+            if (typeof window.showModal === 'function') window.showModal('❌ 修罗宫 · 落选', fhtml);
+        }
+        xiuluoScore = 0;
+        return;
+    }
+
     // 总分判定（使用 TRIAL_RESULT 枚举）
     if (xiuluoScore < 20) {
         setTrialResult(TRIAL_RESULT.FAIL);
@@ -515,6 +555,45 @@ function finishXiuluoJoin() {
         } else {
             // 普通弟子/杂役，不传特殊身份
             window.joinSect('修罗宫', null);
+        }
+    }
+}
+
+// ============ 修罗宫男线：苛刻破例（复用情伤问答考题，门槛更高） ============
+// 男玩家不可走正常女线考核；但可应宫主亲出的情伤之问（与女线同套 4 问）。
+// 男线门槛更高（≥40 通过，女线 ≥20 即可），且无侍妾（男不可侍妾）。
+// 通过 → 以「试情弟子」入派，绯泪主线对其开放；不通过 → 拒收，可他日再应。
+function xiuluoMaleTrialAttempt() {
+    document.querySelectorAll('#xianxia-modal-overlay').forEach(function(el) { el.remove(); });
+    if (typeof window.markSectLeaderMetFromTrial === 'function') window.markSectLeaderMetFromTrial('修罗宫');
+    xiuluoScore = 0;
+    window._xiuluoMaleApplicant = true; // 标记走男线破例评分（在 xiuluoAnswer4 终分处分流）
+    var html = '<div class="space-y-4">';
+    html += '<div class="bg-gray-800/60 p-3 rounded border-l-4 border-pink-500">';
+    html += '<p class="text-xs text-gray-400 mb-1">👑 修罗宫宫主 · 修罗女：</p>';
+    html += '<p class="text-sm text-gray-200 italic">你应宫主亲出的情伤之问求见。一道黑红身影不知何时立在你面前——修罗女凝眸细审，绯红眼底翻涌着你读不懂的东西。</p>';
+    html += '<p class="text-sm text-pink-300 mt-2 italic">「……男人。修罗宫不收男人。」她许久没说话，「但修罗宫收情伤。你若答得出我四问——男子的门槛更高，但我破例一次。」</p>';
+    html += '</div>';
+    html += '<p class="text-sm text-gray-400">情伤四问：为何而来、怎么看待我、可有心上人、触碰反应。答得够真，方可留下。</p>';
+    html += '<p class="text-sm text-pink-300 mt-2 italic">「你……为何而来？」</p>';
+    html += '<div class="mt-3 space-y-2">';
+    html += '<button onclick="xiuluoAnswer(\'shelter\')" class="w-full bg-pink-600 hover:bg-pink-500 text-white px-4 py-2 rounded text-sm">「求宫主收留」</button>';
+    html += '<button onclick="xiuluoAnswer(\'power\')" class="w-full bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded text-sm">「想变强」</button>';
+    html += '<button onclick="xiuluoAnswer(\'despair\')" class="w-full bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">「走投无路」</button>';
+    html += '<button onclick="xiuluoAnswer(\'curiosity\')" class="w-full bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">「不知道」</button>';
+    html += '<button onclick="document.getElementById(\'xianxia-modal-overlay\').remove()" class="w-full bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">退下</button>';
+    html += '</div></div>';
+    if (typeof window.showModal === 'function') window.showModal('🩸 修罗宫 · 破例应考', html);
+}
+
+function finishXiuluoMaleJoin() {
+    document.querySelectorAll('#xianxia-modal-overlay').forEach(function(el) { el.remove(); });
+    if (typeof window.joinSect === 'function') {
+        // 男线破例：以普通弟子身份入派（非侍妾），设 male 破例标记
+        window.joinSect('修罗宫', null);
+        if (window.discipleState) {
+            window.discipleState._maleException = true; // 标记：男破例弟子
+            window.discipleState.rankName = '试情弟子';
         }
     }
 }

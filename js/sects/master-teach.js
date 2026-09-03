@@ -61,9 +61,7 @@ function teachDisciple(npcId) {
     var npc = window.npcManager && window.npcManager.getNPC(npcId);
     if (!npc) { if (window.showMessage) window.showMessage('查无此弟子。', 'warning'); return false; }
     if (npc._graduated) { if (window.showMessage) window.showMessage(npc.name + '已出师，无需再传功。', 'info'); return false; }
-    // F-19 修：DataManager 实际挂在 window.XianXia.DataManager（不是 window.DataManager），原 guard 永远跳过 → 传功无成本
-    var _dm = (window.XianXia && window.XianXia.DataManager) || (window.DataManager);
-    if (_dm && _dm.deductSpiritStones && !_dm.deductSpiritStones(TEACH_COST)) {
+    if (window.DataManager && window.DataManager.deductSpiritStones && !window.DataManager.deductSpiritStones(TEACH_COST)) {
         if (window.showMessage) window.showMessage('传功需 ' + TEACH_COST + ' 灵石布置。', 'warning');
         return false;
     }
@@ -110,10 +108,9 @@ function tryGraduateDisciple(npcId) {
         return false;
     }
     npc._graduated = true;
-    // 一次性反哺：灵石+声望+真元（F-19 修：DataManager 实际挂在 XianXia 下）
+    // 一次性反哺：灵石+声望+真元
     var stone = 200, fame = 10, ess = 50;
-    var _dm = (window.XianXia && window.XianXia.DataManager) || (window.DataManager);
-    if (_dm && typeof _dm.addSpiritStones === 'function') _dm.addSpiritStones(stone);
+    if (window.DataManager && typeof window.DataManager.addSpiritStones === 'function') window.DataManager.addSpiritStones(stone);
     else cd.spiritStones = (cd.spiritStones || 0) + stone;
     cd.fame = Math.min(100, (cd.fame || 0) + fame);
     cd.essence = (cd.essence || 0) + ess;
@@ -143,9 +140,7 @@ function dailyGraduatedFeedback() {
         if (gradCount <= 0) return;
         var stones = gradCount * DAILY_STONE_PER_GRAD;
         var fame = gradCount * DAILY_FAME_PER_GRAD;
-        // F-19 修：DataManager 实际挂在 XianXia 下，原 guard 永远跳过 → 每日反哺失败
-        var _dm = (window.XianXia && window.XianXia.DataManager) || (window.DataManager);
-        if (_dm && typeof _dm.addSpiritStones === 'function') _dm.addSpiritStones(stones);
+        if (window.DataManager && typeof window.DataManager.addSpiritStones === 'function') window.DataManager.addSpiritStones(stones);
         else cd.spiritStones = (cd.spiritStones || 0) + stones;
         cd.fame = Math.min(100, (cd.fame || 0) + fame);
         if (window.gameLog && window.gameLog.add) {

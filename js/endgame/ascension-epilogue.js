@@ -16,12 +16,11 @@ function onAscension() {
     cd._ascensionDay = (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function')
         ? window.timeSystem.getAbsoluteDay() : 0;
     cd._unlockedTianjie = true;
-    // v20.1 自动存档：飞升是关键时刻，独立键不抢手动档
-    try { if (typeof window.doAutoSave === 'function') window.doAutoSave('ascension'); } catch (eAS) {}
     if (window.showMessage) {
         window.showMessage('🌤️ 你白日飞升，凡间信徒 ' + cd.incense + ' 人为你立祠供奉。每日香火回馈真元。', 'success');
     }
     if (window.updateCharacterStatus) window.updateCharacterStatus();
+    if (window.doAutoSave) window.doAutoSave('ascension');
 }
 
 // 每日香火反馈：飞升后，信徒每日供奉→真元（香火越旺产出越高）

@@ -734,20 +734,6 @@ var REALM_UNIQUE_EFFECTS = {
         desc: '天劫对抗，飞升之门开启，千里感知，全属性大幅提升',
         icon: '⚡',
         bonuses: { attack: 1.5, defense: 1.5, block: 25, penetrate: 25 }
-    },
-    // F-43 v20.0 1.3 飞升后世界：飞升态获得仙灵加成
-    '飞升': {
-        name: '飞升仙界',
-        desc: '飞升仙界，灵力转化为仙元，全属性再大幅提升',
-        icon: '🌟',
-        bonuses: { attack: 2.0, defense: 2.0, health: 1.5, qi: 2.0, dodge: 30, crit: 25 }
-    },
-    // F-43 v20.0 1.3 飞升后世界：金仙为飞升后最高境界
-    '金仙': {
-        name: '金仙不朽',
-        desc: '金仙之境，万劫不磨，全属性达到极诣',
-        icon: '✨',
-        bonuses: { attack: 3.0, defense: 3.0, health: 2.0, qi: 3.0, dodge: 40, crit: 35, cultivate: 1.5 }
     }
 };
 
@@ -1244,43 +1230,9 @@ function breakthroughWithHeartDemon() {
 // 规则：灵根值% = 对应功法修炼速度% = 功法发挥%
 // 无属性功法：直接返回基准值
 
-// 获取功法对应灵根元素（从 currentSkills + v15.4 藏经阁 artInsights 读取）
+// 获取功法对应灵根元素（从 currentSkills 读取）
 function _getMainTechniqueElement() {
     try {
-        // F-57 v15.4 藏经阁接线：从 artInsights 找掌握度最高的 art_xx 查 SECT_SPECIFIC_ARTS 元素
-        // v15.4 art_xx 没 elements/element 字段，按功法名"拳/剑/刀"等推断
-        var ds = window.discipleState;
-        if (ds && ds.artInsights) {
-            var best = null;
-            for (var aid in ds.artInsights) {
-                var rec = ds.artInsights[aid];
-                if (!rec || !(rec.m > 0)) continue;
-                if (!best || rec.m > best.m) best = { id: aid, m: rec.m };
-            }
-            if (best) {
-                var allArts = window.SECT_SPECIFIC_ARTS;
-                if (allArts) {
-                    for (var sn in allArts) {
-                        var arr = allArts[sn];
-                        if (!Array.isArray(arr)) continue;
-                        for (var i = 0; i < arr.length; i++) {
-                            if (arr[i].id === best.id) {
-                                // 按 type 推断：内功→金（按武林默认主修内功为金系）
-                                // 法术/符箓→火；医道/文道→木；炼体→土；剑/刀/奇门→金
-                                var atype = arr[i].type;
-                                if (/内功/.test(atype)) return 'metal';
-                                if (/法术|符箓/.test(atype)) return 'fire';
-                                if (/医道|文道/.test(atype)) return 'wood';
-                                if (/炼体/.test(atype)) return 'earth';
-                                if (/剑法|刀法|奇门|长兵|射术/.test(atype)) return 'metal';
-                                if (/拳掌|轻功/.test(atype)) return 'earth';
-                                return 'neutral';
-                            }
-                        }
-                    }
-                }
-            }
-        }
         const mainSkill = window.currentSkills && (window.currentSkills.main || window.currentSkills.neigong || window.currentSkills.inner);
         if (!mainSkill) return 'neutral';
         

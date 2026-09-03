@@ -873,10 +873,18 @@ function visitHerbGarden(city) {
 }
 
 function visitTribulationPlatform(city) {
+    var cd = window.currentCharData;
+    var realm = (cd && cd.realm) || '';
+    var tier = (typeof window.getRealmTier === 'function') ? window.getRealmTier(realm) : 0;
+    // v20.0 1.1：渡劫期满 → 触发天劫战（多波雷劫+心魔劫+护法）；此前只弹文案
+    if (tier >= 9 && typeof window.triggerHeavenlyTribulation === 'function') {
+        window.triggerHeavenlyTribulation();
+        return;
+    }
     if (window.showMessage) window.showMessage('渡劫台雷光隐现，你观摩天威，突破感悟加深', 'success');
-    if (window.currentCharData) {
-        window.currentCharData._foundationBonus = (window.currentCharData._foundationBonus || 0) + 5;
-        window.currentCharData.essence = (window.currentCharData.essence || 0) + 60;
+    if (cd) {
+        cd._foundationBonus = (cd._foundationBonus || 0) + 5;
+        cd.essence = (cd.essence || 0) + 60;
     }
 }
 

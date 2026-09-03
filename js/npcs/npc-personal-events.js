@@ -789,6 +789,7 @@ var XIULUO_EVENTS = {
         trigger: { random: 1.0 },
         cooldown: 0,
         flag: 'xl_e033_done',
+        endingMap: { '共主': 'xl_ending_共主', '归心': 'xl_ending_归心', '比邻': 'xl_ending_比邻', '归处': 'xl_ending_归处', '霜烬': 'xl_ending_霜烬', '修罗': 'xl_ending_修罗' },
         scenes: [
             { speaker: 'narrator', text: '绯泪在修罗宫大殿等你。她穿着那件绯色衣裳——不是宫主正装，而是她自己。', type: 'description' },
             { speaker: 'narrator', text: '她手里拿着那根修好的玉簪——她把断簪接上了，金线缠绕断裂处，像一道愈合的伤疤。', type: 'description' },
@@ -801,11 +802,17 @@ var XIULUO_EVENTS = {
                 { text: '「我想做你的恋人。我们一起扛。」', effect: 'lover_carry', affection: 30 },
                 { text: '「我想做你的恋人。你扛就行，我在你身边。」', effect: 'lover_rest', affection: 25 },
                 { text: '「我想做你的朋友。我们一起扛。」', effect: 'friend_carry', affection: 20 },
-                { text: '「我想做你的朋友。你扛就行，我在你身边。」', effect: 'friend_rest', affection: 15 }
+                { text: '「我想做你的朋友。你扛就行，我在你身边。」', effect: 'friend_rest', affection: 15 },
+                { text: '「我不想再和你有任何关系。从此恩断义绝。」', effect: 'break', affection: -20 }
             ]}
         ],
         effects: function(npc, choice) {
             var aff = 0, msg = '', ending = '';
+            // 霜烬兜底：累计负面选项≥5 时，恋人选项转为放手结局（与温蘅花冢/琤霄凌断鸣/蓝凤凰蛊噬同构）
+            var negCount = (window._negativeChoiceCount && window._negativeChoiceCount['sect_leader_修罗宫']) || 0;
+            if (negCount >= 5 && (choice === 'lover_carry' || choice === 'lover_rest')) {
+                return { affection: 0, msg: '她看着你，良久没动。然后她拿起那根修好的簪子——又掰断了，金线崩开，像一道愈合又被撕开的疤。「……我修好了它，等你来接。你来了，却不像来接的。」她把半截簪子放在桌上，推向你，「你我各拿一半。谁也不欠谁。」', ending: '霜烬' };
+            }
             switch (choice) {
                 case 'lover_carry':
                     aff = 30;
@@ -826,6 +833,11 @@ var XIULUO_EVENTS = {
                     aff = 15;
                     msg = '她松了口气，笑了笑：「……嗯。这样也很好。」她把簪子收好：「走吧，去吃饭。」';
                     ending = '归处';
+                    break;
+                case 'break':
+                    aff = -20;
+                    msg = '她把簪子攥在掌心，指节发白。半晌，她当着你的面把那根修好的簪子掰断——金线崩飞，断裂声很轻，却比任何一句话都重。「——你走吧。」她没回头，「以后见面，就是敌人。修罗宫从此没有绯泪——只有修罗女。」';
+                    ending = '修罗';
                     break;
             }
             return { affection: aff, msg: msg, ending: ending };
@@ -1232,9 +1244,12 @@ function markEventTriggered(eventId) {
     savePersonalEventFlags();
 }
 
-// v18.8：个人线资格统一门禁。
-// 当前个人事件池只有百花谷主/修罗宫主，两条线的叙事都发生在本门内部；
-// 因此不能只靠 UI 调用位置保证资格，底层触发函数也必须验证：已见过、本门身份、人在本门。
+// v20.4：个人线资格统一门禁（v18.8 的「须为其门下弟子」已废除）。
+// 缘由：八条感情线分踞八派，玩家同时只能入一门——若以「该派弟子身份」为门槛，
+// 除本派外的七条线永远不可达，整套多线感情（含吃醋/情敌）形同虚设。
+// 现行门槛：①与此人结识过；②人在其所在地（剧情发生在其门内，跨图无法成立）。
+// 身份类门槛（侍妾/弟子）只落在各自链的 requireConcubine / requireDisciple 上，不再整线拦人。
+// 所在地校验保留在底层：手动触发经对话面板本就同地才非远程，但自动触发（greet）不受 UI 约束，须在此守住。
 function getPersonalEventSectId(eventDef) {
     var npcId = eventDef && eventDef.npcId;
     if (typeof npcId !== 'string') return null;
@@ -1249,8 +1264,6 @@ function canPlayerAccessPersonalEvent(eventDef, npc) {
 
     var sectId = getPersonalEventSectId(eventDef);
     if (sectId) {
-        var ds = window.discipleState || {};
-        if (!ds.isInSect || ds.sectId !== sectId) return false;
         if ((window.currentCharData.location || '') !== sectId) return false;
     }
 
@@ -1259,6 +1272,28 @@ function canPlayerAccessPersonalEvent(eventDef, npc) {
     if (eventDef.requireDisciple) {
         var d = window.discipleState || {};
         if (!d.isInSect || d.sectId !== sectId || isConcubine) return false;
+    }
+    // v20.2 吃醋事件：需玩家已与另一位女主角缔结表白/道侣，否则不可触发（手动与自动均守此门）
+    if (eventDef.requireRivalRomance) {
+        if (typeof window.detectRivalRomance !== 'function') return false;
+        if (!window.detectRivalRomance(eventDef.npcId)) return false;
+    }
+    // v20.2 和好事件：需指定的前置事件（如吃醋对峙）已发生过
+    if (eventDef.requireEventDone) {
+        if (typeof hasEventTriggered !== 'function') return false;
+        if (!hasEventTriggered(eventDef.requireEventDone)) return false;
+    }
+    // v20.2 女修同修语境事件：仅女玩家可触发（同性恋情的社会语境）
+    if (eventDef.requirePlayerFemale) {
+        if (!window.currentCharData || window.currentCharData.gender !== 'female') return false;
+    }
+    // v20.2 男修追女掌门语境事件：仅男玩家可触发
+    if (eventDef.requirePlayerMale) {
+        if (!window.currentCharData || window.currentCharData.gender !== 'male') return false;
+    }
+    // v20.2 道侣回访：须已与该女主角结为道侣（dao_companion flag）
+    if (eventDef.requireDaoCompanion) {
+        if (!npc.hasFlag || !npc.hasFlag('dao_companion')) return false;
     }
     return true;
 }
@@ -1353,24 +1388,26 @@ function renderPersonalEventScene(index) {
         }
         return;
     }
-    
+
     var npc = ev.npc;
     var npcName = npc.name;
     var npcIcon = npc.appearance?.icon || '👤';
     var playerName = window.currentCharData?.name || '道友';
-    
+    var playerTa = (window.currentCharData && window.currentCharData.gender === 'female') ? '她' : '他';
+    var playerTaPoss = (window.currentCharData && window.currentCharData.gender === 'female') ? '她的' : '他的';
+
     if (scene.speaker === 'narrator') {
-        appendPEMessage('narrator', scene.text.replace(/{playerName}/g, playerName).replace(/{npc_name}/g, npcName));
+        appendPEMessage('narrator', scene.text.replace(/{playerName}/g, playerName).replace(/{npc_name}/g, npcName).replace(/{playerTa}/g, playerTa).replace(/{playerTaPoss}/g, playerTaPoss));
         ev._nextIndex = index + 1;
         setTimeout(function() { renderPersonalEventScene(ev._nextIndex); }, 350);
     } else if (scene.speaker === 'npc') {
-        appendPEMessage('npc', scene.text.replace(/{playerName}/g, playerName).replace(/{npc_name}/g, npcName), npcIcon, npcName, scene.emotion);
+        appendPEMessage('npc', scene.text.replace(/{playerName}/g, playerName).replace(/{npc_name}/g, npcName).replace(/{playerTa}/g, playerTa).replace(/{playerTaPoss}/g, playerTaPoss), npcIcon, npcName, scene.emotion);
         ev._nextIndex = index + 1;
         setTimeout(function() { renderPersonalEventScene(ev._nextIndex); }, 450);
     } else if (scene.speaker === 'player_select') {
-        var optionsHtml = '<div class="bg-gray-700/50 p-3 rounded-lg border border-gray-600"><p class="text-sm text-gray-300 mb-2">' + scene.text + '</p><div class="space-y-2">';
+        var optionsHtml = '<div class="bg-gray-700/50 p-3 rounded-lg border border-gray-600"><p class="text-sm text-gray-300 mb-2">' + scene.text.replace(/{playerName}/g, playerName).replace(/{playerTa}/g, playerTa).replace(/{playerTaPoss}/g, playerTaPoss) + '</p><div class="space-y-2">';
         scene.options.forEach(function(opt, oi) {
-            optionsHtml += '<button onclick="handlePersonalEventChoice(' + index + ',' + oi + ')" class="w-full text-left p-2.5 bg-gray-700 hover:bg-gray-600 hover:border-yellow-500 rounded-lg border border-gray-600 text-sm text-gray-200 transition-colors">' + opt.text.replace(/{playerName}/g, playerName) + '</button>';
+            optionsHtml += '<button onclick="handlePersonalEventChoice(' + index + ',' + oi + ')" class="w-full text-left p-2.5 bg-gray-700 hover:bg-gray-600 hover:border-yellow-500 rounded-lg border border-gray-600 text-sm text-gray-200 transition-colors">' + opt.text.replace(/{playerName}/g, playerName).replace(/{playerTa}/g, playerTa).replace(/{playerTaPoss}/g, playerTaPoss) + '</button>';
         });
         optionsHtml += '</div></div>';
         appendPEMessage('choice', optionsHtml);
@@ -1427,12 +1464,22 @@ window.handlePersonalEventChoice = function(sceneIndex, choiceIndex) {
     // 追加玩家选择的气泡
     var playerDiv = document.createElement('div');
     playerDiv.className = 'bg-blue-900/50 p-3 rounded-lg border-l-4 border-blue-500 ml-8';
-    playerDiv.innerHTML = '<div class="flex items-center gap-2 mb-1"><span class="text-sm font-bold text-blue-300">' + playerName + '</span></div><p class="text-gray-200 text-sm">' + choice.text.replace(/{playerName}/g, playerName) + '</p>';
+    var _ptChoice = (window.currentCharData && window.currentCharData.gender === 'female') ? '她' : '他';
+    var _ptPossChoice = (window.currentCharData && window.currentCharData.gender === 'female') ? '她的' : '他的';
+    playerDiv.innerHTML = '<div class="flex items-center gap-2 mb-1"><span class="text-sm font-bold text-blue-300">' + playerName + '</span></div><p class="text-gray-200 text-sm">' + choice.text.replace(/{playerName}/g, playerName).replace(/{playerTa}/g, _ptChoice).replace(/{playerTaPoss}/g, _ptPossChoice) + '</p>';
     ev.msgArea.appendChild(playerDiv);
     ev.msgArea.scrollTop = ev.msgArea.scrollHeight;
     
     // 应用效果
     var result = ev.eventDef.effects(npc, choice.effect);
+    // 吃醋事件：按情敌性别加一句有意思的话语（同性/异性分流）
+    if (ev.eventDef.requireRivalRomance && result && result.msg && typeof window.detectRivalRomance === 'function' && typeof window._rivalSexFlavor === 'function') {
+        var _rivalForFlavor = window.detectRivalRomance(ev.eventDef.npcId);
+        if (_rivalForFlavor && _rivalForFlavor.gender) {
+            var _flavorLine = window._rivalSexFlavor(npc, _rivalForFlavor);
+            if (_flavorLine) result.msg = _flavorLine + result.msg;
+        }
+    }
     if (result.affection && npc) {
         npc.relationship.affection = Math.max(-100, Math.min(100, (npc.relationship.affection || 0) + result.affection));
         
@@ -1612,18 +1659,15 @@ function isChainHead(ev) {
 }
 
 // ============ 获取NPC的个人事件按钮（用于对话面板显示） ============
+// v20.3 修订：不再用「首个事件测门禁，不过就整栏隐藏」的探针法——
+// 那会让异派/不在场/远程查看时整栏凭空消失，玩家不知道为什么。
+// 改为：只要有私人线就显示整栏，逐条事件各自给出锁定原因（含门派/地点/身份/性别/道侣等）。
 function getPersonalEventButtons(npc, npcId) {
     if (!npc || !npcId) return '';
-    // v18.8：游客、异派弟子、远程档案、尚未见面的NPC不展示私人事件入口。
-    var anyEvent = null;
-    for (var gateKey in NPC_PERSONAL_EVENTS) {
-        if (NPC_PERSONAL_EVENTS[gateKey] && NPC_PERSONAL_EVENTS[gateKey].npcId === npcId) { anyEvent = NPC_PERSONAL_EVENTS[gateKey]; break; }
-    }
-    if (anyEvent && !canPlayerAccessPersonalEvent(anyEvent, npc)) return '';
-    
+
     // 每次调用时尝试注入秘密（幂等，确保NPC实例已获得secrets数据）
     injectSectSecrets();
-    
+
     // 查找属于该NPC的所有个人事件
     var eventList = [];
     for (var key in NPC_PERSONAL_EVENTS) {
@@ -1633,15 +1677,20 @@ function getPersonalEventButtons(npc, npcId) {
         }
     }
     if (eventList.length === 0) return '';
-    
+
     var player = window.currentCharData || {};
     var isConcubine = player.isConcubine || window.discipleState?.isConcubine || false;
     var isDisciple = window.discipleState?.isInSect && window.discipleState?.sectId === '修罗宫' && !isConcubine;
     var affection = npc.relationship?.affection || 0;
-    
+    var homeSect = npcId.indexOf('sect_leader_') === 0 ? npcId.slice('sect_leader_'.length) : '';
+    var playerLoc = player.location || '';
+    var ds = window.discipleState || {};
+    var isConcubineOfThis = isConcubine; // 侍妾身份本就只属其门（侍妾链仅绯泪有）
+    var metNpc = !!(npc.memory && (npc.memory.firstMet === true || (npc.memory.meetCount || 0) > 0));
+
     // 统计已触发数量
     var triggeredCount = eventList.filter(function(ev) { return hasEventTriggered(ev.id); }).length;
-    
+
     // 按链分组排序：主链 E → 侍妾链 S → 弟子链 D
     var mainChain = eventList.filter(function(ev) { return getEventChain(ev) === 'main'; })
         .sort(function(a, b) { return getChainOrder(a) - getChainOrder(b); });
@@ -1649,13 +1698,17 @@ function getPersonalEventButtons(npc, npcId) {
         .sort(function(a, b) { return getChainOrder(a) - getChainOrder(b); });
     var discipleChain = eventList.filter(function(ev) { return getEventChain(ev) === 'disciple'; })
         .sort(function(a, b) { return getChainOrder(a) - getChainOrder(b); });
-    
+
     // 使用 details/summary 实现默认收起
     var html = '<details class="mb-3 group">';
     html += '<summary class="cursor-pointer select-none text-sm font-bold text-green-400 hover:text-green-300 mb-1 flex items-center gap-2">';
     html += '<span class="transition-transform group-open:rotate-90">▶</span>';
     html += '<span>📜 个人事件</span>';
     html += '<span class="text-xs text-gray-500 font-normal">（已完成 ' + triggeredCount + '/' + eventList.length + '）</span>';
+    // 未结识时在标题旁给一句总括提示，不再整栏隐藏
+    if (!metNpc) {
+        html += '<span class="text-xs text-gray-600 font-normal">· 尚未与此人结识</span>';
+    }
     html += '</summary>';
     html += '<div class="space-y-3">';
     
@@ -1670,35 +1723,63 @@ function getPersonalEventButtons(npc, npcId) {
             var chainHead = isChainHead(ev);
             var canTrigger = true;
             var reasons = [];
-            
+
+            // v20.3：原因不做短路，全部汇总——玩家一次看全要补什么。
+            // 已完成的事件只显示「已完成」，不再堆叠其他条件。
+
+            // 见识/地点前置（结识 + 人在其门内；不再要求弟子身份）
+            if (!metNpc) {
+                canTrigger = false;
+                reasons.push('尚未结识');
+            } else if (homeSect && playerLoc !== homeSect) {
+                canTrigger = false;
+                reasons.push('需亲至「' + homeSect + '」');
+            }
+
             // 链式解锁：只有链头（前一个已完成且自己未完成）才可触发
             if (!isTriggered && !chainHead) {
                 canTrigger = false;
                 reasons.push('需先完成上一个事件');
             }
-            
-            // 检查是否已触发
-            if (isTriggered) {
-                canTrigger = false;
-                reasons.push('已完成');
-            }
-            
+
             // 检查好感度
-            if (canTrigger && affection < ev.minAffection) {
+            if (!isTriggered && affection < ev.minAffection) {
                 canTrigger = false;
                 reasons.push('好感≥' + ev.minAffection + '（当前' + affection + '）');
             }
-            
+
             // 检查侍妾/弟子要求（链级）
-            if (canTrigger && getEventChain(ev) === 'concubine' && !isConcubine) {
+            if (getEventChain(ev) === 'concubine' && !isConcubineOfThis) {
                 canTrigger = false;
                 reasons.push('需要侍妾身份');
             }
-            if (canTrigger && getEventChain(ev) === 'disciple' && !isDisciple) {
+            if (getEventChain(ev) === 'disciple' && !isDisciple) {
                 canTrigger = false;
                 reasons.push('需要弟子身份');
             }
-            
+
+            // v20.2 新增门禁的逐条原因
+            if (ev.requireRivalRomance && (typeof window.detectRivalRomance !== 'function' || !window.detectRivalRomance(ev.npcId))) {
+                canTrigger = false;
+                reasons.push('需先与另一位缔结情缘');
+            }
+            if (ev.requireEventDone && (typeof hasEventTriggered !== 'function' || !hasEventTriggered(ev.requireEventDone))) {
+                canTrigger = false;
+                reasons.push('需先经历前情');
+            }
+            if (ev.requirePlayerFemale && player.gender !== 'female') {
+                canTrigger = false;
+                reasons.push('仅女修可经历');
+            }
+            if (ev.requirePlayerMale && player.gender !== 'male') {
+                canTrigger = false;
+                reasons.push('仅男修可经历');
+            }
+            if (ev.requireDaoCompanion && !(npc.hasFlag && npc.hasFlag('dao_companion'))) {
+                canTrigger = false;
+                reasons.push('需先结为道侣');
+            }
+
             // 调用 checkEventTrigger 检查其他条件（简化版）
             if (canTrigger && typeof checkEventTrigger === 'function') {
                 var evPlayer = window.currentCharData || {};
@@ -1727,14 +1808,9 @@ function getPersonalEventButtons(npc, npcId) {
     
     // 渲染主链（通用事件）
     html += renderChain(mainChain, '🎭 主线情缘');
-    // 渲染侍妾链（仅侍妾可见）
-    if (isConcubine) {
-        html += renderChain(concubineChain, '💕 侍妾专线');
-    }
-    // 渲染弟子链（仅弟子可见）
-    if (isDisciple) {
-        html += renderChain(discipleChain, '⚔️ 弟子专线');
-    }
+    // 侍妾/弟子专线：恒渲染，未达身份时逐条给「需要侍妾身份/需要弟子身份」原因（不再整栏隐藏）
+    html += renderChain(concubineChain, '💕 侍妾专线');
+    html += renderChain(discipleChain, '⚔️ 弟子专线');
     
     html += '</div></details>';
     return html;
@@ -1793,19 +1869,42 @@ function getSecretDisplayHtml(npc) {
 }
 
 // ============ 日常好感衰减机制（v12.3：扩展至所有有感情线的核心NPC） ============
+// v20.3 修订：
+//   1. 名册补齐 8 位——四男主线此前不在衰减之列，久不联系好感纹丝不动，与「感情需维系」的现实逻辑相悖。
+//   2. 互动时钟取两个真实来源中较近者：个人事件当天 / 亲至本人处见面当天（远程查看不计入，见 npc-system.js showNPCDialog 的 isRemote 分支）。
+//      旧版只认个人事件——玩家天天登门问候却因事件池空转而照样衰减，不合常理。
+//   3. 道侣不衰减：结契之盟是制度性羁绊（ registerEndingCallback 落 dao_companion 标记），非路人情分，不随未见而磨蚀。
+//   4. 默认关闭：衰减属可选难度，由设置页「难度设置 → 感情维系衰减」开关控制（window._settings.affectionDecay）。
+//      未开启时本机制完全不参与，任何好感都不会因未联系而下降。
 function checkDailyAffectionDecay() {
-    var coreIds = ['sect_leader_修罗宫', 'sect_leader_百花谷'];
+    if (!(window._settings && window._settings.affectionDecay === true)) return; // 默认不开启
+    var coreIds = ['sect_leader_修罗宫', 'sect_leader_百花谷', 'sect_leader_天山派', 'sect_leader_五仙教',
+                   'sect_leader_铸剑山庄', 'sect_leader_药王谷', 'sect_leader_茅山派', 'sect_leader_金刚宗'];
     for (var i = 0; i < coreIds.length; i++) {
         var npc = window.npcManager?.getNPC(coreIds[i]);
         if (!npc) continue;
         if ((npc.relationship?.affection || 0) <= -50) continue;
-        
+        // 道侣之盟不随未见而磨蚀
+        if (npc.hasFlag && npc.hasFlag('dao_companion')) continue;
+
         if (!window._lastInteractDay) window._lastInteractDay = {};
         var npcId = npc.id;
         var currentDay = window.timeSystem?.gameTime?.currentDay || 0;
-        var lastDay = window._lastInteractDay[npcId] || currentDay;
+        var lastDay = window._lastInteractDay[npcId] || 0;
+        // 见面当天（游戏历法）：1440 游戏分钟为一天，与 time-system.js 的 currentDay 换算一致
+        // 注意：lastMeetGameMinute 为 null 表示从未谋面，Number(null)===0 会误判成第1天见过，须显式排除
+        var totalMin = Number(window.timeSystem?.gameTime?.totalMinutes) || 0;
+        var lastMeetRaw = npc.memory ? npc.memory.lastMeetGameMinute : null;
+        if (lastMeetRaw !== null && lastMeetRaw !== undefined) {
+            var lastMeetMin = Number(lastMeetRaw);
+            if (Number.isFinite(lastMeetMin) && lastMeetMin >= 0 && totalMin >= lastMeetMin) {
+                var meetDay = Math.floor(lastMeetMin / 1440) + 1;
+                if (meetDay > lastDay) lastDay = meetDay;
+            }
+        }
+        if (lastDay <= 0) lastDay = currentDay; // 无任何互动记录（新档首日）不起算
         var daysSince = currentDay - lastDay;
-        
+
         if (daysSince >= 3 && daysSince < 7) {
             npc.relationship.affection = Math.max(-100, (npc.relationship.affection || 0) - 1);
         } else if (daysSince >= 7) {

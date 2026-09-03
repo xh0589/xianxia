@@ -483,8 +483,6 @@ function showBreakthroughResult() {
         charData.maxQi = window.getQiMax(nextIndex, 1);
         charData.qi = Math.min(charData.qi || 0, charData.maxQi);
     }
-    // v20.1 自动存档：突破成功是关键时刻，独立键不抢手动档
-    try { if (typeof window.doAutoSave === 'function') window.doAutoSave('breakthrough'); } catch (eAS) {}
 
     // 异象文本
     const phenomena = BREAKTHROUGH_PHENOMENA[nextRealm] || BREAKTHROUGH_PHENOMENA['default'];
@@ -543,6 +541,7 @@ function showBreakthroughResult() {
     // 更新UI
     if (window.updateCharacterStatus) window.updateCharacterStatus();
     if (window.showMessage) window.showMessage(`🎉 突破成功！当前境界：${nextRealm}期`, 'success');
+    if (window.doAutoSave) window.doAutoSave('breakthrough');
     // v7.1 P0-2: 突破特效
     if (typeof window.showEffect === 'function') {
         try { window.showEffect('breakthrough'); } catch (e) {}

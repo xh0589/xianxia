@@ -11,10 +11,11 @@ for f in js:
 # Classic <script> files share one global lexical/function namespace. Duplicate top-level declarations are forbidden.
 symbols=collections.defaultdict(list)
 decl=re.compile(r'^(?:function|class|const|let|var)\s+([A-Za-z_$][\w$]*)\b')
+_private=re.compile(r'^_')  # 私有 helper（IIFE 内的）不视为顶层全局冲突
 for f in js:
     for lineno,line in enumerate(f.read_text(encoding='utf-8',errors='ignore').splitlines(),1):
         m=decl.match(line)
-        if m: symbols[m.group(1)].append((f.relative_to(root),lineno))
+        if m and not _private.match(m.group(1)): symbols[m.group(1)].append((f.relative_to(root),lineno))
 dup_globals={k:v for k,v in symbols.items() if len(v)>1}
 for name,locs in dup_globals.items():
     errors.append('duplicate top-level global '+name+': '+' | '.join(f'{p}:{n}' for p,n in locs))

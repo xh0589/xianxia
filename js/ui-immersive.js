@@ -23,14 +23,16 @@ function showEffect(effectType, x, y) {
     container.style.animation = 'none';
 
     // 粒子效果
-    for (var i = 0; i < def.particles; i++) {
-        var particle = document.createElement('div');
+    for (let i = 0; i < def.particles; i++) {
+        const particle = document.createElement('div');
         particle.className = 'absolute text-2xl';
         particle.textContent = def.emoji;
-        var startX = (x || window.innerWidth / 2) + (Math.random() - 0.5) * 60;
-        var startY = (y || window.innerHeight / 2) + (Math.random() - 0.5) * 60;
-        var endX = (Math.random() - 0.5) * 120;
-        var endY = -50 - Math.random() * 100;
+        const startX = (x || window.innerWidth / 2) + (Math.random() - 0.5) * 60;
+        const startY = (y || window.innerHeight / 2) + (Math.random() - 0.5) * 60;
+        // F-37：用 let/const 使每轮迭代独立绑定，避免 var 函数级作用域导致
+        // setTimeout 闭包全部捕获最后一轮的 endX/endY（粒子全飞同一点）
+        const endX = (Math.random() - 0.5) * 120;
+        const endY = -50 - Math.random() * 100;
         particle.style.left = startX + 'px';
         particle.style.top = startY + 'px';
         particle.style.transition = 'all ' + (def.duration / 1000) + 's ease-out';

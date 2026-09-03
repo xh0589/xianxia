@@ -510,7 +510,13 @@ function equipItem(slot, item) {
             }
         } catch (e) {}
     }
-    currentEquipment[slot] = item;
+    // F-29：存浅克隆而非模板引用——防 enhancement/battle mutate 全局模板致同款装备串改
+    // （背包第二把同款玄铁剑不再显示 +5；强化/耐久挂在克隆实例上）
+    var _eqClone = Object.assign({}, item);
+    if (typeof _eqClone.enhancementLevel !== 'number') _eqClone.enhancementLevel = 0;
+    if (typeof _eqClone.refineLevel !== 'number') _eqClone.refineLevel = 0;
+    if (!_eqClone.enchantType) _eqClone.enchantType = null;
+    currentEquipment[slot] = _eqClone;
     return true;
 }
 

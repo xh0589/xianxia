@@ -781,15 +781,24 @@ function showSectDeepOverview(sectName) {
         html += '</div>';
     }
     
-    // 特殊资源
+    // 特殊资源（v20.2：地标建筑可交互）
     if (data.specialResources && data.specialResources.length > 0) {
-        html += '<h3 class="text-lg font-bold text-blue-400">🏗️ 门派资源</h3>';
+        html += '<h3 class="text-lg font-bold text-blue-400">🏗️ 门派建筑</h3>';
+        html += '<p class="text-xs text-gray-500 mb-2">建筑使用耗费精力、真气或时辰，产出随建筑而异。</p>';
         html += '<div class="space-y-2">';
         data.specialResources.forEach(function(r) {
-            html += '<div class="bg-gray-800/40 p-2 rounded border border-gray-700 flex justify-between text-xs">';
-            html += '<span class="text-gray-300">' + r.name + '</span>';
-            html += '<span class="text-green-400">产能+' + r.output + '/日</span>';
-            html += '<span class="text-gray-500">' + r.desc + '</span>';
+            var actionLabel = _sectResourceActionLabel(r.type);
+            html += '<div class="bg-gray-800/40 p-2 rounded border border-gray-700">';
+            html += '<div class="flex justify-between items-center mb-1">';
+            html += '<span class="text-gray-200 text-sm font-bold">' + (r.icon ? r.icon + ' ' : '') + r.name + '</span>';
+            html += '<span class="text-green-400 text-xs">效能 ' + r.output + '</span>';
+            html += '</div>';
+            html += '<p class="text-gray-500 text-xs mb-2">' + (r.desc || '') + '</p>';
+            if (actionLabel) {
+                html += '<button onclick="useSectResource(\'' + sectName + '\', \'' + r.id + '\')" class="w-full bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs">' + actionLabel + '</button>';
+            } else {
+                html += '<button disabled class="w-full bg-gray-700 text-gray-500 px-2 py-1 rounded text-xs cursor-not-allowed">暂无可执行动作</button>';
+            }
             html += '</div>';
         });
         html += '</div>';

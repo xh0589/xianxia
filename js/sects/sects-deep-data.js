@@ -138,7 +138,39 @@ function initSectsDeepData() {
             { id: 'yw_master_3', name: '华若兰', title: '长老', realm: '筑基', layer: 8, age: 50,
               desc: '药王谷长老，擅治疑难杂症，尤其精通毒术。', personality: '温婉沉静，心思细腻',
               skills: ['解毒术', '炼丹术', '金针渡穴'],
-              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 4, contribution: 150, medicine: 15 } }
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 4, contribution: 150, medicine: 15 } },
+            // v20.3 男主·芩木（谷主继承人，医毒双修）——与孙思邈（masters 教学线）并存；不收徒，承载秘密
+            { id: 'yw_master_4', name: '芩木', title: '谷主继承人', realm: '金丹', layer: 5, age: 28,
+              desc: '药王谷谷主继承人，人称「温润毒医」。医毒双修，性温润却眼底不达底。', personality: '温润锋芒，一诺千金',
+              skills: ['青囊经', '百毒不侵体', '金针渡穴'],
+              secrets: {
+                  'su_secret_01': {
+                      id: 'su_secret_01', title: '温润的来历',
+                      content: '芩木的温润是修行戒律——七岁那场瘟，他师父临终说「医者不能带情绪，笑一个给我看」。他笑到现在。这温润底下，藏着一场没救回来的命。',
+                      desc: '温润是戒律，也是藏毒的壳', type: 'personal',
+                      unlockConditions: [ { type: 'affection', min: 50 }, { type: 'event_completed', eventId: 'su_event_005', eventName: '旧方' } ],
+                      effects: { affectionGain: 8 }, unlocked: false
+                  },
+                  'su_secret_02': {
+                      id: 'su_secret_02', title: '他学毒的真正缘由',
+                      content: '芩木学毒，是因为他师父。师父救不了那场瘟的最后一个人，病倒走了。他若懂毒、以毒攻毒，那个人能活。他学毒，是想补上师父那场没救回来的命。',
+                      desc: '学毒是为了补那场没救回来的命',
+                      type: 'personal',
+                      unlockConditions: [ { type: 'affection', min: 65 }, { type: 'event_completed', eventId: 'su_event_008', eventName: '毒与医' } ],
+                      effects: { affectionGain: 6 },
+                      exposureRisk: { useAgainst: { affectionPenalty: -40, npcReaction: 'betrayal' } },
+                      unlocked: false
+                  },
+                  'su_secret_03': {
+                      id: 'su_secret_03', title: '十八遍方子的来历',
+                      content: '那张改到十八遍的方，本是芩木师父留下的「无效」方。他改了二十年，只为等一个能让他把「无效」改成「有效」的人。你在的那天，他改成了。',
+                      desc: '改了二十年，只为等一个人',
+                      type: 'personal',
+                      unlockConditions: [ { type: 'affection', min: 80 }, { type: 'event_completed', eventId: 'su_event_013', eventName: '终章·一张为你开的方' } ],
+                      effects: { affectionGain: 10 }, unlocked: false
+                  }
+              }
+            }
         ],
         factions: [
             { id: 'yw_faction_treat', name: '仁心派', icon: '💊', desc: '主张免费救治天下病患，广积善缘。',
@@ -377,7 +409,39 @@ function initSectsDeepData() {
             { id: 'zj_master_3', name: '莫邪', title: '大匠师', realm: '筑基', layer: 9, age: 45,
               desc: '铸剑山庄大匠师，干将之妻，铸剑技艺不输丈夫。', personality: '细致入微，精益求精',
               skills: ['铸造术', '雕刻术', '镶嵌术'], isFemale: true,
-              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 5, contribution: 200, forging: 20 } }
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 5, contribution: 200, forging: 20 } },
+            // v20.3 男主·冶砚（少庄主，铸剑师）——与欧冶子（masters 教学线）并存；不收徒，承载可解锁秘密
+            { id: 'zj_master_4', name: '冶砚', title: '少庄主', realm: '金丹', layer: 4, age: 26,
+              desc: '铸剑山庄少庄主，人称「炉火少主」。欧冶子义子，铸剑天才，性如炉火。', personality: '火性赤诚，一诺千金',
+              skills: ['天工锻诀', '炉火内功', '玄铁剑法'],
+              secrets: {
+                  'lu_secret_01': {
+                      id: 'lu_secret_01', title: '炉火秘诀的真正来源',
+                      content: '冶砚的炉火内功并非欧冶子所授，而是他幼年在炉灰里挨冻时自己悟的——他怕冷，便学着把炉火吞进丹田。这身火，是被冷逼出来的。',
+                      desc: '火是被冷逼出来的', type: 'personal',
+                      unlockConditions: [ { type: 'affection', min: 45 }, { type: 'event_completed', eventId: 'lu_event_004', eventName: '冷夜添柴' } ],
+                      effects: { affectionGain: 8 }, unlocked: false
+                  },
+                  'lu_secret_02': {
+                      id: 'lu_secret_02', title: '三年未成之剑的真相',
+                      content: '那柄铸了三年未成的剑，他照的是欧冶子之女（早夭的师姐）的虎口茧型。师姐走后，他想铸一柄她用不上的剑——剑成不了，是因为人不在了。',
+                      desc: '剑成不了，是因为等的人不在了',
+                      type: 'personal',
+                      unlockConditions: [ { type: 'affection', min: 60 }, { type: 'event_completed', eventId: 'lu_event_007', eventName: '断剑' } ],
+                      effects: { affectionGain: 6 },
+                      exposureRisk: { useAgainst: { affectionPenalty: -40, npcReaction: 'betrayal' } },
+                      unlocked: false
+                  },
+                  'lu_secret_03': {
+                      id: 'lu_secret_03', title: '他怕冷的来历',
+                      content: '冶砚五岁前的事他不记得，但欧冶子记得——那年是铸剑山庄一场炉塌，他生父母为护住一炉玄铁，把他塞进炉灰坑里。他在灰里埋了三天，活下来，从此怕冷，也从此能把炉火吞进身体。',
+                      desc: '怕冷，是因为曾在炉灰里埋了三天',
+                      type: 'personal',
+                      unlockConditions: [ { type: 'affection', min: 78 }, { type: 'event_completed', eventId: 'lu_event_008', eventName: '怕冷' } ],
+                      effects: { affectionGain: 10 }, unlocked: false
+                  }
+              }
+            }
         ],
         factions: [
             { id: 'zj_faction_traditional', name: '古法派', icon: '🔨', desc: '主张遵循古法铸剑，追求品质极致。',
@@ -406,7 +470,39 @@ function initSectsDeepData() {
             { id: 'ms_master_3', name: '诸葛青', title: '长老', realm: '筑基', layer: 8, age: 50,
               desc: '茅山派长老，精通风水堪舆，寻龙点穴。', personality: '博学多才，温文尔雅',
               skills: ['符箓术', '风水术', '阵法'],
-              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 6, contribution: 150 } }
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 6, contribution: 150 } },
+            // v20.3 男主·昴既明（伏魔首席，阴阳眼）——与茅山老祖（masters 教学线）并存；不收徒，承载秘密
+            { id: 'ms_master_4', name: '昴既明', title: '伏魔首席', realm: '金丹', layer: 5, age: 27,
+              desc: '茅山派伏魔首席，人称「阴阳道士」。天生阴阳眼，专司伏魔渡魂。', personality: '清冷寡言，见惯生死',
+              skills: ['天罡伏魔诀', '阴阳瞳', '渡魂符'],
+              secrets: {
+                  'ms_secret_01': {
+                      id: 'ms_secret_01', title: '阴阳眼的来历',
+                      content: '昴既明的阴阳眼，是他七岁那年高烧死过三天后醒来才开的。那三天他在跟看不见的人说话——被丢回来时，左眼就留着那一眼银光。',
+                      desc: '阴阳眼是被丢回来时留下的', type: 'personal',
+                      unlockConditions: [ { type: 'affection', min: 50 }, { type: 'event_completed', eventId: 'ms_event_007', eventName: '死过一次' } ],
+                      effects: { affectionGain: 8 }, unlocked: false
+                  },
+                  'ms_secret_02': {
+                      id: 'ms_secret_02', title: '未画完的渡魂符',
+                      content: '那道画了三年没画完的渡魂符，是替他师兄画的。三年前师兄伏魔魂散，他画符想聚——画不成，因为魂散了聚不回。他画着，是觉得画着，师兄就还在。',
+                      desc: '画着，是觉得他还在',
+                      type: 'personal',
+                      unlockConditions: [ { type: 'affection', min: 65 }, { type: 'event_completed', eventId: 'ms_event_005', eventName: '未画完的符' } ],
+                      effects: { affectionGain: 6 },
+                      exposureRisk: { useAgainst: { affectionPenalty: -40, npcReaction: 'betrayal' } },
+                      unlocked: false
+                  },
+                  'ms_secret_03': {
+                      id: 'ms_secret_03', title: '他为何只渡不灭',
+                      content: '昴既明只渡魂，不灭魂——哪怕对厉鬼。因为他死过那三天里，是那些看不见的「人」把他送回来的。他欠他们一条命。他渡，是还。',
+                      desc: '只渡不灭，是因为欠一条命',
+                      type: 'personal',
+                      unlockConditions: [ { type: 'affection', min: 78 }, { type: 'event_completed', eventId: 'ms_event_008', eventName: '渡你' } ],
+                      effects: { affectionGain: 10 }, unlocked: false
+                  }
+              }
+            }
         ],
         factions: [
             { id: 'ms_faction_zheng', name: '正一派', icon: '⚡', desc: '主张以天雷正法诛邪，积极降妖伏魔。',
@@ -468,7 +564,56 @@ function initSectsDeepData() {
             { id: 'ts_master_3', name: '巫行云', title: '长老', realm: '金丹', layer: 3, age: 65,
               desc: '天山派长老，性烈如火，擅长冰火双修。', personality: '性烈如火，直来直去', isFemale: true,
               skills: ['天山六阳掌', '火焰刀', '寒冰真气'],
-              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 6, contribution: 200, waterRoot: true } }
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 6, contribution: 200, waterRoot: true } },
+            // v20.2 琤霄凌：代掌门首席，剑道核心；不收徒（剑道一对一），仅承载可解锁秘密
+            { id: 'ts_master_4', name: '琤霄凌', title: '代掌门首席', realm: '金丹', layer: 5, age: 30,
+              desc: '天山派代掌门首席，江湖称"雪隐剑姬"，守师姐遗剑霜鸣十二年。', personality: '外冷内热，守一道而活', isFemale: true,
+              skills: ['天山剑诀', '霜鸣剑法', '雪隐步'],
+              secrets: {
+                  'ts_secret_01': {
+                      id: 'ts_secret_01',
+                      title: '霜鸣的裂纹',
+                      content: '霜鸣剑上那道最深的裂纹，不是岁月磨出来的——是十八岁那年，师姐琤青鸾替她挡刀时，血溅剑身，干在剑里的。她擦了十二年，擦不掉。',
+                      desc: '裂纹是师姐留的，她舍不得修',
+                      type: 'personal',
+                      unlockConditions: [
+                          { type: 'affection', min: 40 },
+                          { type: 'event_completed', eventId: 'ts_event_004', eventName: '师姐的剑' }
+                      ],
+                      effects: { affectionGain: 8 },
+                      unlocked: false
+                  },
+                  'ts_secret_02': {
+                      id: 'ts_secret_02',
+                      title: '从不拔剑的真相',
+                      content: '她从不拔霜鸣出鞘——因为师姐临终说"等我把它练成"。她练了十二年没成，便觉得是自己在拖累这柄剑。她怕拔出来，剑会怨她。',
+                      desc: '不拔剑，是因为剑还没等到被练成',
+                      type: 'personal',
+                      unlockConditions: [
+                          { type: 'affection', min: 62 },
+                          { type: 'event_completed', eventId: 'ts_event_008', eventName: '月下剑舞' }
+                      ],
+                      effects: { affectionGain: 6 },
+                      exposureRisk: {
+                          useAgainst: { affectionPenalty: -40, npcReaction: 'betrayal' }
+                      },
+                      unlocked: false
+                  },
+                  'ts_secret_03': {
+                      id: 'ts_secret_03',
+                      title: '守剑等的人',
+                      content: '霜鸣的裂纹能愈合，前提是剑认了一个人。她守剑十二年，等的不是剑成，是一个能让霜鸣出鞘、又不让它见血的人——一个配得上拔这柄剑的人。',
+                      desc: '她等的不是解药，是一个敢接剑的人',
+                      type: 'personal',
+                      unlockConditions: [
+                          { type: 'affection', min: 78 },
+                          { type: 'event_completed', eventId: 'ts_event_011', eventName: '心障' }
+                      ],
+                      effects: { affectionGain: 10 },
+                      unlocked: false
+                  }
+              }
+            }
         ],
         specialResources: [
             { id: 'ts_resource_ice', name: '天池', type: 'training', output: 18, desc: '天山顶上的灵池，水灵气充沛' },
@@ -487,14 +632,48 @@ function initSectsDeepData() {
             { id: 'jg_master_2', name: '密宗金刚', title: '护法', realm: '金丹', layer: 3, age: 50,
               desc: '金刚宗护法，身材魁梧，力大无穷。', personality: '沉默寡言，忠心护教',
               skills: ['金刚不坏神功', '大摔碑手', '龙象般若功'],
-              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 8, contribution: 250, constitution: 30 } }
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 8, contribution: 250, constitution: 30 } },
+            // v20.3 男主·赫渊（法名净渊，苦行僧）——与鸠摩智（masters 教学线）并存；不收徒，承载秘密
+            { id: 'jg_master_3', name: '赫渊', title: '法王继承人', realm: '金丹', layer: 5, age: 29,
+              desc: '金刚宗法王继承人，法名净渊，人称「苦行尊者」。修闭口禅+苦行，肉身证道。', personality: '沉默寡言，守戒极严',
+              skills: ['金刚不坏神功', '龙象般若功', '闭口禅'],
+              secrets: {
+                  'jg_secret_01': {
+                      id: 'jg_secret_01', title: '闭口禅的真正来历',
+                      content: '赫渊修闭口禅不是修行，是怕——他五岁那年师父替他挡刀而死，他哭了一夜，第二日立誓不开口，怕一开口就乱道心。闭口禅是他给自己立的戒，不是佛门的。',
+                      desc: '闭口禅是怕开口乱道心', type: 'personal',
+                      unlockConditions: [ { type: 'affection', min: 50 }, { type: 'event_completed', eventId: 'jg_event_008', eventName: '沉默的真相' } ],
+                      effects: { affectionGain: 8 }, unlocked: false
+                  },
+                  'jg_secret_02': {
+                      id: 'jg_secret_02', title: '心口旧疤的来历',
+                      content: '赫渊心口那道极旧的疤，是他五岁那年金刚塔下，有人想取他的血炼魔，他师父（一位苦行僧）替他挡的刀。师父死了。他苦行，是想把这条命还给师父。',
+                      desc: '苦行是为还师父替他挡的那条命',
+                      type: 'personal',
+                      unlockConditions: [ { type: 'affection', min: 65 }, { type: 'event_completed', eventId: 'jg_event_005', eventName: '旧伤' } ],
+                      effects: { affectionGain: 6 },
+                      exposureRisk: { useAgainst: { affectionPenalty: -40, npcReaction: 'betrayal' } },
+                      unlocked: false
+                  },
+                  'jg_secret_03': {
+                      id: 'jg_secret_03', title: '金刚线的真正含义',
+                      content: '赫渊右臂缠了二十年的金刚线，是金刚宗守戒僧的标志——也是他给自己上的枷。他缠着，是怕自己破了戒律伤了修为；解下，意味着他为人破了最后一道戒，甘愿伤修为。',
+                      desc: '解线即破最后一戒',
+                      type: 'personal',
+                      unlockConditions: [ { type: 'affection', min: 80 }, { type: 'event_completed', eventId: 'jg_event_013', eventName: '终章·为你破最后一戒' } ],
+                      effects: { affectionGain: 10 }, unlocked: false
+                  }
+              }
+            }
         ],
         factions: [
             { id: 'jg_faction_ku', name: '苦行派', icon: '🏔️', desc: '主张艰苦修行，以肉身证道。',
               leader: '鸠摩智', members: [], stance: { asceticism: 40, expansion: 10 }, influence: 50 }
         ],
         specialResources: [
-            { id: 'jg_resource_stupa', name: '金刚塔', type: 'training', output: 15, desc: '修炼金刚不坏之身的宝塔' }
+            { id: 'jg_resource_stupa', name: '金刚塔', type: 'training', output: 15, desc: '修炼金刚不坏之身的宝塔' },
+            { id: 'jg_resource_arya', name: '苦行崖', type: 'training', output: 12, desc: '苦行僧面壁断欲的悬崖，磨砺心志' },
+            { id: 'jg_resource_sutra', name: '伏魔藏', type: 'knowledge', output: 10, desc: '收藏降魔伏妖密典的石窟' }
         ]
     };
 
@@ -583,7 +762,52 @@ function initSectsDeepData() {
             { id: 'wx_master_1', name: '蓝凤凰', title: '教主', realm: '金丹', layer: 5, age: 45,
               desc: '五仙教教主，驭蛊之术天下无双。', personality: '妖媚动人，心狠手辣', isFemale: true,
               skills: ['蛊术', '毒术', '咒术'],
-              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 2, contribution: 400 } },
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 2, contribution: 400 },
+              secrets: {
+                  'wx_secret_01': {
+                      id: 'wx_secret_01',
+                      title: '心蛊的来历',
+                      content: '她锁骨下的蝶形黑纹，是十八岁那年那人死后第三日自己养出来的——那只蛊以她的真情为食，自此她再不敢动情。',
+                      desc: '动情即喂蛊，蛊成则心死',
+                      type: 'personal',
+                      unlockConditions: [
+                          { type: 'affection', min: 45 },
+                          { type: 'event_completed', eventId: 'wx_event_004', eventName: '心蛊' }
+                      ],
+                      effects: { affectionGain: 8 },
+                      unlocked: false
+                  },
+                  'wx_secret_02': {
+                      id: 'wx_secret_02',
+                      title: '忘情散的代价',
+                      content: '忘情散压得住心蛊，压不住寿元。每服一丸，她便少一岁阳寿。这十年她已少活十年——她从不在乎，直到遇见你。',
+                      desc: '续命之药，亦是催命之药',
+                      type: 'personal',
+                      unlockConditions: [
+                          { type: 'affection', min: 60 },
+                          { type: 'event_completed', eventId: 'wx_event_008', eventName: '忘情散断' }
+                      ],
+                      effects: { affectionGain: 6 },
+                      exposureRisk: {
+                          useAgainst: { affectionPenalty: -40, npcReaction: 'betrayal' }
+                      },
+                      unlocked: false
+                  },
+                  'wx_secret_03': {
+                      id: 'wx_secret_03',
+                      title: '养蛊等的人',
+                      content: '她养心蛊十八年不杀它，是因为蛊成蝶那日，便是养蛊之人能再动情之时。她等的不是蛊死，是蛊化蝶——等一个能让蛊认主的人。',
+                      desc: '她在等的，从来不是解药，是一个敢选她的人',
+                      type: 'personal',
+                      unlockConditions: [
+                          { type: 'affection', min: 78 },
+                          { type: 'event_completed', eventId: 'wx_event_011', eventName: '破蛊前夜' }
+                      ],
+                      effects: { affectionGain: 10 },
+                      unlocked: false
+                  }
+              }
+            },
             { id: 'wx_master_2', name: '毒娘子', title: '长老', realm: '金丹', layer: 3, age: 55,
               desc: '五仙教长老，精研天下奇毒。', personality: '阴冷毒辣，不近人情', isFemale: true,
               skills: ['毒术', '蛊术', '蛇行术'],
@@ -655,7 +879,10 @@ function initSectsDeepData() {
               acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 6, contribution: 200 } }
         ],
         specialResources: [
-            { id: 'bh_resource_garden', name: '百花圃', type: 'herb', output: 18, desc: '种植天下奇花的园圃' }
+            { id: 'bh_resource_garden', name: '百花圃', type: 'herb', output: 18, desc: '种植天下奇花的园圃' },
+            { id: 'bh_resource_alchemy', name: '百草庐', type: 'alchemy', output: 14, desc: '谷主亲设的炼药庐，以花入药' },
+            { id: 'bh_resource_retreat', name: '隐花径', type: 'training', output: 12, desc: '花深处的隐修炼地，花气助人定心' },
+            { id: 'bh_resource_library', name: '医典阁', type: 'knowledge', output: 10, desc: '收藏天下医书与毒经的小阁' }
         ]
     };
 

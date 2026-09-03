@@ -163,7 +163,8 @@ const scenarioEngine = {
         var p = window.currentCharData || {};
         var inv = window.inventory || {};
         if (req.realm) {
-            var lv = p.realmLevel || 0;
+            // 0.2.7：角色用 realm(字符串)+layer，无 realmLevel 字段→此前 lv 恒 0，境界门控永远 disabled
+            var lv = (typeof window.getRealmTier === 'function') ? window.getRealmTier(p.realm) : (p.realmLevel || 0);
             if (lv < req.realm) return { ok: false, msg: '境界不足' };
         }
         if (req.stones) {
@@ -337,7 +338,8 @@ function doScenarioChoice(index) {
 function closeScenarioModal() {
     var m = document.getElementById('scenario-modal');
     if (m) m.classList.add('hidden');
-    if (window.scenarioEngine) window.scenarioEngine.cancel();
+    // 0.2.7：关闭只隐藏弹窗，保留 progress 供续关（此前调 cancel() 删 progress 致续关路径形同虚设）
+    // 显式"放弃"才应调 scenarioEngine.cancel()
 }
 
 // 初始化

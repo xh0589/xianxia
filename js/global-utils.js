@@ -221,16 +221,6 @@ window.XianXia = window.XianXia || {};
                 charData.copper = Math.max(0, amount);
             }
         },
-        // F-19 补：v20.0.2 F-17 修复时漏了 addCopper/deductCopper → 铜钱写入单源致双源不一致
-        addCopper(amount) {
-            this.setCopper(this.getCopper() + amount);
-        },
-        deductCopper(amount) {
-            const cur = this.getCopper();
-            if (cur < amount) return false;
-            this.setCopper(cur - amount);
-            return true;
-        },
 
         // 获取玩家属性（统一从 currentCharData 读取）
         getCharAttr(key) {
@@ -453,17 +443,6 @@ window.XianXia = window.XianXia || {};
         window.syncCharAttrsFromMain(data);
         // v13.1 绝技兜底：任何角色数据入口都保证 combatAbilities 为数组
         if (!Array.isArray(data.combatAbilities)) data.combatAbilities = [];
-        // F-13 完整版：旧存档字段兜底（新创建角色由 collectCharacterData 完整初始化）
-        if (!data.bonds) data.bonds = {};
-        if (!Array.isArray(data._children)) data._children = [];
-        if (typeof data.realm !== 'string') data.realm = '炼气';
-        if (!data.layer) data.layer = 1;
-        if (!data.level) data.level = 1;
-        if (data.exp == null) data.exp = 0;
-        if (data.spiritStones == null) data.spiritStones = 100;
-        if (data.day == null) data.day = 1;
-        if (typeof data._masterId === 'undefined') data._masterId = null;
-        if (!data.currentMap) data.currentMap = 'main';
         window.currentCharData = data;
         // 若 app 暴露了赋值钩子则同步（见 app.js）
         if (typeof window._setAppCurrentCharData === 'function') {

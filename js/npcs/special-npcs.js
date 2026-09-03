@@ -497,6 +497,114 @@ var SPECIAL_NPC_DEFINITIONS = {
         isFemale: true,
         _isFixedDefinition: true
     },
+    // v20.3 男主·冶砚（铸剑山庄少庄主，铸剑师）——火性赤诚，与欧冶子（masters 教学线）并存
+    'sect_leader_铸剑山庄': {
+        name: '冶砚',
+        trueName: '冶砚',
+        title: '炉火少主',
+        gender: 'male',
+        age: 26,
+        occupation: '少庄主',
+        location: '铸剑山庄',
+        icon: '🔥',
+        appearance: { hair: '黑发短束，额前一缕被火烤得焦黄', eyes: '深琥珀，炉火映得发亮', clothing: '皮质铸剑围裙，袖口常年熏黑', features: '眉骨一道浅烫疤，笑起来露虎牙' },
+        background: {
+            origin: '孤儿→铸剑山庄',
+            family: '欧冶子义子（生父母不详）',
+            history: '五岁被欧冶子从炉灰里捡回，自幼在炉前长大。铸剑天赋惊人，二十岁已成庄中第一铸剑师。性如炉火，直来直去，不擅言辞；一诺千金。怕冷却从不说',
+            goal: '铸出一柄配得上「天下第一」的剑，找到配得上这柄剑的人',
+            secret: '炉火秘诀的真正来源；他怕冷的来历；为谁铸了三年未成的剑'
+        },
+        personalityBig5: { openness: 60, conscientiousness: 78, extraversion: 58, agreeableness: 65, neuroticism: 40 },
+        mainAttributes: { strength: 70, dexterity: 75, intelligence: 65, willpower: 80, constitution: 75, meridian: 70 },
+        combatSkills: { 内功: 75, 轻功: 60, 绝技: 72, 剑法: 78, 拳掌: 65, 刀法: 55, 长兵: 60, 奇门: 40, 射术: 30 },
+        combat: { level: 72, realm: '金丹', layer: 4, attack: 76, defense: 68, speed: 65 },
+        skills: ['天工锻诀', '炉火内功', '玄铁剑法'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 60, stress: 28 },
+        _isFixedDefinition: true
+    },
+    // v20.3 男主·芩木（药王谷谷主继承人，医毒双修）——温润锋芒，与孙思邈（masters 教学线）并存
+    'sect_leader_药王谷': {
+        name: '芩木',
+        trueName: '芩木',
+        title: '温润毒医',
+        gender: 'male',
+        age: 28,
+        occupation: '谷主继承人',
+        location: '药王谷',
+        icon: '🌿',
+        appearance: { hair: '墨黑长发松松绾起，簪一支药草', eyes: '浅褐，温润如茶汤', clothing: '青白药袍，袖口常年染着药渍', features: '眉目温润，笑起来眼底却不达底' },
+        background: {
+            origin: '医家遗孤→药王谷',
+            family: '药王谷老谷主之徒（父母为医者，死于瘟）',
+            history: '七岁入药王谷，医术天赋惊人，二十岁已能独当一面。性温润，话不多但句句到点；笑得温润却眼底不达底——温润是修行的戒律，也是藏毒的壳',
+            goal: '医该医的人，毒该毒的人，分清这两者',
+            secret: '温润的来历；他学毒的真正缘由；那张救不活的人的旧方'
+        },
+        personalityBig5: { openness: 72, conscientiousness: 82, extraversion: 45, agreeableness: 70, neuroticism: 52 },
+        mainAttributes: { strength: 50, dexterity: 78, intelligence: 88, willpower: 75, constitution: 62, meridian: 80 },
+        combatSkills: { 内功: 76, 轻功: 70, 绝技: 74, 剑法: 45, 拳掌: 40, 刀法: 25, 长兵: 35, 奇门: 80, 射术: 30 },
+        combat: { level: 70, realm: '金丹', layer: 5, attack: 68, defense: 65, speed: 72 },
+        skills: ['青囊经', '百毒不侵体', '金针渡穴'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 58, stress: 32 },
+        _isFixedDefinition: true
+    },
+    // v20.3 男主·昴既明（茅山派青年符箓伏魔道士，阴阳眼）——与茅山老祖（masters 教学线）并存
+    'sect_leader_茅山派': {
+        name: '昴既明',
+        trueName: '昴既明',
+        title: '阴阳道士',
+        gender: 'male',
+        age: 27,
+        occupation: '伏魔首席',
+        location: '茅山派',
+        icon: '🪔',
+        appearance: { hair: '墨黑长发松挽，插一支桃木簪', eyes: '右眼深褐，左眼底泛极淡的银——阴阳眼', clothing: '玄青道袍，袖口藏朱砂', features: '眉目清冷如月光，眉心一道朱砂点' },
+        background: {
+            origin: '荒村孤儿→茅山派',
+            family: '不详（自幼被茅山老祖捡回）',
+            history: '七岁那年高烧险死，醒来后开了阴阳眼，能见鬼神。茅山老祖收为关门弟子，专司伏魔渡魂。性冷淡寡言——见惯生死鬼神的人，话少。执拗于「渡」与「灭」之分',
+            goal: '渡该渡的魂，灭该灭的魔，分清这两者',
+            secret: '阴阳眼的来历（他幼时死过一次）；一道画了三年没画完的渡魂符；他为何只渡不灭'
+        },
+        personalityBig5: { openness: 68, conscientiousness: 85, extraversion: 28, agreeableness: 58, neuroticism: 48 },
+        mainAttributes: { strength: 52, dexterity: 76, intelligence: 85, willpower: 82, constitution: 60, meridian: 78 },
+        combatSkills: { 内功: 78, 轻功: 70, 绝技: 75, 剑法: 50, 拳掌: 38, 刀法: 30, 长兵: 35, 奇门: 92, 射术: 35 },
+        combat: { level: 71, realm: '金丹', layer: 5, attack: 70, defense: 66, speed: 68 },
+        skills: ['天罡伏魔诀', '阴阳瞳', '渡魂符'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 52, stress: 30 },
+        _isFixedDefinition: true
+    },
+    // v20.3 男主·赫渊（法名净渊，金刚宗苦行僧）——与鸠摩智（masters 教学线）并存
+    'sect_leader_金刚宗': {
+        name: '赫渊',
+        trueName: '赫渊',
+        title: '苦行尊者',
+        gender: 'male',
+        age: 29,
+        occupation: '法王继承人',
+        location: '金刚宗',
+        icon: '📿',
+        appearance: { hair: '光头，戒疤九点', eyes: '深黑沉静，像井', clothing: '灰色苦行僧衣，右臂袒露缠着金刚线', features: '眉目端正庄严，唇线紧抿——修闭口禅' },
+        background: {
+            origin: '弃婴→金刚宗',
+            family: '不详（襁褓弃于金刚塔下）',
+            history: '弃婴被金刚宗收，自幼修苦行+闭口禅，炼体大成。法名净渊。性沉默——闭口禅多年，开口字字千金。守戒极严，肉身苦行，直至动情破戒',
+            goal: '以肉身证道，还清欠的一段命',
+            secret: '他破过一次戒（为谁）；苦行是为还一段命；闭口禅的真正来历'
+        },
+        personalityBig5: { openness: 50, conscientiousness: 90, extraversion: 15, agreeableness: 62, neuroticism: 55 },
+        mainAttributes: { strength: 88, dexterity: 60, intelligence: 72, willpower: 90, constitution: 92, meridian: 70 },
+        combatSkills: { 内功: 80, 轻功: 55, 绝技: 78, 剑法: 40, 拳掌: 92, 刀法: 50, 长兵: 45, 奇门: 30, 射术: 25 },
+        combat: { level: 73, realm: '金丹', layer: 5, attack: 80, defense: 85, speed: 58 },
+        skills: ['金刚不坏神功', '龙象般若功', '闭口禅'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 50, stress: 34 },
+        _isFixedDefinition: true
+    },
     'sect_leader_少林寺': {
         name: '释玄慈',
         gender: 'male',
@@ -531,6 +639,64 @@ var SPECIAL_NPC_DEFINITIONS = {
         skills: ['太极拳', '太极剑', '纯阳无极功'],
         relationship: { affection: 15, trust: 10, respect: 0, favor: 0 },
         state: { mood: 65, stress: 10 },
+        _isFixedDefinition: true
+    },
+    // v20.2 天山派剑修·琤霄凌（人称"雪隐剑姬"）——外冷内热剑修感情线核心NPC
+    // 与天山童姥（SECT_DEEP_DATA masters 掌门）并存：童姥隐修，霄凌代掌天山日常、为剑道首席
+    'sect_leader_天山派': {
+        name: '琤霄凌',
+        trueName: '琤霄凌',       // 真名即琤霄凌，江湖称号"雪隐剑姬"
+        title: '雪隐剑姬',
+        gender: 'female',
+        age: 30,                // 修为驻颜，外貌如二十许人
+        occupation: '代掌门首席',
+        location: '天山派',
+        icon: '❄️',
+        appearance: { hair: '银白长发高束，以一根素银簪绾住', eyes: '浅冰蓝，看人时像在量一柄剑', clothing: '霜白窄袖剑衣', features: '眉目清冷如雪后初晴，右腕常年缠一道束剑的素绫' },
+        background: {
+            origin: '北地寒门→天山派',
+            family: '寒门孤女（父母早亡）',
+            history: '八岁入天山，与师姐琤青鸾相依。十八岁那年天魔袭击天山，师姐以己身挡下她致命一击、血溅霜鸣剑。此后她再不笑、只守剑。二十六岁代童姥掌天山日常，江湖称"雪隐剑姬"',
+            goal: '守好师姐留下的霜鸣，守住天山，等一个配得上拔霜鸣的人',
+            secret: '霜鸣剑的真正来历；她为何从不拔剑出鞘；守剑二十年无人知她其实在等一句"你可以放下了"'
+        },
+        personalityBig5: { openness: 55, conscientiousness: 88, extraversion: 22, agreeableness: 40, neuroticism: 58 },
+        mainAttributes: { strength: 62, dexterity: 88, intelligence: 80, willpower: 85, constitution: 60, meridian: 82 },
+        combatSkills: { 内功: 80, 轻功: 78, 绝技: 72, 剑法: 92, 拳掌: 40, 刀法: 25, 长兵: 50, 奇门: 45, 射术: 30 },
+        combat: { level: 74, realm: '金丹', layer: 5, attack: 78, defense: 66, speed: 82 },
+        skills: ['天山剑诀', '霜鸣剑法', '雪隐步'],
+        relationship: { affection: 12, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 42, stress: 35 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+    // v20.2 五仙教教主·蓝凤凰——妖媚蛊女感情线核心NPC
+    // 五仙教本为母系，教主历代皆女；与 SECT_DEEP_DATA masters 教主「蓝凤凰」同名（秘密按名注入，一致）
+    'sect_leader_五仙教': {
+        name: '蓝凤凰',
+        trueName: '蓝凤凰',       // 江湖称号"蛊仙"
+        title: '蛊仙',
+        gender: 'female',
+        age: 28,
+        occupation: '教主',
+        location: '五仙教',
+        icon: '🦋',
+        appearance: { hair: '乌黑长发松松挽起，插一支银蝶簪', eyes: '狭长凤目，眼尾微挑', clothing: '靛蓝苗银绣蛊纹窄袖衣', features: '妖媚入骨，行走间似有蝶影随行' },
+        background: {
+            origin: '苗疆五仙教圣女→教主',
+            family: '五仙教历代母系传承',
+            history: '十岁养出第一只本命蛊，十五岁继圣女位。十八岁那年动了凡情，所养「心蛊」嗜她真情、几欲破壳反噬——她亲手以忘情散断了那段情，自此再不近人。二十六岁接掌教主，江湖称"蛊仙"',
+            goal: '守住心蛊不破，守住五仙教，不让任何人再因情蛊而死',
+            secret: '心蛊的真正来历；她为何妖媚却从不动情；以忘情散续命的代价'
+        },
+        personalityBig5: { openness: 70, conscientiousness: 65, extraversion: 65, agreeableness: 35, neuroticism: 60 },
+        mainAttributes: { strength: 55, dexterity: 82, intelligence: 85, willpower: 70, constitution: 58, meridian: 80 },
+        combatSkills: { 内功: 78, 轻功: 75, 绝技: 88, 剑法: 50, 拳掌: 35, 刀法: 30, 长兵: 40, 奇门: 90, 射术: 25 },
+        combat: { level: 76, realm: '金丹', layer: 5, attack: 72, defense: 64, speed: 80 },
+        skills: ['万蛊诀', '蝶影步', '忘情散'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 55, stress: 30 },
+        isFemale: true,
         _isFixedDefinition: true
     },
     // v12.3 百花谷谷主·温蘅（人称"花仙子"）——温柔医者感情线核心NPC

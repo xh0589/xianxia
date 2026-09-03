@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>仙路长青</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗡️</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -12,6 +12,14 @@
         }
     </script>
     <link rel="stylesheet" href="styles.css">
+    <style>
+    /* v20.1 移动端适配：触屏友好 + 窄屏弹窗适配 */
+    button, .nav-item, [onclick] { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+    @media (max-width: 768px) {
+        body { font-size: 14px; }
+        .fixed.inset-0 > div { max-width: 95vw !important; }
+    }
+    </style>
 </head>
 <body class="p-2 md:p-4 min-h-screen">
 
@@ -49,51 +57,6 @@
                             <div class="gender-option flex-1 bg-gray-800 border-2 border-gray-600 rounded-lg p-4 text-center" id="gender-female" onclick="selectGender('female')">
                                 <div class="gender-indicator mr-2 align-middle"></div>
                                 <span class="text-lg ml-1">♀ 女</span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- v20.1 开局出身 + 天赋（对标鬼谷八荒）-->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
-                        <label class="block text-lg font-bold text-gray-300 mb-3"><span class="text-yellow-500 mr-2">✦</span>出身</label>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div class="origin-option bg-gray-800 border-2 border-gray-600 rounded-lg p-3 cursor-pointer hover:border-yellow-500 transition" data-origin="humble" onclick="selectOrigin('humble')">
-                                <div class="text-2xl mb-1">🌾</div><div class="text-sm font-bold text-yellow-400">寒门子弟</div>
-                                <div class="text-xs text-gray-400 mt-1">铜钱+200 气运+5 历练+10</div>
-                            </div>
-                            <div class="origin-option bg-gray-800 border-2 border-gray-600 rounded-lg p-3 cursor-pointer hover:border-yellow-500 transition" data-origin="noble" onclick="selectOrigin('noble')">
-                                <div class="text-2xl mb-1">🏯</div><div class="text-sm font-bold text-yellow-400">世家子弟</div>
-                                <div class="text-xs text-gray-400 mt-1">灵石+300 铜钱+1000 名声+30</div>
-                            </div>
-                            <div class="origin-option bg-gray-800 border-2 border-gray-600 rounded-lg p-3 cursor-pointer hover:border-yellow-500 transition" data-origin="wanderer" onclick="selectOrigin('wanderer')">
-                                <div class="text-2xl mb-1">🌿</div><div class="text-sm font-bold text-yellow-400">散修传人</div>
-                                <div class="text-xs text-gray-400 mt-1">灵石+50 历练+30</div>
-                            </div>
-                            <div class="origin-option bg-gray-800 border-2 border-gray-600 rounded-lg p-3 cursor-pointer hover:border-yellow-500 transition" data-origin="exile" onclick="selectOrigin('exile')">
-                                <div class="text-2xl mb-1">⚔️</div><div class="text-sm font-bold text-yellow-400">弃徒之后</div>
-                                <div class="text-xs text-gray-400 mt-1">名声-20 历练+60</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
-                        <label class="block text-lg font-bold text-gray-300 mb-3"><span class="text-yellow-500 mr-2">✦</span>天赋（永久，选一）</label>
-                        <div class="grid grid-cols-3 gap-2">
-                            <div class="talent-option bg-gray-800 border-2 border-gray-600 rounded-lg p-2 cursor-pointer hover:border-yellow-500 transition text-center" data-talent="sword" onclick="selectTalent('sword')">
-                                <div class="text-xl">🗡️</div><div class="text-xs font-bold text-yellow-400">剑骨</div><div class="text-[10px] text-gray-500">攻+10%</div>
-                            </div>
-                            <div class="talent-option bg-gray-800 border-2 border-gray-600 rounded-lg p-2 cursor-pointer hover:border-yellow-500 transition" data-talent="iron" onclick="selectTalent('iron')">
-                                <div class="text-xl">🛡️</div><div class="text-xs font-bold text-yellow-400">铁骨</div><div class="text-xs text-gray-500">防+10%</div>
-                            </div>
-                            <div class="talent-option bg-gray-800 border-2 border-gray-600 rounded-lg p-2 cursor-pointer hover:border-yellow-500 transition" data-talent="qi" onclick="selectTalent('qi')">
-                                <div class="text-xl">✨</div><div class="text-xs font-bold text-outline">灵机</div><div class="text-[10px] text-gray-500">真元+10%</div>
-                            </div>
-                            <div class="talent-option bg-gray-800 border-2 border-gray-600 rounded-lg p-2 cursor-pointer hover:border-yellow-500 transition" data-talent="dao" onclick="selectTalent('dao')">
-                                <div class="text-xl">🫣</div><div class="text-xs font-bold text-yellow-400">道心</div><div class="text-[10px] text-gray-500">走火-30%</div>
-                            </div>
-                            <div class="talent-option bg-gray-800 border-2 border-gray-600 rounded-lg p-2 cursor-pointer hover:border-yellow-500 transition" data-talent="luck" onclick="selectTalent('luck')">
-                                <div class="text-xl">🍀</div><div class="text-xs font-bold text-yellow-400">福星</div><div class="text-xs text-gray-500">气运+15</div>
                             </div>
                         </div>
                     </div>
@@ -322,6 +285,12 @@
                             <p class="text-xs text-gray-500" id="realm-essence-display">真元: 0/30</p>
                             <p class="text-xs text-gray-500" id="realm-tempering-display">历练: 0/5</p>
                             <p class="text-xs text-purple-400 mt-1" id="char-abilities-display">绝技: 无</p><!-- v13.1 绝技行 -->
+                            <div class="flex flex-wrap gap-1 mt-2 justify-center">
+                                <button onclick="openMainStoryPanel()" class="text-[10px] bg-purple-600 hover:bg-purple-500 text-white px-2 py-1 rounded">📜主线</button>
+                                <button onclick="openDisciplePanel()" class="text-[10px] bg-yellow-700 hover:bg-yellow-600 text-white px-2 py-1 rounded">🧑‍🎓弟子</button>
+                                <button onclick="openFireQTE()" class="text-[10px] bg-orange-600 hover:bg-orange-500 text-white px-2 py-1 rounded">🔥火候</button>
+                                <button onclick="openBountyBoard()" class="text-[10px] bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-2 py-1 rounded">📜悬赏</button>
+                            </div>
                         </div>
                         <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 text-center">
                             <p class="text-xs text-gray-400 mb-1">📍 所在地</p>
@@ -552,6 +521,8 @@
                                     data-filter-key="isCompanion" onclick="toggleRelationsFilter('isCompanion')">👫同行</button>
                                 <button class="relations-filter-btn text-xs px-2 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 transition"
                                     data-filter-key="specialRelation" onclick="toggleRelationsFilter('specialRelation')">💕特殊关系</button>
+                                <button class="relations-filter-btn text-xs px-2 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 transition"
+                                    data-filter-key="isRomance" onclick="toggleRelationsFilter('isRomance')">💗情缘</button>
                             </div>
                             <div id="relations-npc-list" class="space-y-2">
                                 <!-- 动态渲染 -->
@@ -1110,10 +1081,23 @@
                     <div id="save-slots" class="space-y-3">
                         <p class="text-gray-500 text-sm text-center">暂无存档记录</p>
                     </div>
+                    <div class="border-t border-gray-600 pt-4 mt-4">
+                        <h4 class="text-sm font-bold text-green-400 mb-2">⚡ 自动存档（每7天 / 突破成功 / 飞升 / 转世）</h4>
+                        <p class="text-xs text-gray-600 mb-2" id="last-auto-save-time">上次自动保存: --</p>
+                        <div id="auto-save-slots" class="space-y-2"></div>
+                    </div>
                 </div>
 
                 <div class="bg-gray-700/30 p-6 rounded-lg border border-gray-600">
                     <h3 class="text-lg font-bold text-yellow-500 mb-4 border-b border-gray-600 pb-2">🎮 游戏设置</h3>
+                    <div class="border-b border-gray-600 pb-3 mb-3">
+                        <p class="text-sm text-gray-300 font-bold mb-1">⌨️ 键盘快捷键</p>
+                        <p class="text-xs text-gray-500">C角色 B背包 M地图 K功法 Q任务 E装备 H洞府 G灵兽 D日程 · Esc 关闭弹窗/战斗 · 空格 战斗继续</p>
+                    </div>
+                    <label class="flex items-center justify-between text-sm text-gray-300 cursor-pointer">
+                        <span>🔊 音效提示（突破/战斗/收火/炼丹/任务）</span>
+                        <input type="checkbox" id="setting-sfx" checked onchange="toggleSfx()" class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-600">
+                    </label>
                     <div class="space-y-4">
                         <label class="flex items-center justify-between text-sm text-gray-300 cursor-pointer">
                             <span>进城时显示城市介绍</span>
@@ -1127,18 +1111,30 @@
                             </label>
                             <p class="text-xs text-gray-600 mt-1" id="last-save-time">上次保存: --</p>
                         </div>
-                        <!-- v12.4 战斗难度条件栏（点击展开三档详情） -->
+                        <!-- v20.3 难度设置（战斗难度 + 感情维系衰减） -->
                         <div class="border-t border-gray-600 pt-4 mt-4">
-                            <div class="flex items-center justify-between text-sm text-gray-300 cursor-pointer select-none" onclick="toggleDifficultyDetail()">
-                                <span>⚔️ 战斗难度</span>
-                                <span class="flex items-center gap-2">
-                                    <span id="difficulty-current-label" class="text-xs text-gray-400">标准 🔵</span>
-                                    <span id="difficulty-expand-arrow" class="text-xs text-gray-500">▶</span>
-                                </span>
+                            <p class="text-sm font-bold text-gray-300 mb-2">🎚️ 难度设置</p>
+                            <!-- 战斗难度 -->
+                            <div class="pl-3 border-l-2 border-gray-700">
+                                <div class="flex items-center justify-between text-sm text-gray-300 cursor-pointer select-none" onclick="toggleDifficultyDetail()">
+                                    <span>⚔️ 战斗难度</span>
+                                    <span class="flex items-center gap-2">
+                                        <span id="difficulty-current-label" class="text-xs text-gray-400">标准 🔵</span>
+                                        <span id="difficulty-expand-arrow" class="text-xs text-gray-500">▶</span>
+                                    </span>
+                                </div>
+                                <div id="difficulty-detail" class="hidden mt-3">
+                                    <p class="text-xs text-gray-500 mb-2">影响敌方伤害、危急救治窗口与要害部位伤害，切换后立即生效并保存。</p>
+                                    <div id="difficulty-cards" class="grid grid-cols-1 sm:grid-cols-3 gap-2"></div>
+                                </div>
                             </div>
-                            <div id="difficulty-detail" class="hidden mt-3">
-                                <p class="text-xs text-gray-500 mb-2">影响敌方伤害、危急救治窗口与要害部位伤害，切换后立即生效并保存。</p>
-                                <div id="difficulty-cards" class="grid grid-cols-1 sm:grid-cols-3 gap-2"></div>
+                            <!-- 感情维系衰减（默认关闭） -->
+                            <div class="pl-3 border-l-2 border-gray-700 mt-3">
+                                <label class="flex items-center justify-between text-sm text-gray-300 cursor-pointer">
+                                    <span>💞 感情维系衰减</span>
+                                    <input type="checkbox" id="setting-affection-decay" onchange="toggleAffectionDecay()" class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-600">
+                                </label>
+                                <p class="text-xs text-gray-600 mt-1">开启后，与有感情线的对象久不联系（≥3 天）好感会逐渐下降；道侣不受影响。默认关闭。</p>
                             </div>
                         </div>
                     </div>
@@ -1659,6 +1655,21 @@
     <script src="js/npcs/baihua-events-main.js"></script>
     <script src="js/npcs/baihua-events-extra.js"></script>
     <script src="js/npcs/baihua-personal-events.js"></script>
+    <script src="js/npcs/tianshan-events.js"></script>
+    <script src="js/npcs/wuxian-events.js"></script>
+    <script src="js/npcs/heroine-rivalry.js"></script>
+    <script src="js/npcs/heroine-rivalry-bridge.js"></script>
+    <script src="js/npcs/heroine-female-context.js"></script>
+    <script src="js/npcs/heroine-male-context.js"></script>
+    <script src="js/npcs/zhujian-events.js"></script>
+    <script src="js/npcs/yaowang-events.js"></script>
+    <script src="js/npcs/maoshan-events.js"></script>
+    <script src="js/npcs/jingang-events.js"></script>
+    <script src="js/npcs/male-lead-rivalry.js"></script>
+    <script src="js/npcs/male-lead-reconcile.js"></script>
+    <script src="js/npcs/male-lead-bridge.js"></script>
+    <script src="js/npcs/male-lead-aftermath.js"></script>
+    <script src="js/npcs/heroine-aftermath.js"></script>
     <script src="js/relations-panel.js"></script>
     <!-- 飞鸽传书系统 v12.0 -->
     <script src="js/mail-system.js"></script>
@@ -1675,6 +1686,7 @@
     <script src="js/sects/sect-events.js"></script>
     <script src="js/sects/dao-companion-deep.js"></script>
     <script src="js/sects/sects-deep-ui.js"></script>
+    <script src="js/sects/sect-resource-actions.js"></script>
     <script src="js/sects/sect-wudang-deep.js"></script>
 
     <!-- 第10层：v6.0+ 新增系统 -->
@@ -1746,13 +1758,13 @@
     <script src="js/core/karma-retribution.js"></script>
     <script src="js/sects/master-teach.js"></script>
     <script src="js/world/solar-terms.js"></script>
-    <!-- v20.1 补充：市面对标补缺（自动存档+主线多阶段Boss+出身天赋+快捷键+火候QTE+音效+弟子培养重写）-->
     <script src="js/core/auto-save.js"></script>
     <script src="js/quest/main-storyline-arc.js"></script>
-    <script src="js/core/origin-talent.js"></script>
+    <!-- 出身/天赋系统已按需求移除（见 禁止设计.md） -->
     <script src="js/core/keyboard-shortcuts.js"></script>
     <script src="js/crafting/fire-qte.js"></script>
     <script src="js/core/audio-synth.js"></script>
+    <script src="js/quest/bounty-board.js"></script>
     
     <!-- 第14层：v9.0 情境引擎 + 第二批设施 -->
     <script src="js/core/scenario-engine.js"></script>

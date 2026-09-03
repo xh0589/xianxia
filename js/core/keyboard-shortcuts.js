@@ -86,11 +86,8 @@ window.getKeyboardShortcuts = function () {
         { key: 'K', desc: '功法' },
         { key: 'Q', desc: '任务' },
         { key: 'E', desc: '装备' },
-        { key: 'F', desc: '势力' },
         { key: 'H', desc: '洞府' },
-        { key: 'P', desc: '队伍' },
         { key: 'G', desc: '灵兽' },
-        { key: 'A', desc: '活动' },
         { key: 'D', desc: '日程' },
         { key: 'Esc', desc: '关闭弹窗/战斗' },
         { key: '空格', desc: '战斗继续' }

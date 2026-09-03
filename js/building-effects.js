@@ -236,10 +236,10 @@ buildingEffectsRegistry['training'] = {
         showMessage(`在演武场训练获得 ${expGain} 点经验`, 'success');
         if (window.updateStatusPanel) window.updateStatusPanel();
         
-        // F-67 修复：updateQuestObjective 接 3 参数 (questId, objectiveType, extraData)，
-        // 此前 2 参数调用永远 obj.type !== objectiveType 失败，daily_003 切磋武艺任务无法完成
-        if (window.questSystem) {
-            window.questSystem.updateQuestObjective('daily_003', 'sparring', { amount: 1 });
+        // F-24：切磋推进 daily_003（type:'sparring'）。此前误把 'sparring' 当 questId 传
+        // updateQuestObjective，findQuestById 返回 null，daily_003 永不可完成
+        if (window.advanceQuestObjectivesFromEvent) {
+            window.advanceQuestObjectivesFromEvent('sparring', { amount: 1 });
         }
         
         return true;
@@ -477,7 +477,12 @@ buildingEffectsRegistry['tavern'] = {
             return false;
         }
         
-        currentCharData.copper -= cost;
+        // F-17：铜钱统一走 DataManager（此前 charData-only 写入，DataManager 读 inventory 致 in-play 数值错）
+        if (window.XianXia && window.XianXia.DataManager && typeof window.XianXia.DataManager.deductCopper === 'function') {
+            window.XianXia.DataManager.deductCopper(cost);
+        } else {
+            currentCharData.copper = Math.max(0, (currentCharData.copper || 0) - cost);
+        }
         
         // 可能触发事件
         if (window.eventSystem && Math.random() < 0.3) {

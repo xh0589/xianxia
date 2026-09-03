@@ -496,28 +496,35 @@ function isRealmAtLeast(currentRealm, targetRealm) {
 
 // ============ 显示事件对话框 ============
 function showEventDialog(event) {
+    // F-38：先清掉旧的同 id modal（防重复堆叠），再加 overlay 点遮罩关闭 + ✕ 按钮 + 无 choices 时给关闭按钮
+    const old = document.getElementById('event-modal');
+    if (old) old.remove();
     // 创建模态框
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50';
     modal.id = 'event-modal';
-    
+    modal.onclick = (e) => { if (e.target === modal) closeEventModal(); };
+
     const rarityColor = event.rarity?.color || 'text-gray-400';
     const rarityName = event.rarity?.name || '普通';
-    
+
     let choicesHtml = '';
-    if (event.choices) {
+    if (event.choices && event.choices.length) {
         event.choices.forEach(choice => {
             choicesHtml += `
-                <button onclick="handleEventChoice('${event.id}', '${choice.id}')" 
+                <button onclick="handleEventChoice('${event.id}', '${choice.id}')"
                         class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-3 rounded mb-2 transition">
                     ${choice.text}
                 </button>
             `;
         });
+    } else {
+        choicesHtml = `<button onclick="closeEventModal()" class="w-full bg-gray-700 hover:bg-gray-600 px-4 py-3 rounded mb-2 transition">关闭</button>`;
     }
-    
+
     modal.innerHTML = `
-        <div class="bg-gray-900 border border-yellow-600 rounded-lg p-6 max-w-md w-full mx-4">
+        <div class="bg-gray-900 border border-yellow-600 rounded-lg p-6 max-w-md w-full mx-4 relative">
+            <button onclick="closeEventModal()" class="absolute top-2 right-3 text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
             <div class="flex items-center mb-4">
                 <span class="text-3xl mr-3">${getEventIcon(event.type)}</span>
                 <div>
@@ -531,9 +538,16 @@ function showEventDialog(event) {
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
 }
+
+// F-38：事件 modal 关闭入口（幂等——只移除当前存在的 event-modal）
+function closeEventModal() {
+    const m = document.getElementById('event-modal');
+    if (m) m.remove();
+}
+window.closeEventModal = closeEventModal;
 
 // ============ 处理事件选择 ============
 function handleEventChoice(eventId, choiceId) {
