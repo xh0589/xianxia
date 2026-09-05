@@ -292,7 +292,16 @@ function collectCharacterData(name) {
         qi: 100, maxQi: 100,
         mood: 80, maxMood: 100,
         // 1.5 气运/机缘：luck 影响奇遇触发率与稀有度，fortune 可消耗破机缘
-        luck: 50, fortune: 0
+        luck: 50, fortune: 0,
+        // F-13 完整版：修真境界/层级/经验/道侣/子嗣/师父/天数/灵石/位置
+        // 此前靠散落 `|| '炼气'`/`|| 100` 兜底，集中初始化便于测试与存档
+        realm: '炼气', layer: 1, level: 1, exp: 0,
+        // 关系
+        bonds: {}, _children: [], _masterId: null,
+        // 时间/资源
+        day: 1, spiritStones: 100, copper: 50,
+        // 位置
+        currentMap: 'main'
     };
     document.querySelectorAll('#main-attributes-container input').forEach(input => {
         var attrName = input.dataset.attr;
@@ -804,6 +813,10 @@ function switchPanel(panelId) {
         renderBeastList();
         renderBeastTemplates();
     }
+    // v20.11 成就墙
+    if (panelId === 'achievements') {
+        if (typeof renderAchievementPanel === 'function') renderAchievementPanel();
+    }
     if (panelId === 'house') {
         renderHouseStatus();
     }
@@ -879,7 +892,7 @@ const CITY_FACILITIES = {
     'weapon_shop': { name: '兵器铺', icon: '⚔️', color: 'text-red-400', action: 'openWeaponShopCity', desc: '兵器刀剑' },
     'armor_shop': { name: '防具铺', icon: '🛡️', color: 'text-blue-400', action: 'openArmorShopCity', desc: '防具护甲' },
     'art_shop': { name: '功法阁', icon: '📚', color: 'text-indigo-400', action: 'openArtShop', desc: '功法秘籍' },
-    'beast_shop': { name: '灵兽坊', icon: '🐾', color: 'text-amber-400', action: 'openBeastShop', desc: '灵兽相关' },
+    'beast_shop': { name: '灵兽坊', icon: '🐾', color: 'text-amber-400', action: 'openBeastShop', desc: '驯化幼兽出售' },
     'auction': { name: '拍卖行', icon: '🔨', color: 'text-pink-400', action: 'openAuctionHouse', desc: '挂牌拍卖物品' },
     'alchemy': { name: '炼丹房', icon: '⚗️', color: 'text-lime-400', action: 'openAlchemyRoom', desc: '炼制丹药' },
     'forging': { name: '铁匠铺', icon: '⚒️', color: 'text-orange-400', action: 'openForgingShop', desc: '锻造和强化装备' },
@@ -930,7 +943,7 @@ const CITY_FACILITIES = {
 // 门派设施定义
 const SECT_FACILITIES = [
     { id: 'sect_training', name: '演武场', icon: '⚔️', desc: '练习门派武学，提升熟练度', action: 'sectTrain' },
-    { id: 'sect_cultivation', name: '修炼洞府', icon: '🧘', desc: '消耗贡献租用洞府修炼', action: 'sectCultivate' },
+    { id: 'sect_cultivation', name: '修炼洞府', icon: '🧘', desc: '石室静坐定心，缓缓恢复真气', action: 'sectCultivate' },
     { id: 'sect_alchemy', name: '炼丹房', icon: '💊', desc: '使用门派资源炼制丹药', action: 'openCraftingUI' },
     { id: 'sect_forging', name: '铸剑阁', icon: '⚒️', desc: '锻造门派专属装备', action: 'openEnhancementUI' },
     { id: 'sect_library', name: '藏经阁', icon: '📚', desc: '学习门派功法和秘籍', action: 'openSectLibrary' },
@@ -1091,41 +1104,41 @@ function executeFacilityAction(action, type) {
 
 
 function executeSectFacilityAction(action, sectName) {
+    // v20.8：全部接回真实系统。此前医馆是免费无限满血满蓝的漏洞、
+    // 炼造按钮点的是不存在的旧函数名、藏经阁/兑换只是文案——现在都走有成本的真设施。
     switch(action) {
         case 'sectTrain':
-            startTraining();
+            if (window.useFacility) window.useFacility('sect_training_ground');
+            else if (typeof startTraining === 'function') startTraining();
             break;
         case 'sectCultivate':
-            startCultivation();
+            if (window.useFacility) window.useFacility('sect_cave');
+            else if (typeof startCultivation === 'function') startCultivation();
             break;
         case 'openCraftingUI':
-            if (window.showCraftingUI) {
-                window.showCraftingUI('pilfer');
-            }
+            if (window.openCraftingUI) window.openCraftingUI('pilfer');
+            else showMessage('炼造坊还没开张。', 'info');
             break;
         case 'openEnhancementUI':
-            if (window.openEnhancementUI) {
-                window.openEnhancementUI();
-            }
+            if (window.openEnhancementHall) window.openEnhancementHall();
+            else if (window.openEnhancementUI) window.openEnhancementUI();
             break;
         case 'openSectLibrary':
-            showMessage(`打开${sectName}藏经阁...`, 'info');
+            if (window.openSectLibraryPanel) window.openSectLibraryPanel();
+            else showMessage('藏经阁执事今日不在。', 'info');
             break;
         case 'openSectQuestUI':
-            if (window.questSystem && window.questSystem.showQuestPanel) {
-                window.questSystem.showQuestPanel();
-            }
+            if (window.openSectTaskUI) window.openSectTaskUI();
+            else if (window.questSystem && window.questSystem.showQuestPanel) window.questSystem.showQuestPanel();
             break;
         case 'sectHeal':
-            showMessage(`${sectName}医馆为您治疗...`, 'info');
-            if (window.currentCharData) {
-                currentCharData.health = currentCharData.maxHealth || 100;
-                currentCharData.qi = currentCharData.maxQi || 100;
-                if (window.updateCharacterStatus) window.updateCharacterStatus();
-            }
+            // 医馆疗伤走设施系统：按次扣门派贡献，不再是免费无限满血满蓝
+            if (window.useFacility) window.useFacility('sect_medical');
+            else showMessage('医馆医师不在，你自行服药调息。', 'info');
             break;
         case 'openSectExchange':
-            showMessage(`打开${sectName}贡献兑换...`, 'info');
+            if (window.openContributionShop) window.openContributionShop();
+            else showMessage('贡献兑换处暂时无人值守。', 'info');
             break;
         default:
             showMessage(`执行 ${action}...`, 'info');
@@ -1151,7 +1164,7 @@ function restAtInn() {
     else if (window.inventory && window.inventory.currency) window.inventory.currency.spiritStones -= cost;
 
     var maxH = currentCharData.maxHealth || 100;
-    var maxQ = currentCharData.maxQi || 100;
+    var maxQ = (typeof window.getEffectiveMax === 'function') ? window.getEffectiveMax('maxQi') : (currentCharData.maxQi || 100); // v20.48 功法上限通电
     var maxE = currentCharData.maxEnergy || 100;
     // P0-4 恢复分级化：客栈=精力/真气可满，生命部分恢复(+40%上限)，部位耐久少量(+10)，危急伤仅提示就医
     if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
@@ -1368,7 +1381,8 @@ function cultivationMeditate(durationId) {
         _bonusAll *= 1.10;
         mutationText += '主修功法+10% ';
     }
-    // v9.6.2 灵根简化：灵根值% = 修炼速度%
+    // v9.6.2 灵根简化：v20.10 口径统一——灵根是五行占比饼（总和 100）。
+    // 修炼倍率 = 0.8 + 占比/200（v9.8 定稿），文案如实换算成百分比，不再拿占比冒充百分比
     let rootExpBase = 30;
     if (typeof window.calculateCultivationExpFromRoots === 'function') {
         try {
@@ -1379,7 +1393,7 @@ function cultivationMeditate(durationId) {
                 : 'neutral';
             if (roots && element !== 'neutral') {
                 var val = roots[element] || 0;
-                if (val > 0) mutationText += '匹配灵根+' + val + '% ';
+                if (val > 0) mutationText += '匹配灵根+' + Math.round(val / 2) + '% ';
             }
         } catch (e) {
             rootExpBase = 30;
@@ -1402,6 +1416,14 @@ function cultivationMeditate(durationId) {
         // 1.9 丹毒惩罚：高丹毒降修炼效率（50丹毒-25%、100丹毒-50%）
         var _ppPen = (typeof window.getPillPoisonPenalty === 'function') ? window.getPillPoisonPenalty() : 0;
         if (_ppPen > 0) essenceGain = Math.floor(essenceGain * (1 - _ppPen));
+        // v20.48 境界质变补电：大乘「天人感应」cultivation×1.2 / 金仙「金仙不朽」cultivate×1.5 —— 此前无人读
+        try {
+            var _rzName = currentCharData.realm || '';
+            if (_rzName && typeof window.getRealmBonus === 'function') {
+                var _rzCult = Math.min(window.getRealmBonus(_rzName, 'cultivation') || 1, window.getRealmBonus(_rzName, 'cultivate') || 1);
+                if (_rzCult !== 1) essenceGain = Math.floor(essenceGain * _rzCult);
+            }
+        } catch (eRz) {}
         currentCharData.essence = (currentCharData.essence || 0) + essenceGain;
         // 2.1 走火入魔：真气枯竭强行修炼/丹毒侵蚀→气机紊乱
         if (typeof window.addQiDeviation === 'function') {
@@ -1449,7 +1471,7 @@ function cultivationMeditate(durationId) {
 function useSpring() {
     if (!window.currentCharData) return;
     currentCharData.health = currentCharData.maxHealth || 100;
-    currentCharData.qi = currentCharData.maxQi || 100;
+    currentCharData.qi = (typeof window.getEffectiveMax === 'function') ? window.getEffectiveMax('maxQi') : (currentCharData.maxQi || 100); // v20.48 功法上限通电
     currentCharData.energy = currentCharData.maxEnergy || 100;
     // P1-2.1: 时间推进
     if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
@@ -1673,8 +1695,27 @@ function showTeleportUI() {
 }
 
 function teleportToCity(cityName) {
+    // v20.53 位面闸门：传送阵只接人间城镇——位面地点的境界门槛不因花钱而失效
+    var _cd0 = window.currentCharData;
+    var _cityInfo = (window.locationSystem && window.locationSystem.getCityData) ? window.locationSystem.getCityData(cityName) : null;
+    if (_cityInfo && _cityInfo.accessLevel && _cityInfo.accessLevel !== 'all' && window.locationSystem.checkAccessRequirement) {
+        var _okLv = window.locationSystem.checkAccessRequirement(_cityInfo.accessLevel,
+            (_cd0 && _cd0.realm) || '炼气', (_cd0 && _cd0.layer) || 1);
+        if (!_okLv) {
+            showMessage('传送阵的灵光在半途散了——' + cityName + '需 ' + _cityInfo.accessLevel + ' 方可踏足（需要：' + _cityInfo.accessLevel + '）', 'error');
+            return;
+        }
+    }
     // F-40：传送扣 100 灵石（此前 showTeleportUI 显示成本但 teleportToCity 不扣）
     var _tpCost = 100;
+    // v20.48 境界质变补电：炼虚「虚空融合」传送耗灵减半（teleport_cost 0.5）—— 此前无人读
+    try {
+        var _tpRealm = (window.currentCharData && window.currentCharData.realm) || '';
+        if (_tpRealm && typeof window.getRealmBonus === 'function') {
+            var _tpMul = window.getRealmBonus(_tpRealm, 'teleport_cost');
+            if (typeof _tpMul === 'number' && _tpMul > 0 && _tpMul !== 1) _tpCost = Math.max(1, Math.round(_tpCost * _tpMul));
+        }
+    } catch (eTp) {}
     if (window.XianXia && window.XianXia.DataManager && typeof window.XianXia.DataManager.deductSpiritStones === 'function') {
         if (!window.XianXia.DataManager.deductSpiritStones(_tpCost)) {
             showMessage('灵石不足，传送需 ' + _tpCost + ' 灵石', 'error');
@@ -1942,44 +1983,19 @@ function acceptQuestFromHall(questId) {
     if (modal) modal.remove();
 }
 
-// ============ 黑市界面 ============
+// ============ 黑市入口 ============
+// v20.7 修复：旧版是假黑市——三个按钮点了只弹"黑市交易完成"，不扣钱不发货。
+// 真黑市商店（动态货架、真扣款、时价联动）在 enhanced-shop 的 'special' 店，
+// 坊市黑市建筑走 useBuilding→openCityShop('special') 早已接通；这里让地下集市等
+// 所有旧入口统一转发过去，删掉假交易面。
 function openBlackMarket() {
-    const items = [
-        { name: '神秘宝物', icon: '🎁', desc: '可能是珍宝也可能是陷阱', price: 500 },
-        { name: '禁术功法', icon: '📕', desc: '威力巨大但有副作用', price: 1000 },
-        { name: '毒药', icon: '☠️', desc: '各种致命毒药', price: 300 }
-    ];
-    
-    let itemsHtml = items.map(item => `
-        <div class="bg-gray-800/50 p-3 rounded border border-gray-600 mb-2">
-            <div class="flex justify-between items-center">
-                <div class="flex items-center gap-2">
-                    <span class="text-2xl">${item.icon}</span>
-                    <div>
-                        <p class="font-bold text-gray-300">${item.name}</p>
-                        <p class="text-xs text-gray-500">${item.desc}</p>
-                        <p class="text-xs text-yellow-600">价格: ${item.price} 灵石</p>
-                    </div>
-                </div>
-                <button onclick="showMessage('黑市交易完成', 'success'); this.closest('.fixed').remove();" class="bg-gray-600 hover:bg-gray-500 text-white px-3 py-1 rounded text-sm">购买</button>
-            </div>
-        </div>
-    `).join('');
-    
-    const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50';
-    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-    modal.innerHTML = `
-        <div class="bg-gray-900 border-2 border-gray-500 rounded-xl p-6 max-w-2xl w-full mx-4">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold text-gray-400">🌙 黑市</h3>
-                <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-white text-2xl">&times;</button>
-            </div>
-            <p class="text-xs text-red-400 mb-3">⚠️ 黑市交易违法，可能被追踪</p>
-            <div>${itemsHtml}</div>
-        </div>
-    `;
-    document.body.appendChild(modal);
+    if (typeof window.openCityShop === 'function') {
+        window.openCityShop('special');
+    } else if (typeof window.openHiddenShop === 'function') {
+        window.openHiddenShop((window.currentCharData && window.currentCharData.location) || '');
+    } else if (window.showMessage) {
+        window.showMessage('黑市今日歇业', 'info');
+    }
 }
 
 // ============ 加入门派 ============
@@ -3821,10 +3837,19 @@ function buildPlayerBattleEntity(level) {
             for (var abKey in abBuffs) {
                 var abItem = abBuffs[abKey];
                 if (!abItem || !abItem.effects || ((abItem.expiryGameMinute || 0) <= nowMinAb)) continue;
-                for (var abEff in abItem.effects) {
-                    var abVal = abItem.effects[abEff];
-                    if (typeof abVal !== 'number') continue;
-                    playerAttrs[abEff] = Math.round(((playerAttrs[abEff] || 10) + abVal) * 10) / 10;
+                // v20.8：经 sectBuffAttrBonus 翻译别名键（defense/crit/qiRegen…→六维），
+                // 此前只有恰好写成六维键的 buff 才生效，约 20 派特色都是安慰剂。
+                if (typeof window.sectBuffAttrBonus === 'function') {
+                    var abDelta = window.sectBuffAttrBonus(abItem.effects, playerAttrs);
+                    for (var abT in abDelta) {
+                        playerAttrs[abT] = Math.round(((playerAttrs[abT] || 10) + abDelta[abT]) * 10) / 10;
+                    }
+                } else {
+                    for (var abEff in abItem.effects) {
+                        var abVal = abItem.effects[abEff];
+                        if (typeof abVal !== 'number') continue;
+                        playerAttrs[abEff] = Math.round(((playerAttrs[abEff] || 10) + abVal) * 10) / 10;
+                    }
                 }
             }
         }
@@ -4006,6 +4031,26 @@ function buildPlayerBattleEntity(level) {
             if (_baMul !== 1) playerEntity._artifactMul = _baMul;
         }
     } catch (e) {}
+    // v20.48 功法掌握通电（乘算层）：当前武器对应功法（剑/刀/拳/枪）+ 通用攻击百分比 → 攻击乘算；
+    // 元素伤表与吸血功掌握一并挂实体，battle.js 结算时读取。加值层已在 getCombatBonuses 并入。
+    try {
+        if (window.ArtEffects) {
+            var _mhTpl = null;
+            if (window.currentEquipment && window.currentEquipment.mainHand && window.itemById) {
+                _mhTpl = window.itemById[window.currentEquipment.mainHand.templateId || window.currentEquipment.mainHand.id] || null;
+            }
+            var _wpMul = window.ArtEffects.weaponPct(_mhTpl ? (_mhTpl.weaponType || _mhTpl.subtype || '') : '');
+            if (_wpMul > 0 && playerEntity.combat) {
+                playerEntity.combat.attack = Math.round((playerEntity.combat.attack || 0) * (1 + _wpMul / 100));
+                playerEntity._artWeaponPct = _wpMul;
+            }
+            var _artElem = window.ArtEffects.elemMap();
+            for (var _aek in _artElem) { if (_artElem[_aek]) { playerEntity._artElem = _artElem; break; } }
+            if (window.ArtEffects.hasLifesteal() && playerEntity.combatAbilities && playerEntity.combatAbilities.indexOf('lifesteal') < 0) {
+                playerEntity.combatAbilities.push('lifesteal');
+            }
+        }
+    } catch (eArt) {}
     return playerEntity;
 }
 
@@ -4417,10 +4462,14 @@ function showBattleUI(battle) {
                 if (typeof window.notifyQuestKill === 'function' && hasSpoils) {
                     window.notifyQuestKill(currentBattle && currentBattle.enemy);
                 }
-                if (window.achievementManager && typeof window.achievementManager.checkAllAchievements === 'function') {
-                    window.achievementManager.checkAllAchievements(window.currentCharData || currentCharData);
-                } else if (typeof window.checkAllAchievements === 'function') {
-                    window.checkAllAchievements(window.currentCharData || currentCharData);
+                // v20.11：击杀计数唯一写入点（遁走无战利品不算杀，与任务桥同口径）。
+                // 收藏系统与成就档案都读这个数；随档持久（game-state killCount 字段）。
+                if (hasSpoils && window.currentCharData) {
+                    window.currentCharData._killCount = (window.currentCharData._killCount || 0) + 1;
+                }
+                // v20.11：成就检查统一走档案快照入口（旧版直接喂角色数据，全是幽灵键）
+                if (typeof window.checkAchievementsNow === 'function') {
+                    window.checkAchievementsNow();
                 }
             } catch (e) {}
             if (window.showEffect) try { window.showEffect('quest_done'); } catch (e) {}
@@ -5223,6 +5272,19 @@ function renderSkillSlotsInline() {
     }
 
     let html = '';
+    // v20.48 功法掌握通电：面板如实汇报已学功法折出的数值（加值/乘算口径见 art-effects）
+    try {
+        if (window.ArtEffects && typeof window.ArtEffects.describe === 'function') {
+            var _artDesc = window.ArtEffects.describe();
+            if (_artDesc) {
+                html += '<div class="mb-2 p-2 rounded border border-emerald-800 bg-emerald-900/20 text-xs text-emerald-300">' +
+                    '🌿 ' + _artDesc + '</div>';
+            } else if (skills.length) {
+                html += '<div class="mb-2 p-2 rounded border border-gray-700 bg-gray-800/60 text-xs text-gray-500">' +
+                    '🌿 已学功法暂无数值加成（研读至「学会」后生效）</div>';
+            }
+        }
+    } catch (eArtDesc) {}
     skillSlots.forEach(function (slot) {
         const equipped = currentSkills[slot.id];
         const skillName = equipped ? equipped.name : '空';
@@ -5516,7 +5578,7 @@ function updateCharacterStatus() {
     const qiText = document.getElementById('qi-text');
     if (qiText) {
         const qi = currentCharData.qi ?? 100;
-        const maxQi = currentCharData.maxQi ?? 100;
+        const maxQi = (typeof window.getEffectiveMax === 'function') ? window.getEffectiveMax('maxQi') : (currentCharData.maxQi ?? 100); // v20.48 功法上限通电
         qiText.textContent = `${Math.round(qi)}/${maxQi}`;
         if (qiBar) qiBar.style.width = `${(qi / maxQi) * 100}%`;
     }
@@ -6361,6 +6423,14 @@ function gatherHerbs() {
         const bonus = window.getRegionBonus(region);
         if (bonus && bonus.herb) regionBonus = bonus.herb;
     }
+    // v20.48 境界质变补电：炼气「灵气感应」采集效率+20%（herb×1.2）—— 此前无人读
+    try {
+        var _ghRealm = currentCharData.realm || '';
+        if (_ghRealm && typeof window.getRealmBonus === 'function') {
+            var _herbMul = window.getRealmBonus(_ghRealm, 'herb');
+            if (typeof _herbMul === 'number' && _herbMul !== 1) regionBonus *= _herbMul;
+        }
+    } catch (eHerb) {}
     
     // 基础草药（所有地区都有）
     const results = [
@@ -6943,6 +7013,13 @@ function openContributionShop() {
             </div>
             <div class="mb-4 p-3 bg-gray-700/50 rounded">
                 <p class="text-sm text-gray-400">当前贡献: <span class="text-purple-400 font-bold">⭐ ${contribution}</span></p>
+                <div class="mt-2 pt-2 border-t border-gray-600">
+                    <p class="text-xs text-gray-400 mb-1">捐灵石入宗门公账，记你功劳（十文记五文，另一半入公账）</p>
+                    <div class="flex gap-2">
+                        <input id="sect-donate-amount" type="number" min="1" placeholder="灵石数" class="bg-gray-900 border border-gray-600 rounded px-2 py-1 text-sm w-24 text-gray-200">
+                        <button onclick="donateSectStones(parseInt(document.getElementById('sect-donate-amount').value,10))" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded text-sm">捐献</button>
+                    </div>
+                </div>
             </div>
             <div>${html}</div>
         </div>
@@ -7657,8 +7734,10 @@ window.spendLuck = function(amount) {
     return true;
 };
 window.getLuck = function() { var cd = window.currentCharData; return cd ? (cd.luck != null ? cd.luck : 50) : 50; };
-// 1.6 玩家建宗 UI helper：接通既有 PlayerSect 系统（此前 create 无 UI 入口）
+// 1.6 玩家建宗 UI helper：v20.52 起立派走完整流程（起名/定出身/择山门），旧入口转发兼容
 window._quickFoundSect = function() {
+    if (typeof window.openFoundSectPanel === 'function') { window.openFoundSectPanel(); return; }
+    // 兜底：界面模块缺失时按旧的一键流程
     var cd = window.currentCharData;
     if (!cd) return;
     var cost = 500;
@@ -7677,19 +7756,22 @@ window._quickFoundSect = function() {
         }
     }
 };
-window._defendSectRaid = function() {
-    var cd = window.currentCharData;
-    if (!cd) return;
-    var tier = (typeof window.getRealmTier === 'function') ? window.getRealmTier(cd.realm) : 4;
-    var enemyData = {
-        name: '攻山妖兽', type: 'beast', species: 'beast', physiologyType: 'beast',
-        level: tier * 4 + 10,
-        attack: 40 + tier * 6, defense: 20 + tier * 3, speed: 25,
-        maxDurability: 120 + tier * 20, durabilities: { chest: 120 + tier * 20 },
-        combatAbilities: []
+// 护宗战（v20.52）：完整实现移入宗门界面模块（武库/宗门史同源）；此处仅在界面模块缺失时兜底
+if (typeof window._defendSectRaid !== 'function') {
+    window._defendSectRaid = function() {
+        var cd = window.currentCharData;
+        if (!cd) return;
+        var tier = (typeof window.getRealmTier === 'function') ? window.getRealmTier(cd.realm) : 4;
+        var enemyData = {
+            name: '攻山妖兽', type: 'beast', species: 'beast', physiologyType: 'beast',
+            level: tier * 4 + 10,
+            attack: 40 + tier * 6, defense: 20 + tier * 3, speed: 25,
+            maxDurability: 120 + tier * 20, durabilities: { chest: 120 + tier * 20 },
+            combatAbilities: []
+        };
+        if (window.startBattle) window.startBattle(enemyData);
     };
-    if (window.startBattle) window.startBattle(enemyData);
-};
+}
 window.openInteraction = openInteraction;
 window.renderInteraction = renderInteraction;
 window.interactBuilding = interactBuilding;
@@ -7814,6 +7896,15 @@ function globalStartBattle(typeOrData, extra) {
         }
         var level = charData.level || charData.layer || 1;
         var type = 'enemy';
+        // v20.53：调用方传具体敌人数据（护宗战/主线Boss/宿敌链都这么传）时，照单全收——
+        // 此前对象入参被整包丢弃，实际出怪全按玩家 layer 重掷，写好的强敌形同虚设。
+        var explicitEnemy = null;
+        if (typeOrData && typeof typeOrData === 'object') {
+            explicitEnemy = typeOrData;
+            type = (typeOrData.type === 'beast' || typeOrData.species === 'beast' || typeOrData.physiologyType === 'beast') ? 'beast' : 'enemy';
+            var _declaredLv = Number(typeOrData.level);
+            if (_declaredLv > 0) level = Math.max(level, _declaredLv);
+        }
         var typeMap = {
             bandits: 'enemy', bandit: 'enemy',
             beast: 'beast', beast_tide: 'beast', wild_beast: 'beast',
@@ -7832,7 +7923,7 @@ function globalStartBattle(typeOrData, extra) {
             if (window.showMessage) window.showMessage('战斗启动失败', 'error');
             return null;
         }
-        var enemyData = gen(level, type);
+        var enemyData = explicitEnemy || gen(level, type);
         // 命名覆盖
         if (typeof typeOrData === 'string') {
             var names = {
@@ -7874,7 +7965,27 @@ function openTalismanShop() { openCityShop('talisman'); }
 function openWeaponShopCity() { openCityShop('weapon'); }
 function openArmorShopCity() { openCityShop('armor'); }
 function openArtShop() { openCityShop('art'); }
+// v20.9 灵兽坊=真实购入：卖各家驯养大的幼兽（Lv.1 起养，付血脉钱），灵石走 DataManager。
+// 此前只跳面板"跳转即功能"；无货单数据/无模态时仍退回面板。
 function openBeastShop() {
+    if (window.BEAST_SHOP_STOCK && typeof window.buyBeastFromShop === 'function' && typeof window.showModal === 'function') {
+        var owned = (window.tamedBeasts || []).length;
+        var html = '<p class="text-xs text-gray-400 mb-2">铺里都是各家驯兽行当养大的幼兽——血脉是好的，'
+            + '但从Lv.1养起的交情得你自己挣。（现有灵兽 ' + owned + ' 只）</p>';
+        for (var id in window.BEAST_SHOP_STOCK) {
+            var tpl = window.BEAST_TEMPLATES[id];
+            if (!tpl) continue;
+            var st = window.BEAST_SHOP_STOCK[id];
+            html += '<div class="bg-gray-900 rounded p-2 mb-1 flex justify-between items-center">'
+                + '<div><span class="text-sm text-white font-bold">🐾 ' + tpl.name + '</span>'
+                + '<span class="text-xs text-gray-500 ml-2">' + (tpl.realm || '') + '血脉 · ' + st.gloss + '</span></div>'
+                + '<button onclick="buyBeastFromShop(\'' + id + '\')" class="text-xs bg-amber-700 hover:bg-amber-600 px-2 py-1 rounded">' + st.price + ' 灵石购入</button>'
+                + '</div>';
+        }
+        html += '<p class="text-[11px] text-gray-500 mt-2">买定离手，安顿费不另计；驯化兽不外卖。</p>';
+        window.showModal('🐾 灵兽坊 · 驯化幼兽', html);
+        return;
+    }
     if (typeof switchPanel === 'function') switchPanel('beasts');
     else if (window.showMessage) window.showMessage('请打开灵兽面板', 'info');
 }
@@ -7882,43 +7993,134 @@ function openEnchantShop() {
     if (window.openEnhancementHall) window.openEnhancementHall();
     else if (window.openForgingShop) window.openForgingShop();
 }
+// v20.7 茶馆=江湖传闻堂：茶资 10 灵石，直接展开真实传闻池（含 🌀 走形版本）。
+// 此前"听得几句传闻"只是文案，与 RUMOR_LOG 真源零接线。
 function visitTeaHouse() {
-    if (window.showMessage) window.showMessage('茶香袅袅，你听得几句江湖传闻……', 'info');
+    var cost = 10;
+    var paid = false;
+    if (window.XianXia && window.XianXia.DataManager && typeof window.XianXia.DataManager.deductSpiritStones === 'function') {
+        paid = !!window.XianXia.DataManager.deductSpiritStones(cost);
+    } else if (window.currentCharData && (window.currentCharData.spiritStones || 0) >= cost) {
+        window.currentCharData.spiritStones -= cost; paid = true;
+    }
+    if (!paid) {
+        if (window.showMessage) window.showMessage('好茶要 10 灵石茶资，白嫖的说书先生不等你。', 'warning');
+        return false;
+    }
     if (window.currentCharData) {
         window.currentCharData.mood = Math.min(100, (window.currentCharData.mood || 50) + 8);
-        window.currentCharData.tempering = (window.currentCharData.tempering || 0) + 15;
     }
-    if (window.eventSystem && Math.random() < 0.25) window.eventSystem.triggerRandomEvent();
-    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '茶馆');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '茶馆听书');
+    // 传闻堂面板：真源 RUMOR_LOG（缺真源时降级旧文案）
+    if (window.NPCLife && typeof window.NPCLife.renderRumorPanel === 'function') {
+        var html = '<p class="text-xs text-gray-500 mb-2">说书人抚尺一响，最近江湖上的事都被编排有鼻子有眼——至于有几分真，听客自己掂量。</p>' +
+            window.NPCLife.renderRumorPanel(15);
+        if (typeof window.showModal === 'function') { window.showModal('🍵 茶馆·传闻集散', html); return true; }
+    }
+    if (window.showMessage) window.showMessage('茶香袅袅，跑堂随口报了几个近日江湖动静（茶资 10 灵石）。', 'info');
+    return true;
+}
+// v20.21 公会堂去别名，做实"商会"：本城行情代问 + 代售台（按本城行情现算、抽一成半佣金、
+// 一笔一单走统一结算真出货）。旧版是"公会堂=悬赏楼=任务堂"三栋一个门面。
+function guildSellPrice(unitPrice, sellMod) {
+    return Math.max(1, Math.floor(unitPrice * sellMod * 0.85)); // 代售佣金一成半
+}
+function guildSellMod() {
+    var city = (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) ||
+        (window.currentCharData && window.currentCharData.location) || '';
+    var m = null;
+    if (window.locationSystem) {
+        try {
+            if (typeof window.locationSystem.getCityPriceModifier === 'function') m = window.locationSystem.getCityPriceModifier(city, 'sell');
+        } catch (e) {}
+        if (m == null) try {
+            var cd = window.locationSystem.getCityData && window.locationSystem.getCityData(city);
+            if (cd && cd.priceModifier) m = cd.priceModifier.sell;
+        } catch (e2) {}
+    }
+    return (m != null && m > 0) ? m : 1;
 }
 function openGuildHall() {
-    if (typeof switchPanel === 'function') switchPanel('quests');
-    else if (window.openQuestHall) window.openQuestHall();
-    if (window.showMessage) window.showMessage('公会大厅：可接悬赏与任务', 'info');
+    var log = window.gameLog || { add: function() {} };
+    var sellMod = guildSellMod();
+    var slots = (window.inventory && window.inventory.slots) || [];
+    var rows = '';
+    var seen = {};
+    slots.forEach(function (s) {
+        if (!s) return;
+        var tid = s.templateId || s.id || (typeof s.getTemplate === 'function' && s.getTemplate() && s.getTemplate().id);
+        if (!tid || seen[tid]) return;
+        var tpl = (typeof s.getTemplate === 'function') ? s.getTemplate() : (window.itemById ? window.itemById[tid] : null);
+        if (!tpl) { if (window.itemById) tpl = window.itemById[tid]; }
+        if (!tpl || tpl.price == null) return;
+        seen[tid] = true;
+        var n = Number(s.count) || 1;
+        var amt = guildSellPrice(Number(tpl.price) || 0, sellMod) * n;
+        rows += '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #333">'
+            + '<span style="color:#ccc">' + (tpl.name || tid) + ' ×' + n + ' → <b style="color:#f0c674">' + amt + '</b> 灵石</span>'
+            + '<button onclick="guildSellSlot(\'' + tid + '\')" class="bg-amber-700 hover:bg-amber-600 text-xs px-2 py-1 rounded">代售</button></div>';
+    });
+    var body = '<p class="text-xs text-gray-400 mb-2">商会管事拨着算盘："本城行价系数 ' + sellMod +
+        '，代售抽一成半佣金。贵地出货值钱，贱地出手吃亏——行价就是这么个理。"</p>' +
+        (rows ? '<div style="max-height:260px;overflow:auto">' + rows + '</div>'
+              : '<p class="text-xs text-gray-500">柜上没见你带什么能出手的货。</p>');
+    if (typeof window.showModal === 'function') { window.showModal('🏬 商会·行情代问与代售台', body); }
+    else { log.add('商会管事报行价：本城行情系数 ' + sellMod + '，代售抽一成半。', 'info'); }
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(5, '商会问询');
 }
+// 代售交割：货按本城行情×0.85 现算、银货同笔走统一结算（不足即整笔不成）
+function guildSellSlot(templateId) {
+    var log = window.gameLog || { add: function() {} };
+    var inv = window.inventory;
+    if (!inv || !inv.slots) return false;
+    var hit = null, total = 0;
+    inv.slots.forEach(function (s) {
+        if (!s) return;
+        var tid = s.templateId || s.id;
+        if (tid === templateId) { hit = s; total += Number(s.count) || 1; }
+    });
+    if (!hit) { if (window.showMessage) window.showMessage('行囊里没有这件货。', 'warning'); return false; }
+    var tpl = (typeof hit.getTemplate === 'function') ? hit.getTemplate() : (window.itemById ? window.itemById[templateId] : null);
+    if (!tpl || tpl.price == null) { if (window.showMessage) window.showMessage('这件货没有行价，商会不收。', 'warning'); return false; }
+    var amt = guildSellPrice(Number(tpl.price) || 0, guildSellMod()) * total;
+    if (!window.RewardService) { log.add('商会账房没开张，改日再来。', 'warning'); return false; }
+    var res = window.RewardService.apply({ stones: amt, take: [{ itemId: templateId, count: total }], msgType: 'success',
+        msg: '商会代售 ' + (tpl.name || templateId) + ' ×' + total + '：行价抽一成半佣金，落袋 ' + amt + ' 灵石。' },
+        { source: 'guild', city: (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || '' });
+    if (!res || res.success === false) { if (window.showMessage) window.showMessage('代售未成：' + ((res && res.reason) || '交割不通'), 'warning'); return false; }
+    if (window.showMessage) window.showMessage('商会代售成交，落袋 ' + amt + ' 灵石（佣金一成半）。', 'success');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(20, '商会代售');
+    return true;
+}
+window.guildSellSlot = window.guildSellSlot || guildSellSlot;
 function openLibrary() {
+    // v20.7 堵免费刷：纸墨笔资 3 灵石，抄书要本钱
+    {
+        var paid = false;
+        if (window.XianXia && window.XianXia.DataManager && typeof window.XianXia.DataManager.deductSpiritStones === 'function') {
+            paid = !!window.XianXia.DataManager.deductSpiritStones(3);
+        } else if (window.currentCharData && (window.currentCharData.spiritStones || 0) >= 3) {
+            window.currentCharData.spiritStones -= 3; paid = true;
+        }
+        if (!paid) {
+            if (window.showMessage) window.showMessage('藏经阁抄录需 3 灵石纸墨钱。', 'warning');
+            return false;
+        }
+    }
     if (window.currentCharData) {
-        window.currentCharData.essence = (window.currentCharData.essence || 0) + 25;
+        window.currentCharData.essence = (window.currentCharData.essence || 0) + 15;
         window.currentCharData.insightPoints = (window.currentCharData.insightPoints || 0) + (Math.random() < 0.15 ? 1 : 0);
     }
-    // v19.0 P0-3 批次 B1：若玩家在宗门内，藏经阁按职位分层阅览
+    // v20.9 楼层口径统一：以 canAccessScriptureTier 为唯一真源探测可达层，
+    // 不再在此处复制一套 role/rank→层 的平行判断（此前三处口径互有出入）
     var ds = window.discipleState;
-    if (ds && ds.isInSect && typeof window.getReadableSectArts === 'function') {
+    if (ds && ds.isInSect && typeof window.getReadableSectArts === 'function' && typeof window.canAccessScriptureTier === 'function') {
         var arts = window.getReadableSectArts(ds.sectId);
-        var role = (typeof window.getPlayerSectRole === 'function') ? window.getPlayerSectRole() : null;
-        if (role) {
-            // 玩家能读的本派功法
-            var msg = '📖 藏经阁（共可阅览 ' + arts.length + ' 部本派功法）';
-            var maxTier = 1;
-            if (role === 'elder' || role === 'leader') maxTier = 4;
-            else if (role === 'disciple') {
-                var rankId = ds.rank;
-                if (rankId === 3) maxTier = 3;
-                else if (rankId === 4) maxTier = 2;
-            }
-            msg += ' · 镇派至 ' + maxTier + ' 楼';
-            if (typeof window.showMessage === 'function') window.showMessage(msg, 'info');
-        }
+        var msg = '📖 藏经阁（共可阅览 ' + arts.length + ' 部本派功法）';
+        var maxTier = 1;
+        for (var _lt = 4; _lt >= 1; _lt--) { if (window.canAccessScriptureTier(_lt)) { maxTier = _lt; break; } }
+        msg += ' · 镇派至 ' + maxTier + ' 楼';
+        if (typeof window.showMessage === 'function') window.showMessage(msg, 'info');
     }
     if (window.showMessage) window.showMessage('翻阅典籍，修为略有精进', 'success');
     if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(40, '藏经阁');
@@ -7941,11 +8143,13 @@ window.selectCity = selectCity;
 
 // ==================== v9.0 新增设施基础功能 ====================
 
-// === 户籍司 ===
+// === 户籍司 ===（v20.21 与七衙门同一规矩：书吏翻档要 10 真气打点的茶钱，不再是白拿历练的窗口）
 function openHouseholdRegistry() {
     var player = window.currentCharData || {};
     var log = window.gameLog || { add: function() {} };
-    log.add('你来到户籍司，向书吏出示身份令牌，查询了城中居民登记信息。', 'info');
+    if ((player.qi || 0) < 10) { log.add('卷宗浩繁，没真气打底你在字里行间绕半个时辰就晕了。改日再来吧。', 'warning'); return; }
+    player.qi -= 10;
+    log.add('你来到户籍司，10 点真气的茶钱递过去，书吏翻出一册《流寓录》——城中户口流移、谁家近年添丁减口都写得明白。你逐页记诵，历练+5。', 'info');
     player.tempering = (player.tempering || 0) + 5;
     if (window.timeSystem && window.timeSystem.advanceTime) {
         window.timeSystem.advanceTime(10, '户籍司查询');
@@ -7953,19 +8157,106 @@ function openHouseholdRegistry() {
 }
 
 // === 消防司 ===
+// v20.48 消防司做实：此前是纯台词死按钮。开门两件事——当差（真气换功德与本城声望，体力不济如实拒绝）
+// 与检视火情（今日是否走水，走水时可出力扑救，救成有赏、烧伤挂彩）。
 function openFireDepartment() {
     var log = window.gameLog || { add: function() {} };
-    log.add('你来到消防司，今日并无火情，与值班差官闲聊了几句城中防火事宜。', 'info');
-    if (window.timeSystem && window.timeSystem.advanceTime) {
-        window.timeSystem.advanceTime(5, '消防司');
+    var player = window.currentCharData || {};
+    var city = (typeof getCurrentCityName === 'function') ? getCurrentCityName() : (window.currentLocation || '');
+    var day = (window.timeSystem && window.timeSystem.gameTime) ? (window.timeSystem.gameTime.currentDay || 0) : 0;
+    // 走水判定：真源只有日子与城名， seeded——同一城同一天结果一致，不靠当场掷骰说谎
+    var seed = (function (s) { var h = 0; for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; })(String(city) + '_' + day);
+    var onFire = (seed % 100) < 12;
+    var _addRep = function (n) {
+        try {
+            if (typeof window.addReputation === 'function' && city) window.addReputation(city, n);
+        } catch (e) {}
+    };
+
+    var html = '<p class="text-sm text-gray-300 mb-2">消防司值房——水龙、火钩、沙袋靠墙码着，值班差官正在点名。</p>';
+    if (onFire) {
+        html += '<p class="text-sm text-red-300 mb-3">🔥 今日城中走了水——' + (city || '本城') + '某处起了火，正等着人手！</p>';
+        html += '<button onclick="window._fireDeptAct(\'fight\')" class="w-full bg-red-800 hover:bg-red-700 text-white p-3 rounded text-left mb-2">' +
+            '🚒 出力扑救——烧 20 真气，救成得赏钱与本城声望，力竭或失手会挂彩</button>';
+    } else {
+        html += '<p class="text-sm text-gray-400 mb-3">今日并无火情。</p>';
+    }
+    html += '<button onclick="window._fireDeptAct(\'duty\')" class="w-full bg-amber-800 hover:bg-amber-700 text-white p-3 rounded text-left mb-2">' +
+        '🪣 水龙当差半日——烧 10 真气，练扛水龙的本事，功德+1、本城声望+2</button>';
+    html += '<button onclick="window._fireDeptAct(\'chat\')" class="w-full bg-gray-700 hover:bg-gray-600 text-white p-3 rounded text-left">' +
+        '💬 与差官闲聊城中防火事宜</button>';
+    if (typeof window.showBuildingEffectDialog === 'function') {
+        window.showBuildingEffectDialog('消防司', html);
+    } else if (window.showMessage) {
+        window.showMessage(onFire ? '消防司：今日走了水！' : '消防司：今日并无火情。', onFire ? 'warning' : 'info');
     }
 }
 
-// === 悬赏楼 ===
+window._fireDeptAct = function (mode) {
+    var log = window.gameLog || { add: function (m, t) { if (window.showMessage) window.showMessage(m, t || 'info'); } };
+    var player = window.currentCharData || {};
+    var city = (typeof getCurrentCityName === 'function') ? getCurrentCityName() : (window.currentLocation || '');
+    var _deductQi = function (n) {
+        if (!player || (player.qi || 0) < n) return false;
+        player.qi = (player.qi || 0) - n;
+        return true;
+    };
+    var _addRep = function (n) {
+        try { if (typeof window.addReputation === 'function' && city) window.addReputation(city, n); } catch (e) {}
+    };
+    var _pay = function (n) {
+        try {
+            if (window.XianXia && window.XianXia.DataManager) { window.XianXia.DataManager.addSpiritStones(n); return; }
+            if (window.inventory && window.inventory.currency) {
+                window.inventory.currency.spiritStones = (window.inventory.currency.spiritStones || 0) + n;
+                if (window.currentCharData) window.currentCharData.spiritStones = window.inventory.currency.spiritStones;
+            }
+        } catch (e) {}
+    };
+    var dlg = document.getElementById('xianxia-modal-overlay');
+    if (dlg && dlg.parentNode) try { dlg.parentNode.removeChild(dlg); } catch (e) {}
+
+    if (mode === 'duty') {
+        if (!_deductQi(10)) { log.add('消防司差官摆手：没真气压不住水龙，歇着吧。', 'warning'); return; }
+        if (window.RewardService) {
+            window.RewardService.apply({ karma: 1, rep: 2, msg: '', msgType: 'info' }, { source: 'fire_duty', city: city });
+        }
+        log.add('消防司当差半日：扛水龙、盘水带，肩上磨出印子。功德+1，本城声望+2。', 'success');
+        if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(240, '消防司当差');
+    } else if (mode === 'fight') {
+        if (!_deductQi(20)) { log.add('消防司差官拦住你：真气都提不起来，上火场是添乱。', 'warning'); return; }
+        var roll = Math.random();
+        if (roll < 0.6) {
+            var bounty = 40 + Math.floor(Math.random() * 60);
+            _pay(bounty);
+            if (window.RewardService) {
+                window.RewardService.apply({ karma: 3, rep: 5, msg: '', msgType: 'info' }, { source: 'fire_fight', city: city });
+            }
+            log.add('🔥 火场扑救有功！水龙压住火头，官府赏钱 ' + bounty + ' 灵石，功德+3，本城声望+5。', 'success');
+        } else if (roll < 0.85) {
+            log.add('🔥 火头太烈，泼出去的水压不住——白烧了真气，人手撤了下来。', 'warning');
+        } else {
+            player.health = Math.max(1, (player.health || 100) - 12);
+            log.add('🔥 火场塌了半面墙——你被气浪掀翻，生命-12，被人拖出来。官府给了 10 灵石汤药钱。', 'error');
+            _pay(10);
+        }
+        if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(180, '火场扑救');
+    } else {
+        log.add('你与消防司差官闲聊几句城中防火事宜，听了几桩旧年大火的教训。', 'info');
+        if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(5, '消防司');
+    }
+    if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+    if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI();
+};
+
+// === 悬赏楼 ===（v20.21 接上早就存在却没接线的公共悬赏榜 bounty-board——
+// 三栋楼从此各司其职：任务堂挂个人差事，悬赏楼是各家商号与官府的公共赏格，商会做行情与代售）
 function openBountyHall() {
     var log = window.gameLog || { add: function() {} };
-    log.add('你来到悬赏楼，查看最新的悬赏榜单。', 'info');
-    if (typeof openQuestHall === 'function') {
+    log.add('你来到悬赏楼，公共悬赏榜上贴满了各家商号与官府的赏格。', 'info');
+    if (typeof window.openBountyBoard === 'function') {
+        window.openBountyBoard();
+    } else if (typeof openQuestHall === 'function') {
         openQuestHall();
     } else {
         log.add('悬赏榜上暂无新通缉令。', 'info');
@@ -7975,56 +8266,136 @@ function openBountyHall() {
     }
 }
 
-// === 税课司 ===
+// === 税课司 ===（v20.17：看账要耗真气提灯，与工曹署同一规矩，不再是免费历练机）
 function openTaxBureau() {
-    var player = window.currentCharData || {};
+    var player = window.currentCharData;
     var log = window.gameLog || { add: function() {} };
-    log.add('你来到税课司，查阅了本月的税收账册。城中丹药税收入颇丰，灵矿税略有下降。', 'info');
+    if (!player || (player.qi || 0) < 10) { log.add('税册密密麻麻全是暗记，没真气提灯你根本对不上账。改日再来吧。', 'warning'); return; }
+    player.qi -= 10;
+    // v20.18：账册如实读出本城行情（读城建真源的物价系数与特产，不编数）
+    var city = (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || player.location || '';
+    var cityInfo = city && window.locationSystem && window.locationSystem.getCityData ? window.locationSystem.getCityData(city) : null;
+    var intel = '';
+    if (cityInfo) {
+        var pm = (cityInfo.priceModifier && cityInfo.priceModifier.buy) || 1;
+        var diff = Math.round((pm - 1) * 100);
+        intel = diff === 0 ? '账上看来，本城行价与通衢持平' : '账上看来，本城行价比通衢' + (diff > 0 ? '贵' + diff + '%' : '贱' + (-diff) + '%');
+        if (cityInfo.specialties && cityInfo.specialties.length) intel += '，课税大宗：' + cityInfo.specialties.slice(0, 3).join('、');
+        intel += '。';
+    }
+    log.add('你耗了10点真气提灯，在税课司核了半个时辰的账。' + intel + '历练+5。', 'info');
     player.tempering = (player.tempering || 0) + 5;
     if (window.timeSystem && window.timeSystem.advanceTime) {
         window.timeSystem.advanceTime(10, '税课司查阅');
     }
 }
 
-// === 粮仓 ===
-function openGranary() {
-    var player = window.currentCharData || {};
+// === 粮仓 ===（v20.17：扛粮巡查要耗力气，与工曹署同一规矩。v20.22：官价籴米、捐米积德。v20.23：官价随年景行情浮动）
+function granaryRiceUnit() { return Math.round(18 * (window.facilityBuyMod ? window.facilityBuyMod() : 1)); }
+function granaryBuyRice() {
     var log = window.gameLog || { add: function() {} };
-    log.add('你巡视粮仓，粮仓储备充足，管事的向你汇报了近期粮食收支情况。', 'info');
+    if (!window.RewardService) { log.add('粮仓账上今日没支应，改日再来。', 'warning'); return false; }
+    var cost = granaryRiceUnit() * 3;
+    var res = window.RewardService.apply({
+        stones: -cost, items: [{ itemId: 'food_spirit_rice', count: 3 }],
+        msg: '官价籴米 ' + cost + ' 灵石，扛回三袋灵米饭（今年米价随行市走——官仓到底比坊市厚道三成）。', msgType: 'success'
+    }, { source: 'granary', city: (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || '' });
+    if (!res || res.success === false) { if (window.showMessage) window.showMessage('官价籴米需 ' + cost + ' 灵石，手头不足。', 'warning'); return false; }
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(20, '粮仓籴米');
+    return true;
+}
+function granaryDonateRice() {
+    var log = window.gameLog || { add: function() {} };
+    if (!window.RewardService) { log.add('粮仓今日不收捐，改日再来。', 'warning'); return false; }
+    var res = window.RewardService.apply({
+        take: [{ itemId: 'food_spirit_rice', count: 3 }], rep: 4, karma: 2, exp: 2,
+        msg: '你把三袋灵米饭捐进粥棚，管事亲手记上功德簿。粥香飘出半条街，你的业障也轻了一分。', msgType: 'success'
+    }, { source: 'granary', city: (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || '' });
+    if (!res || res.success === false) { if (window.showMessage) window.showMessage('行囊里没有三袋灵米饭，捐不成。', 'warning'); return false; }
+    log.add('捐米入粥棚：本城声望+4，功德+2（业障-2）。', 'success');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(15, '粮仓捐米');
+    return true;
+}
+function openGranary() {
+    var player = window.currentCharData;
+    var log = window.gameLog || { add: function() {} };
+    if (!player || (player.qi || 0) < 10) { log.add('粮垛堆得比房高，你真气不济，跟着粮袋挪两步都喘。改日再来吧。', 'warning'); return; }
+    player.qi -= 10;
+    log.add('你耗了10点真气随管事巡查粮仓，搬垛验潮，一身粮屑。储备充足，收支明白。历练+3。', 'info');
     player.tempering = (player.tempering || 0) + 3;
     if (window.timeSystem && window.timeSystem.advanceTime) {
         window.timeSystem.advanceTime(10, '巡视粮仓');
     }
+    // v20.22 官价籴米/捐米积德（弹窗里有真价真货，无弹窗维持旧口径）
+    if (typeof window.showModal === 'function') {
+        window.showModal('🌾 粮仓·官价粜米',
+            '<p class="text-xs text-gray-400 mb-2">管事拨着账册："今年官价一袋灵米饭 ' + granaryRiceUnit() + ' 灵石，一次粜三袋共 ' + (granaryRiceUnit() * 3) + '——坊市牌价随年景涨跌，官仓恒让三成。攒够了捐进粥棚，功德簿上见名字。"</p>' +
+            '<div style="display:flex;gap:8px"><button onclick="granaryBuyRice()" class="bg-amber-700 hover:bg-amber-600 text-xs px-3 py-2 rounded">🌾 官价籴米 ×3（' + (granaryRiceUnit() * 3) + ' 灵石）</button>' +
+            '<button onclick="granaryDonateRice()" class="bg-rose-800 hover:bg-rose-700 text-xs px-3 py-2 rounded">🍚 捐米三袋入粥棚（功德+2）</button></div>');
+    }
 }
 
-// === 司法堂 ===
+// === 司法堂 ===（v20.18：不只旁听——有概率承接缉查委托，真职能、真气成本）
 function openCourt() {
+    var player = window.currentCharData;
     var log = window.gameLog || { add: function() {} };
-    var msgs = [
-        '今日审理的是一桩灵兽伤人案，你旁听了整个庭审过程。',
-        '有一桩丹方归属纠纷正在调解，双方各执一词。',
-        '今日并无重大案件，你与司法堂主簿聊了聊城中治安。'
-    ];
-    log.add('你来到司法堂，' + msgs[Math.floor(Math.random() * msgs.length)], 'info');
+    if (Math.random() < 0.35) {
+        if (!player || (player.qi || 0) < 15) {
+            log.add('堂外包干递出一纸缉查委托——灵田失窃案，偏你真气不济，签不了这道押，只好眼看旁人领了。', 'warning');
+        } else {
+            player.qi -= 15;
+            player.tempering = (player.tempering || 0) + 8;
+            var city = (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || player.location || '';
+            if (city && typeof window.addReputation === 'function') window.addReputation(city, 2);
+            log.add('你领签押，随班头缉查灵田失窃案至深夜，赃物起获、苦主登门道谢。历练+8' + (city ? '，本城声望+2' : '') + '。', 'success');
+        }
+    } else {
+        var msgs = [
+            '今日审理的是一桩灵兽伤人案，你旁听了整个庭审过程。',
+            '有一桩丹方归属纠纷正在调解，双方各执一词。',
+            '今日并无重大案件，你与司法堂主簿聊了聊城中治安。'
+        ];
+        log.add('你来到司法堂，' + msgs[Math.floor(Math.random() * msgs.length)], 'info');
+    }
     if (window.timeSystem && window.timeSystem.advanceTime) {
         window.timeSystem.advanceTime(10, '司法堂旁听');
     }
 }
 
-// === 镇邪司 ===
-function openExorcistBureau() {
-    var player = window.currentCharData || {};
+// === 镇邪司 ===（v20.17：巡封印要耗真气护航。v20.22：悬赏真收妖丹——官方出溢价收，猎邪就是护城）
+function exorcistDonateCore() {
     var log = window.gameLog || { add: function() {} };
+    if (!window.RewardService) { log.add('镇邪司今日封印库封档，不收货。', 'warning'); return false; }
+    var res = window.RewardService.apply({
+        take: [{ itemId: 'mat_demon_beast_core', count: 1 }], stones: 130, exp: 3, karma: 1,
+        msg: '你缴上一枚妖兽内丹。镇邪司按悬赏价收——牌价一百，官府给到 130：妖在城外一日，城里人便不安一日，这 30 灵石买的是阖城安稳。', msgType: 'success'
+    }, { source: 'exorcist', city: (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || '' });
+    if (!res || res.success === false) { if (window.showMessage) window.showMessage('柜上没有内丹，缴不成——丹得自己猎。', 'warning'); return false; }
+    log.add('缴丹入库：灵石+130，历练+3，除邪护民功德+1。', 'success');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(10, '镇邪司缴丹');
+    return true;
+}
+function openExorcistBureau() {
+    var player = window.currentCharData;
+    var log = window.gameLog || { add: function() {} };
+    if (!player || (player.qi || 0) < 10) { log.add('封印阵纹近身三里便压人神魂，你真气不济，靠近不得。改日再来吧。', 'warning'); return; }
+    player.qi -= 10;
     var hasActivity = Math.random() < 0.3;
     if (hasActivity) {
-        log.add('镇邪司今日有任务：城郊发现疑似邪祟活动的痕迹，你可以前去调查。', 'warning');
+        log.add('你耗了10点真气巡了一圈封印，果不其然：城郊发现疑似邪祟活动的痕迹，你可以前去调查。历练+10。', 'warning');
         player.tempering = (player.tempering || 0) + 10;
     } else {
-        log.add('镇邪司今日清静，并无异常事件报告。你检查了各处封印，一切正常。', 'info');
+        log.add('你耗了10点真气巡了一圈封印，今日清静，并无异常事件报告，各处封印一切正常。历练+5。', 'info');
         player.tempering = (player.tempering || 0) + 5;
     }
     if (window.timeSystem && window.timeSystem.advanceTime) {
         window.timeSystem.advanceTime(15, '镇邪司巡查');
+    }
+    // v20.22 悬赏缴丹台（牌价 100 的妖丹官府 130 收——溢价买的是阖城平安）
+    if (typeof window.showModal === 'function') {
+        window.showModal('⛩️ 镇邪司·悬赏缴丹',
+            '<p class="text-xs text-gray-400 mb-2">主事验丹的铜尺敲在案上："妖兽内丹，牌面一百，官府悬赏价 130 收。城外的妖少一只，城里的灯多点一盏——丹得你猎来，我们不收空口白话。"</p>' +
+            '<button onclick="exorcistDonateCore()" class="bg-purple-800 hover:bg-purple-700 text-xs px-3 py-2 rounded">🦴 缴一枚妖兽内丹（+130 灵石，历练+3，功德+1）</button>');
     }
 }
 
@@ -8110,6 +8481,10 @@ window.openGranary = openGranary;
 window.openCourt = openCourt;
 window.openExorcistBureau = openExorcistBureau;
 window.openMedicalClinic = openMedicalClinic;
+// v20.22 四衙真生意（弹窗按钮入口）
+window.granaryBuyRice = granaryBuyRice;
+window.granaryDonateRice = granaryDonateRice;
+window.exorcistDonateCore = exorcistDonateCore;
 
 // ==================== 第二批设施入口函数 ====================
 // 12个情境设施（已移除重复的坊市）→ 打开情境引擎面板
@@ -8164,6 +8539,19 @@ function initSettings() {
     // v20.3 感情维系衰减（默认关闭）
     var decayCb = document.getElementById('setting-affection-decay');
     if (decayCb) decayCb.checked = !!(window._settings && window._settings.affectionDecay === true);
+    // v20.5 传闻失真（默认开启，只有显式关过的才不带失真）
+    var rdCb = document.getElementById('setting-rumor-distortion');
+    if (rdCb) rdCb.checked = !(window._settings && window._settings.rumorDistortion === false);
+}
+
+// v20.5 传闻性格失真开关（写入既有 _settings 用户偏好，非角色数据）
+function toggleRumorDistortion() {
+    var cb = document.getElementById('setting-rumor-distortion');
+    if (cb) {
+        window._settings.rumorDistortion = !!cb.checked;
+        try { localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch(e) {}
+        if (window.showMessage) window.showMessage(cb.checked ? '🗣️ 传闻失真已开启：闲话经不同性格的人转述会走形。' : '🗣️ 传闻失真已关闭：闲话只扩散、不改口。', 'info');
+    }
 }
 
 // v20.3 感情维系衰减开关（写入既有 _settings 存储，非角色数据）
@@ -8178,6 +8566,7 @@ function toggleAffectionDecay() {
 
 window.toggleCityIntro = toggleCityIntro;
 window.toggleAffectionDecay = toggleAffectionDecay;
+window.toggleRumorDistortion = toggleRumorDistortion;
 window.initSettings = initSettings;
 
 // ==================== P0 修复：黑市交易函数 ====================

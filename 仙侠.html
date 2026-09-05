@@ -208,6 +208,9 @@
                 <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="beasts" onclick="switchPanel('beasts')">
                     <span class="text-lg mr-3">🐾</span>灵兽
                 </div>
+                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="achievements" onclick="switchPanel('achievements')">
+                    <span class="text-lg mr-3">🏅</span>成就
+                </div>
                 <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="house" onclick="switchPanel('house')">
                     <span class="text-lg mr-3">🏡</span>洞府
                 </div>
@@ -288,6 +291,7 @@
                             <div class="flex flex-wrap gap-1 mt-2 justify-center">
                                 <button onclick="openMainStoryPanel()" class="text-[10px] bg-purple-600 hover:bg-purple-500 text-white px-2 py-1 rounded">📜主线</button>
                                 <button onclick="openDisciplePanel()" class="text-[10px] bg-yellow-700 hover:bg-yellow-600 text-white px-2 py-1 rounded">🧑‍🎓弟子</button>
+                                <button onclick="openDaoCompanionPanel()" class="text-[10px] bg-rose-700 hover:bg-rose-600 text-white px-2 py-1 rounded">💞道侣</button><!-- v20.25 双修入口：位分/情分唯一增长路径的开关 -->
                                 <button onclick="openFireQTE()" class="text-[10px] bg-orange-600 hover:bg-orange-500 text-white px-2 py-1 rounded">🔥火候</button>
                                 <button onclick="openBountyBoard()" class="text-[10px] bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-2 py-1 rounded">📜悬赏</button>
                             </div>
@@ -1136,6 +1140,14 @@
                                 </label>
                                 <p class="text-xs text-gray-600 mt-1">开启后，与有感情线的对象久不联系（≥3 天）好感会逐渐下降；道侣不受影响。默认关闭。</p>
                             </div>
+                            <!-- 传闻性格失真（默认开启） -->
+                            <div class="pl-3 border-l-2 border-gray-700 mt-3">
+                                <label class="flex items-center justify-between text-sm text-gray-300 cursor-pointer">
+                                    <span>🗣️ 传闻走形</span>
+                                    <input type="checkbox" id="setting-rumor-distortion" checked onchange="toggleRumorDistortion()" class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-600">
+                                </label>
+                                <p class="text-xs text-gray-600 mt-1">开启后，江湖传闻经不同性格的人转述会添油加醋、各走各的形；关闭则闲话只扩散、不改口。默认开启。</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1160,12 +1172,29 @@
                         <div id="active-quest-list" class="space-y-2"></div>
                     </div>
                 </div>
+                <div class="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                        <h3 class="text-lg font-bold text-emerald-400 mb-3">🪧 门派日常</h3>
+                        <!-- v20.53：此容器此前根本不在页面上，四条日常任务从未露过面 -->
+                        <div id="daily-quest-list" class="space-y-2"></div>
+                    </div>
+                    <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                        <h3 class="text-lg font-bold text-amber-400 mb-3">📜 布告委托</h3>
+                        <p class="text-xs text-gray-500 mb-2">城里贴出来的活计，赏钱现结。</p>
+                        <div id="random-quest-list" class="space-y-2 max-h-72 overflow-y-auto"></div>
+                    </div>
+                </div>
+                <div class="mt-6 bg-gray-700/30 p-4 rounded-lg border border-gray-600">
+                    <h3 class="text-lg font-bold text-pink-400 mb-3">💬 故人心事</h3>
+                    <p class="text-xs text-gray-500 mb-2">交情到了，才有人肯把心事托给你。</p>
+                    <div id="npc-quest-list" class="space-y-2 max-h-72 overflow-y-auto"></div>
+                </div>
                 <div class="mt-6 bg-gray-700/30 p-4 rounded-lg border border-gray-600">
                     <h3 class="text-lg font-bold text-purple-400 mb-3">✅ 已完成任务</h3>
                     <div id="completed-quest-list" class="space-y-1 max-h-48 overflow-y-auto"></div>
                 </div>
             </div>
-            
+
             <!-- ===== 势力面板 ===== -->
             <div id="panel-factions" class="panel-content fade-in hidden">
                 <h2 class="text-xl font-bold text-yellow-500 mb-6">🏴 势力一览</h2>
@@ -1182,6 +1211,12 @@
             
             <!-- ===== 灵兽面板 ===== -->
             
+            <!-- ===== v20.11 成就墙面板 ===== -->
+            <div id="panel-achievements" class="panel-content fade-in hidden">
+                <h2 class="text-xl font-bold text-yellow-500 mb-2">🏅 成就</h2>
+                <div id="achievement-summary" class="text-sm text-gray-400 mb-4">…</div>
+                <div id="achievement-list" class="text-sm"></div>
+            </div>
             <!-- ===== 灵兽面板 ===== -->
             <div id="panel-beasts" class="panel-content fade-in hidden">
                 <h2 class="text-xl font-bold text-yellow-500 mb-6">🐾 灵兽</h2>
@@ -1578,6 +1613,8 @@
     <script src="js/items-extended/13-missing-ids.js"></script>
     <!-- v13.1：绝技秘籍（玩家可学 COMBAT_ABILITIES 绝技的研读渠道，自注册进物品库） -->
     <script src="js/items-extended/14-ability-manuals.js"></script>
+    <!-- v20.16：重塑灵根丹（后天改命线物品，自注册进物品库） -->
+    <script src="js/items-extended/15-root-refine.js"></script>
 
     <!-- 第5层：知识系统 + 背包与装备（knowledge 须在 equipment 前） -->
     <script src="js/core/knowledge-system.js"></script>
@@ -1597,6 +1634,8 @@
     <script src="js/core/world-calendar.js"></script>
     <!-- v18.9 世界日历 UI 渲染：依赖 world-calendar.js -->
     <script src="js/core/world-calendar-ui.js"></script>
+    <script src="js/core/dao-bridge.js"></script><!-- v20.24 道侣名册的桥：结契落笔/旧档补票/道侣相约（依赖 world-calendar.js） -->
+    <script src="js/core/festival-bridge.js"></script><!-- v20.28 节日的帖：四节定点、每位道侣各一帖、一夜只陪一人（依赖 world-calendar/dao-bridge） -->
     <!-- v19.0 P0-3 批次 C：年度宗门目标 5 选 1（依赖 sects-system / sect-internal） -->
     <script src="js/sects/sect-year-goal.js"></script>
     <!-- v19.1 P0-4：宗门大比与同门竞争（依赖 sect-year-goal 的 addTournamentWin 钩） -->
@@ -1612,6 +1651,7 @@
     <script src="js/crafting/forging-compound.js"></script>
     <script src="js/enhancement.js"></script>
     <script src="js/cultivation/cultivation.js"></script>
+    <script src="js/cultivation/art-effects.js"></script><!-- v20.48 功法掌握通电：秘籍effect/功法字符串 → 战斗/恢复/上限/面板单一真源 -->
     <script src="js/cultivation/breakthrough-system.js"></script>
     <script src="js/cultivation/long-retreat.js"></script>
     <script src="js/party-system.js"></script>
@@ -1651,6 +1691,16 @@
     <script src="js/npcs/social-content.js"></script>
     <!-- v14.2 16Personalities 五维性格（连续倾向条 + 16型池 + Big5双向桥接；包装 npcManager.getNPC） -->
     <script src="js/npcs/personality16.js"></script>
+    <!-- v20.5 P16 性格驱动层：行动权重/社交倾向/相性/传闻失真（纯函数，运行时读 personality16） -->
+    <script src="js/npcs/personality-driver.js"></script>
+    <!-- v20.5 玩家介入恩怨：居中调停/添油加醋/澄清辟谣（复用关系真源，注入 NPC 对话面板） -->
+    <script src="js/npcs/social-intervene.js"></script>
+    <!-- v20.6 闭环② 关系边产事件：仇家寻衅/好友回访（概率制，挂世界日历） -->
+    <script src="js/npcs/npc-rel-events.js"></script>
+    <!-- v20.6 闭环①③ 玩家进传闻网 + 传闻改行为（包装 recruitNPCFromDialog，需在其定义之后） -->
+    <script src="js/npcs/player-rumor.js"></script>
+    <!-- v20.7 建筑补齐包：试炼塔层数/剑冢剑意/僵尸字段接真消费/黄金宫珍珠货架（毒发订阅世界日历，需在 time-system 之后） -->
+    <script src="js/city-depth.js"></script>
     <!-- v12.3 温蘅（百花谷主）感情线：主线事件 / 日常接近事件 / 结局与自动触发系统 -->
     <script src="js/npcs/baihua-events-main.js"></script>
     <script src="js/npcs/baihua-events-extra.js"></script>
@@ -1667,6 +1717,8 @@
     <script src="js/npcs/jingang-events.js"></script>
     <script src="js/npcs/male-lead-rivalry.js"></script>
     <script src="js/npcs/male-lead-reconcile.js"></script>
+    <!-- v20.30 吃醋事件扩容包：八人×四类（试探/敲打/节日余波/小心眼）——余波全读 festival-bridge 既有账本，零新增存档键；需在其八人全局 detectRivalRomance 就位后加载 -->
+    <script src="js/npcs/jealousy-deep.js"></script>
     <script src="js/npcs/male-lead-bridge.js"></script>
     <script src="js/npcs/male-lead-aftermath.js"></script>
     <script src="js/npcs/heroine-aftermath.js"></script>
@@ -1682,8 +1734,13 @@
     <script src="js/sects/sect-internal.js"></script>
     <script src="js/sects/sect-join-flow.js"></script>
     <script src="js/sects/sect-visit.js"></script>
+    <script src="js/sects/sect-profiles.js"></script>
+    <script src="js/sects/sect-crisis-events.js"></script>
+    <script src="js/sects/sect-crisis-engine.js"></script>
     <script src="js/sects/sect-specialties.js"></script>
     <script src="js/sects/sect-events.js"></script>
+    <script src="js/sects/sect-exclusive-events.js"></script>
+    <script src="js/sects/sect-story-arc.js"></script>
     <script src="js/sects/dao-companion-deep.js"></script>
     <script src="js/sects/sects-deep-ui.js"></script>
     <script src="js/sects/sect-resource-actions.js"></script>
@@ -1731,8 +1788,11 @@
     <script src="js/extensions/cave-facilities.js"></script>
     <script src="js/extensions/codex-tutorial.js"></script>
     <script src="js/extensions/player-sect.js"></script>
+    <script src="js/extensions/player-sect-ui.js"></script>
     <script src="js/extensions/beast-evolution.js"></script>
     <script src="js/extensions/beast-tide.js"></script>
+    <!-- v20.16 后天改命线：重塑灵根丹服用逻辑（挪饼重归一，依赖 NpcLineage 同一把尺子） -->
+    <script src="js/extensions/root-refine.js"></script>
     <!-- v20.0 主循环真集成：newDay → 各模块 tickDay -->
     <script src="js/core/world-loop.js"></script>
     <!-- P0-5 死亡仙侠化：神魂/残魂系统（依赖运行时对象，须在 app.js 之前） -->
@@ -1767,9 +1827,13 @@
     <script src="js/quest/bounty-board.js"></script>
     
     <!-- 第14层：v9.0 情境引擎 + 第二批设施 -->
+    <script src="js/core/world-teeth.js"></script><!-- v20.21 世界的牙齿：黑市信用簿/巡夜罚则/本城买价行情 -->
     <script src="js/core/scenario-engine.js"></script>
+    <script src="js/city-facilities/bank-service.js"></script><!-- v20.18 钱庄账房：存款起息/欠条到期/逾期催收 -->
+    <script src="js/city-facilities/pawn-service.js"></script><!-- v20.20 当铺账房：真当票/凭票赎回/过期死当 -->
     <script src="js/city-facilities/facility-batch2.js"></script>
-    
+    <script src="js/city-facilities/facility-batch3.js"></script><!-- v20.19 单剧本设施各添第二出戏：报价随行情现算 -->
+
     <!-- 第15层：v9.9 日常事件系统（在 event-system 之后，依赖 showMessage/addItem 等） -->
     <script src="js/core/daily-events.js"></script>
 

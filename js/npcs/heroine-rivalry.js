@@ -258,10 +258,11 @@ var HEROINE_RECONCILE_EVENTS = {
             { speaker: 'narrator', text: '修罗宫后殿。她坐在妆台前，手里捏着那根被她掰成两截的断簪——接了很久，没接上。', type: 'description' },
             { speaker: 'npc', text: '她听见你进来，没回头。半晌，把断簪往后一递：「……你手稳，你来接。」' },
             { speaker: 'npc', text: '「我不爱求人。」她声音很轻，「但这个，我接不上。」' },
+            // v20.26 好感以 effects 真源为准（有无道侣两档：12/8/5 与 4/6/2），选项行不再标数
             { speaker: 'player_select', text: '你如何回应？', options: [
-                { text: '接上断簪，交还她', effect: 'fix', affection: 12 },
-                { text: '「这簪子，我替你收着。」', effect: 'keep', affection: 8 },
-                { text: '「绯泪，我对不住你。」', effect: 'apologize', affection: 5 }
+                { text: '接上断簪，交还她', effect: 'fix' },
+                { text: '「这簪子，我替你收着。」', effect: 'keep' },
+                { text: '「绯泪，我对不住你。」', effect: 'apologize' }
             ]}
         ],
         effects: function(npc, choice) {
@@ -389,6 +390,9 @@ if (typeof window !== 'undefined' && window.timeSystem && window.timeSystem.onNe
         try {
             if (!window.currentCharData || !window.npcManager) return;
             var loc = window.currentCharData.location || '';
+            // v20.25 情敌探测走全局版：男主入门文件加载时会把 window.detectRivalRomance 换成八人扫描版
+            // （含四位男主）——本钩子旧版闭着本地函数（只扫四位女主），情敌若是男主，女主永远"看不见"。
+            var _det = (typeof window.detectRivalRomance === 'function') ? window.detectRivalRomance : detectRivalRomance;
             for (var i = 0; i < HEROINE_ROSTER.length; i++) {
                 var h = HEROINE_ROSTER[i];
                 if (h.sect !== loc) continue;                       // 玩家须在该女主角所在门派
@@ -397,7 +401,7 @@ if (typeof window !== 'undefined' && window.timeSystem && window.timeSystem.onNe
                 var aff = (npc.relationship && npc.relationship.affection) || 0;
 
                 // 1) 吃醋对峙：好感≥45、未对峙过、有情敌
-                if (aff >= 45 && !hasEventTriggered(h.eventId) && detectRivalRomance(h.id)) {
+                if (aff >= 45 && !hasEventTriggered(h.eventId) && _det(h.id)) {
                     var ev = NPC_PERSONAL_EVENTS[h.eventId];
                     if (ev && (!canPlayerAccessPersonalEvent || canPlayerAccessPersonalEvent(ev, npc))) {
                         _delayedRivalryFire(h.eventId, npc);
@@ -407,7 +411,7 @@ if (typeof window !== 'undefined' && window.timeSystem && window.timeSystem.onNe
 
                 // 2) 和好：已对峙过、好感养回≥55、未和好过、仍有情敌
                 if (h.reconcileId && aff >= 55 && hasEventTriggered(h.eventId)
-                    && !hasEventTriggered(h.reconcileId) && detectRivalRomance(h.id)) {
+                    && !hasEventTriggered(h.reconcileId) && _det(h.id)) {
                     var ev2 = NPC_PERSONAL_EVENTS[h.reconcileId];
                     if (ev2 && (!canPlayerAccessPersonalEvent || canPlayerAccessPersonalEvent(ev2, npc))) {
                         _delayedRivalryFire(h.reconcileId, npc);

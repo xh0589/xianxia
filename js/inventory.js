@@ -322,6 +322,29 @@ function useItem(uid) {
                     }
                     return true;
                 }
+                // v20.16 重塑灵根丹：挪饼+封顶拒服（拒绝时不消耗——药力不白受，丹也不白吃）
+                if (template.effect && template.effect.root_refine) {
+                    if (typeof window.refineRootByPill !== 'function') {
+                        console.warn('refineRootByPill 未定义');
+                        return false;
+                    }
+                    var _rr = window.refineRootByPill();
+                    if (_rr && _rr.error) {
+                        if (typeof window.showMessage === 'function') window.showMessage('❌ ' + _rr.error, 'warning');
+                        return false; // 拒服：不扣丹
+                    }
+                    if (typeof window.showMessage === 'function') {
+                        window.showMessage('🌈 药力游走四肢百骸——' + _rr.element + '灵根更纯了（主根占比 ' + _rr.fromMain + '% → ' + _rr.toMain + '%，第 ' + _rr.count + ' 次重塑）', 'success');
+                    }
+                    if (typeof window.updateCharacterStatus === 'function') {
+                        try { window.updateCharacterStatus(); } catch (e) {}
+                    }
+                    slot.removeCount(1);
+                    if (slot.count <= 0) {
+                        inventory.slots[inventory.slots.indexOf(slot)] = null;
+                    }
+                    return true;
+                }
                 if (template.subtype === 'talisman') {
                     if (!applyTalismanEffect(slot, template)) return false;
                 } else {
@@ -1512,18 +1535,27 @@ function updateEquippedStats() {
 // ============ 获取最终属性（含装备加成） ============
 function getFinalAttributes(baseAttrs) {
     const final = { ...baseAttrs };
-    
+
     Object.entries(equippedStatsCache.attrs).forEach(([key, value]) => {
         final[key] = (final[key] || 0) + value;
     });
-    
+    // v20.48 功法掌握通电：已学功法的六维底蕴（all_attr/专属属性）在此并入
+    try {
+        if (window.ArtEffects && typeof window.ArtEffects.attrBonus === 'function') {
+            var artAttrs = window.ArtEffects.attrBonus();
+            Object.entries(artAttrs).forEach(([key, value]) => {
+                if (value) final[key] = (final[key] || 0) + value;
+            });
+        }
+    } catch (eArt) {}
+
     return final;
 }
 
 // ============ 获取战斗属性加成 ============
 function getCombatBonuses(baseBonuses) {
     const final = { ...baseBonuses };
-    
+
     Object.entries(equippedStatsCache.combatBonus).forEach(([key, value]) => {
         final[key] = (final[key] || 0) + value;
     });
@@ -1531,6 +1563,23 @@ function getCombatBonuses(baseBonuses) {
         var talismanBonuses = window.TalismanSystem.getCombatBonuses();
         Object.entries(talismanBonuses).forEach(([key, value]) => { final[key] = (final[key] || 0) + value; });
     }
+    // v20.48 功法掌握通电：秘籍/功法的攻防速闪反暴加值在此并入（乘算类走 buildPlayerBattleEntity）
+    try {
+        if (window.ArtEffects && typeof window.ArtEffects.combatBonus === 'function') {
+            var artBonus = window.ArtEffects.combatBonus();
+            Object.entries(artBonus).forEach(([key, value]) => { final[key] = (final[key] || 0) + value; });
+        }
+    } catch (eArt) {}
+    // v20.48 境界质变补电：block/dodge/penetrate/crit 四个百分点键此前无人读（乘数三键已接 _realmCombatMul）
+    try {
+        var _rzRealm = (window.currentCharData && window.currentCharData.realm) || '';
+        if (_rzRealm && typeof window.getRealmBonusPct === 'function') {
+            ['block', 'dodge', 'penetrate', 'crit'].forEach(function (rk) {
+                var rv = window.getRealmBonusPct(_rzRealm, rk);
+                if (rv) final[rk] = (final[rk] || 0) + rv;
+            });
+        }
+    } catch (eRealm) {}
     return final;
 }
 

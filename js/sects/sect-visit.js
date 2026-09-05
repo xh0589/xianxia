@@ -221,11 +221,11 @@ function renderSectInnerGate(sectName, isMember, accessLevel) {
             '<p class="text-xs text-gray-500">你的职位尚不能进入内院核心区域</p>' +
             '</div>';
     } else {
-        // 游客 - 显示封锁
-        return '<div class="bg-gray-800/30 p-3 rounded border border-red-800 text-center">' +
-            '<p class="text-sm text-red-400 font-bold">🚫 内院入口（已封锁）</p>' +
-            '<p class="text-xs text-gray-500 mt-1">「弟子清修之地，游客止步」</p>' +
-            '<p class="text-xs text-red-500 mt-1">🔒 需加入门派方可进入</p>' +
+        // v20.46：游客至内院——门闭着就是了，不立"禁止"的牌子。
+        // 准入由门禁与测试守住，场面留给叙事。
+        return '<div class="bg-gray-800/30 p-3 rounded border border-gray-700 text-center">' +
+            '<p class="text-sm text-gray-400">🚪 内院</p>' +
+            '<p class="text-xs text-gray-500 mt-1">门闭着。门内传来弟子早课的诵声，有执事弟子在廊下守着。</p>' +
             '</div>';
     }
 }
@@ -434,6 +434,13 @@ function showSectInnerView(sectName) {
         '<button onclick="showSectOuterView(\'' + sectName + '\')" class="text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded">← 外院</button>' +
         '<button onclick="closeSectPanel()" class="text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded">✕ 离开</button>' +
         '</div></div>' +
+        // 门派大事（v20.49 因果引擎：酝酿可防备 / 爆发抉择 / 余波了结）
+        (function() {
+            try {
+                return (window.SectCrisis && typeof window.SectCrisis.display === 'function')
+                    ? ((window.SectCrisis.display(sectName) || {}).html || '') : '';
+            } catch (eCrisis) { return ''; }
+        })() +
         // 门派事件（P3）
         (function() {
             var eventDisplay = (typeof window.getSectEventDisplay === 'function') ? window.getSectEventDisplay(sectName) : null;

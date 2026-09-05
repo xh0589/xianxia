@@ -48,17 +48,19 @@ var COMMON_RANKS = [
 ];
 
 // ============ 通用日常任务模板 ============
+// v20.53：每桩差事都有真实的工夫——耗时与精力写进条目，执行时照扣。
+// 之前是"点击即完成"，无成本无复核，点十下白拿十份贡献。
 var COMMON_TASKS = [
-    { id: 'task_clean', name: '打扫庭院', desc: '保持门派环境整洁', minRank: 7, reward: { contribution: 5, exp: 10 } },
-    { id: 'task_chores', name: '杂务帮工', desc: '协助厨房/仓库等杂务', minRank: 7, reward: { contribution: 5, exp: 8 } },
-    { id: 'task_patrol', name: '山门巡逻', desc: '在山门周围巡逻', minRank: 6, reward: { contribution: 10, exp: 15 } },
-    { id: 'task_gather', name: '采集物资', desc: '采集门派所需物资', minRank: 6, reward: { contribution: 10, exp: 20 } },
-    { id: 'task_teach', name: '教导新弟子', desc: '指导新入门弟子修炼', minRank: 5, reward: { contribution: 20, exp: 30 } },
-    { id: 'task_hunt', name: '下山除妖', desc: '处理附近的妖患', minRank: 5, reward: { contribution: 25, exp: 40, spiritStones: 20 } },
-    { id: 'task_train', name: '演练武艺', desc: '在演武场演练门派武学', minRank: 4, reward: { contribution: 35, exp: 50 } },
-    { id: 'task_manage', name: '管理事务', desc: '协助处理门派日常管理', minRank: 3, reward: { contribution: 50, exp: 60, spiritStones: 30 } },
-    { id: 'task_lecture', name: '开坛讲道', desc: '为弟子们讲解道法武学', minRank: 2, reward: { contribution: 80, exp: 100, spiritStones: 50 } },
-    { id: 'task_diplomacy', name: '外交出访', desc: '代表门派前往其他门派交流', minRank: 2, reward: { contribution: 100, exp: 120, fame: 3 } }
+    { id: 'task_clean', name: '打扫庭院', desc: '保持门派环境整洁', minRank: 7, cost: { energy: 10, minutes: 40 }, reward: { contribution: 5, exp: 10 } },
+    { id: 'task_chores', name: '杂务帮工', desc: '协助厨房/仓库等杂务', minRank: 7, cost: { energy: 15, minutes: 60 }, reward: { contribution: 5, exp: 8 } },
+    { id: 'task_patrol', name: '山门巡逻', desc: '在山门周围巡逻', minRank: 6, cost: { energy: 20, minutes: 60 }, reward: { contribution: 10, exp: 15 } },
+    { id: 'task_gather', name: '采集物资', desc: '采集门派所需物资', minRank: 6, cost: { energy: 20, minutes: 90 }, reward: { contribution: 10, exp: 20 } },
+    { id: 'task_teach', name: '教导新弟子', desc: '指导新入门弟子修炼', minRank: 5, cost: { energy: 15, minutes: 60 }, reward: { contribution: 20, exp: 30 } },
+    { id: 'task_hunt', name: '下山除妖', desc: '处理附近的妖患', minRank: 5, cost: { energy: 30, minutes: 120 }, reward: { contribution: 25, exp: 40, spiritStones: 20 } },
+    { id: 'task_train', name: '演练武艺', desc: '在演武场演练门派武学', minRank: 4, cost: { energy: 25, minutes: 90 }, reward: { contribution: 35, exp: 50 } },
+    { id: 'task_manage', name: '管理事务', desc: '协助处理门派日常管理', minRank: 3, cost: { energy: 15, minutes: 60 }, reward: { contribution: 50, exp: 60, spiritStones: 30 } },
+    { id: 'task_lecture', name: '开坛讲道', desc: '为弟子们讲解道法武学', minRank: 2, cost: { energy: 25, minutes: 120 }, reward: { contribution: 80, exp: 100, spiritStones: 50 } },
+    { id: 'task_diplomacy', name: '外交出访', desc: '代表门派前往其他门派交流', minRank: 2, cost: { energy: 35, minutes: 240 }, reward: { contribution: 100, exp: 120, fame: 3 } }
 ];
 
 // ============ 门派深度数据配置 ============

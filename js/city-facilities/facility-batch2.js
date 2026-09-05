@@ -4,36 +4,36 @@
 
 // ========== 情境设施（13个） ==========
 
-// 1. 钱庄
+// 1. 钱庄（v20.18：存款真起息、欠条真到期、账目走钱庄账房 BankService）
 scenarioEngine.register('money_house', {
     id: 'money_house', name: '钱庄', icon: '🏦',
-    desc: '存放灵石、抵押法宝、办理贷款',
+    desc: '存放灵石按月生息、抵押法宝、签借据（逾期有人登门）',
     scenarios: [{
-        id: 'loan', name: '灵石贷款', icon: '💰',
-        desc: '钱庄可以抵押物品换取灵石',
+        id: 'loan', name: '钱庄业务', icon: '💰',
+        desc: '存取生息、抵押卖断、借据清偿，一笔一笔都登簿',
         startNode: 'loan_start',
         nodes: {
             loan_start: {
-                desc: '钱庄掌柜热情招呼："客官要存灵石还是借贷？本店抵押公道，利息优惠。"',
+                desc: function () {
+                    return (window.BankService && typeof window.BankService.describe === 'function')
+                        ? window.BankService.describe()
+                        : '钱庄掌柜热情招呼："客官存灵石月息五、随存随取，抵押公道，借贷也便。"';
+                },
                 choices: [
-                    { text: '📦 抵押一件装备换取灵石', next: 'loan_mortgage', require: { stones: -1 }, effects: { msg: '你抵押了一件装备，获得300灵石。', msgType: 'success', stones: 300, time: 10 } },
-                    { text: '💰 借贷灵石（需支付利息）', next: 'loan_borrow', effects: { time: 10 } },
-                    { text: '💳 存入灵石赚取利息', next: 'loan_deposit', effects: { stones: -50, msg: '你存入50灵石作为本金。', time: 10 } },
+                    { text: '📦 当一件龙鳞甲换灵石（250，卖断）', next: null, require: { items: { itemId: 'mat_dragon_scale', count: 1 } }, effects: { msg: '掌柜验了货："龙鳞甲是真货，行价250灵石，卖断不赎。"鳞甲锁进了柜台，灵石落进你的口袋。', msgType: 'success', stones: 250, take: [{ itemId: 'mat_dragon_scale', count: 1 }], time: 10 } },
+                    { text: '💰 存入100灵石（月息五，起息今日）', next: null, require: { stones: 100 }, effects: { bank: { op: 'deposit' , amount: 100 }, time: 5 } },
+                    { text: '🏦 存入500灵石（月息五，利随本清）', next: null, require: { stones: 500 }, effects: { bank: { op: 'deposit', amount: 500 }, time: 5 } },
+                    { text: '🧳 取出存款（利息一并结清）', next: null, effects: { bank: { op: 'withdraw' }, time: 5 } },
+                    { text: '💳 借贷灵石（欠条会传出去）', next: 'loan_borrow', effects: { time: 5 } },
+                    { text: '🧾 还清欠柜上的账', next: null, effects: { bank: { op: 'repay' }, time: 10 } },
                     { text: '👋 暂时不需要', next: null }
                 ]
             },
             loan_borrow: {
-                desc: '"借贷100灵石，一月后需还120灵石。客官可愿意？"',
+                desc: '"借贷100灵石，一月后连本带利还120。欠条留名，商路上传开了可不好看。"\n\n（逾期未还：账房会按日登门划扣，身上划不够就得上点手段。）',
                 choices: [
-                    { text: '✅ 借贷100灵石', next: null, effects: { stones: 100, msg: '你借了100灵石，一月后需还120。', time: 10 } },
+                    { text: '✅ 签下欠条，领100灵石', next: null, effects: { bank: { op: 'borrow', amount: 100 }, karma: -3, noto: 2, msg: '你按下手印领了100灵石——欠条是会走路的东西，行商圈里从此多了一句你的闲话。', msgType: 'warning', time: 10 } },
                     { text: '❌ 利息太高了', next: null }
-                ]
-            },
-            loan_deposit: {
-                desc: '掌柜为你办理了存单："每月可领取5%的利息，随时可取。"',
-                choices: [
-                    { text: '✅ 存入50灵石', next: null, effects: { stones: -50, msg: '存入50灵石，每月可领利息。', time: 10 } },
-                    { text: '❌ 算了', next: null }
                 ]
             }
         }
@@ -60,7 +60,11 @@ scenarioEngine.register('contract_hall', {
             ct_accept: {
                 desc: '你签下名字，契约化作一道灵光没入你的神识——\n\n"契约已成，若违约将受灵气反噬。"\n\n你接过货物，踏上前往青木城的路。',
                 choices: [
-                    { text: '🚶 出发护送', next: null, effects: { exp: 40, stones: 200, rep: 5, msg: '一路平安抵达，获得200灵石和40经验！', msgType: 'success', time: 60 } },
+                    { text: '🚶 出发护送', next: null, require: { energy: 30 }, effects: { cost: { energy: 30 }, time: 60, roll: {
+                        prob: function() { var lv = (typeof window.getRealmTier === 'function') ? window.getRealmTier((window.currentCharData || {}).realm) : 1; return Math.max(0.4, Math.min(0.9, 0.55 + lv * 0.05)); },
+                        win: { exp: 40, stones: 200, rep: 5, msg: '路上喝退两拨劫道的，安然抵达青木城，货主当面点清。历练+40，声望+5！', msgType: 'success' },
+                        lose: { qi: -30, health: -20, stones: 100, exp: 25, rep: -3, msg: '山道上撞了邪修！你拼死护住大半货物，仍有灵药受损——货主只付了一半酬金，一路上怨气不断。', msgType: 'warning' }
+                    } } },
                     { text: '🏃 中途放弃（违约）', next: null, effects: { qi: -50, noto: 5, msg: '你撕毁契约，灵气反噬，真气大损！', msgType: 'warning' } }
                 ]
             }
@@ -87,15 +91,13 @@ scenarioEngine.register('escort_office', {
             es_road: {
                 desc: '你押着镖车走了大半日，行至一片密林时，前方突然杀出一伙山贼！',
                 choices: [
-                    { text: '⚔️ 击退山贼！', next: 'es_fight', effects: { qi: -20, time: 15 } },
+                    { text: '⚔️ 击退山贼！（真刀真枪，会输）', next: null, require: { qi: 40 }, effects: { time: 45, roll: {
+                        prob: function() { var lv = (typeof window.getRealmTier === 'function') ? window.getRealmTier((window.currentCharData || {}).realm) : 1; return Math.max(0.35, Math.min(0.85, 0.45 + lv * 0.06)); },
+                        win: { qi: -25, exp: 40, rep: 5, stones: 300, msg: '你把山贼杀得四散奔逃，镖车安全送达！获得300灵石和40历练！', msgType: 'success' },
+                        lose: { qi: -60, health: -25, stones: 150, exp: 30, msg: '群贼围攻，你挂了彩才护住镖车。镖头扣了货损赔款，只拿到150灵石——但这场硬仗比银子值钱。', msgType: 'warning' }
+                    } } },
                     { text: '💰 花钱买路', next: null, effects: { stones: -100, msg: '山贼拿了钱让开道路。', time: 10 } },
                     { text: '🏃 绕路而行', next: null, effects: { time: 30, exp: 10, msg: '你绕路多走了半日，但安全抵达。', msgType: 'info' } }
-                ]
-            },
-            es_fight: {
-                desc: '你三下五除二解决了山贼，押着镖车继续赶路。',
-                choices: [
-                    { text: '✅ 安全送达，领取报酬', next: null, effects: { stones: 300, exp: 40, rep: 5, msg: '货物安全送达！获得300灵石和40经验！', msgType: 'success', time: 30 } }
                 ]
             }
         }
@@ -105,17 +107,17 @@ scenarioEngine.register('escort_office', {
 // 4. 善堂
 scenarioEngine.register('charity_hall', {
     id: 'charity_hall', name: '善堂', icon: '🏮',
-    desc: '捐赠物资获取功德，功德可用于祈福抵消业障',
+    desc: '捐赠物资积累功德，功德可抵消一身业障',
     scenarios: [{
         id: 'donate', name: '捐赠物资', icon: '🎁',
         desc: '善堂正在募集粮食和药材',
         startNode: 'do_start',
         nodes: {
             do_start: {
-                desc: '善堂管事拱手："施主慈悲，今冬城中难民众多，急需粮食和药材。"\n\n捐赠物资可获得功德，功德可抵消业障、祈福增运。',
+                desc: '善堂管事拱手："施主慈悲，今冬城中难民众多，急需粮食和药材。"\n\n捐赠实打实换米下锅——功德能抵一身业障，恶业深重的人捐得越多，账消得越快。',
                 choices: [
-                    { text: '🌾 捐赠粮食（消耗50灵石）', next: null, effects: { stones: -50, rep: 5, msg: '你捐赠了粮食，功德+5。', msgType: 'success', time: 10 } },
-                    { text: '💊 捐赠药材（消耗30灵石）', next: null, effects: { stones: -30, rep: 3, msg: '你捐赠了药材，功德+3。', time: 10 } },
+                    { text: '🌾 捐赠粮食（消耗50灵石）', next: null, effects: { stones: -50, rep: 5, karma: 2, msg: '你捐赠了粮食，粥棚当日起灶。功德簿上记了你一笔，业障若负，便消减二分。', msgType: 'success', time: 10 } },
+                    { text: '💊 捐赠药材（消耗30灵石）', next: null, effects: { stones: -30, rep: 3, karma: 1, msg: '你捐赠了药材，病棚的人有药可煎了。功德簿上记了你一笔。', time: 10 } },
                     { text: '🙏 捐赠大量物资（消耗200灵石）', next: 'do_generous', effects: { time: 10 } },
                     { text: '🚶 四处散步看看', next: null, effects: { msg: '你在善堂外随意走动，感受冬日的寒风。', time: 5 } }
                 ]
@@ -123,7 +125,7 @@ scenarioEngine.register('charity_hall', {
             do_generous: {
                 desc: '管事大喜："施主大善！我替城中百姓谢过施主！"',
                 choices: [
-                    { text: '✅ 捐赠200灵石', next: null, effects: { stones: -200, rep: 15, exp: 20, msg: '你的善举传遍全城，声望大增！', msgType: 'success', time: 15 } },
+                    { text: '✅ 捐赠200灵石', next: null, effects: { stones: -200, rep: 15, karma: 4, exp: 20, msg: '你的善举传遍全城，声望大增！功德簿上重重记了一笔——负业缠身的人，这一笔能压下大半口气。', msgType: 'success', time: 15 } },
                     { text: '❌ 还是捐少一点', next: 'do_start' }
                 ]
             }
@@ -149,23 +151,18 @@ scenarioEngine.register('arena_stage', {
                 ]
             },
             du_fight: {
-                desc: function(v) { return '你跃上斗法台，对面修士冷笑一声："又来一个送分的！"\n\n双方抱拳行礼，战斗开始！'; },
+                desc: '你跃上斗法台，对面修士冷笑一声："又来一个送分的！"\n\n双方抱拳行礼，战斗开始！台下赌盘已经开了赔率。',
                 choices: [
-                    { text: '💪 全力进攻，快速取胜', next: 'du_win_fast', effects: { qi: -30, time: 10 } },
-                    { text: '🧘 稳扎稳打，防守反击', next: 'du_win_steady', effects: { qi: -20, time: 15 } }
-                ]
-            },
-            du_win_fast: {
-                desc: '你一出手就是凌厉攻势，对手措手不及，三招之内被你打下擂台！\n\n台下爆发出喝彩声！',
-                choices: [
-                    { text: '✅ 领取胜者奖金', next: null, effects: { stones: 100, exp: 30, rep: 5, msg: '你获得100灵石奖金和30经验！', msgType: 'success' } },
-                    { text: '⚔️ 继续挑战下一个', next: null, effects: { stones: 50, exp: 20, msg: '你继续守擂，又赢了一场！', msgType: 'success', qi: -20 } }
-                ]
-            },
-            du_win_steady: {
-                desc: '你稳扎稳打，消耗对手的体力。\n\n十招之后，对手露出破绽，你一招制敌！',
-                choices: [
-                    { text: '✅ 领取胜者奖金', next: null, effects: { stones: 80, exp: 25, rep: 3, msg: '你获得80灵石奖金！', msgType: 'success' } }
+                    { text: '💪 全力进攻（险中求胜）', next: null, require: { qi: 30 }, effects: { time: 10, roll: {
+                        prob: function() { var lv = (typeof window.getRealmTier === 'function') ? window.getRealmTier((window.currentCharData || {}).realm) : 1; return Math.max(0.3, Math.min(0.8, 0.35 + lv * 0.06)); },
+                        win: { qi: -30, stones: 100, exp: 30, rep: 5, fame: 1, msg: '三招之内你把对手打下擂台！100灵石奖金入袋，台下喝彩声里有人记住了你的名号。', msgType: 'success' },
+                        lose: { qi: -45, health: -25, exp: 20, msg: '对手的身法比你想象的快——一掌把你拍下台去，哄笑声里你爬起来掸了掸灰。', msgType: 'warning' }
+                    } } },
+                    { text: '🧘 稳扎稳打（后手更稳）', next: null, require: { qi: 20 }, effects: { time: 15, roll: {
+                        prob: function() { var lv = (typeof window.getRealmTier === 'function') ? window.getRealmTier((window.currentCharData || {}).realm) : 1; return Math.max(0.25, Math.min(0.75, 0.28 + lv * 0.06)); },
+                        win: { qi: -20, stones: 80, exp: 25, rep: 3, msg: '十招之后对手力竭破绽大开，你一击制胜！奖金80灵石。', msgType: 'success' },
+                        lose: { qi: -30, health: -15, exp: 20, msg: '你守到第十招，一口气没换匀，被他一记劈山掌震得倒退了半步——半步便是输。', msgType: 'warning' }
+                    } } }
                 ]
             }
         }
@@ -223,12 +220,14 @@ scenarioEngine.register('stele_forest', {
                 ]
             },
             stl_sword: {
-                desc: function(v) {
-                    var insight = Math.random() < 0.4;
-                    return insight ? '你凝视剑碑，眼前仿佛出现一位剑客在演练剑法。\n\n忽然间，你悟通了其中一式！' : '你仔细研读碑文，但其中剑意高深，你暂时未能领悟。';
-                },
+                desc: '你凝视剑碑，碑上刻痕深深浅浅，仿佛一位剑客在你眼前反复演练同一式剑招。',
                 choices: [
-                    { text: '✅ 继续参悟', next: null, effects: { exp: 30, msg: Math.random() < 0.4 ? '你领悟了剑法真意！历练+30' : '你略有感悟，历练+15', time: 15 } }
+                    { text: '🧘 盘膝坐下，深参剑意', next: null, effects: { time: 25, roll: {
+                        prob: 0.4,
+                        win: { exp: 30, msg: '你忽然悟通了剑碑中的一式真意！历练+30', msgType: 'success' },
+                        lose: { exp: 15, msg: '碑文剑意高深，你只得皮毛，略有感悟。历练+15' }
+                    } } },
+                    { text: '👋 状态不佳，改日再来', next: null }
                 ]
             },
             stl_cultivate: {
@@ -289,28 +288,29 @@ scenarioEngine.register('oddity_museum', {
     }]
 });
 
-// 9. 当铺
+// 9. 当铺（v20.20：真当票——当期一月、凭票赎回加息一成五、过期死当；当金/卖断价随本城行情现算）
 scenarioEngine.register('pawn_shop', {
     id: 'pawn_shop', name: '当铺', icon: '🔨',
-    desc: '紧急变现，抵押物品获取灵石',
+    desc: '紧急变现：典当可赎，卖断给足行价，票面写多少就是多少',
     scenarios: [{
         id: 'pawn', name: '典当物品', icon: '💎',
-        desc: '急需灵石时可以典当身上的物品',
+        desc: '龙鳞甲可当可卖——当有赎期，卖无回头',
         startNode: 'pw_start',
         nodes: {
             pw_start: {
-                desc: '当铺掌柜拨着算盘："客官要典当什么？本店价格公道，过期不赎就归本店所有了。"',
+                desc: function () {
+                    return (window.PawnService && typeof window.PawnService.describe === 'function')
+                        ? window.PawnService.describe()
+                        : '当铺掌柜拨着算盘："本店只收大件——龙鳞甲这类硬货。当有赎期，卖无回头。"';
+                },
                 choices: [
-                    { text: '💎 典当一件贵重物品', next: 'pw_do', effects: { time: 10 } },
-                    { text: '🔄 赎回之前典当的物品', next: null, effects: { msg: '你暂时没有需要赎回的物品。', time: 5 } },
+                    { text: '📜 把龙鳞甲当上（按行情折当金，当期一月可赎）', next: null, require: { items: { itemId: 'mat_dragon_scale', count: 1 } }, effects: { pawn: { op: 'pawn', itemId: 'mat_dragon_scale', count: 1, base: 250 }, time: 5 } },
+                    { text: '🧾 拿当票赎回物件（当金加息一成五）', next: null, effects: { pawn: { op: 'redeem' }, time: 5 } },
+                    { text: '💎 卖断龙鳞甲（行价现算，死当无回头）', next: null, require: { items: { itemId: 'mat_dragon_scale', count: 1 } }, effects: {
+                        stones: function () { return Math.round(250 * facilitySellMod()); },
+                        take: [{ itemId: 'mat_dragon_scale', count: 1 }],
+                        msg: '掌柜把鳞甲翻来覆去验了两遍，按本城行市点足了现钱："死当成交，票根收好——只是个纪念了。"', time: 10 } },
                     { text: '👋 只是看看', next: null }
-                ]
-            },
-            pw_do: {
-                desc: '掌柜看了看你的物品："这件东西可以当300灵石，当期一个月，月息10%。\n一个月内不来赎，东西就归我们了。"',
-                choices: [
-                    { text: '✅ 典当', next: null, effects: { stones: 300, msg: '你获得300灵石，一个月内需赎回。', time: 10 } },
-                    { text: '❌ 太少了，不当了', next: null }
                 ]
             }
         }
@@ -327,24 +327,37 @@ scenarioEngine.register('auction_house', {
         startNode: 'au_start',
         nodes: {
             au_start: {
-                desc: '拍卖行中座无虚席，台上正在拍卖一件珍品。\n\n"下一件拍品——筑基丹一枚，起拍价500灵石！"',
+                desc: function () {
+                    var P = Math.round(500 * (window.facilityBuyMod ? window.facilityBuyMod() : 1));
+                    return '拍卖行中座无虚席，台上正在拍卖一件珍品。\n\n"下一件拍品——筑基丹一枚，起拍价' + P + '灵石！"（拍行随本城行情定价，贵地起拍就贵）';
+                },
                 choices: [
                     { text: '💰 参与竞拍筑基丹', next: 'au_bid', effects: { time: 10 } },
                     { text: '👀 只是看看热闹', next: null, effects: { exp: 5, msg: '你见识了各种珍品，开阔了眼界。', time: 15 } },
-                    { text: '📦 把自己的物品上架拍卖', next: null, effects: { msg: '你可以将物品交给拍卖行寄售。', time: 10 } }
+                    { text: '📦 把自己的物品上架拍卖', next: null, effects: { msg: '寄售要押信物排队，档期排到下月了——急出手的话，去商会代售台更实在。', time: 10 } }
                 ]
             },
             au_bid: {
-                desc: '你举牌出价500灵石！\n\n立刻有人加价到550。\n\n拍卖师看向你："这位客官还要加价吗？"',
+                desc: function () {
+                    var P = Math.round(500 * (window.facilityBuyMod ? window.facilityBuyMod() : 1));
+                    return '你举牌出价' + P + '灵石！\n\n立刻有人加价到' + Math.round(P * 1.1) + '。\n\n拍卖师看向你："这位客官还要加价吗？"';
+                },
                 choices: [
-                    { text: '💰 加价到600灵石', next: 'au_bid2', effects: { time: 5 } },
+                    { text: '💰 咬牙一口加到落槌', next: 'au_bid2', effects: { time: 5 } },
                     { text: '❌ 放弃，价格太高了', next: null, effects: { msg: '你放弃了竞拍。', time: 5 } }
                 ]
             },
             au_bid2: {
-                desc: '对方犹豫了一下，没有再加价。\n\n"600灵石第一次！第二次！第三次！成交！"\n\n你成功拍下了一枚筑基丹！',
+                desc: function () {
+                    var H = Math.round(500 * (window.facilityBuyMod ? window.facilityBuyMod() : 1) * 1.2);
+                    return '对方犹豫了一下，没有再加价。\n\n"' + H + '灵石第一次！第二次！第三次！成交！"\n\n你成功拍下了一枚筑基丹！';
+                },
                 choices: [
-                    { text: '✅ 付款取货', next: null, effects: { stones: -600, items: [{ itemId: 'pill_foundation', count: 1 }], msg: '你获得筑基丹×1！', msgType: 'success', time: 10 } }
+                    { text: '✅ 付款取货', next: null, effects: {
+                        stones: function () { return -Math.round(500 * (window.facilityBuyMod ? window.facilityBuyMod() : 1) * 1.2); },
+                        items: [{ itemId: 'pill_foundation', count: 1 }],
+                        msg: function () { var H = Math.round(500 * (window.facilityBuyMod ? window.facilityBuyMod() : 1) * 1.2); return '你付了 ' + H + ' 灵石，获得筑基丹×1！'; },
+                        msgType: 'success', time: 10 } }
                 ]
             }
         }
@@ -361,12 +374,32 @@ scenarioEngine.register('black_market', {
         startNode: 'bl_start',
         nodes: {
             bl_start: {
-                desc: '你穿过几条暗巷，来到一处地下集市。\n\n一个戴斗笠的人低声说："要货吗？刚从秘境里弄出来的好东西。"\n\n他打开包袱一角，露出一卷泛黄的卷轴——上面写着"禁术·噬魂诀"。',
+                desc: function () {
+                    var base = '你穿过几条暗巷，来到一处地下集市。\n\n一个戴斗笠的人低声说："要货吗？刚从秘境里弄出来的好东西。"\n\n他打开包袱一角，露出一卷泛黄的卷轴——上面写着"禁术·噬魂诀"。';
+                    var st = (window.FenceCredit && window.FenceCredit.describe) ? window.FenceCredit.describe() : '';
+                    return base + (st ? '\n\n' + st : '');
+                },
                 choices: [
                     { text: '💰 买下禁术残卷（500灵石）', next: 'bl_buy', effects: { time: 10 } },
+                    { text: '🕯️ 问一句：柜底可有真货', next: 'bl_hidden', effects: { time: 5 } },
                     { text: '🔍 仔细看看，别是假货', next: 'bl_check', effects: { time: 10 } },
-                    { text: '🚫 举报给镇邪司', next: null, effects: { rep: 10, msg: '镇邪司查获了这批禁术，你获得嘉奖。', msgType: 'success', time: 15 } },
+                    { text: '🚫 举报给镇邪司', next: null, effects: { rep: 8, karma: 2, noto: 2, fence: { op: 'trust', delta: -2, kind: 'snitch' }, msg: '镇邪司连夜抄了这批禁术，你得了嘉奖；但黑市最恨黑吃黑——告示墙上贴了你的名号，信用簿上记了重重一笔（黑市信用 -2）。', msgType: 'warning', time: 15 } },
+                    { text: '🕯️ 托中间人说和（100灵石）', next: null, effects: { cost: { stones: 100 }, fence: { op: 'settle' }, msg: '银子过了三道手，墙上条子揭了。黑市重新接你的单——下次做事留三分余地。', msgType: 'info', time: 15 } },
                     { text: '👋 不碰这种脏东西', next: null }
+                ]
+            },
+            bl_hidden: {
+                desc: function () {
+                    var s = (window.FenceCredit && window.FenceCredit.summary) ? window.FenceCredit.summary() : null;
+                    var trust = s ? s.trust : 0;
+                    var price = Math.round(500 * (trust >= 4 ? 0.85 : 0.9));
+                    return '斗笠人左右看了看，把你引到柜底："街面上那卷是残的。这卷是全的——只当交情到位的人卖。"\n\n全册噬魂诀，' + price + '灵石。真货沉手，业障也沉。';
+                },
+                choices: [
+                    { text: '🕯️ 取下全册', next: null, effects: { fence: { op: 'deal', min: 2 }, time: 10,
+                        stones: function () { var s = (window.FenceCredit && window.FenceCredit.summary) ? window.FenceCredit.summary() : null; return -Math.round(500 * ((s && s.trust) >= 4 ? 0.85 : 0.9)); },
+                        items: [{ itemId: 'mat_shihun_scroll', count: 1 }], noto: 5, karma: -8, msg: function () { var s = (window.FenceCredit && window.FenceCredit.summary) ? window.FenceCredit.summary() : null; return '全册入手（' + Math.round(500 * ((s && s.trust) >= 4 ? 0.85 : 0.9)) + '灵石，成交一笔）。东西摆不上台面，也洗不干净——但暗柜记住了你是能做成买卖的人。'; }, msgType: 'warning' } },
+                    { text: '👋 交情没到，不硬凑', next: null }
                 ]
             },
             bl_check: {
@@ -379,8 +412,8 @@ scenarioEngine.register('black_market', {
             bl_buy: {
                 desc: '你付了灵石，接过卷轴。\n\n打开一看——这确实是真正的禁术残卷，但只有前半部分，修炼了会有严重后遗症。',
                 choices: [
-                    { text: '📖 收起来，以后研究', next: null, effects: { stones: -500, noto: 5, msg: '你获得了禁术残卷（残篇），但恶名略有上升。', msgType: 'warning', time: 10 } },
-                    { text: '🔥 当场销毁', next: null, effects: { stones: -500, msg: '你不想这种东西害人，当场销毁了它。灵石白花了。', time: 5 } }
+                    { text: '📖 收起来，以后研究', next: null, effects: { stones: -500, noto: 5, karma: -5, fence: { op: 'deal', min: -1 }, items: [{ itemId: 'mat_shihun_scroll', count: 1 }], msg: '噬魂诀残卷入手——禁物无市价，摆不上台面也洗不干净。这一笔成交，暗巷里记你一面。', msgType: 'warning', time: 10 } },
+                    { text: '🔥 当场销毁', next: null, effects: { stones: -500, karma: 5, fence: { op: 'deal', min: -1 }, msg: '你不想这种东西害人，当着斗笠人的面烧了它。灵石白花了，但街角几个老住户朝你拱了拱手。', msgType: 'success', time: 5 } }
                 ]
             }
         }
@@ -424,32 +457,114 @@ scenarioEngine.register('garden_villa', {
 
 // ========== 官府设施（基础功能，2个） ==========
 
-// 14. 工曹署
+// 14. 工曹署（v20.22：查图纸照旧，另开真承揽——勘河修渠有工钱，贵地工钱随行情，也有栽下来的一天）
+function worksJobPay() { return Math.round(80 * (window.facilityBuyMod ? window.facilityBuyMod() : 1)); }
+function takeWorksJob() {
+    var log = window.gameLog || { add: function() {} };
+    var p = window.currentCharData;
+    if (!p || (p.qi || 0) < 20) { log.add('河工堤上八尺高，没二十点真气打底你踩不稳脚手架。改日再来。', 'warning'); return false; }
+    if (!window.RewardService) { log.add('工曹署账上今日没支应，改日再来。', 'warning'); return false; }
+    var rng = (typeof window.__workRng === 'function') ? window.__workRng() : Math.random();
+    var pay = worksJobPay();
+    // 工本（真气20）与工钱同一笔交割：赢拿全钱，摔了拿四成还挂彩，任一环节不足整笔不成交
+    var eff = rng < 0.85
+        ? { qi: -20, stones: pay, msg: '你随河工队勘了一段渠线，日暮验收合格。工钱 ' + pay + ' 灵石（随本城工价行情现算），工本真气 20。', msgType: 'success' }
+        : { qi: -20, stones: Math.round(pay * 0.4), health: -10, msg: '堤石松了半块，你从脚手架上摔下来——工头照付了四成工钱，你的胳膊肿了半日。', msgType: 'warning' };
+    var res2 = window.RewardService.apply(eff, { source: 'works', city: (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || '' });
+    if (!res2 || res2.success === false) { if (window.showMessage) window.showMessage('工钱交割未成。', 'warning'); return false; }
+    log.add(eff.msg, eff.msgType);
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(40, '工曹署承揽');
+    if (window.updateStatusPanel) window.updateStatusPanel();
+    return true;
+}
 function openWorksBureau() {
     var log = window.gameLog || { add: function() {} };
-    log.add('你来到工曹署，查阅了城中工程图纸。目前正在修建一条新的水渠，预计下月完工。', 'info');
-    if (window.currentCharData) {
-        window.currentCharData.tempering = (window.currentCharData.tempering || 0) + 3;
-    }
+    var p = window.currentCharData;
+    if (!p || (p.qi || 0) < 10) { log.add('卷宗库要点灵灯才看得清图纸，你真气不济，只好改日再来。', 'warning'); return; }
+    p.qi -= 10;
+    p.tempering = (p.tempering || 0) + 3;
+    log.add('你耗了10点真气提灯，在工曹署翻了一个时辰的图纸——水渠、灵脉、城墙，人情世故都在字缝里。历练+3。', 'info');
     if (window.timeSystem && window.timeSystem.advanceTime) {
         window.timeSystem.advanceTime(10, '工曹署查阅');
     }
+    // v20.22 承揽台（有弹窗才显式给选项，无则维持轻交互旧口径）
+    if (typeof window.showModal === 'function') {
+        window.showModal('🏗️ 工曹署·承揽台',
+            '<p class="text-xs text-gray-400 mb-2">书吏指着墙上一排工牌："勘河八尺堤，去人就有力气换工钱——本城工钱现算 ' + worksJobPay() + ' 灵石，摔下来另说。"</p>' +
+            '<button onclick="takeWorksJob()" class="bg-stone-700 hover:bg-stone-600 text-xs px-3 py-2 rounded">🧱 承揽河工（真气20，约40时辰）</button>');
+    }
 }
 
-// 15. 盐铁局
+// 15. 盐铁局（v20.22：核账照旧，另放官盐引——官价领引、凭引行盐，贵地盐贵引子也值钱，行商之路自此通）
+function saltBuyCharter() {
+    var log = window.gameLog || { add: function() {} };
+    if (!window.RewardService) { log.add('盐铁局今日不收状子，改日再来。', 'warning'); return false; }
+    var res = window.RewardService.apply({
+        stones: -80, items: [{ itemId: 'mat_salt_charter', count: 1 }],
+        msg: '你按官价 80 灵石领了一张官盐引。引纸盖着盐铁局的朱印——拿去贵地出手，盐路上的利自己挣。', msgType: 'success'
+    }, { source: 'salt_iron', city: (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || '' });
+    if (!res || res.success === false) {
+        if (window.showMessage) window.showMessage('领引需官价 80 灵石，手头不足。', 'warning');
+        return false;
+    }
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(15, '盐铁局领引');
+    return true;
+}
+// v20.23 私盐道：行商多给一成二收引，代价是过手留名——盐铁局的缉私册子上会多一行字
+function saltSmugglePrice() {
+    var sellMod = (typeof window.facilitySellMod === 'function') ? window.facilitySellMod() : 1;
+    return Math.round(100 * sellMod * 1.12);
+}
+function saltSellSmuggler() {
+    var log = window.gameLog || { add: function() {} };
+    if (!window.RewardService) { log.add('渡口今日没有盐商的船，改日再来。', 'warning'); return false; }
+    var price = saltSmugglePrice();
+    var res = window.RewardService.apply({
+        take: [{ itemId: 'mat_salt_charter', count: 1 }], stones: price, noto: 3,
+        msg: '渡口盐商验了朱印，' + price + ' 灵石当面付清——比商会代售多给一成二。只是盐船离岸时他提了一嘴："引子过手的名姓，局里的册子上可都记着。"', msgType: 'success'
+    }, { source: 'salt_smuggle', city: (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || '' });
+    if (!res || res.success === false) {
+        if (window.showMessage) window.showMessage('行囊里没有官盐引，盐商的船不载空手人。', 'warning');
+        return false;
+    }
+    // 缉私：私市过手四刻内被拿问的概率不低（rng 可注入测试）
+    var rng = (typeof window.__smugRng === 'function') ? window.__smugRng() : Math.random();
+    if (rng < 0.25) {
+        var p = window.currentCharData || {};
+        var paid = window.XianXia && window.XianXia.DataManager && window.XianXia.DataManager.deductSpiritStones
+            ? window.XianXia.DataManager.deductSpiritStones(60) : false;
+        if (!paid) { p.health = Math.max(0, (p.health || 0) - 10); }
+        log.add(paid ? '盐课巡船兜住了你的舢板——盐引没拿住，罚款 60 灵石交了，人放回来。'
+                     : '盐课巡船兜住了你的舢板，罚款凑不出，局里蹲了一宿，饿损了元气（健康-10）。');
+    } else {
+        log.add('盐引脱手，恶名+3——官盐引走私市，缉私的册子记你一笔。', 'warning');
+    }
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '渡口卖引');
+    return true;
+}
 function openSaltIronOffice() {
     var log = window.gameLog || { add: function() {} };
-    log.add('你来到盐铁局，查阅了官营产业的账目。本月玄铁产量稳定，灵盐供应充足。', 'info');
-    if (window.currentCharData) {
-        window.currentCharData.tempering = (window.currentCharData.tempering || 0) + 3;
-    }
+    var p = window.currentCharData;
+    if (!p || (p.qi || 0) < 10) { log.add('账山堆得比人高，没真气提灯你连第一页都翻不动。改日再来吧。', 'warning'); return; }
+    p.qi -= 10;
+    p.tempering = (p.tempering || 0) + 3;
+    log.add('你耗了10点真气核了半个时辰账——玄铁产量、灵盐流转，一个时辰的市井见识换历练+3。', 'info');
     if (window.timeSystem && window.timeSystem.advanceTime) {
         window.timeSystem.advanceTime(10, '盐铁局查阅');
+    }
+    // v20.22 官盐引窗口；v20.23 盐路分官私两道：商会抽佣稳当，私盐行多给一成二但有官非
+    if (typeof window.showModal === 'function') {
+        window.showModal('⚒️ 盐铁局·官盐引',
+            '<p class="text-xs text-gray-400 mb-2">槽吏敲着柜子："官价 80 灵石一张引。牌面行价 100——贵地出手更高，贱地出手吃亏，盐路自己走。"</p>' +
+            '<p class="text-xs text-gray-500 mb-2">出引有两道：商会代售台抽佣一成五，稳当；渡口盐商行私价收引（本城私价现算 ' + saltSmugglePrice() + '），多给一成二——但私市过手，缉私册子记名，四刻内兜上巡船就是罚款 60 起。</p>' +
+            '<div style="display:flex;gap:8px"><button onclick="saltBuyCharter()" class="bg-cyan-800 hover:bg-cyan-700 text-xs px-3 py-2 rounded">🧂 官价领一张盐引（80 灵石）</button>' +
+            '<button onclick="saltSellSmuggler()" class="bg-red-900 hover:bg-red-800 text-xs px-3 py-2 rounded">🚢 渡口卖给私盐行（' + saltSmugglePrice() + '，恶名+3，有官非）</button></div>');
     }
 }
 
 // 导出
 window.openWorksBureau = openWorksBureau;
 window.openSaltIronOffice = openSaltIronOffice;
+window.saltSellSmuggler = saltSellSmuggler;
 
 console.log('[第二批设施] 15个设施已注册（13个情境 + 2个基础）');

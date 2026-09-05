@@ -101,7 +101,7 @@ const facilities = [
             { type: 'rewardMaterials', value: 1 },
             { type: 'advanceTime', value: 30 }
         ],
-        rankReq: 3,
+        rankReq: 4, // v20.8：与访问权限表对齐（兵器库=内门弟子+，此前 rankReq:3 比权限表更严）
         dailyUses: 1 // 配给制：制度性每日一次（有据的规则）
     },
     {
@@ -122,14 +122,15 @@ const facilities = [
         name: '掌门大殿',
         type: FACILITY_TYPES.SPECIAL,
         icon: '👑',
-        desc: '掌门每日晨课后升殿受贺。此后再闯，守卫不会客气——初犯拦下劝返，再犯以冒犯尊长论处',
+        desc: '掌门每日晨课后升殿受贺。奉贡献礼可求掌门亲口指点一二——亲传之谊，全在这一点拨里',
         actions: [
+            { type: 'spendContribution', value: 20 },
+            { type: 'addPoints', value: 25 },
             { type: 'advanceTime', value: 15 }
         ],
-        rankReq: 5,
+        rankReq: 2, // v20.8：与访问权限表对齐（大殿=长老/掌门，此前 rankReq:5 形同虚设）
         trackVisits: true, // 内部行为记录（供反应链判定），非玩家可见配额
         // 无每日计数：擅闯后果由下方世界反应链处理（v15.5 宪法：逻辑优先，惩罚来自世界而非计数器）
-        dummy: 0
     }
 ];
 
@@ -690,6 +691,10 @@ function executeAction(action, resultMsgs) {
                 ];
                 const info = infos[Math.floor(Math.random() * infos.length)];
                 resultMsgs.push(`・获得情报: ${info}`);
+                // v20.8：情报不只进日志——顺手递进传闻池，同门与茶馆会把话头带走（此前情报是死文本）
+                if (window.playerPushDeed) {
+                    try { window.playerPushDeed('neutral', '议事厅里传开：' + info); } catch (eRm) {}
+                }
             }
             break;
         }
@@ -1000,14 +1005,25 @@ window.resetFacilityState = resetFacilityState;
 // 设计（行业调研后定稿）：地位=准入证（楼层按职级开放，可见不可入）· 时间=主要成本（参悟耗时+真气）
 // · 贡献=加速器（请抄本不绕职级门）· 神识=效率阀。
 // 掌握度曲线：成长速率 = max(0.1, 1 - m/100)——0%时1.0倍、60%时0.4倍；功法威力按掌握度百分比发挥。
+// v20.9 口径统一：maxRank 与 canAccessScriptureTier 完全对齐（tier2=内门≤4、tier3=亲传≤3、tier4=长老≤2）。
+// 此前 tier2 写 5、tier3 写 4、tier4 写 3，各比真门槛松一级，导致分层面板与可读典籍列表观感不一致。
 var LIB_TIERS = [
     { tier: 1, floor: '一层·外门阁', maxRank: 7, insightBase: 40, studyMinutes: 120 },
-    { tier: 2, floor: '二层·内门阁', maxRank: 5, insightBase: 25, studyMinutes: 150 },
-    { tier: 3, floor: '三层·核心阁', maxRank: 4, insightBase: 15, studyMinutes: 180 },
-    { tier: 4, floor: '四层·镇派阁', maxRank: 3, insightBase: 10, studyMinutes: 210 }
+    { tier: 2, floor: '二层·内门阁', maxRank: 4, insightBase: 25, studyMinutes: 150 },
+    { tier: 3, floor: '三层·核心阁', maxRank: 3, insightBase: 15, studyMinutes: 180 },
+    { tier: 4, floor: '四层·镇派阁', maxRank: 2, insightBase: 10, studyMinutes: 210 }
 ];
 var LIB_TIER_COPYPRICE = { 1: 300, 2: 800, 3: 1500, 4: 3000 };
-var LIB_RANK_NAMES = { 7: '杂役弟子', 6: '记名弟子', 5: '外门弟子', 4: '内门弟子', 3: '亲传弟子' };
+var LIB_RANK_NAMES = { 7: '杂役弟子', 6: '记名弟子', 5: '外门弟子', 4: '内门弟子', 3: '亲传弟子', 2: '长老' };
+// 唯一准入判定：真源 canAccessScriptureTier 在则用它（与 getReadableSectArts 同门），
+// 缺载（独立加载/测试桩）才退回 maxRank 数值——两者数值已对齐，口径不再分叉。
+function libTierUnlocked(tier) {
+    if (typeof window.canAccessScriptureTier === 'function') return !!window.canAccessScriptureTier(tier);
+    var ds = window.discipleState;
+    var rank = (ds && ds.rank != null) ? ds.rank : 7;
+    if (rank === -1 || rank === -2) return false; // 侍妾/同参弟子无职位，与真源同口径（对齐 canAccessScriptureTier）
+    return rank <= libTierCfg(tier).maxRank;
+}
 
 function libArtsOf(sectName) {
     return (window.SECT_SPECIFIC_ARTS && window.SECT_SPECIFIC_ARTS[sectName]) || [];
@@ -1055,7 +1071,7 @@ window.openSectLibraryPanel = function () {
     var html = '<p class="text-xs text-gray-400 mb-2">' + sectName + '·藏经阁——你的职位：<span class="text-amber-300">' + (ds.rankName || ('rank' + rank)) + '</span>　神识：<span class="text-cyan-300">' + intAttr + '</span></p>';
     LIB_TIERS.forEach(function (t) {
         html += '<div class="mt-3 pt-2 border-t border-gray-700"><p class="text-xs font-bold text-sky-300 mb-1">' + t.floor + '</p>';
-        if (rank > t.maxRank) {
+        if (!libTierUnlocked(t.tier)) {
             html += '<p class="text-xs text-gray-600 px-2 py-2 bg-gray-900/60 rounded">🔒 ' + (LIB_RANK_NAMES[t.maxRank] || '高位弟子') + '及以上方可入内</p></div>';
             return;
         }
@@ -1096,7 +1112,7 @@ window.sectLibBrowse = function (artId) {
     var art = libArtsOf(ds.sectId).find(function (a) { return a.id === artId; });
     if (!art) return;
     var t = libTierCfg(art.tier || 1);
-    if ((ds.rank == null ? 7 : ds.rank) > t.maxRank) { if (window.showMessage) window.showMessage('你尚未获准进入' + t.floor, 'warning'); return; }
+    if (!libTierUnlocked(art.tier || 1)) { if (window.showMessage) window.showMessage('你尚未获准进入' + t.floor, 'warning'); return; }
     var ins = libInsights();
     if (!ins[artId]) ins[artId] = { heard: true, m: 0, lastDay: 0 }; // v15.7 修复：翻阅不占参悟日——lastDay 置 0 使当日即可首参
     else { ins[artId].heard = true; }
@@ -1112,8 +1128,7 @@ window.sectLibStudy = function (artId) {
     var art = libArtsOf(ds.sectId).find(function (a) { return a.id === artId; });
     if (!art) return;
     var t = libTierCfg(art.tier || 1);
-    var rank = ds.rank == null ? 7 : ds.rank;
-    if (rank > t.maxRank) { if (window.showMessage) window.showMessage('你尚未获准进入' + t.floor, 'warning'); return; }
+    if (!libTierUnlocked(art.tier || 1)) { if (window.showMessage) window.showMessage('你尚未获准进入' + t.floor, 'warning'); return; }
     var ins = libInsights();
     var rec = ins[artId];
     if (!rec || !rec.heard) { if (window.showMessage) window.showMessage('先翻阅此书方可参悟', 'warning'); return; }
@@ -1153,7 +1168,7 @@ window.sectLibCopy = function (artId) {
     var art = libArtsOf(ds.sectId).find(function (a) { return a.id === artId; });
     if (!art) return;
     var t = libTierCfg(art.tier || 1);
-    if ((ds.rank == null ? 7 : ds.rank) > t.maxRank) { if (window.showMessage) window.showMessage('你尚未获准进入' + t.floor, 'warning'); return; }
+    if (!libTierUnlocked(art.tier || 1)) { if (window.showMessage) window.showMessage('你尚未获准进入' + t.floor, 'warning'); return; }
     var price = art.copyPrice || LIB_TIER_COPYPRICE[t.tier];
     if ((ds.contribution || 0) < price) { if (window.showMessage) window.showMessage('门派贡献不足（需' + price + '，当前' + (ds.contribution || 0) + '）', 'error'); return; }
     if (typeof window.addItem !== 'function') { if (window.showMessage) window.showMessage('背包系统未就绪', 'error'); return; }

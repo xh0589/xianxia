@@ -505,6 +505,7 @@ class Entity {
         this._hardenedCharges = data._hardenedCharges || 0; // 硬化充能（生成器仅对持 hardened 技的实体赋值）
         this._pounceUsed = data._pounceUsed === true;       // 猛扑是否已用（仅持 pounce 技者有意义）
         this._elementType = data._elementType || null;      // 冰/火元素展示标（效果判定改查 chill/burn 技）
+        this._evilFaction = data._evilFaction === true;     // v20.48：邪道标（山贼/邪修/魔修等），功法「魔伤」按此出力
         // ===== v13.0 运行时状态（原 v12.9 八个机制布尔透传已删除：_bloodDrain/_reflectPct/_soundShock/
         // _illusionist/_escapeArtist/_essenceDrain/_guMaster/_critBonus —— 判定一律改走 hasAbility）=====
         this._illusionHits = data._illusionHits || 0;             // 迷扰层数（被迷魂术命中方，攻击时消耗）
@@ -642,6 +643,13 @@ class Entity {
         // 2.12 自创丹方临时 attack buff
         if (this.type === 'player' && this._customPillAtk && this._customPillAtk !== 1) {
             attack = Math.floor(attack * this._customPillAtk);
+        }
+        // v20.7 剑冢剑意：每点剑意 +0.6% 攻击（与阵法增益同款的全局函数读取，缺载返回 1）
+        if (this.type === 'player' && typeof window.getSwordIntentAttackMul === 'function') {
+            try {
+                const sm = window.getSwordIntentAttackMul();
+                if (sm && sm !== 1) attack = Math.floor(attack * sm);
+            } catch (e) {}
         }
         return attack;
     }
@@ -1934,6 +1942,7 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
         enemyData._elementType = elementType; // 元素属性标仅随 chill/burn 技存在
     }
     if (pickedSubRow && pickedSubRow.renegade) enemyData._renegadeTauntPending = true;
+    if (evilFaction) enemyData._evilFaction = true; // v20.48：邪道标透传（功法「魔伤」按此出力）
     return enemyData;
 }
 
@@ -2672,6 +2681,22 @@ class Battle {
                     if (_em !== 1) damage = Math.max(1, Math.floor(damage * _em));
                 }
             } catch (e) {}
+        }
+        // v20.48 功法元素伤通电：习得秘籍的元素伤加成按敌型出力——
+        // 火/冰/水/金/虚 对元素生物；虚 对亡灵；龙 对妖兽；魔 对邪道（山贼/邪修/魔修等 evil 标）。
+        if (attacker.type === 'player' && attacker._artElem) {
+            try {
+                var _ph = defender.physiology || {};
+                var _dtype = _ph.type || defender._enemyType || '';
+                var _evil = !!_ph.evil || defender._evilFaction === true;
+                var _mul = 0;
+                var _ae = attacker._artElem;
+                if (_dtype === 'elemental') _mul = Math.max(_mul, _ae.fire || 0, _ae.ice || 0, _ae.water || 0, _ae.metal || 0, _ae.void || 0);
+                else if (_dtype === 'undead') _mul = Math.max(_mul, _ae.void || 0);
+                else if (_dtype === 'beast') _mul = Math.max(_mul, _ae.dragon || 0);
+                else if (_evil) _mul = Math.max(_mul, _ae.demon || 0);
+                if (_mul > 0) damage = Math.max(1, Math.floor(damage * (1 + Math.min(60, _mul) / 100)));
+            } catch (eArtEl) {}
         }
         return Math.max(1, damage);
     }

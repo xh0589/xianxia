@@ -386,9 +386,16 @@ function naturalRecovery() {
     const healthRecovery = 2;
     const qiRecovery = 1;
     const energyRecovery = 3;
-    
-    currentCharData.health = Math.min(currentCharData.maxHealth || 100, (currentCharData.health || 0) + healthRecovery);
-    currentCharData.qi = Math.min(currentCharData.maxQi || 100, (currentCharData.qi || 0) + qiRecovery);
+    // v20.48 功法掌握通电：吐纳/青木一脉的恢复加成在此出力（真气恢复+X%/血气恢复+X%）
+    var _artRegen = { qi: 0, hp: 0 };
+    try {
+        if (window.ArtEffects && typeof window.ArtEffects.regenPct === 'function') _artRegen = window.ArtEffects.regenPct();
+    } catch (eArt) {}
+    var _hpRec = Math.round(healthRecovery * (1 + (_artRegen.hp || 0) / 100) * 10) / 10;
+    var _qiRec = Math.round(qiRecovery * (1 + (_artRegen.qi || 0) / 100) * 10) / 10;
+
+    currentCharData.health = Math.min(getEffectiveMax('maxHealth') || currentCharData.maxHealth || 100, (currentCharData.health || 0) + _hpRec);
+    currentCharData.qi = Math.min(getEffectiveMax('maxQi') || currentCharData.maxQi || 100, (currentCharData.qi || 0) + _qiRec);
     currentCharData.energy = Math.min(currentCharData.maxEnergy || 100, (currentCharData.energy || 0) + energyRecovery);
 
     // 每日额外生理恢复（每小时恢复已在 advanceTime 中触发）

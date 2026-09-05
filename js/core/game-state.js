@@ -181,6 +181,38 @@
             karma: charData.karma != null ? charData.karma : 0,
             order: charData.order != null ? charData.order : 0,
             blessing: charData.blessing != null ? charData.blessing : 0,
+            // v20.39：气运与走火入魔紊乱入档（此前漏白名单——存读档气运归零、紊乱重置）
+            luck: charData.luck != null ? charData.luck : 50,
+            qiDeviation: charData._qiDeviation != null ? charData._qiDeviation : 0,
+            // v20.11：击杀计数与收藏领奖记录入档（此前只在内存，重开档归零）
+            killCount: charData._killCount != null ? charData._killCount : 0,
+            collectionClaimed: charData._collectionClaimed && typeof charData._collectionClaimed === 'object'
+                ? JSON.parse(JSON.stringify(charData._collectionClaimed)) : {},
+            // v20.12：道侣/结拜关系与子嗣入档（此前不在白名单，重开档道侣除名、
+            // 道侣战斗加成丢失、子嗣清零、"上限3"守卫形同虚设）
+            bonds: charData.bonds && typeof charData.bonds === 'object'
+                ? JSON.parse(JSON.stringify(charData.bonds)) : {},
+            children: Array.isArray(charData._children)
+                ? JSON.parse(JSON.stringify(charData._children)) : [],
+            // v20.42：悟道树领悟节点入档（永久领悟，读档不得清零）
+            enlightenedNodes: Array.isArray(charData._enlightenedNodes)
+                ? JSON.parse(JSON.stringify(charData._enlightenedNodes)) : [],
+            // v20.45：门派故事进度入档（演过的戏，读档不得重演/丢戏）
+            sectStory: charData._sectStory && typeof charData._sectStory === 'object'
+                ? JSON.parse(JSON.stringify(charData._sectStory)) : {},
+            // v20.16：重塑灵根次数入档（灵根饼本体在 roots/spiritualRoots 字段，早已入档）
+            rootRefines: charData._rootRefines != null ? charData._rootRefines : 0,
+            // v20.18：钱庄账本入档（存款/起息日/欠款/到期日/催收日——单一字段，无平行状态）
+            bank: charData._bank && typeof charData._bank === 'object'
+                ? JSON.parse(JSON.stringify(charData._bank)) : null,
+            // v20.20：当铺当票入档（货/件数/当金/赎期——单一字段，无平行状态）
+            pawn: charData._pawn && typeof charData._pawn === 'object'
+                ? JSON.parse(JSON.stringify(charData._pawn)) : null,
+            // v20.21：黑市信用簿入档（信用/成交笔数/举报前科——单一字段，无平行状态）
+            fence: charData._fence && typeof charData._fence === 'object'
+                ? JSON.parse(JSON.stringify(charData._fence)) : null,
+            // v20.53：渡界前的人间落脚点入档（渡回人间要知道往哪落，读档不得丢失）
+            mortalOrigin: charData._mortalOrigin != null ? charData._mortalOrigin : '',
             // P0-5 死亡仙侠化：神魂/残魂状态
             soulState: charData.soulState ? JSON.parse(JSON.stringify(charData.soulState)) : null,
             maxHealth: charData.maxHealth != null ? charData.maxHealth : 100,
@@ -661,6 +693,31 @@
             karma: n(saveData.karma, 0),
             order: n(saveData.order, 0),
             blessing: n(saveData.blessing, 0),
+            // v20.39：气运与走火入魔紊乱回灌（旧档无字段：气运按 50、紊乱按 0）
+            luck: n(saveData.luck, 50),
+            _qiDeviation: n(saveData.qiDeviation, 0),
+            // v20.11：击杀计数 / 收藏领奖记录回灌（旧档无字段按 0/空处理）
+            _killCount: n(saveData.killCount, 0),
+            _collectionClaimed: (saveData.collectionClaimed && typeof saveData.collectionClaimed === 'object')
+                ? saveData.collectionClaimed : {},
+            // v20.12：道侣/结拜与子嗣回灌（旧档无字段按空处理，旧档期间结的道侣
+            // 已随旧版丢失，无从追溯）
+            bonds: (saveData.bonds && typeof saveData.bonds === 'object') ? saveData.bonds : {},
+            _children: Array.isArray(saveData.children) ? saveData.children : [],
+            // v20.42：悟道树领悟节点回灌（旧档无字段按空树处理）
+            _enlightenedNodes: Array.isArray(saveData.enlightenedNodes) ? saveData.enlightenedNodes.slice() : [],
+            // v20.45：门派故事进度回灌（旧档无字段按未开演处理）
+            _sectStory: (saveData.sectStory && typeof saveData.sectStory === 'object') ? saveData.sectStory : {},
+            // v20.16：重塑灵根次数回灌（旧档无字段按 0 处理）
+            _rootRefines: n(saveData.rootRefines, 0),
+            // v20.18：钱庄账本回灌（旧档无字段按空账处理；账本结构由 BankService 使用时再校验）
+            _bank: (saveData.bank && typeof saveData.bank === 'object') ? saveData.bank : null,
+            // v20.20：当票回灌（旧档无字段按无票处理；结构由 PawnService 使用时再校验）
+            _pawn: (saveData.pawn && typeof saveData.pawn === 'object') ? saveData.pawn : null,
+            // v20.21：黑市信用簿回灌（旧档无字段按初来乍到处理；结构由 FenceCredit 使用时再校验）
+            _fence: (saveData.fence && typeof saveData.fence === 'object') ? saveData.fence : null,
+            // v20.53：渡界前的人间落脚点回灌（旧档无字段按空处理，渡回时落帝都）
+            _mortalOrigin: saveData.mortalOrigin || '',
             // P0-5 死亡仙侠化：神魂/残魂状态
             soulState: saveData.soulState || null,
             maxHealth: n(saveData.maxHealth, 100),
@@ -959,6 +1016,11 @@
             } catch (e) {
                 console.warn('[GameState] NPC反序列化失败:', e);
             }
+        }
+
+        // v20.24 旧档补票：早年"婚礼办过、名册没写"的道侣之盟照补（只翻译旧旗，不另发好处）
+        if (typeof global.daoCompanionSweep === 'function') {
+            try { global.daoCompanionSweep(); } catch (e) { console.warn('[GameState] 道侣名册补票失败:', e); }
         }
 
         // v10.5 交易系统状态恢复

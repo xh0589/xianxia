@@ -105,6 +105,22 @@
             },
             result: { itemId: 'pill_big_recovery', count: 1, allowFlaw: true, flawItemId: 'pill_big_recovery_flaw', flawThreshold: 55 },
             qiCost: 40, timeCost: 30
+        },
+        {
+            // v20.16 后天改命线：重塑灵根丹。主药锁"五行俱足且药性平和"——唯五行灵髓合格
+            // （混沌石五行虽全但药性 80 过烈，摊不动饼只会烧经脉——所以也过不了主药关）
+            id: 'recipe_root_refine_open',
+            name: '重塑灵根丹·开放',
+            category: 'pilfer',
+            tags: ['开放配方', '灵根', '传说'],
+            requiredSkills: { '炼制': 70 },
+            slots: {
+                main:     { minElement: { metal: 0.15, wood: 0.15, water: 0.15, fire: 0.15, earth: 0.15 }, minPrimary: { breakthrough: 40 }, minNature: 40, maxNature: 70, maxToxic: 35, count: 1 },
+                assist:   { minPrimary: { qi: 25 }, maxToxic: 35, count: 2 },
+                balancer: { maxToxic: 20, count: 1 }
+            },
+            result: { itemId: 'pill_root_refine', count: 1 },
+            qiCost: 100, timeCost: 120
         }
     ];
 

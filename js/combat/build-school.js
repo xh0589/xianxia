@@ -5,8 +5,39 @@
 (function () {
 
 // 判定流派：剑修（剑/刀）/体修（掌/拳/体）/法修（诀/功/法/印）
+// F-52 v15.4 藏经阁接线：优先用 artInsights 掌握度最高的功法（v15.4 sectLibStudy 涨掌握度）
+// fallback 到 currentSkills.main（v9.x equipSkill 装备）— 旧玩家兼容
 function getBuildSchool() {
     try {
+        // v15.4 藏经阁：artInsights 里找掌握度最高的功法
+        var ds = window.discipleState;
+        if (ds && ds.artInsights) {
+            var best = null;
+            for (var aid in ds.artInsights) {
+                var rec = ds.artInsights[aid];
+                if (!rec || !(rec.m > 0)) continue;
+                if (!best || rec.m > best.m) best = { id: aid, m: rec.m };
+            }
+            if (best) {
+                // artId → SECT_SPECIFIC_ARTS 反查名称（跨门派：玩家可带旧门派掌握度叛门）
+                var artName = best.id;
+                var allArts = window.SECT_SPECIFIC_ARTS;
+                if (allArts) {
+                    for (var sectName in allArts) {
+                        var arts = allArts[sectName];
+                        if (!Array.isArray(arts)) continue;
+                        for (var i = 0; i < arts.length; i++) {
+                            if (arts[i].id === best.id) { artName = arts[i].name; break; }
+                        }
+                        if (artName !== best.id) break;
+                    }
+                }
+                if (/(剑|刀|锋)/.test(artName)) return 'sword';
+                if (/(掌|拳|体|骨|皮)/.test(artName)) return 'body';
+                if (/(诀|功|法|印|经)/.test(artName)) return 'caster';
+            }
+        }
+        // v9.x fallback：currentSkills.main
         var skills = window.currentSkills || {};
         var main = skills.main || skills.neigong || skills.inner;
         if (!main) return 'none';

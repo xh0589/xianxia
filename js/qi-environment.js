@@ -1,6 +1,8 @@
 // ==================== qi-environment.js - 灵气环境系统 ====================
 // 地点灵气浓度、引导灵气修炼、灵气枯竭
 // 加载顺序：在 regions.js 之后
+// v20.43 做深：天时地灵共鸣（天气五行合地灵+10%，读取方在 weather-effects）；
+// 枯竭警示有纪律（跌破一档报一次，回春再报一次，不刷屏）。
 
 // ============ 地点灵气浓度 ============
 var QI_CONCENTRATION = {
@@ -18,15 +20,30 @@ var QI_CONCENTRATION = {
     '大漠孤城': { base: 0.8, type: 'fire', desc: '沙漠之地，灵气稀薄', color: 'text-yellow-600' },
     '洛水城': { base: 1.1, type: 'water', desc: '洛水之畔，灵气平和', color: 'text-blue-400' },
     '帝都·长安': { base: 1.0, type: 'mixed', desc: '繁华帝都，灵气混杂', color: 'text-yellow-400' },
+    // v20.53 高位面：灵界灵气凝成实质，魔界是浊气（浓而不纯，久留蚀体）
+    '灵界·蓬莱仙境': { base: 4.5, type: 'water', desc: '灵气凝雾，吐纳一口抵人间一日', color: 'text-cyan-300' },
+    '灵界·九天罡风带': { base: 5.5, type: 'metal', desc: '罡风裹灵气，浓烈却割人', color: 'text-slate-300' },
+    '魔界·九幽深渊': { base: 3.6, type: 'fire', desc: '浊气上涌，炼之快，染之亦快', color: 'text-purple-400' },
+    '魔界·血海荒原': { base: 4.0, type: 'fire', desc: '血气弥天，魔物逐血而行', color: 'text-red-500' },
     'default': { base: 0.8, type: 'mixed', desc: '普通区域，灵气一般', color: 'text-gray-400' }
 };
 
 var globalQiLevel = 100; // 世界灵气水平（0-100）
 
-// 获取地点灵气浓度
+// 地点地灵属性（供天时共鸣判断）
+function getQiLocElement(locationName) {
+    var data = QI_CONCENTRATION[locationName] || QI_CONCENTRATION['default'];
+    return data.type;
+}
+
+// 获取地点灵气浓度（v20.43：天时合地灵则共鸣+10%）
 function getQiConcentration(locationName) {
     var data = QI_CONCENTRATION[locationName] || QI_CONCENTRATION['default'];
-    return data.base * (globalQiLevel / 100);
+    var conc = data.base * (globalQiLevel / 100);
+    if (typeof window.getWeatherQiResonance === 'function') {
+        try { conc *= window.getWeatherQiResonance(data.type); } catch (e) {}
+    }
+    return conc;
 }
 
 // 获取修炼速度加成
@@ -98,22 +115,32 @@ function openGuideQiMiniGame() {
     };
 }
 
-// 灵气枯竭
+// 灵气枯竭（v20.43：跌破一档只报一次，回春再报一次——灾讯不刷屏）
 function depleteQi(amount) {
     globalQiLevel = Math.max(0, globalQiLevel - (amount || 1));
-    if (globalQiLevel < 30 && window.showMessage) {
+    if (typeof window !== 'undefined') window.globalQiLevel = globalQiLevel; // 外部读的是活值，不是快照
+    if (globalQiLevel < 30 && !_qiWarned && window.showMessage) {
+        _qiWarned = true;
         showMessage('⚠️ 世界灵气正在枯竭，修炼效率大幅降低！', 'warning');
     }
 }
 
 function restoreWorldQi(amount) {
+    var before = globalQiLevel;
     globalQiLevel = Math.min(100, globalQiLevel + (amount || 5));
+    if (typeof window !== 'undefined') window.globalQiLevel = globalQiLevel;
+    if (_qiWarned && before < 30 && globalQiLevel >= 30 && window.showMessage) {
+        _qiWarned = false;
+        showMessage('🌱 天地灵气回春，修炼的涩感散了些。', 'success');
+    }
 }
+var _qiWarned = false;
 
 // 导出
 if (typeof window !== 'undefined') {
     window.QI_CONCENTRATION = QI_CONCENTRATION;
     window.getQiConcentration = getQiConcentration;
+    window.getQiLocElement = getQiLocElement;
     window.getCultivationSpeedBonusFromQi = getCultivationSpeedBonusFromQi;
     window.guideQiCultivation = guideQiCultivation;
     window.openGuideQiMiniGame = openGuideQiMiniGame;

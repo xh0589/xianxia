@@ -18,6 +18,16 @@ var HOUSE_CROPS = {
     snow_lotus: { name: '雪莲', icon: '💮', growDays: 5, seedId: 'mat_snow_lotus', yieldId: 'mat_snow_lotus', yieldCount: 1, herbBonus: true }
 };
 
+// v20.44 及时收成：熟后三日不采即蔫——灵植不等懒汉
+var CROP_GRACE_DAYS = 3;
+
+// v20.44 家具：死字段通电——每件家具一份实在的加成，随 playerHouse 整体随档走
+var HOUSE_FURNITURE = {
+    mat: { name: '聚灵蒲团', icon: '🧘', price: 800, desc: '洞府修炼效率+5%', bonus: { cultivation: 0.05 } },
+    stove: { name: '暖玉炉', icon: '🔥', price: 1200, desc: '灵田地温足，生长期缩短（herb+0.25）', bonus: { herb: 0.25 } },
+    lamp: { name: '聚灵灯', icon: '🏮', price: 600, desc: '储物+5格', bonus: { storage: 5 } }
+};
+
 var playerHouse = null; // { type, upgrades, furniture, planted: [{cropId, plantDay, readyDay}], storageApplied }
 
 function exportHouseState() {
@@ -104,6 +114,36 @@ function upgradeHouse(upgradeType) {
     return false;
 }
 
+// v20.44 家具加成合计（死字段通电：每件家具一份实在的数）
+function getFurnitureBonus(bonusType) {
+    var furn = (playerHouse && playerHouse.furniture) || [];
+    var total = 0;
+    for (var i = 0; i < furn.length; i++) {
+        var f = HOUSE_FURNITURE[furn[i]];
+        if (f && f.bonus && f.bonus[bonusType]) total += f.bonus[bonusType];
+    }
+    return total;
+}
+
+function buyFurniture(fid) {
+    var f = HOUSE_FURNITURE[fid];
+    if (!f) return false;
+    if (!playerHouse) { if (window.showMessage) window.showMessage('尚未拥有洞府', 'warning'); return false; }
+    playerHouse.furniture = playerHouse.furniture || [];
+    if (playerHouse.furniture.indexOf(fid) >= 0) { if (window.showMessage) window.showMessage('已置办过「' + f.name + '」', 'info'); return false; }
+    if (!window.inventory || window.inventory.currency.spiritStones < f.price) {
+        if (window.showMessage) window.showMessage('灵石不足（需 ' + f.price + '）', 'error'); return false;
+    }
+    window.inventory.currency.spiritStones -= f.price;
+    playerHouse.furniture.push(fid);
+    if (window.updateCurrencyUI) window.updateCurrencyUI();
+    if (f.bonus.storage) applyHouseStorageBonus();
+    saveHouseData();
+    if (window.showMessage) window.showMessage('置办了「' + f.name + '」——' + f.desc, 'success');
+    if (typeof window.renderHouseStatus === 'function') window.renderHouseStatus();
+    return true;
+}
+
 function getHouseBonus(bonusType) {
     if (!playerHouse || !playerHouse.type) {
         if (bonusType === 'storage') return 0;
@@ -114,6 +154,7 @@ function getHouseBonus(bonusType) {
         var base = (house && house.bonuses && house.bonuses.storage) || 0;
         var up = (playerHouse.upgrades && playerHouse.upgrades.storage) || 0;
         var storage = base + up * 5;
+        storage += getFurnitureBonus('storage'); // v20.44 聚灵灯等家具的储物
         // v20.0：龙龟 carry 加成（洞府储物 +10%/只）
         try {
             if (window.BeastEcosystem && typeof window.BeastEcosystem.getActiveBeastBuff === 'function') {
@@ -126,6 +167,7 @@ function getHouseBonus(bonusType) {
     var baseMul = (house && house.bonuses && house.bonuses[bonusType]) || 1.0;
     var upgradeLevel = (playerHouse.upgrades && playerHouse.upgrades[bonusType]) || 0;
     var result = baseMul + upgradeLevel * 0.05;
+    result += getFurnitureBonus(bonusType); // v20.44 蒲团/暖玉炉等家具的加成
     // v20.0：洞府设施加成（接 v19.16 CaveFacilities）
     try {
         if (window.CaveFacilities && typeof window.CaveFacilities.getBuff === 'function') {
@@ -255,6 +297,36 @@ function plantCrop(cropId) {
     return true;
 }
 
+// v20.53 洒扫：洞府的日常活计。这是「打扫洞府」门派日常真正能落的地方——
+// 此前该任务要的 clean:completed 事件全库无人发出，任务接了就永远完不成。
+function cleanDwelling() {
+    if (!playerHouse || !playerHouse.type) {
+        if (window.showMessage) window.showMessage('你连个洞府都没有，扫哪儿去？', 'warning');
+        return false;
+    }
+    var cd = window.currentCharData;
+    if (!cd) return false;
+    var cost = 15;
+    if ((Number(cd.energy) || 0) < cost) {
+        if (window.showMessage) window.showMessage('精力不足（需 ' + cost + '），改日再扫吧。', 'warning');
+        return false;
+    }
+    cd.energy = (Number(cd.energy) || 0) - cost;
+    if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
+        window.timeSystem.advanceTime(30, '洒扫洞府');
+    }
+    if (window.EventBus && typeof window.EventBus.emit === 'function') {
+        try { window.EventBus.emit('clean:completed', { target: '洞府', count: 1 }); } catch (e) {}
+    }
+    if (typeof window.addProfessionExp === 'function') {
+        try { window.addProfessionExp('herbalist', 3); } catch (e2) {}
+    }
+    if (window.showMessage) window.showMessage('🧹 你把洞府里外洒扫了一遍，灵田边的水渠也通了一回。', 'success');
+    if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+    return true;
+}
+window.cleanDwelling = cleanDwelling;
+
 function harvestCrop(index) {
     if (!playerHouse || !playerHouse.planted) return false;
     var plot = playerHouse.planted[index];
@@ -264,15 +336,21 @@ function harvestCrop(index) {
         if (window.showMessage) window.showMessage('尚未成熟（还需 ' + (plot.readyDay - day) + ' 天）', 'info');
         return false;
     }
+    // v20.44 灵植不等懒汉：熟后三日不采即蔫——蔫了收成减半，地里的账不会自己销
+    var withered = day > plot.readyDay + CROP_GRACE_DAYS;
     var count = plot.yieldCount || 1;
-    var qualityMul = getHouseBonus('herb') || 1;
-    if (qualityMul > 1.2 && Math.random() < 0.3) count += 1;
+    if (!withered) {
+        var qualityMul = getHouseBonus('herb') || 1;
+        if (qualityMul > 1.2 && Math.random() < 0.3) count += 1;
+    } else {
+        count = Math.max(1, Math.floor(count / 2));
+    }
     if (typeof window.addItem === 'function' && plot.yieldId) {
         window.addItem(plot.yieldId, count);
     }
     playerHouse.planted.splice(index, 1);
     saveHouseData();
-    if (window.showMessage) window.showMessage('收获 ' + (plot.name || '') + ' x' + count, 'success');
+    if (window.showMessage) window.showMessage('收获 ' + (plot.name || '') + ' x' + count + (withered ? '（蔫后才收，收成减半）' : ''), withered ? 'warning' : 'success');
     if (typeof window.addProfessionExp === 'function') window.addProfessionExp('herbalist', 8);
     if (typeof window.renderHouseStatus === 'function') window.renderHouseStatus();
     return true;
@@ -318,7 +396,8 @@ function getHouseStatusHtml() {
         '<button onclick="upgradeHouse(\'cultivation\')" class="text-xs bg-purple-700 hover:bg-purple-600 text-white px-2 py-1 rounded">升级修炼</button>' +
         '<button onclick="upgradeHouse(\'storage\')" class="text-xs bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded">升级储物</button>' +
         '<button onclick="upgradeHouse(\'herb\')" class="text-xs bg-green-700 hover:bg-green-600 text-white px-2 py-1 rounded">升级灵田</button>' +
-        '<button onclick="harvestAllReady()" class="text-xs bg-yellow-700 hover:bg-yellow-600 text-white px-2 py-1 rounded">一键收获</button></div>';
+        '<button onclick="harvestAllReady()" class="text-xs bg-yellow-700 hover:bg-yellow-600 text-white px-2 py-1 rounded">一键收获</button>' +
+        '<button onclick="cleanDwelling()" class="text-xs bg-teal-700 hover:bg-teal-600 text-white px-2 py-1 rounded">洒扫</button></div>';
 
     // 灵田
     status += '<p class="text-sm text-green-400 font-bold mb-1">🌱 灵田</p>';
@@ -329,9 +408,13 @@ function getHouseStatusHtml() {
         planted.forEach(function(plot, i) {
             var left = Math.max(0, plot.readyDay - day);
             var ready = left <= 0;
+            // v20.44 蔫了就是蔫了——面板上红给你看
+            var withered = ready && day > plot.readyDay + CROP_GRACE_DAYS;
             status += '<div class="bg-gray-800/50 p-2 rounded mb-1 flex justify-between items-center">' +
                 '<span>' + (plot.icon || '🌱') + ' ' + plot.name +
-                (ready ? ' <span class="text-green-400">可收获</span>' : ' <span class="text-gray-500">' + left + '天后</span>') +
+                (withered ? ' <span class="text-red-400">已蔫·收成减半</span>'
+                    : ready ? ' <span class="text-green-400">可收获</span>'
+                    : ' <span class="text-gray-500">' + left + '天后</span>') +
                 '</span>' +
                 (ready
                     ? '<button onclick="harvestCrop(' + i + ')" class="text-xs bg-green-600 text-white px-2 py-0.5 rounded">收获</button>'
@@ -350,6 +433,26 @@ function getHouseStatusHtml() {
         status += '</div>';
     }
 
+    // v20.44 家具：置办过的列出来，没置办的摆个小铺
+    status += '<p class="text-sm text-amber-400 font-bold mb-1 mt-3">🪑 家具</p>';
+    var owned = playerHouse.furniture || [];
+    if (owned.length) {
+        status += '<p class="text-xs text-gray-400 mb-1">已置办：' + owned.map(function (fid) {
+            var f = HOUSE_FURNITURE[fid];
+            return f ? (f.icon + f.name) : fid;
+        }).join('、') + '</p>';
+    }
+    var furnShop = Object.keys(HOUSE_FURNITURE).filter(function (fid) { return owned.indexOf(fid) < 0; });
+    if (furnShop.length) {
+        status += '<div class="flex flex-wrap gap-1">';
+        furnShop.forEach(function (fid) {
+            var f = HOUSE_FURNITURE[fid];
+            status += '<button onclick="buyFurniture(\'' + fid + '\')" title="' + f.desc + '" class="text-xs bg-amber-800 hover:bg-amber-700 text-white px-2 py-1 rounded">' +
+                f.icon + f.name + '(' + f.price + ')</button>';
+        });
+        status += '</div>';
+    }
+
     // 换购更高级
     var shop = '<p class="text-xs text-gray-500 mb-2">可换购更高级洞府（补差价）</p>';
     for (var tid2 in HOUSE_TYPES) {
@@ -364,10 +467,13 @@ function getHouseStatusHtml() {
 // 导出
 window.HOUSE_TYPES = HOUSE_TYPES;
 window.HOUSE_CROPS = HOUSE_CROPS;
+window.HOUSE_FURNITURE = HOUSE_FURNITURE;
 window.playerHouse = playerHouse;
 window.initHouseSystem = initHouseSystem;
 window.buyHouse = buyHouse;
 window.upgradeHouse = upgradeHouse;
+window.buyFurniture = buyFurniture;
+window.getFurnitureBonus = getFurnitureBonus;
 window.getHouseBonus = getHouseBonus;
 window.applyHouseStorageBonus = applyHouseStorageBonus;
 window.plantCrop = plantCrop;

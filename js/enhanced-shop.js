@@ -532,8 +532,21 @@ const TradeService = {
         return rates[shopType] || 0.35;
     },
     
-    // 获取地区倍率
+    // 获取地区倍率（v20.21 接城市行情真源：回购价随本城 sell 系数浮动，
+    // 城市数据查不到才落回旧地区表兜底——单一真源，不再两套价各说各话）
     getRegionMultiplier: function(location) {
+        var m = null;
+        if (location && window.locationSystem) {
+            try {
+                if (typeof window.locationSystem.getCityPriceModifier === 'function') m = window.locationSystem.getCityPriceModifier(location, 'sell');
+            } catch (e) {}
+            if (m == null) try {
+                var cd = window.locationSystem.getCityData && window.locationSystem.getCityData(location);
+                if (cd && cd.priceModifier) m = cd.priceModifier.sell;
+            } catch (e2) {}
+        }
+        if (m != null && m > 0) return m;
+        // 兜底：旧地区表（仅城市数据缺位时使用）
         if (!location) return 1.0;
         var regionMul = {
             '中州': 1.2,   // 中州繁华，价格高
@@ -547,7 +560,7 @@ const TradeService = {
         // 尝试从locationSystem获取地区
         var region = '';
         if (window.locationSystem && window.locationSystem.getRegionByLocation) {
-            try { region = window.locationSystem.getRegionByLocation(location); } catch (e) {}
+            try { region = window.locationSystem.getRegionByLocation(location); } catch (e3) {}
         }
         return regionMul[region] || 1.0;
     },
@@ -1177,8 +1190,38 @@ function initShopSystem() {
     for (const shop of PresetShops) {
         shopManager.addShop(shop);
     }
-    
+
+    // v20.53：预设铺子给现货数，且每日打烊后补货——名剑才只此一把，丹药铺货充足。
+    // 之前 inventory 没写 stock，售罄判断（buyItem 的 stock<=0 拦截）永远不触发，货架等于无限量。
+    PresetShops.forEach(function (shop) {
+        (shop.inventory || []).forEach(function (item) {
+            if (item.stock == null) item.stock = presetStockCap(item, shop);
+        });
+    });
+    if (window.timeSystem && typeof window.timeSystem.onNewDaySubscribe === 'function') {
+        window.timeSystem.onNewDaySubscribe(function () {
+            PresetShops.forEach(function (shop) {
+                (shop.inventory || []).forEach(function (item) {
+                    if (item.stock != null) item.stock = presetStockCap(item, shop);
+                });
+            });
+        });
+    }
+
     gameLog.add('商店系统已初始化', 'info');
+}
+
+// 预设铺子的现货上限：兵器/甲胄按价分档，杂货铺货
+function presetStockCap(item, shop) {
+    var t = item.type || (shop && shop.type) || 'item';
+    if (t === 'weapon' || t === 'armor') {
+        var p = item.basePrice || 0;
+        if (p >= 1000) return 1;                       // 上古名器，可遇不可求
+        if (p >= 300) return 1 + Math.floor(Math.random() * 2);
+        return 2 + Math.floor(Math.random() * 3);
+    }
+    if (t === 'material') return 3 + Math.floor(Math.random() * 4);
+    return 6 + Math.floor(Math.random() * 8);
 }
 
 // ==================== 预设商店 ====================
@@ -1366,7 +1409,10 @@ function generateCityShopInventory(cityName, shopType) {
     var cityInfo = (window.locationSystem && window.locationSystem.cityData && window.locationSystem.cityData[cityName]) || {};
     var region = cityInfo.region || '';
     var specialties = cityInfo.specialties || [];
-    var buyMod = (cityInfo.priceModifier && cityInfo.priceModifier.buy) || 1.0;
+    // v20.53 去掉城市买价系数在这里的预烘：getItemPrice → getCombinedShopPriceMultiplier
+    // 已乘过一次城市买价系数（world-events 商店管线），这里再乘就是双算——
+    // 双算后金城实付 0.81 倍行价，而商会代售实收 1.02 倍行价，成了纯套利。
+    // 货架 basePrice 一律按行价记账，买价系数只走结算那一道。
     var filter = CITY_SHOP_TYPE_FILTERS[shopType] || CITY_SHOP_TYPE_FILTERS.general;
     var all = getAllItemTemplates();
     var pool = [];
@@ -1387,7 +1433,7 @@ function generateCityShopInventory(cityName, shopType) {
             id: it.id,
             name: it.name || it.id,
             type: it.type || 'item',
-            basePrice: Math.max(1, Math.floor(price * buyMod)),
+            basePrice: Math.max(1, Math.floor(price)),
             description: it.desc || it.description || '',
             icon: it.icon || '📦',
             stock: stock,
@@ -1449,7 +1495,7 @@ function generateCityShopInventory(cityName, shopType) {
                 id: m.id,
                 name: m.name || m.id,
                 type: m.type || 'consumable',
-                basePrice: Math.max(1, Math.floor(p * buyMod * (mRule.priceMul || 1))),
+                basePrice: Math.max(1, Math.floor(p * (mRule.priceMul || 1))),
                 description: m.desc || m.description || '',
                 icon: m.icon || '📜',
                 stock: 1

@@ -68,6 +68,7 @@ var WUXIAN_MAIN_EVENTS = {
             { speaker: 'npc', text: '「忘情散。压制心蛊用的。」她把空碗一搁，「动一次情，蛊强一分；散压不住，我便不是我了。」' },
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '「那就不动情。」', effect: 'no_love', affection: 4 },
+                { text: '「怕蛊，就承认自己怂了呗。」', effect: 'cruel', affection: -4 },
                 { text: '「有别的法子吗？」', effect: 'other_way', affection: 7 },
                 { text: '夺过碗：「这药伤身。」', effect: 'snatch', affection: 8 }
             ]}
@@ -78,6 +79,8 @@ var WUXIAN_MAIN_EVENTS = {
                 case 'no_love': aff = 4; msg = '她笑了，笑得凉：「说得轻巧。蛊在你身上，看你忍不忍得住。」——这话像在说你，又像说她从前。'; break;
                 case 'other_way': aff = 7; msg = '她怔了一下：「……十年来，没人问过这句。」没说有，也没说没有。但你看见，她那天的药，少饮了半碗。'; break;
                 case 'snatch': aff = 8; msg = '她没抢回来，只看着空碗：「你……」半天，「你这是要害我。」但她嘴角，是弯的。那天她把药减了一丸。'; break;
+                // v20.25 真负选项：拿她的命门激将，凤目里的光就灭了一分（坏结局从此攒得数）
+                case 'cruel': aff = -4; msg = '她慢慢把碗搁下，脸上那点破绽收得干干净净：「怂？」她笑起来，妖媚如常，眼底没了，「好。你记住了——今日的话。」往后你再撞见她，她喝什么药都当着你喝，笑吟吟的，像喂给你看。'; break;
             }
             return { affection: aff, msg: msg };
         }
@@ -120,17 +123,17 @@ var WUXIAN_MAIN_EVENTS = {
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '「它变成了什么？」', effect: 'ask', affection: 7 },
                 { text: '「你怕了。」', effect: 'fear', affection: 5 },
-                { text: '不追问，由她收回', effect: 'let', affection: 8 }
+                { text: '不追问，由她收回', effect: 'let', affection: 6 }
             ]}
         ],
         effects: function(npc, choice) {
-            var aff = 0, msg = '';
+            var aff = 0, msg = '', item = null;
             switch (choice) {
                 case 'ask': aff = 7; msg = '她背过身收蛊：「红的。」半晌，「红的代表……你不必知道。」——但那天之后，她养蛊时总让你在旁。'; break;
                 case 'fear': aff = 5; msg = '她回头，凤目一挑：「我怕？」她笑得花枝乱颤，但你看见，她握蛊虫的手，攥得发白。「……是。我怕。」'; break;
-                case 'let': aff = 8; msg = '她见你不追问，松了口气，少有地柔了声：「你这人……倒识趣。」——那以后她试蛊，头一个找的是你。'; break;
+                case 'let': aff = 6; item = 'mat_beast_fang'; msg = '她见你不追问，松了口气，少有地柔了声：「你这人……倒识趣。」——那以后她试蛊，头一个找的是你。你转身时一枚蛊兽的毒牙丢进你衣领：「含住能拔毒。记住，再中毒，先找我。」'; break;
             }
-            return { affection: aff, msg: msg };
+            return { affection: aff, msg: msg, item: item };
         }
     },
     'wx_event_006': {
@@ -143,17 +146,17 @@ var WUXIAN_MAIN_EVENTS = {
             { speaker: 'npc', text: '「十八岁那年那人。汉家书生，说要带我走。」她蹲下拔草，「我动了情，心蛊破壳前夜，他替我挡了教中刺客这一刀——死在我面前。」' },
             { speaker: 'npc', text: '「我服忘情散，把他忘了个干净。只记得——他临死说的最后一句。」她顿住，「我忘了那句是什么了。」' },
             { speaker: 'player_select', text: '你如何回应？', options: [
-                { text: '蹲下帮她一起拔草', effect: 'weed', affection: 8 },
-                { text: '「他若知道你为他忘情，会不甘心。」', effect: 'regret', affection: 7 },
-                { text: '「忘了也好。记得太苦。」', effect: 'forget', affection: 6 }
+                { text: '蹲下帮她一起拔草', effect: 'weed', affection: 7 },
+                { text: '「他若知道你为他忘情，会不甘心。」', effect: 'regret', affection: 10 },
+                { text: '「忘了也好。记得太苦。」', effect: 'forget', affection: 4 }
             ]}
         ],
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'weed': aff = 8; msg = '她没推开你。两个人把坟头草拔净，她忽然轻声：「……谢了。」这是她第一次，为旧情之外的人说谢。'; break;
-                case 'regret': aff = 7; msg = '她手停住，半晌：「……他若知道，该怨我。」她把一根草攥碎，「但也该怨我。怨我比忘我好。」'; break;
-                case 'forget': aff = 6; msg = '她摇头：「忘了，就没人记得他来过。」——回程路上她走在你前面，但你看见，她袖口擦过眼角一次。'; break;
+                case 'weed': aff = 7; msg = '她没推开你。两个人把坟头草拔净，她忽然轻声：「……谢了。」这是她第一次，为旧情之外的人说谢。'; break;
+                case 'regret': aff = 10; msg = '她手停住，半晌：「……他若知道，该怨我。」她把一根草攥碎，「但也该怨我。怨我比忘我好。」'; break;
+                case 'forget': aff = 4; msg = '她摇头：「忘了，就没人记得他来过。」——回程路上她走在你前面，但你看见，她袖口擦过眼角一次。'; break;
             }
             return { affection: aff, msg: msg };
         }
@@ -170,7 +173,7 @@ var WUXIAN_MAIN_EVENTS = {
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '「现在，它是为了谁？」', effect: 'who_for', affection: 8 },
                 { text: '请她教你一式蝶影步', effect: 'learn', affection: 7 },
-                { text: '什么也不说，在月下陪她到蝶散', effect: 'stay', affection: 9 }
+                { text: '什么也不说，在月下陪她到蝶散', effect: 'stay', affection: 11 }
             ]}
         ],
         effects: function(npc, choice) {
@@ -178,7 +181,9 @@ var WUXIAN_MAIN_EVENTS = {
             switch (choice) {
                 case 'who_for': aff = 8; msg = '她愣了一下，银蝶在她指尖颤：「……我不知道。」很久，「以前为追他，现在——」她没说现在为谁。你也没问。'; break;
                 case 'learn': aff = 7; msg = '她挑眉：「教你？」却还是带你过了一遍起手式。到第三式，两只蝶影在月下交叠——她没收回。'; break;
-                case 'stay': aff = 9; msg = '一整夜没人说话。蝶散尽时她经过你身边，把鬓角那只银蝶，轻轻别在了你衣襟上：「……留着。」'; break;
+                case 'stay': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                                    if (!_py.ok) { aff = 4; msg = '蝶香催眠，你后半场是睡着的。醒来枕边多了一片带鳞粉的蝶翼，凉丝丝的。（精力不足，那一夜你先撑不住了）'; break; }
+                                    aff = 11; msg = ('一整夜没人说话。蝶散尽时她经过你身边，把鬓角那只银蝶，轻轻别在了你衣襟上：「……留着。」') + '（精力-15）'; break; }
             }
             return { affection: aff, msg: msg };
         }
@@ -192,7 +197,7 @@ var WUXIAN_MAIN_EVENTS = {
             { speaker: 'narrator', text: '药庐传来瓷器碎裂声。你冲进去，蓝凤凰伏在案上，锁骨下那只蝶形黑纹正在皮下剧烈鼓动，像要破壳。', type: 'description' },
             { speaker: 'narrator', text: '忘情散的药碗碎了一地。她抬眼，凤目里翻涌着你不认得的妖冶与痛——心蛊要噬主了。', type: 'description' },
             { speaker: 'player_select', text: '你必须立刻做点什么。', options: [
-                { text: '握住她的手，以自身真气引开蛊的噬势', effect: 'qi', affection: 12 },
+                { text: '握住她的手，以自身真气引开蛊的噬势', effect: 'qi', affection: 14 },
                 { text: '跪下抓起碎瓷片割掌，以血喂蛊', effect: 'blood', affection: 11 },
                 { text: '抱住她，什么都不做只稳住她', effect: 'hold', affection: 10 }
             ]}
@@ -200,7 +205,9 @@ var WUXIAN_MAIN_EVENTS = {
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'qi': aff = 12; msg = '你的真气灌入她经脉，心蛊被引得偏了一线——她喘着气把你推开：「……你怎么敢拿真气引心蛊。」黑纹退回去。她握着你的手，很久没松。'; break;
+                case 'qi': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 20) : { ok: true };
+                                    if (!_py.ok) { aff = 6; msg = '你撑到一半就眼前发黑，剩下的那截，她一个人接了回去。（精力不足，那一夜你先撑不住了）'; break; }
+                                    aff = 14; msg = ('你的真气灌入她经脉，心蛊被引得偏了一线——她喘着气把你推开：「……你怎么敢拿真气引心蛊。」黑纹退回去。她握着你的手，很久没松。') + '（精力-20）'; break; }
                 case 'blood': aff = 11; msg = '心蛊嗅到你血，竟舍她而扑你掌——被她一把按回。她把你割伤的手攥紧，眼底有水光：「它要的，不是这个血。」但她替你包扎的手，一直在抖。'; break;
                 case 'hold': aff = 10; msg = '她僵在你怀里，黑纹鼓动渐缓。「……没用。」她哑声，「但你抱着，它好像……不那么凶了。」这是她第一次承认，有人比忘情散管用。'; break;
             }
@@ -217,7 +224,7 @@ var WUXIAN_MAIN_EVENTS = {
             { speaker: 'npc', text: '「心蛊若有一日破壳，我不愿成它的傀。」她抬眼，「我与你讨个誓：到那天，你亲手把心蛊从我心里剜出来，封进这只瓮——哪怕我因此忘了你。」' },
             { speaker: 'npc', text: '「……行不行？」这是她第一次，用这种声音跟你说话。' },
             { speaker: 'player_select', text: '你如何回应？', options: [
-                { text: '「我应你。剜出来，我陪你把忘的，一点一点记回来。」', effect: 'promise', affection: 12 },
+                { text: '「我应你。剜出来，我陪你把忘的，一点一点记回来。」', effect: 'promise', affection: 14 },
                 { text: '「不会有那天。我替你压着它。」', effect: 'guard', affection: 9 },
                 { text: '「……你就不怕我剜的时候手抖？」', effect: 'joke', affection: 7 }
             ]}
@@ -225,7 +232,9 @@ var WUXIAN_MAIN_EVENTS = {
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'promise': aff = 12; msg = '她看了你很久，把空瓮推到你怀里：「……记住你说的。」——那只瓮后来一直放在你屋中，像一个没有内容的誓。'; break;
+                case 'promise': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                                    if (!_py.ok) { aff = 6; msg = '你应完那句话人就先倒了。她是看着你睡着的脸受下这诺的——亏你当真应了。（精力不足，那一夜你先撑不住了）'; break; }
+                                    aff = 14; msg = ('她看了你很久，把空瓮推到你怀里：「……记住你说的。」——那只瓮后来一直放在你屋中，像一个没有内容的誓。') + '（精力-15）'; break; }
                 case 'guard': aff = 9; msg = '她摇头：「压不住的。」但没再争。从那天起，她服忘情散时，会让你坐在她旁边——像一个怕黑的人，留了一盏灯。'; break;
                 case 'joke': aff = 7; msg = '她愣了一下，笑出了声，笑得眼角有泪：「……这时候还贫。」——但她攥着你的手，攥得很紧。'; break;
             }
@@ -241,7 +250,7 @@ var WUXIAN_MAIN_EVENTS = {
             { speaker: 'narrator', text: '议事蛊堂，毒娘子长老当众发难：「教主近来忘情散减半，心蛊活跃。教中传言，教主动了凡情。」', type: 'description' },
             { speaker: 'narrator', text: '堂中蛊师齐齐看你。蓝凤凰没辩，凤目扫过毒娘子，正要开口——你先一步站出来。', type: 'description' },
             { speaker: 'player_select', text: '你如何应对这发难？', options: [
-                { text: '「是我缠着教主。心蛊若要噬，噬我。」', effect: 'shield', affection: 10 },
+                { text: '「是我缠着教主。心蛊若要噬，噬我。」', effect: 'shield', affection: 12 },
                 { text: '「教主减药，是为试解心蛊之法，与情无关。」', effect: 'cover', affection: 8 },
                 { text: '什么也不说，站到蓝凤凰身侧', effect: 'side', affection: 9 }
             ]}
@@ -250,7 +259,9 @@ var WUXIAN_MAIN_EVENTS = {
             var aff = 0, msg = '';
             var _pt = (window.currentCharData && window.currentCharData.gender === 'female') ? '她' : '他';
             switch (choice) {
-                case 'shield': aff = 10; msg = '毒娘子冷笑：「你？」蓝凤凰却忽然笑得妖媚：「是。'+_pt+'缠我。怎么，本教主护短，毒娘子里外都管？」堂上再没人敢出声。'; break;
+                case 'shield': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                                    if (!_py.ok) { aff = 5; msg = '你话放到一半，人先撑不住。第二日的闲话，到底还是她自己挡的。（精力不足，那一夜你先撑不住了）'; break; }
+                                    aff = 12; msg = ('毒娘子冷笑：「你？」蓝凤凰却忽然笑得妖媚：「是。'+_pt+'缠我。怎么，本教主护短，毒娘子里外都管？」堂上再没人敢出声。') + '（精力-15）'; break; }
                 case 'cover': aff = 8; msg = '毒娘子将信将疑地退了。事后蓝凤凰低声：「……你倒是会替我圆。」她眼里，有一瞬极淡的暖。'; break;
                 case 'side': aff = 9; msg = '她没让你退。毒娘子看完这一幕，冷哼一声拂袖：「教主自重。」走时丢下一句，「别忘了前任教主怎么死的。」——这一句，蓝凤凰握拳了很久。'; break;
             }
@@ -267,7 +278,7 @@ var WUXIAN_MAIN_EVENTS = {
             { speaker: 'npc', text: '「今夜它要破壳了。」她声音平得像在说别人的事，「忘情散已压不住。你若剜，我活，但忘你；你若不剜，它噬我，我便成傀，你须杀我。」' },
             { speaker: 'npc', text: '「……我更想让你剜。」她极轻地补，「就算忘你，至少……我还活着，能再被你认回来。」' },
             { speaker: 'player_select', text: '你如何回应？', options: [
-                { text: '「我不剜。我以真情喂它，看它敢不敢破壳。」', effect: 'feed_true', affection: 13 },
+                { text: '「我不剜。我以真情喂它，看它敢不敢破壳。」', effect: 'feed_true', affection: 15 },
                 { text: '「我剜。然后陪你把忘的，一寸一寸找回来。」', effect: 'cut', affection: 11 },
                 { text: '抱住她：「还有第三条路——让它认主。」', effect: 'third', affection: 12 }
             ]}
@@ -275,7 +286,9 @@ var WUXIAN_MAIN_EVENTS = {
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'feed_true': aff = 13; msg = '她猛地抬头——黑纹在她皮下剧烈鼓动，却没破壳。「你疯了。真情喂蛊，它会成蝶——你也会被它认作宿主。」她声音在抖，「……你当真？」'; break;
+                case 'feed_true': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 20) : { ok: true };
+                                    if (!_py.ok) { aff = 6; msg = '蛊啸最凶那一轮你没扛住，那一夜是她独自喂过去的。（精力不足，那一夜你先撑不住了）'; break; }
+                                    aff = 15; msg = ('她猛地抬头——黑纹在她皮下剧烈鼓动，却没破壳。「你疯了。真情喂蛊，它会成蝶——你也会被它认作宿主。」她声音在抖，「……你当真？」') + '（精力-20）'; break; }
                 case 'cut': aff = 11; msg = '她把银刀推回你手里，闭上了眼：「……动手吧。」——但你握刀的手，被她按住。「等天亮。让我再记你一夜。」'; break;
                 case 'third': aff = 12; msg = '她怔住：「认主？让心蛊……认你为主？」黑纹忽地停了一瞬，像在听。「这法子，没人试过。」她低声，「但我们，可以试。」'; break;
             }
@@ -290,19 +303,19 @@ var WUXIAN_MAIN_EVENTS = {
         scenes: [
             { speaker: 'narrator', text: '黎明。万蛊窟。她躺在你怀里，锁骨下的黑纹已鼓成蝶形，将破未破。忘情散的碗，空了。', type: 'description' },
             { speaker: 'npc', text: '「{playerName}。」她声音很轻，「它要选了。你选不选我——选了，它便认你为主，化蝶飞出；不选，它噬我，我忘你，或你杀我。」' },
-            { speaker: 'npc', text: '「这只蝶，连同养蛊的人，你要不要？」' },
+            { speaker: 'npc', text: '「心蛊认了你，我拔不回来了——拔回来，就是我认输。」她指尖点了点你腕上的蝶，「往后它蛰哪儿，哪儿就是你的家。」' },
             { speaker: 'player_select', text: '你的选择将决定你们的关系走向', options: [
                 { text: '「要。我选你。心蛊认主——化蝶飞，我们下山，以毒济世。」', effect: 'lover_travel', affection: 30 },
                 { text: '「要。但哪儿也不去。我留在五仙教，陪你守这一谷的蛊。」', effect: 'lover_stay', affection: 28 },
                 { text: '「蝶我接。人就算了——我做你天下第一的毒蛊搭档，毒手搭档。」', effect: 'friend_travel', affection: 20 },
-                { text: '「蝶我接。五仙教的门，我想一直能掀——做个常客，行吗？」', effect: 'friend_stay', affection: 18 },
+                { text: '「蝶我接。往后你炼出新蛊，头一个找我试——试砸了算五仙教的，试活了是你的名声。」', effect: 'friend_stay', affection: 18 },
                 { text: '「我不选。我替你剜，让你忘了我。」', effect: 'none', affection: 0 }
             ]}
         ],
         effects: function(npc, choice) {
-            // 蛊噬兜底：累计负面选择≥5时，道侣选项转辜负
+            // 蛊噬兜底：累计负面选择≥3时，道侣选项转辜负（v20.25 门槛 5→3，负选项现已攒得够）
             var negCount = (window._negativeChoiceCount && window._negativeChoiceCount[WUXIAN_NPC_ID]) || 0;
-            if (negCount >= 5 && (choice === 'lover_travel' || choice === 'lover_stay')) {
+            if (negCount >= 3 && (choice === 'lover_travel' || choice === 'lover_stay')) {
                 return { affection: 0, msg: '她看着你，忽然惨笑：「……原来养了十八年的蛊，等的是这么一句不选。」黑纹猛地破壳——却没有化蝶，而是一口噬回她心口。她当场昏死。再醒来，她忘了天下人，也包括你。', ending: '蛊噬' };
             }
             switch (choice) {

@@ -146,6 +146,9 @@
         return MATERIAL_TAGS[matId] || [];
     }
 
+    // F-25 恢复：可注入的随机源（测试传 deterministic randomSource 消除波动；未注入时行为与原来一致）
+    var _rng = function () { return Math.random(); };
+
     function pickAffixesForMat(matId, maxCount, skill) {
         var tags = getMaterialTags(matId);
         var candidates = [];
@@ -167,19 +170,24 @@
             if (!seen[candidates[k].key]) { seen[candidates[k].key] = 1; uniq.push(candidates[k]); }
         }
         // 随机取 1~maxCount
-        uniq.sort(function () { return Math.random() - 0.5; });
+        uniq.sort(function () { return _rng() - 0.5; });
         return uniq.slice(0, Math.min(maxCount, uniq.length));
     }
 
     // 技能"保留想要词缀"概率：技能越高越倾向保留高价值（按 attrVal 排序）词缀
     function keepAffixBySkill(affix, skill) {
         var keepProb = Math.min(0.95, 0.4 + skill * 0.005);
-        return Math.random() < keepProb;
+        return _rng() < keepProb;
     }
 
     // ============== 6. executeCompoundForging ==============
 
-    function executeCompoundForging(recipeId, slotPick) {
+    function executeCompoundForging(recipeId, slotPick, options) {
+        var _prevRng = _rng;
+        if (options && typeof options.randomSource === 'function') _rng = options.randomSource;
+        try { return _forgingInner(recipeId, slotPick); } finally { _rng = _prevRng; }
+    }
+    function _forgingInner(recipeId, slotPick) {
         var recipe = null;
         for (var i = 0; i < COMPOUND_FORGING_RECIPES.length; i++) if (COMPOUND_FORGING_RECIPES[i].id === recipeId) { recipe = COMPOUND_FORGING_RECIPES[i]; break; }
         if (!recipe) return { ok: false, reason: 'recipe-not-found' };

@@ -38,7 +38,9 @@
         mat('mat_pearl', '珍珠', 50, '🤍', '海珠'),
         mat('mat_spirit_grass', '灵草', 15, '🌱', '洞府常见灵草'),
         mat('mat_spirit_spring', '灵泉露', 100, '💧', '灵泉之水凝露'),
+        mat('mat_shihun_scroll', '禁术·噬魂残卷', 0, '📜', '黑市流出的禁术残篇。禁物无市价——正经商号不敢收，见了它的人都绕着走。'),
         mat('mat_spirit_wood', '灵木', 30, '🪵', '含灵木材'),
+        mat('mat_salt_charter', '官盐引', 100, '🧂', '盐铁局官让盐引：官价领引、凭引行盐。贵地盐价高，引子也水涨船高——行商的利从盐路上来。'),
         mat('mat_volcanic_rock', '火山岩', 25, '🪨', '火山岩块'),
         mat('mat_wind_essence', '风之精华', 150, '💨', '纯净风灵'),
         mat('mat_wood', '木材', 3, '🪵', '普通木材')

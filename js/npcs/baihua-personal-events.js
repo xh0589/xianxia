@@ -141,9 +141,11 @@ function maybeAutoTriggerPersonalEvent(npcId, source, opts) {
     for (var key in NPC_PERSONAL_EVENTS) {
         var ev = NPC_PERSONAL_EVENTS[key];
         if (!ev || ev.npcId !== npcId) continue;
+        if (typeof _ensureAmbientTag === 'function') _ensureAmbientTag(ev); // v20.25 日常小事就地认定
         if (!ev.autoTrigger) continue; // 仅标记 autoTrigger 的事件参与自动弹出
         if (typeof canPlayerAccessPersonalEvent === 'function' && !canPlayerAccessPersonalEvent(ev, npc)) continue;
-        if (hasEventTriggered(ev.id)) continue;
+        // v20.25 日常小事可重逢：一桩旧事隔够日子（冷却记在 NPC 记忆里随档走）才会再发；主线大事仍一次性
+        if (hasEventTriggered(ev.id) && !(ev.ambient && typeof _ambientRearmOk === 'function' && _ambientRearmOk(npc, ev))) continue;
         if (typeof isChainHead === 'function' && !isChainHead(ev)) continue; // 链式顺序
         if (affection < (ev.minAffection || 0)) continue;
         if (typeof checkEventTrigger === 'function' && !checkEventTrigger(ev, window.currentCharData)) continue;

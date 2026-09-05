@@ -230,7 +230,7 @@ const SECT_SPECIALTIES = {
         cooldown: 12,
         rankReq: 5,
         applyEffect: function() {
-            var talismans = ['talisman_fire', 'talisman_ice', 'talisman_thunder', 'talisman_heal'];
+            var talismans = ['tal_fireball', 'tal_icicle', 'tal_lightning', 'tal_shield'];
             var reward = talismans[Math.floor(Math.random() * talismans.length)];
             if (typeof addItem === 'function') addItem(reward, 1);
             return '符箓绘制成功！道法自然！';
@@ -349,7 +349,7 @@ const SECT_SPECIALTIES = {
         cooldown: 48,
         rankReq: 5,
         applyEffect: function() {
-            var treasures = ['mat_phoenix_feather', 'mat_dragon_blood', 'mat_kirin_horn', 'mat_spacetime_crystal'];
+            var treasures = ['mat_phoenix_feather', 'mat_dragon_blood', 'mat_dragon_scale', 'mat_pearl'];
             var reward = treasures[Math.floor(Math.random() * treasures.length)];
             if (typeof addItem === 'function') addItem(reward, 1);
             return '海外寻宝归来，获得珍稀材料！';
@@ -652,9 +652,57 @@ if (window.StateRegistry && typeof window.StateRegistry.register === 'function')
     });
 }
 
+// ============ Buff 真翻译（v20.8）============
+// 此前约 20 派特色 buff 用的是 defense/parry/crit/qiRegen… 这类属性合并处不认识的键——
+// 写进 activeBuffs 后没有任何读者，等于安慰剂。这里把别名键翻译成六维真加成：
+// |v| < 1 视为按比例（v20 特色都是 +20%/+50% 这类），≥1 视为直接加值（设施 tempBuff 的 mind:30 风格）。
+var _SECT_BUFF_ATTR_MAP = {
+    attack: ['strength'], groupAtk: ['strength'], teamAtk: ['strength'], swordSkill: ['strength'], executeDmg: ['strength'],
+    fireDmg: ['strength'], waterDmg: ['strength'], poisonDmg: ['strength'], poisonAtk: ['strength'],
+    dodge: ['dexterity'], crit: ['dexterity'], parry: ['dexterity'], counter: ['dexterity'], speed: ['dexterity'], agility: ['dexterity'],
+    wisdom: ['intelligence'],
+    mind: ['willpower'],
+    defense: ['constitution'], hpMax: ['constitution'],
+    qiRegen: ['meridian'], spiritRegen: ['meridian'],
+    allStats: ['strength', 'dexterity', 'intelligence', 'willpower', 'constitution', 'meridian']
+};
+// executeThreshold 无对应战斗语义、cultivationSpeed 走 getSectBuffCultivationMul，均不进六维。
+function sectBuffAttrBonus(effects, playerAttrs) {
+    var out = {};
+    if (!effects) return out;
+    var SIX = ['strength', 'dexterity', 'intelligence', 'willpower', 'constitution', 'meridian'];
+    for (var key in effects) {
+        var v = effects[key];
+        if (typeof v !== 'number') continue;
+        var targets;
+        if (SIX.indexOf(key) >= 0) targets = [key];           // 设施已是六维键：原样直加（保持旧行为）
+        else targets = _SECT_BUFF_ATTR_MAP[key] || [];
+        for (var ti = 0; ti < targets.length; ti++) {
+            var t = targets[ti];
+            var add = Math.abs(v) < 1 ? Math.round((playerAttrs ? (playerAttrs[t] || 10) : 10) * v) : Math.round(v);
+            out[t] = (out[t] || 0) + add;
+        }
+    }
+    return out;
+}
+// cultivationSpeed 真读者：修炼结算处按 activeBuffs 里的 cultivationSpeed 总和放大收益
+function getSectBuffCultivationMul() {
+    var total = 0;
+    var buffs = window.activeBuffs || {};
+    var nowMin = _sectSpecialtyNowMinute();
+    for (var id in buffs) {
+        var b = buffs[id];
+        if (!b || !b.effects || ((b.expiryGameMinute || 0) <= nowMin)) continue;
+        if (typeof b.effects.cultivationSpeed === 'number') total += b.effects.cultivationSpeed;
+    }
+    return 1 + total;
+}
+
 // ============ 导出 ============
 window.SECT_SPECIALTIES = SECT_SPECIALTIES;
 window.getSectSpecialty = getSectSpecialty;
 window.useSectSpecialty = useSectSpecialty;
 window.getSectSpecialtyCooldown = getSectSpecialtyCooldown;
 window.applyBuff = applyBuff;
+window.sectBuffAttrBonus = sectBuffAttrBonus;
+window.getSectBuffCultivationMul = getSectBuffCultivationMul;

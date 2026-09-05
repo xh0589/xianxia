@@ -1387,6 +1387,17 @@ function showSectGuardTrial(sectId) {
         html += '<button onclick="xiaoYaoQ1(\'join\')" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded text-sm">「是的，请前辈收留」</button>';
         html += '<button onclick="xiaoYaoQ1(\'pass\')" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded text-sm">「不，我只是路过」</button>';
         html += '<button onclick="xiaoYaoQ1(\'dunno\')" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded text-sm">「逍遥派？没听说过」</button></div></div>';
+    } else if (sectId === '药王谷') {
+        // v20.47：门槛不再是一行"医术达标"的红字，而是药童当场认草——
+        // 认对入谷（医术扎实进内门，不懂医理先做杂役），认错才有回话。
+        html += '<div class="space-y-4"><div class="bg-gray-800/60 p-3 rounded border-l-4 border-green-500">';
+        html += '<p class="text-xs text-gray-400 mb-1">🚶 山门守卫：</p>';
+        html += '<p class="text-sm text-gray-200 italic">一个背着药篓的药童拦住你。他从篓里取出三株草，一字排开，拍了拍手上的泥。</p>';
+        html += '<p class="text-sm text-green-300 mt-2 italic">「想入药王谷？先认草。这三株里有一株是断肠草——指给我看。」</p></div>';
+        html += '<div class="mt-3 space-y-2">';
+        html += '<button onclick="yaoWangHerb(\'left\')" class="w-full bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded text-sm">「左边这株，叶背带紫纹」</button>';
+        html += '<button onclick="yaoWangHerb(\'middle\')" class="w-full bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded text-sm">「中间这株，茎断处有白浆」</button>';
+        html += '<button onclick="yaoWangHerb(\'right\')" class="w-full bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded text-sm">「右边这株，气味辛烈」</button></div></div>';
     } else if (SECT_LIGHT_ENTRY_QUESTIONS[sectId]) {
         html = renderLightSectQuestion(sectId);
     } else {
@@ -2030,7 +2041,8 @@ function checkSectRequirements(sectId) {
     if (sectId === '蓬莱派' && !hasWaterRoot(player)) return { pass: false, msg: '蓬莱派只招收水灵根弟子（需≥20%）' };
     if (sectId === '天山派' && !hasIceRoot(player)) return { pass: false, msg: '天山派只招收含冰变异灵根的弟子' };
     if (sectId === '金刚宗' && (player.mainAttributes?.['体质'] || 0) < 30) return { pass: false, msg: '金刚宗体质要求较高' };
-    if (sectId === '药王谷' && (player.lifeSkills?.['医术'] || 0) < 20) return { pass: false, msg: '药王谷要求医术达标' };
+    // v20.47：药王谷不再立"医术达标"的牌子——门槛交给药童认草的考核，
+    // 医术高低定职位（内门/杂役），不由一行红字吓人。门禁由测试守住。
     if (sectId === '铸剑山庄' && (player.lifeSkills?.['锻造'] || 0) < 20) return { pass: false, msg: '铸剑山庄要求锻造达标' };
     if (sect.type === '正道' && (player.notoriety || 0) > 30) return { pass: false, msg: '恶名过高，正道门派不会接纳' };
     

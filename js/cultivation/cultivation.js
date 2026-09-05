@@ -210,6 +210,10 @@ function breakthroughProficiency(skillId) {
     if (masteryInsight) {
         successRate += 0.2;
     }
+    // v20.42 悟道树·悟破境关：道心固者，叩关更稳（+5%）
+    if (typeof window.getEnlightenmentFlag === 'function' && window.getEnlightenmentFlag('breakthrough')) {
+        successRate += 0.05;
+    }
     
     if (!confirm(`确定要突破到 ${nextLevel.name} 吗？\n成功率：${Math.round(successRate * 100)}%`)) {
         return false;
@@ -224,10 +228,11 @@ function breakthroughProficiency(skillId) {
         info.exp = 0;
         info.breakthroughAttempts = 0;
         
-        // 获得领悟点数
-        insightPoints += 2;
-        
-        alert(`突破成功！\n功法提升至 ${nextLevel.name}！\n获得领悟点数 +2`);
+        // 获得领悟点数（v20.42 悟道树·静功生慧：悟过此节点者多得一）
+        var _insightGain = 2 + (typeof window.getInsightGainBonus === 'function' ? window.getInsightGainBonus() : 0);
+        insightPoints += _insightGain;
+
+        alert(`突破成功！\n功法提升至 ${nextLevel.name}！\n获得领悟点数 +${_insightGain}`);
         
         // 触发特殊效果
         triggerBreakthroughEffect(skillId, info.level);
@@ -345,8 +350,13 @@ function cultivateSkill(skillId, amount = 10) {
 
     let efficiency = 1.0;
     if (discipleState.isInSect) {
-        if (discipleState.rankName === '亲传弟子' || discipleState.rankName === '内门弟子') efficiency += 0.3;
-        else if (discipleState.rankName === '外门弟子') efficiency += 0.1;
+        // v20.53 按职级 id 结账，不再认 rankName 字符串：晋升只改 rank 数字时这里就断了档，
+        // 长老/副掌门拿不到任何加成，入门是外门的话晋升到掌门也还是外门加成。
+        var _rk = Number(discipleState.rank);
+        if (_rk === 3 || _rk === 4) efficiency += 0.3;      // 亲传/内门：有师门功课照看
+        else if (_rk === 2) efficiency += 0.4;              // 长老：可入长老院静室
+        else if (_rk === 1 || _rk === 0) efficiency += 0.5; // 副掌门/掌门：宗门气运加身
+        else if (_rk === 5) efficiency += 0.1;              // 外门
     }
     const exp = Math.floor(amount * efficiency);
     const result = addProficiencyExp(skillId, exp);
@@ -458,17 +468,19 @@ function updateCultivationUI() {
             if (_psMine.length === 0) {
                 html += '<div class="bg-indigo-900/30 p-3 rounded border border-indigo-600/50 flex items-center justify-between">' +
                     '<div><span class="text-lg">🏯</span><span class="font-bold text-indigo-400 ml-2">开山立宗</span>' +
-                    '<span class="text-xs text-indigo-300 ml-2">元婴可分神操持，自立宗门</span></div>' +
-                    '<button onclick="window._quickFoundSect()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded text-xs">开山立宗</button>' +
+                    '<span class="text-xs text-indigo-300 ml-2">元婴可分神操持，自立宗门——起名、定出身、择山门</span></div>' +
+                    '<button onclick="window.openFoundSectPanel()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded text-xs">开山立宗</button>' +
                     '</div>';
             } else {
                 var _ps = _psMine[0];
                 var _dCount = (_ps.disciples && _ps.disciples.length) || 0;
                 html += '<div class="bg-indigo-900/30 p-3 rounded border border-indigo-600/50 flex items-center justify-between">' +
                     '<div><span class="text-lg">🏯</span><span class="font-bold text-indigo-400 ml-2">' + (_ps.name || '本宗') + '</span>' +
-                    '<span class="text-xs text-indigo-300 ml-2">弟子 ' + _dCount + ' 人 · 声望 ' + (_ps.reputation || 0) + '</span></div>' +
+                    '<span class="text-xs text-indigo-300 ml-2">弟子 ' + _dCount + ' 人 · 声望 ' + Math.round(((_ps.resources && _ps.resources.reputation) || 0) * 10) / 10 + ' · ' + (_ps.location || '山门未定') + '</span></div>' +
+                    '<div class="flex gap-2">' +
+                    '<button onclick="window.openPlayerSectPanel()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded text-xs">宗门总册</button>' +
                     '<button onclick="window._defendSectRaid()" class="bg-red-700 hover:bg-red-600 text-white px-3 py-1 rounded text-xs">护宗战</button>' +
-                    '</div>';
+                    '</div></div>';
             }
         }
         // 1.8 本命法宝：金丹+可炼制，喂材料升级，战斗加成随等级
@@ -490,12 +502,14 @@ function updateCultivationUI() {
         }
         // 1.10 高位面入口：元婴+入灵界、化神+入魔界（御剑飞行暴露供旅行系统接）
         if (_tier >= 4 && typeof window.enterPlane === 'function') {
+            var _inPlane = (typeof window.getPlaneOf === 'function') ? window.getPlaneOf(window.currentCharData && window.currentCharData.location) : null;
             html += '<div class="bg-teal-900/30 p-3 rounded border border-teal-600/50 flex items-center justify-between">' +
                 '<div><span class="text-lg">🌀</span><span class="font-bold text-teal-400 ml-2">位面穿梭</span>' +
-                '<span class="text-xs text-teal-300 ml-2">' + (_tier >= 5 ? '灵界/魔界可达' : '灵界可达') + '</span></div>' +
+                '<span class="text-xs text-teal-300 ml-2">' + (_inPlane ? ('现居 ' + (window.currentCharData.location)) : (_tier >= 5 ? '灵界/魔界可达' : '灵界可达')) + '</span></div>' +
                 '<div class="flex gap-2">' +
-                '<button onclick="window.enterPlane(\'灵界\')" class="bg-teal-600 hover:bg-teal-500 text-white px-3 py-1 rounded text-xs">前往灵界</button>' +
-                (_tier >= 5 ? '<button onclick="window.enterPlane(\'魔界\')" class="bg-purple-700 hover:bg-purple-600 text-white px-3 py-1 rounded text-xs">前往魔界</button>' : '') +
+                (_inPlane
+                    ? '<button onclick="window.openPlanePanel && window.openPlanePanel()" class="bg-cyan-700 hover:bg-cyan-600 text-white px-3 py-1 rounded text-xs">位面之门</button>'
+                    : '<button onclick="window.openPlanePanel && window.openPlanePanel()" class="bg-teal-600 hover:bg-teal-500 text-white px-3 py-1 rounded text-xs">位面之门</button>') +
                 '</div></div>';
         }
         // 2.3 悟道树：消耗悟道点解锁永久属性节点
@@ -507,8 +521,11 @@ function updateCultivationUI() {
             for (var _ei = 0; _ei < _enl.length; _ei++) {
                 var _nd = _enl[_ei];
                 var _isDone = _done.indexOf(_nd.id) >= 0;
-                var _can = !_isDone && _ip >= _nd.cost;
-                _enlHtml += '<button ' + (_can ? 'onclick="window.enlightenNode(\'' + _nd.id + '\')"' : 'disabled') + ' title="' + _nd.desc + '" class="text-xs px-2 py-1 rounded ' + (_isDone ? 'bg-cyan-900 text-cyan-600 cursor-not-allowed' : _can ? 'bg-cyan-700 hover:bg-cyan-600 text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed') + '">' + (_nd.icon || '🌳') + _nd.name + (_isDone ? '✓' : '(' + _nd.cost + '点)') + '</button>';
+                // v20.42 前置门槛上脸：锁着的节点挂锁与缘由（树的枝干，得从根上长）
+                var _lockWhy = (!_isDone && typeof window.getEnlightenmentLockReason === 'function') ? window.getEnlightenmentLockReason(_nd.id) : null;
+                var _can = !_isDone && !_lockWhy && _ip >= _nd.cost;
+                var _title = _nd.desc + (_lockWhy ? '｜' + _lockWhy : '');
+                _enlHtml += '<button ' + (_can ? 'onclick="window.enlightenNode(\'' + _nd.id + '\')"' : 'disabled') + ' title="' + _title + '" class="text-xs px-2 py-1 rounded ' + (_isDone ? 'bg-cyan-900 text-cyan-600 cursor-not-allowed' : _can ? 'bg-cyan-700 hover:bg-cyan-600 text-white' : 'bg-gray-800 text-gray-500 cursor-not-allowed') + '">' + (_nd.icon || '🌳') + _nd.name + (_isDone ? '✓' : _lockWhy ? '🔒' : '(' + _nd.cost + '点)') + '</button>';
             }
             _enlHtml += '</div></div>';
             html += _enlHtml;
@@ -567,13 +584,39 @@ function updateCultivationUI() {
                 '<button onclick="window.craftCustomPill()" class="bg-orange-600 hover:bg-orange-500 text-white px-3 py-1 rounded text-xs">炼制丹方</button>' +
                 '</div>';
         }
-        // 2.19 天机占卜：元婴+占卜气运/机缘
-        if (_tier >= 4 && typeof window.divineFortune === 'function') {
+        // 2.19 天机占卜：元婴+占卜气运/机缘（v20.39：一卦 → 四问卦阵）
+        if (_tier >= 4 && typeof window.openDivination === 'function') {
             html += '<div class="bg-violet-900/30 p-3 rounded border border-violet-600/50 flex items-center justify-between">' +
-                '<div><span class="text-lg">🔮</span><span class="font-bold text-violet-400 ml-2">天机占卜</span>' +
+                '<div><span class="text-lg">🔮</span><span class="font-bold text-violet-400 ml-2">天机卦阵</span>' +
                 '<span class="text-xs text-violet-300 ml-2">气运 ' + (window.currentCharData.luck != null ? window.currentCharData.luck : 50) + '</span></div>' +
-                '<button onclick="window.divineFortune()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1 rounded text-xs">占卜</button>' +
+                '<button onclick="window.openDivination()" class="bg-violet-600 hover:bg-violet-500 text-white px-3 py-1 rounded text-xs">起卦（命/事/灾/人）</button>' +
                 '</div>';
+        }
+        // v20.39 走火入魔：气机紊乱只进不出是假伤——化解三途挂上修炼面板
+        if (typeof window.getQiDeviation === 'function' && typeof window.calmQiChoice === 'function') {
+            var _qd = window.getQiDeviation();
+            if (_qd > 0) {
+                var _qdColor = _qd >= 95 ? 'text-red-400' : (_qd >= 80 ? 'text-red-300' : (_qd >= 60 ? 'text-orange-300' : 'text-yellow-300'));
+                var _qdNote = _qd >= 95 ? '紊乱已极·突破锁死' : (_qd >= 80 ? '走火入魔·属性大损' : (_qd >= 60 ? '气机紊乱·诸事宜慎' : '气机微乱'));
+                html += '<div class="bg-red-900/30 p-3 rounded border border-red-600/50 flex items-center justify-between">' +
+                    '<div><span class="text-lg">🌀</span><span class="font-bold text-red-400 ml-2">气机紊乱</span>' +
+                    '<span class="text-xs ' + _qdColor + ' ml-2">紊乱 ' + Math.round(_qd) + ' · ' + _qdNote + '</span></div>' +
+                    '<button onclick="window.calmQiChoice()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded text-xs">化解</button>' +
+                    '</div>';
+            }
+        }
+        // v20.41 丹毒：丹药的甜里带毒——面板露出 + 解毒三途入口
+        if (typeof window.getPillPoison === 'function' && typeof window.detoxChoice === 'function') {
+            var _pp = window.getPillPoison();
+            if (_pp > 0) {
+                var _ppColor = _pp >= 80 ? 'text-red-400' : (_pp >= 50 ? 'text-orange-300' : 'text-lime-300');
+                var _ppNote = _pp >= 80 ? '毒入经脉·修炼大涩' : (_pp >= 50 ? '毒滞体内·修炼发涩' : '毒在腠理');
+                html += '<div class="bg-lime-900/30 p-3 rounded border border-lime-600/50 flex items-center justify-between">' +
+                    '<div><span class="text-lg">🍵</span><span class="font-bold text-lime-400 ml-2">丹毒</span>' +
+                    '<span class="text-xs ' + _ppColor + ' ml-2">' + Math.round(_pp) + ' · ' + _ppNote + '</span></div>' +
+                    '<button onclick="window.detoxChoice()" class="bg-lime-600 hover:bg-lime-500 text-white px-3 py-1 rounded text-xs">解毒</button>' +
+                    '</div>';
+            }
         }
         // 2.21 师徒传功：有宗门弟子可传功加速其突破
         if (typeof window.teachFirstDisciple === 'function' && typeof window.PlayerSect === 'object') {
@@ -734,6 +777,20 @@ var REALM_UNIQUE_EFFECTS = {
         desc: '天劫对抗，飞升之门开启，千里感知，全属性大幅提升',
         icon: '⚡',
         bonuses: { attack: 1.5, defense: 1.5, block: 25, penetrate: 25 }
+    },
+    // F-43 v20.0 1.3 飞升后世界：飞升态获得仙灵加成
+    '飞升': {
+        name: '飞升仙界',
+        desc: '飞升仙界，灵力转化为仙元，全属性再大幅提升',
+        icon: '🌟',
+        bonuses: { attack: 2.0, defense: 2.0, health: 1.5, qi: 2.0, dodge: 30, crit: 25 }
+    },
+    // F-43 v20.0 1.3 飞升后世界：金仙为飞升后最高境界
+    '金仙': {
+        name: '金仙不朽',
+        desc: '金仙之境，万劫不磨，全属性达到极诣',
+        icon: '✨',
+        bonuses: { attack: 3.0, defense: 3.0, health: 2.0, qi: 3.0, dodge: 40, crit: 35, cultivate: 1.5 }
     }
 };
 
@@ -747,6 +804,17 @@ function getRealmBonus(realmName, bonusType) {
     var effect = REALM_UNIQUE_EFFECTS[realmName];
     if (!effect || !effect.bonuses) return 1.0;
     return effect.bonuses[bonusType] || 1.0;
+}
+
+// v20.48 境界质变补电：百分点口径读取。
+// REALM_UNIQUE_EFFECTS 表里乘数（<=3，如 dodge 1.1 = +10%）与百分点（>3，如 dodge 20 = +20%）
+// 混存在同一键位，本函数统一折成百分点：乘数 → (v-1)×100，百分点 → 原值。
+function getRealmBonusPct(realmName, bonusType) {
+    var effect = REALM_UNIQUE_EFFECTS[realmName];
+    if (!effect || !effect.bonuses) return 0;
+    var v = effect.bonuses[bonusType];
+    if (typeof v !== 'number' || !isFinite(v)) return 0;
+    return v <= 3 ? Math.round((v - 1) * 100) : v;
 }
 
 // 获取境界质变描述
@@ -1230,9 +1298,43 @@ function breakthroughWithHeartDemon() {
 // 规则：灵根值% = 对应功法修炼速度% = 功法发挥%
 // 无属性功法：直接返回基准值
 
-// 获取功法对应灵根元素（从 currentSkills 读取）
+// 获取功法对应灵根元素（从 currentSkills + v15.4 藏经阁 artInsights 读取）
 function _getMainTechniqueElement() {
     try {
+        // F-57 v15.4 藏经阁接线：从 artInsights 找掌握度最高的 art_xx 查 SECT_SPECIFIC_ARTS 元素
+        // v15.4 art_xx 没 elements/element 字段，按功法名"拳/剑/刀"等推断
+        var ds = window.discipleState;
+        if (ds && ds.artInsights) {
+            var best = null;
+            for (var aid in ds.artInsights) {
+                var rec = ds.artInsights[aid];
+                if (!rec || !(rec.m > 0)) continue;
+                if (!best || rec.m > best.m) best = { id: aid, m: rec.m };
+            }
+            if (best) {
+                var allArts = window.SECT_SPECIFIC_ARTS;
+                if (allArts) {
+                    for (var sn in allArts) {
+                        var arr = allArts[sn];
+                        if (!Array.isArray(arr)) continue;
+                        for (var i = 0; i < arr.length; i++) {
+                            if (arr[i].id === best.id) {
+                                // 按 type 推断：内功→金（按武林默认主修内功为金系）
+                                // 法术/符箓→火；医道/文道→木；炼体→土；剑/刀/奇门→金
+                                var atype = arr[i].type;
+                                if (/内功/.test(atype)) return 'metal';
+                                if (/法术|符箓/.test(atype)) return 'fire';
+                                if (/医道|文道/.test(atype)) return 'wood';
+                                if (/炼体/.test(atype)) return 'earth';
+                                if (/剑法|刀法|奇门|长兵|射术/.test(atype)) return 'metal';
+                                if (/拳掌|轻功/.test(atype)) return 'earth';
+                                return 'neutral';
+                            }
+                        }
+                    }
+                }
+            }
+        }
         const mainSkill = window.currentSkills && (window.currentSkills.main || window.currentSkills.neigong || window.currentSkills.inner);
         if (!mainSkill) return 'neutral';
         
@@ -1359,6 +1461,7 @@ if (window.XianXia) window.XianXia.openCultivationUI = openCultivationUI;;
 window.REALM_UNIQUE_EFFECTS = REALM_UNIQUE_EFFECTS;
 window.getRealmUniqueEffect = getRealmUniqueEffect;
 window.getRealmBonus = getRealmBonus;
+window.getRealmBonusPct = getRealmBonusPct;
 window.getRealmEffectDescription = getRealmEffectDescription;
 window.SKILL_COMBINATIONS = SKILL_COMBINATIONS;
 window.checkSkillCombinations = checkSkillCombinations;

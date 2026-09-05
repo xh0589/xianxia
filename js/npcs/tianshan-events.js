@@ -121,17 +121,17 @@ var TIANSHAN_MAIN_EVENTS = {
             { speaker: 'narrator', text: '你接了三招，被震退七步。她收剑，眉目间难得有一点松动。', type: 'description' },
             { speaker: 'npc', text: '「接得住我的剑风，天山可以信你一半。」' },
             { speaker: 'player_select', text: '你如何回应？', options: [
-                { text: '「那另一半呢？」', effect: 'half', affection: 6 },
-                { text: '「再比一局，我要赢。」', effect: 'again', affection: 7 },
-                { text: '「师叔的剑，是守的剑。」', effect: 'guard', affection: 8 }
+                { text: '「那另一半呢？」', effect: 'half', affection: 9 },
+                { text: '「再比一局，我要赢。」', effect: 'again', affection: 6 },
+                { text: '「师叔的剑，是守的剑。」', effect: 'guard', affection: 7 }
             ]}
         ],
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'half': aff = 6; msg = '她看了你一眼：「另一半，等霜鸣出鞘那天。」——这话像承诺，又像托付。'; break;
-                case 'again': aff = 7; msg = '第二局她让了你半式，你堪堪平。她把木剑扔给你：「剑要敢赢，也要敢输。你的赢，不急。」'; break;
-                case 'guard': aff = 8; msg = '她怔了一下，随即轻轻「嗯」了一声。「……你看出来了。」那天她破例，收剑后陪你喝了半盏热茶。'; break;
+                case 'half': aff = 9; msg = '她看了你一眼：「另一半，等霜鸣出鞘那天。」——这话像承诺，又像托付。'; break;
+                case 'again': aff = 6; msg = '第二局她让了你半式，你堪堪平。她把木剑扔给你：「剑要敢赢，也要敢输。你的赢，不急。」'; break;
+                case 'guard': aff = 7; msg = '她怔了一下，随即轻轻「嗯」了一声。「……你看出来了。」那天她破例，收剑后陪你喝了半盏热茶。'; break;
             }
             return { affection: aff, msg: msg };
         }
@@ -173,18 +173,20 @@ var TIANSHAN_MAIN_EVENTS = {
             { speaker: 'npc', text: '她把雪莲放你掌心：「……现在有点懂了。有人懂，也是好事。」' },
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '「我懂您一点点，就够了。」', effect: 'understand', affection: 8 },
-                { text: '把雪莲分一半还给她：「一人一朵。」', effect: 'share', affection: 7 },
-                { text: '「那以后我陪您来，每年。」', effect: 'promise', affection: 9 }
+                { text: '把雪莲分一半还给她：「一人一朵。」', effect: 'share', affection: 5 },
+                { text: '「那以后我陪您来，每年。」', effect: 'promise', affection: 11 }
             ]}
         ],
         effects: function(npc, choice) {
-            var aff = 0, msg = '';
+            var aff = 0, msg = '', item = null;
             switch (choice) {
                 case 'understand': aff = 8; msg = '她侧头看你，冰蓝眼底映着雪顶的天光：「……贪心点也行。」这句话她没看你说的。'; break;
-                case 'share': aff = 7; msg = '她看着自己手里那半朵，忽然把你的也拿过去，两朵并排插进她腰间的素绫里：「……并在一起，活得好些。」'; break;
-                case 'promise': aff = 9; msg = '她没答，但第二年雪莲花开的时候，她在崖边多等了你一炷香。你来时她什么都没说，递了朵花给你。'; break;
+                case 'share': aff = 5; item = 'mat_snow_lotus'; msg = '她看着自己手里那半朵，忽然把你的也拿过去，两朵并排插进她腰间的素绫里：「……并在一起，活得好些。」回程她把其中半朵干莲别进你领口：「你收着。收着它，就算你也爬过这座崖。」'; break;
+                case 'promise': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                                    if (!_py.ok) { aff = 4; msg = '下山的路你睡过去半程。背你回来的人没留名，雪地上却是一双脚印。（精力不足，那一夜你先撑不住了）'; break; }
+                                    aff = 11; msg = ('她没答，但第二年雪莲花开的时候，她在崖边多等了你一炷香。你来时她什么都没说，递了朵花给你。') + '（精力-15）'; break; }
             }
-            return { affection: aff, msg: msg };
+            return { affection: aff, msg: msg, item: item };
         }
     },
     'ts_event_008': {
@@ -200,7 +202,7 @@ var TIANSHAN_MAIN_EVENTS = {
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '「她赢了，还是您赢了？」', effect: 'who_win', affection: 8 },
                 { text: '折根梅枝，请她教你一招', effect: 'learn', affection: 7 },
-                { text: '什么也不说，在崖边坐下陪她到月落', effect: 'stay', affection: 9 }
+                { text: '什么也不说，在崖边坐下陪她到月落', effect: 'stay', affection: 11 }
             ]}
         ],
         effects: function(npc, choice) {
@@ -208,7 +210,9 @@ var TIANSHAN_MAIN_EVENTS = {
             switch (choice) {
                 case 'who_win': aff = 8; msg = '她愣了一下，低低笑出声：「我赢了。她让我。」月光下她的侧脸，是你见过的、最像普通女子的她。'; break;
                 case 'learn': aff = 7; msg = '她用梅枝带着你过了一遍「雪落」。到最后一步，两根梅枝在月下交叠——她没收回。'; break;
-                case 'stay': aff = 9; msg = '一整夜，没人说话。月落时她起身，经过你身边，把你肩上的落雪拂掉：「……冷也不说。」'; break;
+                case 'stay': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                                    if (!_py.ok) { aff = 4; msg = '月偏西你就歪了头，那支剑舞的后半段，你是听人转述的。（精力不足，那一夜你先撑不住了）'; break; }
+                                    aff = 11; msg = ('一整夜，没人说话。月落时她起身，经过你身边，把你肩上的落雪拂掉：「……冷也不说。」') + '（精力-15）'; break; }
             }
             return { affection: aff, msg: msg };
         }
@@ -223,7 +227,7 @@ var TIANSHAN_MAIN_EVENTS = {
             { speaker: 'npc', text: '「这裂纹，每过几年就会深一线。有一天它会断。」她抬眼看你，「断的那天，我可能……不太想活。」' },
             { speaker: 'npc', text: '「所以，我跟你讨个诺：到那天，你帮我把剑接上，或者——帮我把人留下。行不行？」' },
             { speaker: 'player_select', text: '你如何回应？', options: [
-                { text: '「我应您。剑断了，我接；人，我也留下。」', effect: 'promise', affection: 12 },
+                { text: '「我应您。剑断了，我接；人，我也留下。」', effect: 'promise', affection: 14 },
                 { text: '「霜鸣不会断的。我会替师叔护住它。」', effect: 'guard', affection: 9 },
                 { text: '「……这种话，不该对人说吗？」', effect: 'press', affection: 5 }
             ]}
@@ -231,7 +235,9 @@ var TIANSHAN_MAIN_EVENTS = {
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'promise': aff = 12; msg = '她看了你很久，把霜鸣横进你掌心一瞬，又收回：「……记住你说的。」那一瞬你触到的，不只是一柄剑。'; break;
+                case 'promise': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                                    if (!_py.ok) { aff = 6; msg = '你守到一半先睡了。剑鞘上那道新缠的布条，是醒来才看见的。（精力不足，那一夜你先撑不住了）'; break; }
+                                    aff = 14; msg = ('她看了你很久，把霜鸣横进你掌心一瞬，又收回：「……记住你说的。」那一瞬你触到的，不只是一柄剑。') + '（精力-15）'; break; }
                 case 'guard': aff = 9; msg = '她点头，没再说话。但从那天起，霜鸣不入鞘时，她会让你坐在她身边——像一个守夜的人，旁边多了一个守夜的人。'; break;
                 case 'press': aff = 5; msg = '她别开脸：「……不该。」半天又补一句，「但你来了。」——这是她第一次承认，你不算「人」，算「这个人」。'; break;
             }
@@ -251,7 +257,7 @@ var TIANSHAN_MAIN_EVENTS = {
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '对童姥一礼：「绝不连累师叔。」', effect: 'respect', affection: 8 },
                 { text: '低声对她：「师叔不必替我挡。」', effect: 'stand', affection: 7 },
-                { text: '什么也不说，站到她身侧并肩', effect: 'side', affection: 9 }
+                { text: '什么也不说，站到她身侧并肩', effect: 'side', affection: 11 }
             ]}
         ],
         effects: function(npc, choice) {
@@ -259,7 +265,9 @@ var TIANSHAN_MAIN_EVENTS = {
             switch (choice) {
                 case 'respect': aff = 8; msg = '童姥走后，她低声：「她最不喜欢没骨头的人。你这一礼，比挡她一掌管用。」——她罕见地，对你笑了。'; break;
                 case 'stand': aff = 7; msg = '她侧头看你，眼底有一瞬的烫：「……想清楚了。你替我挡，我担不起。」但她没把你的手推开。'; break;
-                case 'side': aff = 9; msg = '她看了你一眼，没让你退。童姥在梁上看完这一幕，嗤笑一声走了，丢下一句：「小霄凌，护食倒快。」'; break;
+                case 'side': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                                    if (!_py.ok) { aff = 4; msg = '考校到后半你眼皮打架，末了挨了童姥一句「回去练十个时辰」。（精力不足，那一夜你先撑不住了）'; break; }
+                                    aff = 11; msg = ('她看了你一眼，没让你退。童姥在梁上看完这一幕，嗤笑一声走了，丢下一句：「小霄凌，护食倒快。」') + '（精力-15）'; break; }
             }
             return { affection: aff, msg: msg };
         }
@@ -273,7 +281,7 @@ var TIANSHAN_MAIN_EVENTS = {
             { speaker: 'narrator', text: '剑阁传出霜鸣的剑啸——不是平时的低鸣，是凄厉的尖啸。你冲进去，只见琤霄凌执剑狂舞，双目赤红，剑风绞碎了半个剑阁。', type: 'description' },
             { speaker: 'narrator', text: '她入了心障——十二年前的雪夜、师姐的血、那道裂纹，全压上来。霜鸣在她手里颤得像要炸开。', type: 'description' },
             { speaker: 'player_select', text: '你必须立刻做点什么。', options: [
-                { text: '冲进去抱住她，不管剑风割人', effect: 'hold', affection: 12 },
+                { text: '冲进去抱住她，不管剑风割人', effect: 'hold', affection: 14 },
                 { text: '大喊：「霄凌！师姐让你把它练成，不是让你陪它死！」', effect: 'shout', affection: 10 },
                 { text: '拔自己的剑，接她的剑，把她引回当下', effect: 'spar', affection: 11 }
             ]}
@@ -281,7 +289,9 @@ var TIANSHAN_MAIN_EVENTS = {
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'hold': aff = 12; msg = '剑风在你背上豁开几道口子，血溅上霜鸣的裂纹——剑忽然安静了。她伏在你怀里喘息，半晌，哑声：「……你怎么敢。」你不敢。但你敢。'; break;
+                case 'hold': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 20) : { ok: true };
+                                    if (!_py.ok) { aff = 6; msg = '心障最凶那一阵你撑不住退了出来，那半程，是她独自在里面走完的。（精力不足，那一夜你先撑不住了）'; break; }
+                                    aff = 14; msg = ('剑风在你背上豁开几道口子，血溅上霜鸣的裂纹——剑忽然安静了。她伏在你怀里喘息，半晌，哑声：「……你怎么敢。」你不敢。但你敢。') + '（精力-20）'; break; }
                 case 'shout': aff = 10; msg = '她手腕一抖，霜鸣险些脱手。剑啸戛然而止。她跪在地上，盯着裂纹看了很久，最后把剑轻轻入鞘：「……你比我会说话。」'; break;
                 case 'spar': aff = 11; msg = '你的剑接住霜鸣的第三式，两剑相交的颤音里，她的赤红一点点退下去。收剑时她看着你，像第一次见你：「……你的剑，是活的。」'; break;
             }
@@ -296,19 +306,19 @@ var TIANSHAN_MAIN_EVENTS = {
         scenes: [
             { speaker: 'narrator', text: '天山大雪夜。剑阁只剩一盏灯。琤霄凌把霜鸣横在膝上，那道裂纹，在灯下亮得像一道愈合的疤。', type: 'description' },
             { speaker: 'npc', text: '「它今天鸣了最后一声。」她抬眼，冰蓝眼底映着你，「裂纹合上了——不是剑好了，是它认了一个人。」' },
-            { speaker: 'npc', text: '「{playerName}。霜鸣认了你。」她把剑横在两人之间，霜白的指搭在剑身上，「这柄剑，连同守剑的人，你要不要？」' },
+            { speaker: 'npc', text: '「{playerName}。霜鸣认了你。」她把剑平放进你掌心，「我守剑十二年，不是守它，是等它响。如今响了——该去哪儿，你带它去，我跟着声响走。」' },
             { speaker: 'player_select', text: '你的选择将决定你们的关系走向', options: [
                 { text: '「要。我带你和霜鸣下山——双剑走江湖，哪里有不平就去哪里。」', effect: 'lover_travel', affection: 30 },
                 { text: '「要。但哪儿也不去。我把剑挂在天山雪庐，陪您守每一年的雪。」', effect: 'lover_stay', affection: 28 },
                 { text: '「剑我接。人就算了——我做您天下第一的剑对手，年年天山论剑。」', effect: 'friend_spar', affection: 20 },
-                { text: '「剑我接。雪庐的门，我想一直能推开——做个常客，行吗？」', effect: 'friend_stay', affection: 18 },
+                { text: '「剑我接。霜鸣再响的那天，记得给我递信——拔剑我不来，听响我一定到。」', effect: 'friend_stay', affection: 18 },
                 { text: '「我都不要。我只是个路过的剑客。」', effect: 'none', affection: 0 }
             ]}
         ],
         effects: function(npc, choice) {
-            // 断鸣兜底：累计负面选择≥5时，恋人选项转为辜负结局
+            // 断鸣兜底：累计负面选择≥3时，恋人选项转为辜负结局（v20.25 门槛 5→3，三度伤透即寒心）
             var negCount = (window._negativeChoiceCount && window._negativeChoiceCount[TIANSHAN_NPC_ID]) || 0;
-            if (negCount >= 5 && (choice === 'lover_travel' || choice === 'lover_stay')) {
+            if (negCount >= 3 && (choice === 'lover_travel' || choice === 'lover_stay')) {
                 return { affection: 0, msg: '她看着你，忽然轻轻笑了，笑意却不达眼底：「……原来守了十二年，等的是这么一句话。」她把霜鸣横在膝上，亲手把那道愈合的裂纹，重新掰断。「你走吧。剑我留着自己听。」', ending: '断鸣' };
             }
             switch (choice) {
@@ -329,7 +339,7 @@ var TIANSHAN_ENDINGS = {
         id: 'ts_ending_双剑', npcId: TIANSHAN_NPC_ID, title: '结局·双剑', icon: '⚔️',
         route: '双剑',
         scenes: [
-            { speaker: 'narrator', text: '三天后，琤霄凌把代掌门的印信交还童姥。', type: 'description' },
+            { speaker: 'narrator', text: '三天后，琤霄凌把代掌门的印信捧上大堂，搁在童姥案前。童姥眼皮都没抬：「剑找到了人，还要印做什么。」她摆摆手，「只一句——剑响的那天，你得在。」', type: 'description' },
             { speaker: 'narrator', text: '童姥盘在梁上看着她俩下山，嗤笑一声，没拦。', type: 'description' },
             { speaker: 'npc', text: '「霜鸣给你。」她把剑背在身后，跟你并肩走下天山的长阶，「我空着手——我自个儿就是剑。」' },
             { speaker: 'narrator', text: '多年后，江湖有了「双霜剑」的传说：一柄霜鸣，一个雪隐剑姬。专斩不平。', type: 'description' },

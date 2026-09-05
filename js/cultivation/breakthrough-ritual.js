@@ -664,6 +664,11 @@ if (typeof window !== 'undefined') {
         const cd = window.currentCharData;
         // P0-5：残魂态禁止突破
         if (window.checkSoulBlock && window.checkSoulBlock('突破境界')) return;
+        // v20.39 紊乱已极锁突破：真气逆行欲裂，强进必遭大劫——先化解，再精进
+        if (typeof window.getQiDeviationBlocked === 'function') {
+            var _qdBlock = window.getQiDeviationBlocked();
+            if (_qdBlock) { if (window.showMessage) window.showMessage(_qdBlock, 'error'); return false; }
+        }
         if (!cd) return false;
         const idx = typeof window.getRealmIndex === 'function' ? window.getRealmIndex(cd.realm) : -1;
         const maxLayers = (window.REALM_CONFIG && window.REALM_CONFIG.realms && window.REALM_CONFIG.realms[idx] && window.REALM_CONFIG.realms[idx].layers) || 9;

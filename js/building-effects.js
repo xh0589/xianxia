@@ -69,8 +69,8 @@ buildingEffectsRegistry['shop'] = {
 buildingEffectsRegistry['alchemy'] = {
     // 打开炼丹界面
     open: function() {
-        if (window.showCraftingUI) {
-            window.showCraftingUI('pilfer');
+        if (window.openCraftingUI) {
+            window.openCraftingUI('pilfer');
         } else if (window.showBuildingEffectDialog) {
             showBuildingEffectDialog('炼丹房', `
                 <div class="space-y-3">
@@ -92,8 +92,8 @@ buildingEffectsRegistry['alchemy'] = {
 buildingEffectsRegistry['forging'] = {
     // 打开锻造界面
     open: function() {
-        if (window.showCraftingUI) {
-            window.showCraftingUI('forging');
+        if (window.openCraftingUI) {
+            window.openCraftingUI('forging');
         } else if (window.showBuildingEffectDialog) {
             showBuildingEffectDialog('铁匠铺', `
                 <div class="space-y-3">
@@ -183,6 +183,31 @@ buildingEffectsRegistry['inn'] = {
         return true;
     },
     
+    // v20.7 包间休息（原 room_upgrade 死按钮补活）：贵版休息——清负面状态与毒素
+    'room_upgrade': function() {
+        if (!window.currentCharData) return false;
+        const cost = 50;
+        const dm = window.XianXia?.DataManager;
+        if (dm && typeof dm.deductSpiritStones === 'function') {
+            if (!dm.deductSpiritStones(cost)) { showMessage(`包间需${cost}灵石`, 'error'); return false; }
+        } else {
+            if ((currentCharData.spiritStones || 0) < cost) { showMessage(`包间需${cost}灵石`, 'error'); return false; }
+            currentCharData.spiritStones -= cost;
+        }
+        currentCharData.health = currentCharData.maxHealth || 100;
+        currentCharData.qi = currentCharData.maxQi || 100;
+        currentCharData.energy = currentCharData.maxEnergy || 100;
+        if (Array.isArray(currentCharData.statusEffects)) currentCharData.statusEffects = [];
+        if (currentCharData._poisoned) {
+            currentCharData._poisoned = false;
+            showMessage('包间熏香压住了毒气，体毒暂退（解毒丹才能根除）。', 'info');
+        }
+        if (window.timeSystem) window.timeSystem.advanceTime(240, '包间静养');
+        showMessage('包间一觉到天光，诸般负面尽消！', 'success');
+        if (window.updateStatusPanel) window.updateStatusPanel();
+        return true;
+    },
+
     // 显示选项
     open: function() {
         if (window.showBuildingEffectDialog) {
@@ -245,6 +270,21 @@ buildingEffectsRegistry['training'] = {
         return true;
     },
     
+    // v20.7 静心修炼（原 meditate 死按钮补活）：以真气换少量真元
+    meditate: function() {
+        if (!window.currentCharData) return false;
+        if ((currentCharData.qi || 0) < 30) {
+            showMessage('真气不足 30，静不下来！', 'error');
+            return false;
+        }
+        currentCharData.qi -= 30;
+        currentCharData.essence = (currentCharData.essence || 0) + 10;
+        if (window.timeSystem) window.timeSystem.advanceTime(60, '演武场静坐');
+        showMessage('桩上静坐一个时辰，真元 +10——练武之地也能养气。', 'success');
+        if (window.updateStatusPanel) window.updateStatusPanel();
+        return true;
+    },
+
     // 打开界面
     open: function() {
         if (window.showBuildingEffectDialog) {
@@ -267,21 +307,41 @@ buildingEffectsRegistry['training'] = {
 
 // ============ 传送阵效果 ============
 buildingEffectsRegistry['teleport'] = {
-    // 传送到其他城市
-    teleport: function(cityName) {
-        if (window.travelSystem) {
-            window.travelSystem.startTravel(cityName, 'teleport');
+    // v20.7 修复：旧版按钮 action 名 teleport_to_X 与注册表协议不匹配，永远报"没有该功能"。
+    // 现在按钮统一走 go(城市)，先由 travelSystem 校验（目的地未解锁会被拒、不扣费），成行才收 100 灵石。
+    go: function(cityName) {
+        if (!window.travelSystem || typeof window.travelSystem.startTravel !== 'function') {
+            showMessage('传送阵尚未联通（旅行系统未就绪）', 'error');
+            return false;
         }
+        var ok = window.travelSystem.startTravel(cityName, 'teleport');
+        if (ok === false) return false; // startTravel 自带缘由提示（未解锁/已在途中等）
+        var dm = window.XianXia && window.XianXia.DataManager;
+        if (dm && typeof dm.deductSpiritStones === 'function') {
+            if (!dm.deductSpiritStones(100)) {
+                showMessage('传送耗灵甚巨，100 灵石祭阵费不够。', 'error');
+                return false;
+            }
+        } else if (window.currentCharData) {
+            if ((window.currentCharData.spiritStones || 0) < 100) {
+                showMessage('传送耗灵甚巨，100 灵石祭阵费不够。', 'error');
+                return false;
+            }
+            window.currentCharData.spiritStones -= 100;
+        }
+        if (window.timeSystem) window.timeSystem.advanceTime(30, '传送阵蓄能');
+        showMessage('阵光一闪，你已立于「' + cityName + '」城门外（祭阵费 100 灵石）。', 'success');
+        return true;
     },
-    
-    // 打开界面
+
+    // 打开界面（v20.7：去掉 showTravelMethodSelect 死门槛，只依赖 locationSystem）
     open: function() {
-        if (window.showTravelMethodSelect) {
+        if (window.locationSystem && window.locationSystem.cityData) {
             showBuildingEffectDialog('传送阵', `
                 <div class="space-y-2">
-                    <p class="text-sm text-gray-400 mb-2">选择目的地（100灵石/次）：</p>
+                    <p class="text-sm text-gray-400 mb-2">选择目的地（100灵石/次，须已解锁传送阵）：</p>
                     ${Object.keys(window.locationSystem.cityData).filter(c => c !== window.locationSystem.getCurrentLocation()).map(city => `
-                        <button onclick="useBuildingEffect('teleport', 'teleport_to_${city}')" 
+                        <button onclick="useBuildingEffect('teleport', 'go', '${city}')"
                                 class="w-full bg-cyan-700 hover:bg-cyan-600 p-2 rounded text-left">
                             <span class="text-cyan-400">${city}</span>
                             <span class="text-xs text-gray-400 ml-2">[${window.locationSystem.cityData[city].region}]</span>
@@ -303,15 +363,28 @@ buildingEffectsRegistry['cultivation'] = {
             showMessage('真气不足！', 'error');
             return false;
         }
-        
+        // v20.7 堵免费刷：布阵燃香 5 灵石（世界成本，非次数配额）
+        {
+            const dmC = window.XianXia?.DataManager;
+            if (dmC && typeof dmC.deductSpiritStones === 'function') {
+                if (!dmC.deductSpiritStones(5)) { showMessage('布阵燃香需 5 灵石，请添香火再修。', 'warning'); return false; }
+            } else if ((currentCharData.spiritStones || 0) >= 5) {
+                currentCharData.spiritStones -= 5;
+            }
+        }
+
         currentCharData.qi -= 20;
-        
+
         let cultivationBonus = 1.0;
         if (window.timeSystem) {
             cultivationBonus = window.timeSystem.getCultivationSpeedBonus();
         }
         
         let _cultMul = cultivationBonus;
+        // v20.8：门派特色 buff 的 cultivationSpeed 在此真实结算（全真/大明/昆仑等，此前无读者）
+        if (typeof window.getSectBuffCultivationMul === 'function') {
+            try { _cultMul *= window.getSectBuffCultivationMul(); } catch (eSb) {}
+        }
         if (typeof window.getHouseBonus === 'function') {
             try { _cultMul *= (window.getHouseBonus('cultivation') || 1); } catch(e) {}
         }
@@ -324,6 +397,13 @@ buildingEffectsRegistry['cultivation'] = {
                 if (_wm && _wm.cultivation) _cultMul *= _wm.cultivation;
             } catch(e) {}
         }
+        // v20.7 灵泉余泽真实生效（springBlessing 此前只写不读）：×1.15，逐坐消耗
+        let _zeYu = false;
+        if ((currentCharData.springBlessing || 0) > 0) {
+            _cultMul *= 1.15;
+            currentCharData.springBlessing -= 1;
+            _zeYu = true;
+        }
         const expGain = Math.floor(30 * _cultMul);
         currentCharData.essence = (currentCharData.essence || 0) + expGain;
         
@@ -331,11 +411,11 @@ buildingEffectsRegistry['cultivation'] = {
             window.timeSystem.advanceTime(120);
         }
         
-        showMessage(`修炼获得 ${expGain} 点真元`, 'success');
+        showMessage(`修炼获得 ${expGain} 点真元` + (_zeYu ? '（灵泉余泽 +15%）' : ''), 'success');
         if (window.updateStatusPanel) window.updateStatusPanel();
         return true;
     },
-    
+
     // 突破境界
     breakthrough: function() {
         if (window.cultivationSystem && window.cultivationSystem.showBreakthroughUI) {
@@ -360,8 +440,8 @@ buildingEffectsRegistry['cultivation'] = {
                 <div class="space-y-3">
                     <p class="text-sm text-gray-400 mb-2">选择要进行的操作：</p>
                     <button onclick="useBuildingEffect('cultivation', 'cultivate')" class="w-full bg-indigo-700 hover:bg-indigo-600 p-3 rounded">
-                        <span class="text-indigo-400 font-bold">🧘 静心修炼</span> <span class="text-xs text-gray-400">(20真气)</span><br>
-                        <span class="text-xs text-gray-400">获得真元</span>
+                        <span class="text-indigo-400 font-bold">🧘 静心修炼</span> <span class="text-xs text-gray-400">(20真气/5灵石香火)</span><br>
+                        <span class="text-xs text-gray-400">获得真元；若有灵泉余泽，事半功倍</span>
                     </button>
                     <button onclick="useBuildingEffect('cultivation', 'breakthrough')" class="w-full bg-yellow-700 hover:bg-yellow-600 p-3 rounded">
                         <span class="text-yellow-400 font-bold">⬆️ 尝试突破</span><br>
@@ -375,29 +455,51 @@ buildingEffectsRegistry['cultivation'] = {
 
 // ============ 灵泉效果 ============
 buildingEffectsRegistry['spring'] = {
-    // 沐浴灵泉
+    // 沐浴灵泉（v20.21 堵免费回满：引泉水冲刷经脉须真气护体，泉养身心、填不满道基——
+    // 烧 20 真气换气血+30/精力+50 的部分恢复，回满仍归客栈安歇，名实相符）
     bathe: function() {
         if (!window.currentCharData) return false;
-        
-        currentCharData.health = currentCharData.maxHealth || 100;
-        currentCharData.qi = currentCharData.maxQi || 100;
-        currentCharData.energy = currentCharData.maxEnergy || 100;
-        
+        if ((currentCharData.qi || 0) < 20) {
+            showMessage('引泉水冲刷经脉须真气护体，真气不足 20，下去也是白泡。', 'error');
+            return false;
+        }
+        currentCharData.qi -= 20;
+        currentCharData.health = Math.min(currentCharData.maxHealth || 100, (currentCharData.health || 0) + 30);
+        currentCharData.energy = Math.min(currentCharData.maxEnergy || 100, (currentCharData.energy || 0) + 50);
+
         // 可能获得特殊增益
         if (Math.random() < 0.2) {
             currentCharData.springBlessing = (currentCharData.springBlessing || 0) + 1;
             showMessage('沐浴灵泉，获得了灵气加持！', 'success');
         }
-        
+
         if (window.timeSystem) {
             window.timeSystem.advanceTime(60);
         }
-        
-        showMessage('沐浴灵泉，状态完全恢复！', 'success');
+
+        showMessage('泉水冲开滞涩，气血+30、精力+50（真气 -20）。泉水养身，填不满道基——要回满，去客栈安歇。', 'success');
         if (window.updateStatusPanel) window.updateStatusPanel();
         return true;
     },
     
+    // v20.7 收集灵泉（原 collect 死按钮补活）：灌一瓶灵气，修炼时享余泽（存 3 止）
+    collect: function() {
+        if (!window.currentCharData) return false;
+        if ((currentCharData.energy || 0) < 10) {
+            showMessage('精力不足，舀不动一捧灵泉。', 'error');
+            return false;
+        }
+        if ((currentCharData.springBlessing || 0) >= 3) {
+            showMessage('随身灵泉余泽已满（3），贪多则溢。', 'info');
+            return false;
+        }
+        currentCharData.energy -= 10;
+        currentCharData.springBlessing = (currentCharData.springBlessing || 0) + 1;
+        if (window.timeSystem) window.timeSystem.advanceTime(30, '灵泉汲水');
+        showMessage('🏺 灌下一瓶灵泉灵气，下次修炼事半功倍（余泽 ' + currentCharData.springBlessing + '/3）。', 'success');
+        return true;
+    },
+
     // 打开界面
     open: function() {
         if (window.showBuildingEffectDialog) {
@@ -406,7 +508,7 @@ buildingEffectsRegistry['spring'] = {
                     <p class="text-sm text-gray-400 mb-2">灵泉散发着浓郁的灵气...</p>
                     <button onclick="useBuildingEffect('spring', 'bathe')" class="w-full bg-teal-700 hover:bg-teal-600 p-3 rounded">
                         <span class="text-teal-400 font-bold">⛲ 沐浴灵泉</span><br>
-                        <span class="text-xs text-gray-400">完全恢复状态，可能有额外增益</span>
+                        <span class="text-xs text-gray-400">耗 20 真气，气血+30、精力+50（回满请去客栈）</span>
                     </button>
                     <button onclick="useBuildingEffect('spring', 'collect')" class="w-full bg-cyan-700 hover:bg-cyan-600 p-3 rounded">
                         <span class="text-cyan-400 font-bold">🏺 收集灵泉</span><br>
@@ -429,7 +531,16 @@ buildingEffectsRegistry['temple'] = {
             showMessage('恶孽深重，神明不会回应你...', 'error');
             return false;
         }
-        
+        // v20.7 香火钱 20 灵石（原零成本白拿）；庇佑有真实牙齿——毒洞试毒可挡一次
+        {
+            const dmP = window.XianXia?.DataManager;
+            if (dmP && typeof dmP.deductSpiritStones === 'function') {
+                if (!dmP.deductSpiritStones(20)) { showMessage('香火钱需 20 灵石。', 'warning'); return false; }
+            } else if ((currentCharData.spiritStones || 0) >= 20) {
+                currentCharData.spiritStones -= 20;
+            }
+        }
+
         currentCharData.blessing = (currentCharData.blessing || 0) + 1;
         
         // 净化负面状态
@@ -441,10 +552,26 @@ buildingEffectsRegistry['temple'] = {
             window.timeSystem.advanceTime(30);
         }
         
-        showMessage('在寺庙中祈福，获得神明庇佑！', 'success');
+        showMessage('在寺庙中祈福（香火 20 灵石），神明庇佑之身可挡一次毒瘴！', 'success');
         return true;
     },
-    
+
+    // v20.7 寺中静修（原 meditate 死按钮补活）
+    meditate: function() {
+        if (!window.currentCharData) return false;
+        if ((currentCharData.qi || 0) < 20) {
+            showMessage('真气不足 20。', 'error');
+            return false;
+        }
+        currentCharData.qi -= 20;
+        currentCharData.essence = (currentCharData.essence || 0) + 12;
+        currentCharData.karma = (currentCharData.karma || 0) + 1;
+        if (window.timeSystem) window.timeSystem.advanceTime(60, '寺中静修');
+        showMessage('钟磬声中静修，真元 +12，佛缘 +1。', 'success');
+        if (window.updateStatusPanel) window.updateStatusPanel();
+        return true;
+    },
+
     // 打开界面
     open: function() {
         if (window.showBuildingEffectDialog) {
@@ -489,15 +616,52 @@ buildingEffectsRegistry['tavern'] = {
             window.eventSystem.triggerRandomEvent();
         }
         
-        // 获取情报
+        // v20.7 情报来自真传闻池（RUMOR_LOG），此前是 8 条硬编码文案掷骰
         const intel = generateTavernIntel();
-        showMessage(`在酒楼听到了情报：${intel}`, 'info');
-        
+        if (intel) showMessage(`在酒楼听到了情报：${intel}`, 'info');
+
         if (window.timeSystem) {
             window.timeSystem.advanceTime(30);
         }
-        
+
         if (window.updateStatusPanel) window.updateStatusPanel();
+        return true;
+    },
+
+    // v20.7 结识NPC（原 meet_npc 死按钮补活）：做东 40 铜钱请同地修士入席
+    'meet_npc': function() {
+        if (!window.currentCharData) return false;
+        const cost = 40;
+        if (window.XianXia && window.XianXia.DataManager && typeof window.XianXia.DataManager.deductCopper === 'function') {
+            if (!window.XianXia.DataManager.deductCopper(cost)) { showMessage(`做东需${cost}铜钱`, 'error'); return false; }
+        } else if ((currentCharData.copper || 0) >= cost) {
+            currentCharData.copper -= cost;
+        } else {
+            showMessage(`做东需${cost}铜钱`, 'error'); return false;
+        }
+        const myLoc = (window.currentCharData && window.currentCharData.location) || null;
+        let pool = [];
+        if (myLoc && window.npcManager && typeof window.npcManager.getAllNPCs === 'function') {
+            const all = window.npcManager.getAllNPCs() || [];
+            for (let i = 0; i < all.length; i++) {
+                const n = all[i];
+                if (n && !n.isDead && !n.isMissing && n.location === myLoc) pool.push(n);
+            }
+        }
+        if (!pool.length) {
+            showMessage('菜上齐了，邻座却始终空着——今日这地界没有可结识的修士，酒钱照付。', 'info');
+            if (window.timeSystem) window.timeSystem.advanceTime(30, '酒楼做东');
+            return true; // 请客成本已发生，世界不为空座退款
+        }
+        const npc = pool[Math.floor(Math.random() * pool.length)];
+        if (typeof npc.changeAffection === 'function') npc.changeAffection(2);
+        showMessage(`👥 你请「${npc.name}」吃了杯酒，对方落座攀谈起来（好感 +2）。`, 'success');
+        if (window.timeSystem) window.timeSystem.advanceTime(30, '酒楼做东');
+        // 与街面攀谈同款：关掉本弹窗后直接开对话
+        if (typeof window.closeBuildingDialog === 'function') window.closeBuildingDialog();
+        if (typeof window.showNPCDialog === 'function') {
+            setTimeout(function () { window.showNPCDialog(npc.id); }, 100);
+        }
         return true;
     },
     
@@ -544,7 +708,16 @@ buildingEffectsRegistry['market'] = {
 };
 
 // ============ 生成酒楼情报 ============
+// v20.7：优先从真实传闻池（NPCLife.RUMOR_LOG）取材——听到的就是世界里真发生的事
+// （含 NPC 走形传歪的 🌀 版本）；池空时才退回旧静态池兜底。
 function generateTavernIntel() {
+    if (window.NPCLife && typeof window.NPCLife.getRumorLog === 'function') {
+        const log = window.NPCLife.getRumorLog(30) || [];
+        if (log.length) {
+            const r = log[Math.floor(Math.random() * Math.min(log.length, 12))];
+            if (r && r.summary) return (r.distorted ? '🌀 ' : '') + r.summary;
+        }
+    }
     const inTELs = [
         '最近山贼活动频繁，出行要小心',
         '听说某地发现了秘境入口',
@@ -568,7 +741,8 @@ function useBuildingEffect(buildingId, action) {
     
     const actionFn = effect[action];
     if (typeof actionFn === 'function') {
-        return actionFn();
+        // v20.7：支持带参动作（如 teleport 的目的地）；旧调用不传参不受影响
+        return actionFn.apply(effect, Array.prototype.slice.call(arguments, 2));
     }
     
     showMessage(`建筑 ${buildingId} 没有 ${action} 功能`, 'warning');
@@ -580,8 +754,10 @@ function openBuildingUI(buildingId) {
     const effect = buildingEffectsRegistry[buildingId];
     if (effect && effect.open) {
         effect.open();
-    } else if (window.locationSystem && window.locationSystem.useBuilding) {
-        window.locationSystem.useBuilding(buildingId);
+    } else if (typeof window.showMessage === 'function') {
+        // v20.17 断开回弹：此函数只被 useBuilding 的兜底分支调用，
+        // 旧代码在这里再调回 useBuilding 会无限互跳直至栈溢出（点击表现为无声无息）。
+        window.showMessage('此处暂无可为，且往别处看看', 'info');
     }
 }
 

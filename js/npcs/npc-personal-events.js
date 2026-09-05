@@ -425,7 +425,7 @@ var XIULUO_EVENTS = {
             { speaker: 'player_select', text: '你如何回答？', options: [
                 { text: '「相信。」', effect: 'believe', affection: 3 },
                 { text: '「不太信。」', effect: 'doubt', affection: 5 },
-                { text: '「看人。」——「那你看我，像能信的人吗？」', effect: 'depends', affection: 8, subOption: 'like' }
+                { text: '「看人。」——「那你看我，像能信的人吗？」', effect: 'depends', affection: 4 }
             ]}
         ],
         effects: function(npc, choice) {
@@ -433,8 +433,6 @@ var XIULUO_EVENTS = {
             switch (choice) {
                 case 'believe': aff = 3; msg = '她笑了笑：「天真。」但语气不冷。'; break;
                 case 'doubt': aff = 5; msg = '她低头：「……我也是。」'; break;
-                case 'like': aff = 8; msg = '她看了你很久：「……有趣。」'; break;
-                case 'unlike': aff = 2; msg = '她淡淡地笑了一下。'; break;
                 case 'depends': aff = 4; msg = '她若有所思地看了你一会儿：「你倒是会说话。」'; break;
             }
             return { affection: aff, msg: msg };
@@ -808,9 +806,10 @@ var XIULUO_EVENTS = {
         ],
         effects: function(npc, choice) {
             var aff = 0, msg = '', ending = '';
-            // 霜烬兜底：累计负面选项≥5 时，恋人选项转为放手结局（与温蘅花冢/琤霄凌断鸣/蓝凤凰蛊噬同构）
+            // 霜烬兜底：累计负面选项≥3 时，恋人选项转为放手结局（与温蘅花冢/琤霄凌断鸣/蓝凤凰蛊噬同构）
+            // v20.25 门槛 5→3：三度伤透即寒心——旧门槛对多数线数学不可达（一条线总共没有 5 个负选项），坏结局形同虚设
             var negCount = (window._negativeChoiceCount && window._negativeChoiceCount['sect_leader_修罗宫']) || 0;
-            if (negCount >= 5 && (choice === 'lover_carry' || choice === 'lover_rest')) {
+            if (negCount >= 3 && (choice === 'lover_carry' || choice === 'lover_rest')) {
                 return { affection: 0, msg: '她看着你，良久没动。然后她拿起那根修好的簪子——又掰断了，金线崩开，像一道愈合又被撕开的疤。「……我修好了它，等你来接。你来了，却不像来接的。」她把半截簪子放在桌上，推向你，「你我各拿一半。谁也不欠谁。」', ending: '霜烬' };
             }
             switch (choice) {
@@ -845,7 +844,7 @@ var XIULUO_EVENTS = {
     }
 };
 
-// ============ 她的日常（18件）——绯泪做了但不说的那些事 ============
+// ============ 她的日常（10件，xl_015~024）——绯泪做了但不说的那些事 ============
 var XIULUO_DAILY_EVENTS = {
     'xl_event_015': { id: 'xl_event_015', npcId: 'sect_leader_修罗宫', title: '安神茶', icon: '🍵', desc: '你早上打哈欠，她路过时看了你一眼。', minAffection: 20, trigger: { random: 0.3 }, cooldown: 0, flag: 'xl_e015_done', autoTrigger: { random: 0.3 },
         scenes: [
@@ -884,7 +883,7 @@ var XIULUO_DAILY_EVENTS = {
         ],
         effects: function(npc, choice) { var aff = 0, msg = ''; switch(choice) { case 'eat': aff = 3; msg = '她远远看你吃了，转身走了。'; break; case 'ask': aff = 5; msg = '她低头翻文件：「厨房多做的。」——但你看到厨房今天没做桂花糕。'; break; case 'ignore': aff = -1; msg = '后来那碟桂花糕被收走了。'; break; } return { affection: aff, msg: msg }; }
     },
-    'xl_event_018': { id: 'xl_event_018', npcId: 'sect_leader_修罗宫', title: '伤药', icon: '💊', desc: '你受了伤但瞒着没说。', minAffection: 20, trigger: { random: 0.3 }, cooldown: 0, flag: 'xl_e018_done', autoTrigger: { random: 0.3 },
+    'xl_event_018': { id: 'xl_event_018', npcId: 'sect_leader_修罗宫', title: '瞒不住的伤', icon: '💊', desc: '你受了伤但瞒着没说。', minAffection: 20, trigger: { random: 0.3 }, cooldown: 0, flag: 'xl_e018_done', autoTrigger: { random: 0.3 },
         scenes: [
             { speaker: 'narrator', text: '你受了点伤，但觉得不严重，没说。', type: 'description' },
             { speaker: 'narrator', text: '当晚你门口出现了一瓶伤药。', type: 'description' },
@@ -922,7 +921,7 @@ var XIULUO_DAILY_EVENTS = {
         ],
         effects: function(npc, choice) { var aff = 0, msg = ''; switch(choice) { case 'warm': aff = 3; msg = '从那天起，你值夜时灯都会亮着。'; break; case 'check': aff = 4; msg = '议事厅里没人，但桌上有一杯热茶。'; break; case 'ignore': aff = 0; msg = '第二天灯灭了。但第三天又亮了。'; break; } return { affection: aff, msg: msg }; }
     },
-    'xl_event_021': { id: 'xl_event_021', npcId: 'sect_leader_修罗宫', title: '一对杯盏', icon: '☕', desc: '议事厅里多了一只杯盏。', minAffection: 35, trigger: { random: 0.2 }, cooldown: 0, flag: 'xl_e021_done', autoTrigger: { random: 0.25 },
+    'xl_event_021': { id: 'xl_event_021', npcId: 'sect_leader_修罗宫', title: '殿上的盏', icon: '☕', desc: '议事厅里多了一只杯盏。', minAffection: 35, trigger: { random: 0.2 }, cooldown: 0, flag: 'xl_e021_done', autoTrigger: { random: 0.25 },
         scenes: [
             { speaker: 'narrator', text: '议事厅里多了一只杯盏，和她的那只是一对。', type: 'description' },
             { speaker: 'narrator', text: '她不喝你那只杯子，但你走了之后她会拿起来看一下。', type: 'description' },
@@ -973,7 +972,7 @@ var XIULUO_DAILY_EVENTS = {
     }
 };
 
-// ============ 她的靠近（12件）——她在主动让你发现 ============
+// ============ 她的靠近（8件，xl_025~032）——她在主动让你发现 ============
 var XIULUO_APPROACH_EVENTS = {
     'xl_event_025': { id: 'xl_event_025', npcId: 'sect_leader_修罗宫', title: '偶然路过', icon: '🚶‍♀️', desc: '她「偶然」出现在你修炼的地方附近。', minAffection: 25, trigger: { random: 0.3 }, cooldown: 0, flag: 'xl_e025_done', autoTrigger: { location: '修罗宫', random: 0.3 },
         scenes: [
@@ -1295,6 +1294,16 @@ function canPlayerAccessPersonalEvent(eventDef, npc) {
     if (eventDef.requireDaoCompanion) {
         if (!npc.hasFlag || !npc.hasFlag('dao_companion')) return false;
     }
+    // v20.25 撕破脸锁门：拿秘密要挟翻过脸的人，私人线暂闭——
+    // 情面养回五成，才肯再单独听你说话；届时旧怨翻篇，门重开（旗随记忆销去）。
+    if (npc.hasFlag && npc.hasFlag('leverage_hostile')) {
+        var affHostile = (npc.relationship && npc.relationship.affection) || 0;
+        if (affHostile < 50) return false;
+        try {
+            if (npc.relationship && npc.relationship.flags && npc.relationship.flags.delete) npc.relationship.flags.delete('leverage_hostile');
+            else if (typeof npc.clearFlag === 'function') npc.clearFlag('leverage_hostile');
+        } catch (e) {}
+    }
     return true;
 }
 
@@ -1319,6 +1328,7 @@ function checkEventTrigger(eventDef, player) {
 function triggerPersonalEvent(eventId) {
     var eventDef = NPC_PERSONAL_EVENTS[eventId];
     if (!eventDef) return false;
+    _ensureAmbientTag(eventDef); // v20.25 手动触发也认定日常小事（免手动路径漏标）
     
     var npc = window.npcManager?.getNPC(eventDef.npcId);
     if (!npc) return false;
@@ -1385,6 +1395,21 @@ function renderPersonalEventScene(index) {
         if (window._pendingEventComplete) {
             markEventTriggered(window._pendingEventComplete);
             window._pendingEventComplete = null;
+        }
+        // v20.25 私人相处占时辰：主线大事件一场要耗去大半日——递盏茶不记账，赴一场心事要时辰。
+        var _finEv = ev.eventDef;
+        var _finNpc = ev.npc || {};
+        if (_finEv && !_finEv.ambient && window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
+            try { window.timeSystem.advanceTime(20, '与' + (_finNpc.name || '故人') + '的相处'); } catch (e) {}
+        }
+        // v20.25 日常事件重入：记下这桩小事发生的日头（存 NPC 记忆，随档走），隔够日子才会再遇
+        if (_finEv && _finEv.ambient && _finNpc) {
+            try {
+                if (!_finNpc.memory) _finNpc.memory = {};
+                if (!_finNpc.memory._ambientLastDay) _finNpc.memory._ambientLastDay = {};
+                var _ambToday = (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') ? (Number(window.timeSystem.getAbsoluteDay()) || 0) : 0;
+                _finNpc.memory._ambientLastDay[_finEv.id] = _ambToday;
+            } catch (e) {}
         }
         return;
     }
@@ -1480,6 +1505,19 @@ window.handlePersonalEventChoice = function(sceneIndex, choiceIndex) {
             if (_flavorLine) result.msg = _flavorLine + result.msg;
         }
     }
+    // v20.33 信任折价：吃醋场上，信任是话语的成色——被谎言磨到 10 以下时，
+    // 安抚类选择的好感加成减半（实现见 jealousy-deep.js；涨路：赴约+1、陪节+2）。
+    if (result && typeof result.affection === 'number' && result.affection > 0
+        && /_event_(probe|cold)$/.test(ev.eventDef.id || '')
+        && typeof window._jealTrustDiscount === 'function') {
+        window._jealTrustDiscount(ev.eventDef, npc, choice.effect, result);
+    }
+    // v20.36 深情账：吃醋场上的坦白与立誓是真诚里程碑——深情+1（0~100）。
+    // 深情涨路只认真诚时刻：结契打底、陪节+1、此处坦白/立誓+1；日常陪伴不积（那是好感的账）。
+    if (ev.eventDef.requireRivalRomance && npc && npc.relationship
+        && (choice.effect === 'tell' || choice.effect === 'vow')) {
+        npc.relationship.love = Math.min(100, (Number(npc.relationship.love) || 0) + 1);
+    }
     if (result.affection && npc) {
         npc.relationship.affection = Math.max(-100, Math.min(100, (npc.relationship.affection || 0) + result.affection));
         
@@ -1566,6 +1604,13 @@ window.handlePersonalEventChoice = function(sceneIndex, choiceIndex) {
         if (typeof endingCb === 'function') {
             try { endingCb(result.ending, npc); } catch(e) { console.warn('[个人事件] 结局回调失败:', e); }
         }
+        // v20.24 道侣名册落笔：结局回调落过 dao_companion 旗的，统一写进 bonds 名册
+        // （八条主角线的婚后制度——双修/随行/护法/子嗣——全读名册，此前只有旗、册上无名）
+        try {
+            if (window.ensureDaoBond && npc && typeof npc.hasFlag === 'function' && npc.hasFlag('dao_companion')) {
+                window.ensureDaoBond(ev.eventDef.npcId);
+            }
+        } catch (e) { console.warn('[个人事件] 道侣名册落笔失败:', e); }
         
         // 触发结局演出（v12.3：优先读事件声明的 endingMap，回退到修罗宫映射）
         var endingMap = ev.eventDef.endingMap || { '共主': 'xl_ending_共主', '归心': 'xl_ending_归心', '比邻': 'xl_ending_比邻', '归处': 'xl_ending_归处' };
@@ -1642,6 +1687,9 @@ function getChainOrder(ev) {
 // v12.3 通用化：按 npcId+链 分组，找序号比自己小的最大事件并检查其完成状态，
 // 不再依赖 xl_ 前缀字符串拼接，对任意NPC的感情线生效
 function isChainHead(ev) {
+    // v20.25 日常（ambient）小事不入主线链：萌芽期就碰得上，不再被终章锁死；
+    // 会不会重复发生由重入冷却（_ambientRearmOk）控制，不再只出现一次。
+    if (ev.ambient) return true;
     if (hasEventTriggered(ev.id)) return false;
     var chain = getEventChain(ev);
     var order = getChainOrder(ev);
@@ -1656,6 +1704,44 @@ function isChainHead(ev) {
     }
     if (!prevMax) return true; // 链首（前一节点不存在于事件池）
     return hasEventTriggered(prevMax.id);
+}
+
+// v20.25 日常事件就地认定：xl/bh 两组的 015~032 是"她做了但不说"的生活小事，
+// 不是主线节点——运行时打 ambient 标（加载序不保证，故不靠挂载序），并给重入周期 14 日。
+// v20.27 恋爱事件真实代价：兑现承诺先付精力（打坐/炼丹同一口井，无旁路字段）。
+// 无账本环境（测试沙盒/未开局）不扣不亏——只认 currentCharData.energy 真源。
+window._payCost = function (kind, n) {
+    var cd = window.currentCharData;
+    if (!cd) return { ok: true };
+    if (kind !== 'energy') return { ok: false, why: 'unknown' };
+    if ((Number(cd.energy) || 0) < n) return { ok: false, why: 'exhausted' };
+    cd.energy = Number(cd.energy) || 0;
+    cd.energy -= n;
+    return { ok: true };
+};
+
+function _ensureAmbientTag(ev) {
+    if (!ev || ev.ambient || typeof ev.id !== 'string') return;
+    if (/^(xl|bh)_event_0(1[5-9]|2[0-9]|3[0-2])$/.test(ev.id)) {
+        ev.ambient = true;
+        if (!ev.repeatEvery) ev.repeatEvery = 14;
+    }
+}
+
+// v20.25 日常小事重入闸门：同一桩"她递了盏茶"要隔够日子才会再来（默认 14 日）。
+// 上次发生的日头记在 NPC 记忆里随存档走；无历法环境不重入（宁可不发，不白送好感）。
+function _ambientRearmOk(npc, ev) {
+    if (!ev || !ev.ambient) return false;
+    var m = (npc && npc.memory && npc.memory._ambientLastDay) || null;
+    if (!m) return false; // 从未发生过的事由未触发分支放行，这里只管重入
+    var last = Number(m[ev.id]) || 0;
+    if (!last) return false;
+    var today = 0;
+    try {
+        if (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') today = Number(window.timeSystem.getAbsoluteDay()) || 0;
+    } catch (e) {}
+    if (!today) return false;
+    return (today - last) >= (Number(ev.repeatEvery) || 14);
 }
 
 // ============ 获取NPC的个人事件按钮（用于对话面板显示） ============
@@ -1688,11 +1774,12 @@ function getPersonalEventButtons(npc, npcId) {
     var isConcubineOfThis = isConcubine; // 侍妾身份本就只属其门（侍妾链仅绯泪有）
     var metNpc = !!(npc.memory && (npc.memory.firstMet === true || (npc.memory.meetCount || 0) > 0));
 
-    // 统计已触发数量
-    var triggeredCount = eventList.filter(function(ev) { return hasEventTriggered(ev.id); }).length;
+    // 统计已触发数量（v20.35：只数一次性事件——日常可重演桩不算"完成"，单独分组）
+    var oneShotList = eventList.filter(function(ev) { return !ev.ambient; });
+    var triggeredCount = oneShotList.filter(function(ev) { return hasEventTriggered(ev.id); }).length;
 
-    // 按链分组排序：主链 E → 侍妾链 S → 弟子链 D
-    var mainChain = eventList.filter(function(ev) { return getEventChain(ev) === 'main'; })
+    // 按链分组排序：主链 E → 侍妾链 S → 弟子链 D（ambient 日常桩另组，不进主链）
+    var mainChain = eventList.filter(function(ev) { return getEventChain(ev) === 'main' && !ev.ambient; })
         .sort(function(a, b) { return getChainOrder(a) - getChainOrder(b); });
     var concubineChain = eventList.filter(function(ev) { return getEventChain(ev) === 'concubine'; })
         .sort(function(a, b) { return getChainOrder(a) - getChainOrder(b); });
@@ -1704,7 +1791,9 @@ function getPersonalEventButtons(npc, npcId) {
     html += '<summary class="cursor-pointer select-none text-sm font-bold text-green-400 hover:text-green-300 mb-1 flex items-center gap-2">';
     html += '<span class="transition-transform group-open:rotate-90">▶</span>';
     html += '<span>📜 个人事件</span>';
-    html += '<span class="text-xs text-gray-500 font-normal">（已完成 ' + triggeredCount + '/' + eventList.length + '）</span>';
+    html += '<span class="text-xs text-gray-500 font-normal">（已完成 ' + triggeredCount + '/' + oneShotList.length + ' · 日常可重演 ' + eventList.filter(function(ev) { return !!ev.ambient; }).length + ' 桩）</span>';
+    // v20.33 信任露出：信任是话语的成色（吃醋安抚折价线 10），养回靠到场——赴约+1、陪节+2
+    html += '<span class="text-xs text-gray-500 font-normal">· 信任 ' + ((npc.relationship && npc.relationship.trust) || 0) + '</span>';
     // 未结识时在标题旁给一句总括提示，不再整栏隐藏
     if (!metNpc) {
         html += '<span class="text-xs text-gray-600 font-normal">· 尚未与此人结识</span>';
@@ -1808,6 +1897,45 @@ function getPersonalEventButtons(npc, npcId) {
     
     // 渲染主链（通用事件）
     html += renderChain(mainChain, '🎭 主线情缘');
+
+    // v20.35 日常可重演桩（小心眼/余波/被晾等）：单独分组——不占主链"已完成"名额，
+    // 演过之后标「已上演·可重演」而不是「已完成」，日子到了还会再撞见。
+    var ambientChain = eventList.filter(function(ev) { return !!ev.ambient; });
+    if (ambientChain.length > 0) {
+        var ambientHtml = '';
+        ambientHtml += '<div class="text-xs font-bold text-gray-400 mb-1">🌗 日常相处（可重演）</div>';
+        ambientHtml += '<div class="space-y-1.5">';
+        ambientChain.forEach(function(ev) {
+            var cls = 'w-full text-left px-3 py-2 rounded text-sm transition-colors flex items-center gap-2 border ';
+            if (hasEventTriggered(ev.id)) {
+                cls += 'bg-gray-800/40 border-gray-700 text-gray-500 cursor-default';
+                ambientHtml += '<div class="' + cls + '" title="会发生在日常里的桩——日子到了还会再撞见"><span>🔁</span><span>' + ev.title + '</span><span class="text-xs text-gray-500 ml-auto">已上演·可重演</span></div>';
+                return;
+            }
+            var areasons = [];
+            if (!metNpc) areasons.push('尚未结识');
+            else if (homeSect && playerLoc !== homeSect) areasons.push('需亲至「' + homeSect + '」');
+            if (affection < (ev.minAffection || 0)) areasons.push('好感≥' + ev.minAffection + '（当前' + affection + '）');
+            if (ev.requireDaoCompanion && !(npc.hasFlag && npc.hasFlag('dao_companion'))) areasons.push('需先结为道侣');
+            if (ev.requireRivalRomance && (typeof window.detectRivalRomance !== 'function' || !window.detectRivalRomance(ev.npcId))) areasons.push('需先与另一位缔结情缘');
+            if (ev.requireEventDone && (typeof hasEventTriggered !== 'function' || !hasEventTriggered(ev.requireEventDone))) areasons.push('需先经历前情');
+            if (ev.requireFestivalWound) {
+                // 账本驱动桩：由每日钩子按账实弹，手动触发会弹到占位景——只给"自然来"的展示
+                cls += 'bg-gray-800/20 border-gray-700 text-gray-500 cursor-default';
+                ambientHtml += '<div class="' + cls + '" title="节日账上有亏欠、你回门时自然撞见"><span>🌙</span><span class="tracking-widest">？？？</span><span class="text-xs text-gray-600 ml-auto">日子到了自然来</span></div>';
+                return;
+            }
+            if (areasons.length > 0) {
+                cls += 'bg-gray-800/20 border-gray-700 text-gray-500 cursor-default';
+                ambientHtml += '<div class="' + cls + '" title="' + areasons.join('、') + '"><span>🔒</span><span class="tracking-widest">？？？</span><span class="text-xs text-gray-600 ml-auto">' + areasons.join('、') + '</span></div>';
+            } else {
+                cls += 'bg-green-800/40 border-green-600 text-green-300 hover:bg-green-700/50 hover:border-green-500 cursor-pointer';
+                ambientHtml += '<button onclick="triggerPersonalEvent(\'' + ev.id + '\'); this.closest(\'.personal-event-modal\') ? this.closest(\'.personal-event-modal\').remove() : this.closest(\'.fixed\').remove();" class="' + cls + '"><span>' + (ev.icon || '🌗') + '</span><span>' + ev.title + '</span><span class="text-xs text-green-400 ml-auto">可撞见</span></button>';
+            }
+        });
+        ambientHtml += '</div>';
+        html += ambientHtml;
+    }
     // 侍妾/弟子专线：恒渲染，未达身份时逐条给「需要侍妾身份/需要弟子身份」原因（不再整栏隐藏）
     html += renderChain(concubineChain, '💕 侍妾专线');
     html += renderChain(discipleChain, '⚔️ 弟子专线');
@@ -1923,6 +2051,16 @@ if (typeof window !== 'undefined' && window.timeSystem && window.timeSystem.onNe
 // 注册修罗宫结局集（v12.3：结局注册表，百花谷等新线在各自文件中注册）
 registerEndingSet('sect_leader_修罗宫', XIULUO_ENDINGS);
 
+// v20.25 绯泪线名册落笔：共主（道侣+副门主）、归心（纯道侣）两个定情结局才点道侣旗；
+// 比邻是并肩之谊、归处是常伴之暖，皆非结契——名册只认真拜过堂的人。
+// （此前修罗宫是唯一没有结局回调的主角线：旗不落，回访/双修/护法全断线。）
+registerEndingCallback('sect_leader_修罗宫', function(endingName, npc) {
+    if (endingName === '共主' || endingName === '归心') {
+        if (npc && typeof npc.setFlag === 'function') npc.setFlag('dao_companion');
+        if (window.showMessage) window.showMessage('🥀 你与绯泪定下白首之约——修罗宫上下，从此认你这半个主人。', 'success');
+    }
+});
+
 // 导出
 if (typeof window !== 'undefined') {
     window.showEndingScene = showEndingScene;
@@ -1930,6 +2068,8 @@ if (typeof window !== 'undefined') {
     window.NPC_ENDING_SETS = NPC_ENDING_SETS;
     window.registerEndingSet = registerEndingSet;
     window.registerEndingCallback = registerEndingCallback;
+    window._ambientRearmOk = _ambientRearmOk;
+    window._ensureAmbientTag = _ensureAmbientTag;
 }
 
 console.log('[个人事件] 系统加载完成，已注册 ' + Object.keys(NPC_PERSONAL_EVENTS).length + ' 个事件');

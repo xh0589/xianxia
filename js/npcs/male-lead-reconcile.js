@@ -51,7 +51,7 @@ var MALE_RECONCILE_EVENTS = {
     // ---- 芩木：药庐和好 ----
     'su_event_reconcile': {
         id: 'su_event_reconcile', npcId: 'sect_leader_药王谷', title: '热茶', icon: '🍵',
-        desc: '她推来的茶，又是热的了。',
+        desc: '他推来的茶，又是热的了。', // v20.25 芩木是男主，旧版照抄女主文案写成"她"
         minAffection: 55, trigger: { random: 1.0 }, cooldown: 0, flag: 'su_e_reconcile_done',
         requireRivalRomance: true, requireEventDone: 'su_event_rival',
         scenes: [

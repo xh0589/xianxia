@@ -32,6 +32,10 @@
             items: Array.isArray(spec.items) ? spec.items.map(function(it) {
                 return { itemId: it && (it.itemId || it.id), count: Math.max(1, Math.floor(num(it && it.count) || 1)) };
             }).filter(function(it) { return !!it.itemId; }) : [],
+            // v20.8：take = 真扣物品（当铺售断/抵押），与 items 同走经济事务，缺货整体回滚
+            take: Array.isArray(spec.take) ? spec.take.map(function(it) {
+                return { itemId: it && (it.itemId || it.id), count: Math.max(1, Math.floor(num(it && it.count) || 1)) };
+            }).filter(function(it) { return !!it.itemId; }) : [],
             qi: signedInt(spec.qiRecovery != null ? spec.qiRecovery : spec.qi),
             energy: signedInt(spec.energy),
             health: signedInt(spec.health),
@@ -39,7 +43,8 @@
             notoriety: signedInt(spec.notoriety != null ? spec.notoriety : spec.noto),
             contribution: signedInt(spec.contribution),
             affection: signedInt(spec.affection),
-            fame: signedInt(spec.fame)
+            fame: signedInt(spec.fame),
+            karma: signedInt(spec.karma)
         };
     }
 
@@ -59,7 +64,7 @@
         if (!checkSignedResource(p.energy, r.energy)) return { success: false, reason: 'energy', messages: [] };
         if (!checkSignedResource(p.health, r.health)) return { success: false, reason: 'health', messages: [] };
 
-        var hasEconomy = !!(r.spiritStones || r.copper || r.items.length);
+        var hasEconomy = !!(r.spiritStones || r.copper || r.items.length || r.take.length);
         if (hasEconomy) {
             var tx = global.EconomyTransaction;
             if (!tx) return { success: false, reason: 'transaction_unavailable', messages: [] };
@@ -71,6 +76,12 @@
                 for (var i = 0; i < r.items.length; i++) {
                     if (!tx.addSnapshot({ templateId: r.items[i].itemId, count: r.items[i].count })) {
                         return { success: false, reason: 'inventory_full_or_invalid_item' };
+                    }
+                }
+                // v20.8：take 与给物同一事务——扣不够就整体回滚，杜绝"白拿钱不交货"
+                for (var j = 0; j < r.take.length; j++) {
+                    if (!tx.removeByTemplate(r.take[j].itemId, r.take[j].count)) {
+                        return { success: false, reason: 'missing_item' };
                     }
                 }
                 return { success: true };
@@ -86,6 +97,7 @@
         if (r.spiritStones) messages.push('灵石' + (r.spiritStones > 0 ? '+' : '') + r.spiritStones);
         if (r.copper) messages.push('铜钱' + (r.copper > 0 ? '+' : '') + r.copper);
         r.items.forEach(function(it) { messages.push(itemName(it.itemId) + ' x' + it.count); });
+        r.take.forEach(function(it) { messages.push(itemName(it.itemId) + ' x-' + it.count); });
 
         if (r.qi) {
             p.qi = Math.max(0, Math.min(num(p.maxQi) || 1000, num(p.qi) + r.qi));
@@ -111,6 +123,13 @@
         if (r.notoriety) {
             p.notoriety = num(p.notoriety) + r.notoriety;
             messages.push('恶名' + (r.notoriety > 0 ? '+' : '') + r.notoriety);
+        }
+        if (r.karma) {
+            p.karma = Math.max(-100, Math.min(100, num(p.karma) + r.karma));
+            messages.push('业障' + (r.karma > 0 ? '+' : '') + r.karma);
+            if (typeof global.updateKarmaDisplay === 'function') {
+                try { global.updateKarmaDisplay(p.karma, 'karma'); } catch (e) {}
+            }
         }
         if (r.fame) {
             if (typeof global.addFame === 'function') global.addFame(r.fame);

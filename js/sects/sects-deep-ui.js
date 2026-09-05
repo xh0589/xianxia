@@ -228,6 +228,11 @@ window.maybeSectDailyEvent = function () {
     var ds = window.discipleState || {};
     if (!ds.isInSect || !ds.sectId) return;
     if (typeof window.showModal !== 'function') return;
+    // v20.49 大事当头（酝酿/爆发未了）时，日常琐事让路——免得一日两弹、小事盖过大事
+    try {
+        var cm = window.SectCrisis && window.SectCrisis.mem && window.SectCrisis.mem(ds.sectId);
+        if (cm && cm.active) return;
+    } catch (eC) {}
     var pool = (window.SECT_EVENTS || {})[ds.sectId];
     if (!pool || !pool.length) return;
     var today = sectEventToday();
@@ -374,6 +379,9 @@ function sectPromote(sectName, targetRank) {
         return;
     }
     ds.rank = targetRank;
+    // v20.53 修正：晋升只改了 rank 数字，rankName 一直停在入门那档——
+    // 修炼效率与 5 处职位展示全读 rankName，等于晋升在修炼上是负收益（长老拿不到内门的加成）。
+    ds.rankName = rankDef.name;
     // 防御性 clamp：极端情况下也不退化为负数
     ds.contribution = Math.max(0, (Number(ds.contribution) || 0) - reqAmt);
     if (window.showMessage) window.showMessage('🎉 晋升为' + rankDef.name + '！', 'success');
@@ -421,6 +429,9 @@ function showSectDeepTasks(sectName) {
         if (task.reward.exp) rewards += '经验+' + task.reward.exp + ' ';
         if (task.reward.spiritStones) rewards += '灵石+' + task.reward.spiritStones + ' ';
         if (task.reward.fame) rewards += '名气+' + task.reward.fame + ' ';
+        // v20.53 差事的工夫摆在明面上
+        var cost = task.cost || {};
+        if (cost.minutes || cost.energy) rewards += '<span class="text-gray-500">（' + (cost.minutes || 0) + ' 分钟' + (cost.energy ? '、精力 -' + cost.energy : '') + '）</span> ';
         
         html += '<div class="bg-gray-800 rounded-lg p-3 border border-gray-600">';
         html += '<div class="flex justify-between items-start">';
@@ -449,10 +460,29 @@ function sectCompleteTask(sectName, taskId) {
     if (!tasks) return false;
     var task = tasks.find(function(t) { return t.id === taskId; });
     if (!task) return false;
+    // v20.53 复核：不在宗门、或职级不够格接的差事，按钮点了也不作数
+    if (!ds.isInSect) { if (window.showMessage) window.showMessage('你并未在此门中，做不得门派差事。', 'warning'); return false; }
+    var curRank = Number(ds.rank) || 7;
+    if (task.minRank && curRank > task.minRank) {
+        if (window.showMessage) window.showMessage('此差事需 ' + (task.minRank) + ' 级以上职位方可承接。', 'warning');
+        return false;
+    }
     if (!ds._sectTaskDone) ds._sectTaskDone = [];
     if (ds._sectTaskDone.indexOf(taskId) >= 0) return false;
 
+    // v20.53 差事有工夫：耗时与精力照扣——点一下白拿贡献的日子结束了
+    var cost = task.cost || {};
+    var cd = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
+    var need = Number(cost.energy) || 0;
+    if (cd && need > 0 && (Number(cd.energy) || 0) < need) {
+        if (window.showMessage) window.showMessage('精力不足（需 ' + need + '），这差事今天做不动了。', 'warning');
+        return false;
+    }
+    if (cd && need > 0) cd.energy = (Number(cd.energy) || 0) - need;
+
     if (!window.RewardService) {
+        // 结算服务缺失时把已扣的精力退回，不做半截账
+        if (cd && need > 0) cd.energy = (Number(cd.energy) || 0) + need;
         if (window.showMessage) window.showMessage('奖励结算服务未就绪，任务未消耗', 'error');
         return false;
     }
@@ -466,13 +496,18 @@ function sectCompleteTask(sectName, taskId) {
         fame: reward.fame
     }, { source: 'sect-daily:' + sectName + ':' + taskId });
     if (!result || result.success === false) {
+        if (cd && need > 0) cd.energy = (Number(cd.energy) || 0) + need;
         if (window.showMessage) window.showMessage('任务奖励无法完整结算，任务仍保留', 'error');
         return false;
+    }
+    if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function' && (Number(cost.minutes) || 0) > 0) {
+        window.timeSystem.advanceTime(Number(cost.minutes), '门派日常·' + task.name);
     }
 
     ds._sectTaskDone.push(taskId);
     ds._sectTaskCompleted = (ds._sectTaskCompleted || 0) + 1;
-    if (window.showMessage) window.showMessage('✅ 完成：' + task.name + (result.messages.length ? '（' + result.messages.join('、') + '）' : ''), 'success');
+    if (window.showMessage) window.showMessage('✅ 完成：' + task.name + (result.messages.length ? '（' + result.messages.join('、') + '）' : '') + '（耗时 ' + (Number(cost.minutes) || 0) + ' 分钟' + (need ? '、精力 -' + need : '') + '）', 'success');
+    if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
     showSectDeepTasks(sectName);
     return true;
 }

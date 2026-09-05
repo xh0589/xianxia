@@ -400,19 +400,19 @@ var BAIHUA_MAIN_EVENTS_C = {
             { speaker: 'narrator', text: '暮春，百花圃。所有花都开了。她站在花圃中央等你，手里捧着一个陶盆——盆里是一株你叫不出名字的花，花瓣边缘泛着极淡的金色。', type: 'description' },
             { speaker: 'npc', text: '「认不出来吧？正常，这是我杂交出来的新品种，全世界只有这一株。」她把陶盆递到你面前，「养了九年，今年第一次开。」' },
             { speaker: 'npc', text: '「我一直没给它起名字。想着等它开了，看它像谁，就用谁的名字。」她抬起眼，琥珀色的眼睛里映着满圃的花，「现在我看着它——觉得它像你。」' },
-            { speaker: 'npc', text: '「所以，{playerName}。」她把陶盆轻轻放进你手里，指尖收回去之前在你掌心停了一瞬，「这株花，连同种花的人，你要不要？」' },
+            { speaker: 'npc', text: '「所以，{playerName}。」她把陶盆轻轻放进你手里，指尖收回去之前在你掌心停了一瞬，「老医官说，我这株脾气的花，根须得贴着另一家的根种才肯旺。搬回去罢——它成活那天，我收聘礼。」' },
             { speaker: 'player_select', text: '你的选择将决定你们的关系走向', options: [
                 { text: '「要。我要带着它走遍天下——边走边医，哪里有病人就去哪里。」', effect: 'lover_travel', affection: 30 },
                 { text: '「要。但我哪儿也不去。我把它摆在药庐窗台上，陪你晒每一年的太阳。」', effect: 'lover_stay', affection: 28 },
                 { text: '「花我收下。人就算了——我做你采药行医的搭档，天下无双的那种。」', effect: 'friend_travel', affection: 20 },
-                { text: '「花我收下。药庐的茶我也想一直喝下去——做个常客，行吗？」', effect: 'friend_stay', affection: 18 },
+                { text: '「花我收下。往后药庐煎失败的药，都归我喝——喝到你嫌我烦为止。」', effect: 'friend_stay', affection: 18 },
                 { text: '「我都不要。我只是个过路人。」', effect: 'none', affection: 0 }
             ]}
         ],
         effects: function(npc, choice) {
-            // 花冢兜底：累计负面选择≥5时，恋人选项转为辜负结局
+            // 花冢兜底：累计负面选择≥3时，恋人选项转为辜负结局（v20.25 门槛 5→3，三度伤透即寒心）
             var negCount = (window._negativeChoiceCount && window._negativeChoiceCount[BAIHUA_NPC_ID]) || 0;
-            if (negCount >= 5 && (choice === 'lover_travel' || choice === 'lover_stay')) {
+            if (negCount >= 3 && (choice === 'lover_travel' || choice === 'lover_stay')) {
                 return { affection: 0, msg: '她看着你，忽然轻轻叹了口气：「……原来我这些年，看人也有走眼的时候。」她把陶盆收了回去，笑容依旧，眼底却什么都没有了。', ending: '花冢' };
             }
             switch (choice) {

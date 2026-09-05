@@ -471,8 +471,18 @@ function getCombinedShopPriceMultiplier(cityName, itemId) {
     }
     var ct = getCityTempModifier(cityName);
     if (ct && ct.shopPrice) m *= ct.shopPrice;
-    if (typeof window.getCityPriceModifier === 'function' && cityName) {
-        try { m *= (window.getCityPriceModifier(cityName, 'buy') || 1); } catch (e) {}
+    // v20.21 修通死线：旧写法查的是一个从未挂到全局的函数名，
+    // 城市买价系数在这条管线上从未生效。真源只经 locationSystem 读（城铺货架走自己的 bake 线，此处是商店管线，不双算）。
+    if (cityName && window.locationSystem) {
+        var _bm = null;
+        try {
+            if (typeof window.locationSystem.getCityPriceModifier === 'function') _bm = window.locationSystem.getCityPriceModifier(cityName, 'buy');
+        } catch (e) {}
+        if (_bm == null) try {
+            var _cd = window.locationSystem.getCityData && window.locationSystem.getCityData(cityName);
+            if (_cd && _cd.priceModifier) _bm = _cd.priceModifier.buy;
+        } catch (e2) {}
+        if (_bm != null && _bm > 0) m *= _bm;
     }
     // v20.0：接 v19.11 MarketDynamic 按城市和物品分类算地区差价
     if (window.MarketDynamic && typeof window.MarketDynamic.priceMul === 'function') {

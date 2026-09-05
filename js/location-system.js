@@ -31,7 +31,28 @@ const BUILDING_TYPES = {
     // v9.0 情境交互设施
     HOUSEHOLD_REGISTRY: { id: 'household_registry', name: '户籍司', icon: '📋', color: 'text-amber-300', category: 'social' },
     FIRE_DEPARTMENT: { id: 'fire_department', name: '消防司', icon: '🔥', color: 'text-red-400', category: 'social' },
-    BOUNTY_HALL: { id: 'bounty_hall', name: '悬赏楼', icon: '🎯', color: 'text-yellow-400', category: 'quest' }
+    BOUNTY_HALL: { id: 'bounty_hall', name: '悬赏楼', icon: '🎯', color: 'text-yellow-400', category: 'quest' },
+    // v20.17 城市设施补挂：以下 19 种设施早已写好玩法，此前因缺卡面定义在城中根本显示不出来
+    MONEY_HOUSE: { id: 'money_house', name: '钱庄', icon: '🪙', color: 'text-yellow-300', category: 'commercial' },
+    PAWN_SHOP: { id: 'pawn_shop', name: '当铺', icon: '🧾', color: 'text-gray-300', category: 'commercial' },
+    AUCTION_HOUSE: { id: 'auction_house', name: '拍卖行', icon: '🔨', color: 'text-yellow-200', category: 'commercial' },
+    BLACK_MARKET: { id: 'black_market', name: '黑市暗巷', icon: '🕯️', color: 'text-gray-400', category: 'commercial' },
+    CONTRACT_HALL: { id: 'contract_hall', name: '契约所', icon: '🖋️', color: 'text-orange-300', category: 'quest' },
+    ESCORT_OFFICE: { id: 'escort_office', name: '镖局', icon: '🐎', color: 'text-amber-500', category: 'quest' },
+    CHARITY_HALL: { id: 'charity_hall', name: '善堂', icon: '🍚', color: 'text-green-300', category: 'social' },
+    ODDITY_MUSEUM: { id: 'oddity_museum', name: '异闻馆', icon: '🦉', color: 'text-purple-300', category: 'social' },
+    GARDEN_VILLA: { id: 'garden_villa', name: '园林别业', icon: '🎋', color: 'text-emerald-300', category: 'social' },
+    ARENA_STAGE: { id: 'arena_stage', name: '斗法台', icon: '🥊', color: 'text-red-300', category: 'combat' },
+    OBSERVATORY: { id: 'observatory', name: '观星台', icon: '🌌', color: 'text-indigo-300', category: 'cultivation' },
+    STELE_FOREST: { id: 'stele_forest', name: '碑林', icon: '🪨', color: 'text-stone-300', category: 'cultivation' },
+    // v20.17 城中七衙门（单列分类）
+    TAX_BUREAU: { id: 'tax_bureau', name: '税课司', icon: '🧮', color: 'text-yellow-400', category: 'office' },
+    GRANARY: { id: 'granary', name: '粮仓', icon: '🌾', color: 'text-amber-400', category: 'office' },
+    COURT: { id: 'court', name: '司法堂', icon: '⚖️', color: 'text-blue-300', category: 'office' },
+    EXORCIST_BUREAU: { id: 'exorcist_bureau', name: '镇邪司', icon: '🗡️', color: 'text-red-300', category: 'office' },
+    MEDICAL_CLINIC: { id: 'medical_clinic', name: '医馆', icon: '🩺', color: 'text-green-400', category: 'office' },
+    WORKS_BUREAU: { id: 'works_bureau', name: '工曹署', icon: '🔧', color: 'text-stone-300', category: 'office' },
+    SALT_IRON_OFFICE: { id: 'salt_iron_office', name: '盐铁局', icon: '🧂', color: 'text-cyan-300', category: 'office' }
 };
 
 
@@ -244,6 +265,61 @@ const cityData = {
         events: ['珍珠节', '渔获祭'],
         priceModifier: { buy: 0.85, sell: 1.15 },
         bonus: { fishing: 1.3, trade: 1.15 }
+    },
+    // ==================== v20.53 高位面（灵界/魔界）====================
+    // 位面地点一样走 cityData 真源，进界走 locationSystem.enterCity（同步 currentLocation/visited/事件），
+    // 境界闸门交给 accessLevel，不再由 high-planes 自行拦一道。
+    '灵界·蓬莱仙境': {
+        id: 'spirit_realm_penglai',
+        region: '灵界',
+        buildings: ['cultivation', 'library', 'spring', 'quest', 'teleport', 'auction_house', 'beast_shop', 'alchemy', 'gathering', 'art_shop'],
+        desc: '灵气在此凝成可见的雾霭，仙鹤衔芝而过。上界仙家在此会盟论道，凡间自称一派宗师的，到这里也只是个后进。',
+        accessLevel: '元婴',
+        specialFeatures: ['仙田', '仙缘试炼', '悟道碑', '灵泉'],
+        specialties: ['仙芝', '灵雾茶', '先天灵光'],
+        specialNPCs: ['会盟执事·青梧', '守泉仙官·白泽'],
+        events: ['仙鹤衔芝', '会盟论道'],
+        priceModifier: { buy: 1.6, sell: 1.7 },
+        bonus: { cultivation: 2.2, enlightenment: 1.6 }
+    },
+    '灵界·九天罡风带': {
+        id: 'spirit_realm_gangfeng',
+        region: '灵界',
+        buildings: ['cultivation', 'training', 'quest', 'teleport', 'gathering'],
+        desc: '罡风如刀，云海翻卷。此地灵气浓得能拧出水来，可罡风也在一寸寸削你的护体真元——元婴修士来了，也只敢沿着风眼边缘采撷。',
+        accessLevel: '元婴',
+        specialFeatures: ['风眼灵穴', '仙田'],
+        specialties: ['罡风髓', '云芝'],
+        specialNPCs: ['御风道人·蹇伯'],
+        events: ['罡风骤起', '风眼开启'],
+        priceModifier: { buy: 1.4, sell: 1.8 },
+        bonus: { cultivation: 2.8, body: 1.2 }
+    },
+    '魔界·九幽深渊': {
+        id: 'demon_realm_jiuyou',
+        region: '魔界',
+        buildings: ['shop', 'market', 'black_market', 'alchemy', 'library', 'cultivation', 'teleport', 'tavern'],
+        desc: '深渊裂谷两侧凿着窟室，魔修在此立市，以魔材换魔功。这里没有官府、没有规矩，只有价码和拳头——以及空气里那种往骨缝里钻的浊气。',
+        accessLevel: '化神',
+        specialFeatures: ['魔材矿脉', '魔功阁'],
+        specialties: ['魔晶', '幽冥花', '血珀'],
+        specialNPCs: ['魔市管秤·屠九', '守炉老魔·铁刹'],
+        events: ['魔市开秤', '夺窟火并'],
+        priceModifier: { buy: 1.2, sell: 1.5 },
+        bonus: { cultivation: 2.0, alchemy: 1.2 }
+    },
+    '魔界·血海荒原': {
+        id: 'demon_realm_bloodsea',
+        region: '魔界',
+        buildings: ['cultivation', 'training', 'quest', 'teleport', 'mining'],
+        desc: '血色荒原一望无际，地平线上挂着永不落下的暗红太阳。魔物逐血而行，越往深处走，遇到的东西就越不该遇到。',
+        accessLevel: '化神',
+        specialFeatures: ['魔材矿脉', '血池'],
+        specialties: ['血珀', '魔晶'],
+        specialNPCs: ['断刀魔将·赫连勃'],
+        events: ['血潮', '魔物夜行'],
+        priceModifier: { buy: 1.3, sell: 1.6 },
+        bonus: { cultivation: 2.4, body: 1.3 }
     }
 };
 
@@ -421,7 +497,7 @@ function renderCityBuildings(cityName) {
     const buildingList = document.getElementById('city-building-list');
     if (buildingList) {
         buildingList.innerHTML = '';
-        const cats = { commercial: '🏪 商业', crafting: '🔨 工坊', cultivation: '🧘 修炼', combat: '⚔️ 武道', social: '🍵 社交', rest: '🛏️ 休憩', quest: '📜 任务', travel: '🌀 交通', gather: '🌿 采集' };
+        const cats = { commercial: '🏪 商业', crafting: '🔨 工坊', cultivation: '🧘 修炼', combat: '⚔️ 武道', social: '🍵 社交', rest: '🛏️ 休憩', quest: '📜 任务', travel: '🌀 交通', gather: '🌿 采集', office: '🏛️ 衙门' };
         const grouped = {};
         (city.buildings || []).forEach(function(buildingId) {
             const buildingType = Object.values(BUILDING_TYPES).find(b => b.id === buildingId);
@@ -514,15 +590,10 @@ function createBuildingElement(buildingId, buildingType) {
     
     // 建筑没有“现实时间玩法冷却”；短暂防双击只在 useBuilding 内处理。
     const isOnCooldown = false;
-    
-    // v9.0 情境设施：增加"🔍 深入"按钮
-    var scenarioFacilities = { household_registry: 1, fire_department: 1, bounty_hall: 1 };
-    var hasScenario = scenarioFacilities[buildingId] && window.scenarioEngine && window.scenarioEngine.facilities[buildingId];
-    
+
+    // v20.17：单一“使用”入口——情景设施的弹窗选择本就含全部后续内容；
+    // 旧的“深挖”副按钮白名单写死了三个从未注册进情境引擎的名字，从未显示过，予以移除。
     var btnHtml = '<button onclick="useBuilding(\'' + buildingId + '\')" class="' + (isOnCooldown ? 'bg-gray-600' : 'bg-yellow-600 hover:bg-yellow-500') + ' text-white px-3 py-1 rounded text-sm ' + (isOnCooldown ? 'cursor-not-allowed' : '') + '">' + (isOnCooldown ? '冷却中' : '使用') + '</button>';
-    if (hasScenario) {
-        btnHtml += ' <button onclick="openScenarioPanel(\'' + buildingId + '\')" class="bg-amber-700 hover:bg-amber-600 text-white px-3 py-1 rounded text-sm ml-1">🔍 深入</button>';
-    }
     
     div.innerHTML = `
         <div class="flex items-center justify-between">
@@ -570,7 +641,26 @@ function getBuildingDescription(buildingId) {
         'mining': '开采矿石',
         'household_registry': '查阅户籍，发现异常线索',
         'fire_department': '灭火救援，处理超凡火情',
-        'bounty_hall': '领取悬赏，追捕凶徒'
+        'bounty_hall': '领取悬赏，追捕凶徒',
+        'money_house': '存灵石按月生息，抵押借贷，欠条到期是要还的',
+        'pawn_shop': '典当有当期：凭票加息可赎，过期即为死当',
+        'auction_house': '奇货竞投，价高者得',
+        'black_market': '见不得光的货色都聚在这条暗巷',
+        'contract_hall': '立契作保，违契的要遭天谴',
+        'escort_office': '托镖护路，按里程与人头计价',
+        'charity_hall': '施粥积德，善名传则气运增',
+        'oddity_museum': '稀奇古怪事，桩桩有来由',
+        'garden_villa': '宴饮结客，人脉亦是修行',
+        'arena_stage': '押斗赌彩，胜负各安天命',
+        'observatory': '夜观天象，推演气运流转',
+        'stele_forest': '读前人剑碑，悟不悟全看缘分',
+        'tax_bureau': '代核商税，熟律例长见闻',
+        'granary': '帮理仓务，粗重活也积福报',
+        'court': '堂上听讼，旁听案情始末',
+        'exorcist_bureau': '领缉邪符契，销案可换历练',
+        'medical_clinic': '看诊治伤，挂号要付灵石',
+        'works_bureau': '替官府出力，汗水中换历练',
+        'salt_iron_office': '盘盐查铁，油水与风险并存'
     };
     return descriptions[buildingId] || '点击使用';
 }
@@ -647,6 +737,25 @@ function useBuilding(buildingId) {
         markBuildingUsed(buildingId);
         return;
     }
+    // v20.17 情景设施（钱庄/契约所/当铺/拍卖行/黑市暗巷/镖局/善堂/异闻馆/园林/斗法台/观星台/碑林）：
+    // 内容早已在情境引擎注册，此前无路由，点击会掉进“打开…建筑”的死路。动态查注册表接上。
+    if (window.scenarioEngine && window.scenarioEngine.facilities && window.scenarioEngine.facilities[buildingId] &&
+        typeof window.openFacilityScenario === 'function') {
+        window.openFacilityScenario(buildingId);
+        markBuildingUsed(buildingId);
+        return;
+    }
+    // v20.17 城中七衙门：接回各府衙已有实现（税课司/粮仓/司法堂/镇邪司/医馆/工曹署/盐铁局）
+    var officialOffices = {
+        tax_bureau: 'openTaxBureau', granary: 'openGranary', court: 'openCourt',
+        exorcist_bureau: 'openExorcistBureau', medical_clinic: 'openMedicalClinic',
+        works_bureau: 'openWorksBureau', salt_iron_office: 'openSaltIronOffice'
+    };
+    if (officialOffices[buildingId] && typeof window[officialOffices[buildingId]] === 'function') {
+        window[officialOffices[buildingId]]();
+        markBuildingUsed(buildingId);
+        return;
+    }
     
     // 基础建筑：building-effects
     if (window.buildingEffects && window.buildingEffects.openBuildingUI) {
@@ -700,7 +809,13 @@ function triggerSpecialFeature(featureName) {
         '珍珠市场': function() { openPearlMarket(city); },
         '渔村码头': function() { if (typeof window.goFishing === 'function') window.goFishing(); else showMessage('在码头垂钓...', 'info'); },
         '灯塔': function() { visitLighthouse(city); },
-        '仙缘试炼': function() { enterTrialTower(city); }
+        '仙缘试炼': function() { enterTrialTower(city); },
+        // v20.53 高位面：位面自己的营生（实现都在 map/high-planes.js）
+        '仙田': function() { if (window.planeGather) window.planeGather('灵界'); else showMessage('仙田无人在打理。', 'info'); },
+        '风眼灵穴': function() { if (window.planeCultivate) window.planeCultivate(); else showMessage('风眼未开。', 'info'); },
+        '魔材矿脉': function() { if (window.planeGather) window.planeGather('魔界'); else showMessage('矿脉深处有东西在动。', 'info'); },
+        '魔功阁': function() { if (window.openDemonArts) window.openDemonArts(city); else showMessage('阁门紧闭。', 'info'); },
+        '血池': function() { if (window.planeBloodPool) window.planeBloodPool(city); else showMessage('血池翻着泡。', 'info'); }
     };
     if (handlers[featureName]) {
         handlers[featureName]();
@@ -853,7 +968,13 @@ function visitEnlightenmentStele(city) {
     }
 }
 
+// v20.7 试炼塔层数制：旧版进塔就白送 100 历练 + 丹药（无成本、无成长），
+// 现交给 CityDepth 试炼塔（20 精力 + 30 灵石香火，层数持久化）。缺载时退回旧行为。
 function enterTrialTower(city) {
+    if (window.CityDepth && typeof window.CityDepth.openTrialPanel === 'function') {
+        window.CityDepth.openTrialPanel();
+        return;
+    }
     if (window.showMessage) window.showMessage('试炼开启！', 'warning');
     if (typeof window.startBattle === 'function') window.startBattle('dungeon_guard');
     else {
@@ -915,16 +1036,26 @@ function enterVolcanoCave(city) {
 function enterPoisonCave(city) {
     if (window.showMessage) window.showMessage('毒雾弥漫……', 'warning');
     if (Math.random() < 0.3) {
-        if (window.currentCharData) window.currentCharData._poisoned = true;
-        if (window.showMessage) window.showMessage('你中了毒！', 'error');
+        // v20.7 寺庙祈福 blessing 的真消费：佛门庇佑可挡一次毒
+        var blocked = window.CityDepth && typeof window.CityDepth.tryBlockPoison === 'function'
+            && window.CityDepth.tryBlockPoison();
+        if (!blocked && window.currentCharData) {
+            window.currentCharData._poisoned = true;
+            if (window.showMessage) window.showMessage('你中了毒！', 'error');
+        }
     } else if (typeof window.addItem === 'function') {
         window.addItem('mat_demon_beast_core', 1);
         if (window.showMessage) window.showMessage('取得毒核材料', 'success');
     }
 }
 
+// v20.7 黄金宫专属货架（旧版 openShop('special') 根本没有 special 货架，点了等于没点）
 function openGoldPalace(city) {
-    if (typeof window.openShop === 'function') window.openShop('special');
+    if (window.CityDepth && typeof window.CityDepth.openWaresPanel === 'function') {
+        window.CityDepth.openWaresPanel('gold');
+        return;
+    }
+    if (typeof window.openCityShop === 'function') window.openCityShop('special');
     else if (typeof window.openHiddenShop === 'function') window.openHiddenShop(city);
     else if (window.showMessage) window.showMessage('黄金宫内商贾云集', 'info');
 }
@@ -965,11 +1096,15 @@ function enterSwordTomb(city) {
         '<button onclick="this.closest(\'.fixed\').remove()" class="w-full bg-gray-600 text-white py-2 rounded">离开</button></div>';
     document.body.appendChild(modal);
 }
+// v20.7 剑冢成长线（旧版悟剑白送 55 真元、拔剑 25% 无门槛掉宝）。
+// 现委托 CityDepth 剑意系统：悟剑耗真气、拔剑吃剑意资格、挑战剑灵有胜有败。缺载退回旧行为。
 window._swordComprehend = function() {
+    if (window.CityDepth) return window.CityDepth.swordComprehend();
     if (window.currentCharData) window.currentCharData.essence = (window.currentCharData.essence || 0) + 55;
     if (window.showMessage) window.showMessage('剑意入体，修为精进', 'success');
 };
 window._swordPull = function() {
+    if (window.CityDepth) return window.CityDepth.swordPull();
     if (Math.random() < 0.25) {
         if (typeof window.addItem === 'function') window.addItem('wpn_dark_iron_sword', 1);
         if (window.showMessage) window.showMessage('古剑认可了你！', 'success');
@@ -978,6 +1113,7 @@ window._swordPull = function() {
     }
 };
 window._swordChallenge = function() {
+    if (window.CityDepth) return window.CityDepth.swordChallenge();
     if (typeof window.startBattle === 'function') window.startBattle('elite');
     else if (window.showMessage) window.showMessage('剑灵虚影散去，你若有所悟', 'info');
 };
@@ -996,11 +1132,13 @@ function visitDaoistTemple(city) {
     if (typeof window.addReputation === 'function') window.addReputation(city, 5);
 }
 
+// v20.7 珍珠市场专属货架（旧版是一段空 if 死代码 + 泛货架）
 function openPearlMarket(city) {
-    if (typeof window.addItem === 'function' && window.inventory && (window.inventory.currency.spiritStones || 0) >= 50) {
-        // simple buy pearl-like material
+    if (window.CityDepth && typeof window.CityDepth.openWaresPanel === 'function') {
+        window.CityDepth.openWaresPanel('pearl');
+        return;
     }
-    if (typeof window.openShop === 'function') window.openShop('general');
+    if (typeof window.openCityShop === 'function') window.openCityShop('general');
     if (window.showMessage) window.showMessage('珍珠市场上珠光宝气', 'info');
 }
 
@@ -1150,6 +1288,7 @@ window.locationSystem = {
     getCityBonus,
     getCityAccessLevel,
     getCityRegion,
+    checkAccessRequirement,
     triggerSpecialFeature,
     get currentLocation() { return currentLocation; },
     set currentLocation(v) { currentLocation = v; }
@@ -1307,6 +1446,47 @@ const CITY_ATMOSPHERE = {
         ],
         events: ['青城论道', '竹林听雨', '太极演武'],
         colors: ['from-green-900/30', 'to-emerald-800/20']
+    },
+    // v20.53 高位面氛围
+    '灵界·蓬莱仙境': {
+        default: '缥缈仙华',
+        descriptions: [
+            '仙雾在脚边流成河，抬头是望不到顶的琼楼。',
+            '两位仙官隔着云海对弈，落子声如钟鸣。',
+            '灵鹤衔着芝草掠过，翅上抖落的露水还没落地就化作了光。'
+        ],
+        events: ['仙鹤衔芝', '会盟论道', '灵潮'],
+        colors: ['from-cyan-900/40', 'to-indigo-800/30']
+    },
+    '灵界·九天罡风带': {
+        default: '罡风割面',
+        descriptions: [
+            '风声像一千把刀同时出鞘，你把真元压在皮膜上才站得住。',
+            '云海裂开一道缝，露出下方小如棋盘的人间。',
+            '一缕罡风擦着脸颊过去，护体真元嗡地暗了一分。'
+        ],
+        events: ['罡风骤起', '风眼开启', '云崩'],
+        colors: ['from-slate-800/50', 'to-cyan-900/30']
+    },
+    '魔界·九幽深渊': {
+        default: '浊气沉沉',
+        descriptions: [
+            '谷底的黑雾贴着地面爬，火把的光只能推开三尺。',
+            '窟室里挂满魔材，管秤的魔修用一双竖瞳打量你的钱包。',
+            '远处传来铁链拖地的声音，没人回头去看。'
+        ],
+        events: ['魔市开秤', '夺窟火并', '浊气上涌'],
+        colors: ['from-purple-950/50', 'to-red-900/30']
+    },
+    '魔界·血海荒原': {
+        default: '血色荒芜',
+        descriptions: [
+            '暗红的太阳挂在天上，影子淡得几乎看不见。',
+            '地上的裂缝里渗出温热的液体，你决定不去细想那是什么。',
+            '远处有什么东西在吃，吃得很急。'
+        ],
+        events: ['血潮', '魔物夜行', '骨雨'],
+        colors: ['from-red-950/50', 'to-stone-900/30']
     }
 };
 

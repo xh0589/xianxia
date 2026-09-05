@@ -252,7 +252,18 @@ function startTravel(toCity, method = 'walk') {
         showMessage('您已经在目标城市了', 'warning');
         return false;
     }
-    
+
+    // v20.53 位面屏障：跨界只能走位面之门，两条腿与马车都到不了
+    var planeOf = window.getPlaneOf || null;
+    if (typeof planeOf === 'function') {
+        var fromPlane = planeOf(fromCity), toPlane = planeOf(toCity);
+        if (fromPlane !== toPlane) {
+            showMessage(fromPlane ? ('位面屏障不是脚力能跨的，先从' + fromPlane + '渡界回人间。')
+                                 : ('那位面得走位面之门，寻常道路到不了。'), 'warning');
+            return false;
+        }
+    }
+
     const toCityData = window.locationSystem.getCityData(toCity);
     if (!toCityData) {
         showMessage(`找不到城市：${toCity}`, 'error');

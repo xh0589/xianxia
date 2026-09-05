@@ -224,8 +224,8 @@ const DUNGEON_GUARD_LOOT = {
     rare: [
         { id: 'pill_primordial', weight: 8 },
         { id: 'mat_chaos_stone', weight: 5 },
-        { id: 'mat_spacetime_crystal', weight: 5 },
-        { id: 'art_wan_jian', weight: 5 }
+        { id: 'mat_phoenix_feather', weight: 5 },
+        { id: 'art_zhu_xian_sword', weight: 5 }
     ],
     minLevel: 10,
     spiritStones: { min: 3, max: 8 },
@@ -254,7 +254,7 @@ const DUNGEON_BOSS_LOOT = {
         { id: 'pill_sutra_change', weight: 15 },
         { id: 'art_dugu_sword', weight: 8 },
         { id: 'mat_chaos_stone', weight: 20 },
-        { id: 'mat_spacetime_crystal', weight: 15 }
+        { id: 'mat_phoenix_feather', weight: 15 }
     ],
     minLevel: 18,
     spiritStones: { min: 30, max: 80 },

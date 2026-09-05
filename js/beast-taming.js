@@ -106,6 +106,44 @@ regions: [], catchable: false
                 innate: ["burn"],
         teachable: ["burn","lifesteal"],
 regions: [], catchable: false
+    },
+    // ==================== v20.53 高位面灵兽（灵界/魔界）====================
+    // 人间名册到元婴就断了，位面兽补上高阶档，只在自己位面出没
+    cloud_horn_deer: {
+        name: '云角鹿', type: 'beast', level: 60, realm: '元婴',
+        attrs: { strength: 22, dexterity: 34, constitution: 26, willpower: 24, intelligence: 22, meridian: 26 },
+        skills: ['踏云', '灵愈', '雾隐'],
+        mount: { speed: 3.2, fly: true },
+        innate: ["chill"],
+        teachable: ["chill"],
+        regions: ['灵界'], catchable: true
+    },
+    gangwind_crane: {
+        name: '罡风鹤', type: 'beast', level: 78, realm: '化神',
+        attrs: { strength: 28, dexterity: 42, constitution: 30, willpower: 30, intelligence: 30, meridian: 30 },
+        skills: ['罡风刃', '风隐', '长唳'],
+        mount: { speed: 4.4, fly: true },
+        innate: ["chill"],
+        teachable: ["chill", "sword_burst"],
+        regions: ['灵界'], catchable: true
+    },
+    bloodmare_hound: {
+        name: '血鬃魔犬', type: 'beast', level: 72, realm: '化神',
+        attrs: { strength: 36, dexterity: 32, constitution: 32, willpower: 26, intelligence: 18, meridian: 24 },
+        skills: ['血噬', '凶嚎', '追踪'],
+        mount: { speed: 3.6 },
+        innate: ["burn"],
+        teachable: ["burn", "lifesteal"],
+        regions: ['魔界'], catchable: true
+    },
+    nethervein_serpent: {
+        name: '幽脉蟒', type: 'beast', level: 85, realm: '炼虚',
+        attrs: { strength: 40, dexterity: 28, constitution: 38, willpower: 32, intelligence: 24, meridian: 30 },
+        skills: ['幽脉缠', '毒雾', '蜕鳞'],
+        mount: { speed: 2.8 },
+        innate: ["venom"],
+        teachable: ["venom"],
+        regions: ['魔界'], catchable: true
     }
 };
 
@@ -298,17 +336,9 @@ function captureBeast(templateId) {
 function trainBeast(index) {
     var beast = tamedBeasts[index];
     if (!beast) return false;
-    // B4：培养有成本与日限
+    // v20.9：培养成本=精力+时辰（世界真实约束）。旧"每日3次"是人为计数器，已删——
+    // 精力与游戏时辰本身就是天花板：一天满精力也练不出多少级。
     var cd = window.currentCharData;
-    var day = (typeof window.getAbsoluteDay === 'function') ? window.getAbsoluteDay() : 1;
-    if (!beast._trainDay || beast._trainDay !== day) {
-        beast._trainDay = day;
-        beast._trainCount = 0;
-    }
-    if ((beast._trainCount || 0) >= 3) {
-        if (window.showMessage) window.showMessage('该灵兽今日培养次数已满（3次）', 'warning');
-        return false;
-    }
     if (cd && (cd.energy == null ? 100 : cd.energy) < 5) {
         if (window.showMessage) window.showMessage('精力不足，无法培养', 'warning');
         return false;
@@ -317,7 +347,6 @@ function trainBeast(index) {
     if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
         window.timeSystem.advanceTime(30, '培养灵兽');
     }
-    beast._trainCount = (beast._trainCount || 0) + 1;
     beast.exp += 10;
     beast.affection = Math.min(100, (beast.affection || 50) + 1);
     var needed = beast.level * 50;
@@ -742,8 +771,76 @@ window.teachBeastAbility = function (index, abilityId) {
     if (typeof window.renderBeastList === 'function') window.renderBeastList();
 };
 
+// ==================== v20.9 灵兽坊·真实购入 ====================
+// 此前灵兽坊只跳面板不卖兽。店铺卖的是各家驯兽行当养大的幼兽——血脉是好的，
+// 但都从 Lv.1 养起（付的是血脉钱不是战力钱），与野外收服同一起跑线；
+// 买兽吃灵石（ DataManager 真源）+ 安顿时辰，不设日限。进化形态不外卖。
+var BEAST_SHOP_STOCK = {
+    wind_wolf:    { price: 200,  gloss: '山场放养大的猎兽，认主快' },
+    spirit_fox:   { price: 260,  gloss: '狐崽眼里有灵气，亲近人' },
+    flame_tiger:  { price: 400,  gloss: '南疆火种，毛下温热的' },
+    ice_serpent:  { price: 550,  gloss: '冰窖里孵出来的，性子凉' },
+    shadow_panther: { price: 750, gloss: '自幼蒙眼养大的，只认一个影子' },
+    thunder_eagle: { price: 1200, gloss: '雏鹰剪了翅，肯载人' },
+    dragon_turtle: { price: 1800, gloss: '洛水牧场养了三十年的种，难得有崽' },
+    fire_phoenix: { price: 2600, gloss: '一生只见一次的凤雏，铺子也攒了半辈子运气' }
+};
+
+function buyBeast(templateId) {
+    var tpl = BEAST_TEMPLATES[templateId];
+    var stock = BEAST_SHOP_STOCK[templateId];
+    if (!tpl || !stock || tpl.catchable === false) {
+        if (window.showMessage) window.showMessage('铺子掌柜摇头：这兽，铺子里没有。', 'warning');
+        return false;
+    }
+    var price = stock.price;
+    // 灵石真源：DataManager 优先，退回背包现金/角色数据（与全城买账同一口径）
+    var paid = false;
+    if (window.XianXia && window.XianXia.DataManager && typeof window.XianXia.DataManager.deductSpiritStones === 'function') {
+        paid = !!window.XianXia.DataManager.deductSpiritStones(price);
+    } else if (window.inventory && window.inventory.currency && (window.inventory.currency.spiritStones || 0) >= price) {
+        window.inventory.currency.spiritStones -= price;
+        if (window.currentCharData) window.currentCharData.spiritStones = window.inventory.currency.spiritStones;
+        paid = true;
+    } else if (window.currentCharData && (window.currentCharData.spiritStones || 0) >= price) {
+        window.currentCharData.spiritStones -= price;
+        paid = true;
+    }
+    if (!paid) {
+        if (window.showMessage) window.showMessage('灵石不够——「' + tpl.name + '」幼兽要 ' + price + ' 灵石，钱不够兽不松手。', 'warning');
+        return false;
+    }
+    if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
+        window.timeSystem.advanceTime(15, '灵兽坊买兽');
+    }
+    tamedBeasts.push({
+        templateId: templateId,
+        name: tpl.name,
+        level: 1,
+        exp: 0,
+        affection: 45, // 驯化过的幼兽：亲人，但还没到你疼它的份上
+        skills: (tpl.skills || []).slice(),
+        combatAbilities: [],
+        trait: rollBeastTrait(),
+        mount: tpl.mount ? Object.assign({}, tpl.mount) : null
+    });
+    saveBeastData();
+    if (window.showMessage) window.showMessage('🐾 银货两讫，「' + tpl.name + '」幼兽拿草茎戳了戳你的手背。', 'success');
+    if (typeof window.renderBeastList === 'function') window.renderBeastList();
+    return true;
+}
+
+// 面板重开用（showModal 按钮回调走 window 全局）
+window.buyBeastFromShop = function (templateId) {
+    var okBuy = buyBeast(templateId);
+    if (okBuy && typeof window.openBeastShop === 'function') window.openBeastShop();
+    return okBuy;
+};
+
 // 导出
 window.BEAST_TEMPLATES = BEAST_TEMPLATES;
+window.BEAST_SHOP_STOCK = BEAST_SHOP_STOCK;
+window.buyBeast = buyBeast;
 window.tamedBeasts = tamedBeasts;
 window.activeBeastIndex = activeBeastIndex;
 window.initBeastTaming = initBeastTaming;

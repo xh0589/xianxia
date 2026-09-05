@@ -126,8 +126,8 @@ const SECT_FACILITY_ACCESS = {
     'sect_cave': { minAccess: 2, name: '🧘 修炼洞府', desc: '静心修炼，恢复真气', area: 'inner', icon: '🧘' },
     'sect_medical': { minAccess: 2, name: '💊 医馆', desc: '治疗伤势，恢复部位耐久', area: 'inner', icon: '💊' },
     'sect_chat': { minAccess: 2, name: '🏛️ 议事厅', desc: '与其他弟子交流，获取情报', area: 'inner', icon: '🏛️' },
+    'sect_library': { minAccess: 2, name: '📚 藏经阁', desc: '查阅功法，提升修炼领悟', area: 'inner', icon: '📚' }, // v20.8：一层对全体弟子开放（分层职级门控在书阁内部），与分层准入设计对齐
     // 核心区域 - 内门弟子+
-    'sect_library': { minAccess: 3, name: '📚 藏经阁', desc: '查阅功法，提升修炼领悟', area: 'inner', icon: '📚' },
     'sect_armory': { minAccess: 3, name: '🗡️ 兵器库', desc: '领取门派装备和材料', area: 'inner', icon: '🗡️' },
     'sect_leader': { minAccess: 4, name: '👑 掌门大殿', desc: '拜见掌门，处理门派事务', area: 'core', icon: '👑' }
 };

@@ -40,7 +40,8 @@ var JG_MAIN_EVENTS = {
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '「你伤了。让我看看。」', effect: 'check', affection: 7 },
                 { text: '「你为什么挡？」', effect: 'why', affection: 6 },
-                { text: '什么都不说，扶住他胳膊', effect: 'hold', affection: 8 }
+                { text: '什么都不说，扶住他胳膊', effect: 'hold', affection: 8 },
+                { text: '「练这一身铁，原就是给人砸的。」', effect: 'mock', affection: -3 }
             ]}
         ],
         effects: function(npc, choice) {
@@ -49,6 +50,8 @@ var JG_MAIN_EVENTS = {
                 case 'check': aff = 7; msg = '他没躲，让你看。肩上一片青，下面是练金刚不坏练出的硬茧。你碰，他肌肉一绷——不是痛，是怕你碰。'; break;
                 case 'why': aff = 6; msg = '他沉默很久。从袖里摸出木牌——「闭口禅」。又指了指你，指了指自己的心。意思：不挡你，乱道心。'; break;
                 case 'hold': aff = 8; msg = '你扶住他胳膊。他僵了一下——肌肉硬得像铁。但他没抽开。许久，他低头看了眼你扶着他的手，嘴唇动了一下，没出声。'; break;
+                // v20.25 真负选项：拿人家的血肉当兵器评头论足，是会被记账的（坏结局从此攒得数）
+                case 'mock': aff = -3; msg = '他放下胳膊，看你的眼神第一次冷了。他没恼——恼是要动气的，他只是退开两步，重新合十，像把你从「人」的位置挪回了「香客」。'; break;
             }
             return { affection: aff, msg: msg };
         }
@@ -88,7 +91,8 @@ var JG_MAIN_EVENTS = {
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '把水放他身边，默默陪坐', effect: 'sit', affection: 9 },
                 { text: '「你背上伤，让我看看。」', effect: 'check', affection: 7 },
-                { text: '「你多久没喝了？」', effect: 'ask', affection: 6 }
+                { text: '「你多久没喝了？」', effect: 'ask', affection: 6 },
+                { text: '「自虐成性，别练废了没人抬。」', effect: 'sneer', affection: -4 }
             ]}
         ],
         effects: function(npc, choice) {
@@ -97,6 +101,8 @@ var JG_MAIN_EVENTS = {
                 case 'sit': aff = 9; msg = '你坐他旁边。他许久没动，忽然伸手——把水碗端起来喝了一口，又放下。没看你。但你坐下后，他面壁的脊背，松了一线。'; break;
                 case 'check': aff = 7; msg = '他没躲。你看了那些伤——不是别人打的，是自虐炼体。他背肌一绷：「……苦行。还债。」没说还什么债。'; break;
                 case 'ask': aff = 6; msg = '他指了指日头——意思一天。你把水碗递到他唇边，他顿了一下，喝了。喉结动三次。「……你送，我喝。」他哑声。'; break;
+                // v20.25 真负选项：苦行是他还债的方式，拿这个打趣，伤的是实处
+                case 'sneer': aff = -4; msg = '面壁的背影一动不动。半晌，他哑声说了今日头一句整话：「……水搁下，你走吧。」语气平，平得像塔下的石阶——门没摔，只是关上了。'; break;
             }
             return { affection: aff, msg: msg };
         }
@@ -112,17 +118,17 @@ var JG_MAIN_EVENTS = {
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '「他替你死了。你替他活着。」', effect: 'live', affection: 8 },
                 { text: '「你苦行，是还他的命。」', effect: 'debt', affection: 9 },
-                { text: '轻轻按那道疤', effect: 'touch', affection: 7 }
+                { text: '轻轻按那道疤', effect: 'touch', affection: 5 }
             ]}
         ],
         effects: function(npc, choice) {
-            var aff = 0, msg = '';
+            var aff = 0, msg = '', item = null;
             switch (choice) {
                 case 'live': aff = 8; msg = '他闭眼，许久：「……你说对了。我活，是替他活。」他睁眼，看你，「你让我活，不止替他。」'; break;
                 case 'debt': aff = 9; msg = '他猛地看你，沉静的眼底动了：「……你怎么知道。」他半晌，「我苦行，还他的命。可你来了——这债，我不知怎么还了。」'; break;
-                case 'touch': aff = 7; msg = '他没躲。你指尖按在那道旧疤上，他心跳稳得像鼓。许久，他低声：「……你按着它，比苦行还重。」——不是痛，是别的。'; break;
+                case 'touch': aff = 5; item = 'mat_pearl'; msg = '他没躲。你指尖按在那道旧疤上，他心跳稳得像鼓。许久，他低声：「……你按着它，比苦行还重。」——不是痛，是别的。临走他解下腕上三枚捻了二十年的旧木珠，塞进你手心：「替我捻。想我的时候捻。」'; break;
             }
-            return { affection: aff, msg: msg };
+            return { affection: aff, msg: msg, item: item };
         }
     },
     'jg_event_006': {
@@ -134,16 +140,16 @@ var JG_MAIN_EVENTS = {
             { speaker: 'narrator', text: '又是苦行崖。他这次没面壁，看着崖下云海。你上山，他没回头。', type: 'description' },
             { speaker: 'npc', text: '「我跟你说了那道疤。」他声音哑，开了口，「那位苦行僧，是我师父。他替我死。我苦行，是想把这条命还——还清了，我才能……」他顿住。' },
             { speaker: 'player_select', text: '你如何回应？', options: [
-                { text: '「才能什么？」', effect: 'ask', affection: 7 },
-                { text: '「才能为自己活。」', effect: 'self', affection: 10 },
+                { text: '「才能什么？」', effect: 'ask', affection: 9 },
+                { text: '「才能为自己活。」', effect: 'self', affection: 8 },
                 { text: '「你不用还。命是你自己的。」', effect: 'own', affection: 8 }
             ]}
         ],
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'ask': aff = 7; msg = '他许久没说话，喉结动了几下。「……才能，不欠。」他没说完，但你懂——他不欠了，才敢为你活。'; break;
-                case 'self': aff = 10; msg = '他猛地看你，眼底有东西碎了：「……你说对了。」他声音哑，「我想还清，才敢为自己——为你活。」他第一次，把「你」和「自己」放在一起。'; break;
+                case 'ask': aff = 9; msg = '他许久没说话，喉结动了几下。「……才能，不欠。」他没说完，但你懂——他不欠了，才敢为你活。'; break;
+                case 'self': aff = 8; msg = '他猛地看你，眼底有东西碎了：「……你说对了。」他声音哑，「我想还清，才敢为自己——为你活。」他第一次，把「你」和「自己」放在一起。'; break;
                 case 'own': aff = 8; msg = '他摇头：「……命不是我自己的。是师父用命换的。」他看你，「可你这么说，我头一回觉得——也许，这条命，也该有我自己一份。」'; break;
             }
             return { affection: aff, msg: msg };
@@ -161,7 +167,7 @@ var JG_MAIN_EVENTS = {
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '「那我走。别让你破更多。」', effect: 'leave', affection: 5 },
                 { text: '「你破的，是你的道心吗？」', effect: 'ask', affection: 8 },
-                { text: '「破戒伤修为，我替你修。」', effect: 'share', affection: 9 }
+                { text: '「破戒伤修为，我替你修。」', effect: 'share', affection: 11 }
             ]}
         ],
         effects: function(npc, choice) {
@@ -169,7 +175,9 @@ var JG_MAIN_EVENTS = {
             switch (choice) {
                 case 'leave': aff = 5; msg = '他拦住你，难得话多：「……走也没用。戒已经破了。你走了，我修回来——可我不想修回来。」他看你，「你走了，我才真破。」'; break;
                 case 'ask': aff = 8; msg = '他沉默良久：「……道心。金刚不坏是身，道心是心。身破了能修，心破了——」他看你，「心破了，修不回。但我不想修回。」'; break;
-                case 'share': aff = 9; msg = '他看了你很久，沉静的眼底有了水光——又压下去。「……你替不了。但你这话，比三年苦行还重。」他伸手，第一次主动——握了一下你的手，松开，「我破戒，你陪我修。」'; break;
+                case 'share': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 4; msg = '你熬到后半夜，他那句话你只接了半句就撑不住歪了头。他替你拢了拢衣袍，没再往下说。（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 11; msg = '他看了你很久，沉静的眼底有了水光——又压下去。「……你替不了。但你这话，比三年苦行还重。」他伸手，第一次主动——握了一下你的手，松开，「我破戒，你陪我修。」' + '（精力-15）'; break; }
             }
             return { affection: aff, msg: msg };
         }
@@ -184,7 +192,7 @@ var JG_MAIN_EVENTS = {
             { speaker: 'npc', text: '「我跟你说最后一件事。」他声音哑，「我修闭口禅，不是修行——是怕。怕一开口，就乱道心。」' },
             { speaker: 'npc', text: '「我师父死那夜，我哭了一夜。第二日，我立誓不开口——不乱。」他看你，「可你来了。我开口了。道心乱了——可我不想修回去。」' },
             { speaker: 'player_select', text: '你如何回应？', options: [
-                { text: '「那就别修回去。」', effect: 'stay', affection: 10 },
+                { text: '「那就别修回去。」', effect: 'stay', affection: 12 },
                 { text: '「你乱的不是道心，是动了心。」', effect: 'heart', affection: 9 },
                 { text: '什么都不说，靠他肩上', effect: 'lean', affection: 8 }
             ]}
@@ -192,7 +200,9 @@ var JG_MAIN_EVENTS = {
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'stay': aff = 10; msg = '他看了你很久，沉静的眼底全亮了：「……行。」他难得话多，「我不修回去。这副嗓子，留给你说话。」'; break;
+                case 'stay': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 5; msg = '后半夜你实在撑不住，靠着桩子睡着了。醒来时肩上多了一件僧袍，话只说了一半。（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 12; msg = '他看了你很久，沉静的眼底全亮了：「……行。」他难得话多，「我不修回去。这副嗓子，留给你说话。」' + '（精力-15）'; break; }
                 case 'heart': aff = 9; msg = '他怔住，许久：「……你看得比我还清。」他低声，「道心乱，是动了心。我动了——为你。我不修回去。」'; break;
                 case 'lean': aff = 8; msg = '你没说话，靠他肩上。他浑身僵——肌肉硬得像铁。半晌，他肩松了一线，把头轻轻靠过来。「……你靠着我，比苦行崖的石头暖。」'; break;
             }
@@ -207,7 +217,7 @@ var JG_MAIN_EVENTS = {
         scenes: [
             { speaker: 'narrator', text: '金刚塔内。赫渊把右臂上缠了二十年的金刚线，一圈一圈解下，递到你面前。', type: 'description' },
             { speaker: 'npc', text: '「这是金刚宗守戒僧的线。」他声音哑，话多，「我缠了二十年——今日解了。戒，我破了最后一道。」' },
-            { speaker: 'npc', text: '「{playerName}。」他把线推向你，「这圈线，连同破戒的人，你要不要？」' },
+            { speaker: 'npc', text: '「{playerName}。」他把线推向你，松开了掌中的另一头，「这线离了手，就没打算收回来。断在谁手里，就算谁的。」' },
             { speaker: 'player_select', text: '你的选择将决定你们的关系走向', options: [
                 { text: '「要。我带你下山——破戒证道，哪里有苦难就去哪里。」', effect: 'lover_travel', affection: 30 },
                 { text: '「要。但哪儿也不去。我留在金刚宗，陪你守每一座塔。」', effect: 'lover_stay', affection: 28 },
@@ -216,8 +226,9 @@ var JG_MAIN_EVENTS = {
             ]}
         ],
         effects: function(npc, choice) {
+            // v20.25 门槛 5→3：三度伤透即寒心（旧 5 门槛对本线数学不可达，坏结局形同虚设）
             var negCount = (window._negativeChoiceCount && window._negativeChoiceCount[JG_NPC_ID]) || 0;
-            if (negCount >= 5 && (choice === 'lover_travel' || choice === 'lover_stay')) {
+            if (negCount >= 3 && (choice === 'lover_travel' || choice === 'lover_stay')) {
                 return { affection: 0, msg: '他看着你，把金刚线一圈一圈重新缠回右臂。「……我解了二十年，等的是这么一句。」他合十，「你走吧。这线，我留着自己缠。」', ending: '错过' };
             }
             switch (choice) {
@@ -235,7 +246,7 @@ var JG_ENDINGS = {
     'jg_ending_破戒同道': {
         id: 'jg_ending_破戒同道', npcId: JG_NPC_ID, title: '结局·破戒同道', icon: '📿', route: '破戒同道',
         scenes: [
-            { speaker: 'narrator', text: '三日后，赫渊把法王继承人之印交还鸠摩智。', type: 'description' },
+            { speaker: 'narrator', text: '三日后，赫渊把法王继承人之印交还鸠摩智，一并解下的还有从小缠在腕上的旧数珠。鸠摩智收了印，没接数珠：「还俗的人，念不起我这本经了。」', type: 'description' },
             { speaker: 'npc', text: '「塔托付给您了。」他背一行囊，跟你并肩下山，「我自个儿，就是一具破戒的肉身。」' },
             { speaker: 'narrator', text: '多年后，江湖有「破戒双圣」的传说：一人破戒证道，一人护人证心。专渡苦厄。', type: 'description' },
             { speaker: 'narrator', text: '有人见过他们在荒村的夜里歇脚。他难得没缠金刚线，靠在{playerTa}肩上打了个盹——戒疤在月光下亮着。他不守戒了，因为守的人在身边。', type: 'description' }

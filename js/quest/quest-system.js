@@ -442,6 +442,8 @@ function acceptQuest(questId) {
     // 否则已接取状态要等切面板（showQuestPanel → updateMainQuestUI）才显示。
     updateMainQuestUI();
     updateDailyQuestUI();
+    updateRandomQuestUI();
+    updateNpcQuestUI();
     return true;
 }
 
@@ -1237,6 +1239,8 @@ function showQuestPanel() {
     updateQuestUI();
     updateMainQuestUI();
     updateDailyQuestUI();
+    updateRandomQuestUI();
+    updateNpcQuestUI();
     return document.getElementById('panel-quests');
 }
 
@@ -1307,9 +1311,94 @@ function updateDailyQuestUI() {
                 ${acceptBtn}
             </div>
         `;
-        
+
         list.appendChild(questItem);
     });
+}
+
+// ============ v20.53 布告委托 / 故人心事 ============
+// 此前 20 条布告委托、22 条 NPC 心事只注册进了任务注册表，任何界面都不渲染——
+// 玩家一辈子见不着，等于写完就扔。此处把两条通道都接上任务页。
+function updateRandomQuestUI() {
+    const list = document.getElementById('random-quest-list');
+    if (!list) return;
+    list.innerHTML = '';
+    const randoms = (window.allQuests || []).filter(q => q && q.type === 'random');
+    if (!randoms.length) {
+        list.innerHTML = '<p class="text-gray-500 text-sm">布告栏空着。</p>';
+        return;
+    }
+    randoms.forEach(quest => {
+        const item = document.createElement('div');
+        item.className = 'p-3 bg-gray-800 rounded mb-2';
+        const prio = quest.priority || {};
+        const statusText = quest.completed ? '<span class="text-green-400">已完成</span>'
+            : quest.accepted ? '<span class="text-yellow-400">进行中</span>'
+            : `<span class="${prio.color || 'text-gray-400'}">${prio.name || '普通'}</span>`;
+        const rewardText = [];
+        if (quest.rewards) {
+            if (quest.rewards.spiritStones) rewardText.push('灵石 ' + quest.rewards.spiritStones);
+            if (quest.rewards.exp) rewardText.push('历练 ' + quest.rewards.exp);
+            if (quest.rewards.items && quest.rewards.items.length) {
+                quest.rewards.items.forEach(it => {
+                    const t = (window.itemById && window.itemById[it.itemId]) || {};
+                    rewardText.push((t.name || it.itemId) + ' x' + (it.count || 1));
+                });
+            }
+        }
+        item.innerHTML = `
+            <div class="flex justify-between items-start gap-2">
+                <div>
+                    <p class="font-bold text-amber-300">${quest.title}</p>
+                    <p class="text-sm text-gray-400 mt-1">${quest.description}</p>
+                    <p class="text-xs text-gray-500 mt-1">赏格：${rewardText.join('、') || '—'}</p>
+                    <p class="text-xs text-gray-500 mt-1">状态：${statusText}</p>
+                </div>
+                ${!quest.accepted && !quest.completed ? `<button onclick="acceptQuest('${quest.id}')" class="text-xs bg-amber-600 hover:bg-amber-500 px-3 py-1 rounded shrink-0">接下</button>` : ''}
+            </div>`;
+        list.appendChild(item);
+    });
+}
+
+// 故人心事：交情没到的不显示（人物心里没把你当自己人，自然不会托付）
+function updateNpcQuestUI() {
+    const list = document.getElementById('npc-quest-list');
+    if (!list) return;
+    list.innerHTML = '';
+    const npcQuests = (window.allQuests || []).filter(q => q && q.type === 'npc_story');
+    if (!npcQuests.length) {
+        list.innerHTML = '<p class="text-gray-500 text-sm">暂时没有故人托付心事。</p>';
+        return;
+    }
+    const rel = (window.npcSystem && typeof window.npcSystem.getNPCRelationship === 'function')
+        ? window.npcSystem.getNPCRelationship : null;
+    const getAff = function (npcId) {
+        if (rel) { try { const r = rel(npcId); if (r && r.affection != null) return Number(r.affection) || 0; } catch (e) {} }
+        const nps = window.npcSystem && window.npcSystem.npcs;
+        if (nps && nps[npcId]) return Number(nps[npcId].affection) || 0;
+        return 0;
+    };
+    let shown = 0;
+    npcQuests.forEach(quest => {
+        const aff = getAff(quest.npcId);
+        if (quest.minAffection && aff < quest.minAffection) return;
+        shown++;
+        const item = document.createElement('div');
+        item.className = 'p-3 bg-gray-800 rounded mb-2';
+        const statusText = quest.completed ? '<span class="text-green-400">已了结</span>'
+            : quest.accepted ? '<span class="text-yellow-400">记挂在心</span>' : '<span class="text-pink-400">有话想说</span>';
+        item.innerHTML = `
+            <div class="flex justify-between items-start gap-2">
+                <div>
+                    <p class="font-bold text-pink-300">${quest.title}</p>
+                    <p class="text-sm text-gray-400 mt-1">${quest.description}</p>
+                    <p class="text-xs text-gray-500 mt-1">交情 ${aff}/${quest.minAffection || 0} · ${statusText}</p>
+                </div>
+                ${!quest.accepted && !quest.completed ? `<button onclick="acceptQuest('${quest.id}')" class="text-xs bg-pink-700 hover:bg-pink-600 px-3 py-1 rounded shrink-0">细听</button>` : ''}
+            </div>`;
+        list.appendChild(item);
+    });
+    if (!shown) list.innerHTML = '<p class="text-gray-500 text-sm">交情还不够，没人肯把心事托给你。</p>';
 }
 
 // ============ 显示消息 ============
@@ -1326,6 +1415,8 @@ function updateQuestStatusPanel() {
 // ============ 导出到全局 ============
 window.questSystem = {
     initQuestSystem,
+    updateRandomQuestUI,
+    updateNpcQuestUI,
     saveQuestProgress,
     acceptQuest,
     turnInQuest,
@@ -1406,7 +1497,10 @@ function questObjectiveMatches(obj, eventType, data) {
     }
     if (eventType === 'location:visited') {
         if (obj.type !== 'visit') return false;
-        return !obj.locationId && !obj.locationName && !obj.location || obj.locationId === data.locationId || obj.locationName === data.locationName || obj.location === data.locationName;
+        // v20.53：支持"到某片地域"的前缀匹配（如 location:'灵界' 命中 '灵界·蓬莱仙境'），
+        // 否则主线里指向整片地域的目标永远对不上具体地点名。
+        var _prefixHit = obj.location && data.locationName && data.locationName.indexOf(obj.location) === 0;
+        return !obj.locationId && !obj.locationName && !obj.location || obj.locationId === data.locationId || obj.locationName === data.locationName || obj.location === data.locationName || _prefixHit;
     }
     if (eventType === 'dungeon:completed') {
         return (obj.type === 'explore' || obj.type === 'explore_dungeon') && (!obj.dungeonId && !obj.dungeon || obj.dungeonId === data.dungeonId || obj.dungeon === data.dungeonId || obj.dungeon === data.dungeonName);

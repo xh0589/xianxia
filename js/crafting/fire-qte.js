@@ -10,13 +10,18 @@ var _pos = 0, _dir = 1, _timer = null, _moving = false;
 function openFireQTE() {
     var cd = window.currentCharData;
     if (!cd) { if (window.showMessage) window.showMessage('请先创建角色进入游戏。', 'info'); return; }
+    // v20.41 试火有价：盯火苗半炷香也是熬神——精力 5，不白试
+    var energy = cd.energy != null ? cd.energy : 100;
+    if (energy < 5) { if (window.showMessage) window.showMessage('精神不济，盯不住火苗——精力不足 5。', 'warning'); return; }
+    cd.energy = energy - 5;
+    if (window.updateCharacterStatus) window.updateCharacterStatus();
     if (_timer) { clearInterval(_timer); _timer = null; }
     _pos = 0; _dir = 1; _moving = true;
     var old = document.getElementById('fire-qte-modal'); if (old) old.remove();
     var html = '<div class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" id="fire-qte-modal">'
         + '<div class="bg-gray-800 border-2 border-orange-500 rounded-xl p-6 max-w-md w-full" style="box-shadow:0 0 60px rgba(249,115,22,0.3)">'
         + '<h2 class="text-2xl font-bold text-orange-400 mb-2">🔥 火候试炼</h2>'
-        + '<p class="text-xs text-gray-400 mb-4">指针来回扫动，移入<span class="text-yellow-400">黄区</span>时按空格或点「收火」。命中黄区=火候极佳(80-100)，近黄次之，远则差。得分供<strong class="text-orange-300">下次炼丹</strong>用。</p>'
+        + '<p class="text-xs text-gray-400 mb-4">指针来回扫动，移入<span class="text-yellow-400">黄区</span>时按空格或点「收火」。命中黄区=火候极佳(80-100)，近黄次之，远则差。得分供<strong class="text-orange-300">下次炼丹</strong>用。<br>试火耗精力 5——盯火苗也是熬神。</p>'
         + '<div class="relative h-10 bg-gray-900 rounded mb-4 overflow-hidden border border-gray-600">'
         + '<div class="absolute top-0 bottom-0 bg-yellow-500/30 border-x border-yellow-500" style="left:40%;width:20%"></div>'
         + '<div class="absolute top-0 bottom-0 w-1 bg-orange-400" id="fire-qte-pointer" style="left:0%;box-shadow:0 0 8px rgba(249,115,22,0.8)"></div>'

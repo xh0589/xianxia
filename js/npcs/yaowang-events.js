@@ -89,7 +89,8 @@ var SU_MAIN_EVENTS = {
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '「我替你看火，你去睡。」', effect: 'replace', affection: 8 },
                 { text: '「我陪你。」坐下', effect: 'stay', affection: 7 },
-                { text: '去泡一壶茶', effect: 'tea', affection: 6 }
+                { text: '去泡一壶茶', effect: 'tea', affection: 6 },
+                { text: '「守个火都熬红眼，药王谷就这本事？」', effect: 'jeer', affection: -4 }
             ]}
         ],
         effects: function(npc, choice) {
@@ -98,6 +99,8 @@ var SU_MAIN_EVENTS = {
                 case 'replace': aff = 8; msg = '他摇头：「……药方只有我认得。」但往旁边挪了挪，给你让了炉前一个位，「你坐着，我看着。」——他没睡，但有你在，手不抖了。'; break;
                 case 'stay': aff = 7; msg = '他没再赶你。两个人守一锅药，炉火噼啪。许久他低声：「……有人陪着，文火都不那么长了。」'; break;
                 case 'tea': aff = 6; msg = '你泡了壶茶回来。他接过去，指尖在杯壁停了一下：「……温的。」他喝了一口，看你，「你倒记得，我喝温茶。」'; break;
+                // v20.25 真负选项：他的温润是修出来的，拿行医之本打趣，笑就挂不住了
+                case 'jeer': aff = -4; msg = '他还是笑着，笑得很周全：「这位说得是。」——从那夜起，药庐的门照开，茶照是温的，只是再没有一样，是专门为你留的。'; break;
             }
             return { affection: aff, msg: msg };
         }
@@ -113,17 +116,20 @@ var SU_MAIN_EVENTS = {
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '「他尽力了。」', effect: 'comfort', affection: 6 },
                 { text: '「你想把它改到第十八遍。」', effect: 'see', affection: 9 },
-                { text: '把方子折好还他', effect: 'return', affection: 7 }
+                { text: '把方子折好还他', effect: 'return', affection: 5 },
+                { text: '「改十七遍都救不回人，令师技艺不过如此。」', effect: 'insult', affection: -5 }
             ]}
         ],
         effects: function(npc, choice) {
-            var aff = 0, msg = '';
+            var aff = 0, msg = '', item = null;
             switch (choice) {
                 case 'comfort': aff = 6; msg = '他摇头：「……我师父说，医者说不出尽力。尽力救不回来，就是没本事。」他看着方子，「这句话，我记了二十年。」'; break;
                 case 'see': aff = 9; msg = '他猛地看你，浅褐眼底亮了：「……你怎么知道。」他半晌没说话，从你手里把方子拿回去，摊在案上，「我已经改到第十一遍。」——他第一次，在你面前露出不是温润的东西。'; break;
-                case 'return': aff = 7; msg = '他接过方子，指尖摩挲了一下「无效」二字。「……谢了。」他把它收进袖里最深处——和那些半夏放在一起。'; break;
+                case 'return': aff = 5; item = 'mat_thousand_lingzhi'; msg = '他接过方子，指尖摩挲了一下「无效」二字。「……谢了。」他把它收进袖里最深处——和那些半夏放在一起。次日你房里多了株千年灵芝，附一张字条：方子的谢礼。别让旁人看见。'; break;
+                // v20.25 真负选项：亡师是他二十年心口的方子，这一句划的是「无效」二字上头
+                case 'insult': aff = -5; msg = '他把方子从你手里抽走，很轻，像抽走一段你不配碰的旧事。「……说完了？」他声音还是温润的，「请回吧。药庐今晚不待客。」门外起了风，你听见里面碾药的声音，碾了一夜。'; break;
             }
-            return { affection: aff, msg: msg };
+            return { affection: aff, msg: msg, item: item };
         }
     },
     'su_event_006': {
@@ -135,17 +141,17 @@ var SU_MAIN_EVENTS = {
             { speaker: 'narrator', text: '议事药堂。李时珍长老当众发难：「谷主继承人当众用断肠草救人——药王谷行医百年，何时用过毒？」芩木站堂中，温润的笑没变。', type: 'description' },
             { speaker: 'npc', text: '「李长老。」芩木开口，温润得像茶汤，「那病人中的是蛊毒，只有断肠草能解。我若不用毒，他今日就死。医者的命，比药王谷的名声重——还是轻？」' },
             { speaker: 'player_select', text: '你如何应对？', options: [
-                { text: '「芩木救的是人，不是名声。」', effect: 'defend', affection: 8 },
-                { text: '「李长老，您不该当众为难他。」', effect: 'rebuke', affection: 7 },
-                { text: '站他身侧不说话', effect: 'side', affection: 9 }
+                { text: '「芩木救的是人，不是名声。」', effect: 'defend', affection: 6 },
+                { text: '「李长老，您不该当众为难他。」', effect: 'rebuke', affection: 8 },
+                { text: '站他身侧不说话', effect: 'side', affection: 11 }
             ]}
         ],
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'defend': aff = 8; msg = '芩木侧头看你，温润的笑终于到了眼底：「……谢。」李时珍哼一声退了。事后他低声：「你替我说话，比我自己说管用——我嘴毒，招人。」'; break;
-                case 'rebuke': aff = 7; msg = '李时珍拂袖：「……谷主继承人带了个人，倒硬气了。」走了。芩木轻声：「你倒敢得罪长老。」他眼底有暖，「为我去得罪人——我记着。」'; break;
-                case 'side': aff = 9; msg = '他看了你一眼，没让你退。李时珍看完这一幕，叹气：「……罢了。」走了，丢下一句，「别让你师父看见你这温润底下，藏的是不是毒。」——芩木握了一下拳，松开。'; break;
+                case 'defend': aff = 6; msg = '芩木侧头看你，温润的笑终于到了眼底：「……谢。」李时珍哼一声退了。事后他低声：「你替我说话，比我自己说管用——我嘴毒，招人。」'; break;
+                case 'rebuke': aff = 8; msg = '李时珍拂袖：「……谷主继承人带了个人，倒硬气了。」走了。芩木轻声：「你倒敢得罪长老。」他眼底有暖，「为我去得罪人——我记着。」'; break;
+                case 'side': aff = 11; msg = '他看了你一眼，没让你退。李时珍看完这一幕，叹气：「……罢了。」走了，丢下一句，「别让你师父看见你这温润底下，藏的是不是毒。」——芩木握了一下拳，松开。'; break;
             }
             return { affection: aff, msg: msg };
         }
@@ -160,7 +166,7 @@ var SU_MAIN_EVENTS = {
             { speaker: 'npc', text: '「我跟你说个事。」他声音温润，但没笑，「我这温润，是装的。」' },
             { speaker: 'npc', text: '「我七岁那场瘟，我师父没救回最后一个人，他病倒，也走了。他临终说——『木儿，医者不能带情绪，笑一个给我看。』」他看着那碗药，「我就笑了。笑到现在。」' },
             { speaker: 'player_select', text: '你如何回应？', options: [
-                { text: '「你累了。不笑也没关系。」', effect: 'rest', affection: 9 },
+                { text: '「你累了。不笑也没关系。」', effect: 'rest', affection: 11 },
                 { text: '「你师父若看见你现在，会松口气。」', effect: 'see', affection: 8 },
                 { text: '把那碗药端给他「先喝。」', effect: 'drug', affection: 7 }
             ]}
@@ -168,7 +174,9 @@ var SU_MAIN_EVENTS = {
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'rest': aff = 9; msg = '他怔了很久，浅褐眼底第一次有了水光——又压下去。「……行。」他把药喝了，「我不笑。」——那夜药庐的灯，亮到很晚，他靠在案上，第一次在你面前没笑。'; break;
+                case 'rest': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 4; msg = '药香熏得人发沉，你话没说完先睡了。醒来人在外间，身上盖着谷里的蜀葵被。（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 11; msg = '他怔了很久，浅褐眼底第一次有了水光——又压下去。「……行。」他把药喝了，「我不笑。」——那夜药庐的灯，亮到很晚，他靠在案上，第一次在你面前没笑。' + '（精力-15）'; break; }
                 case 'see': aff = 8; msg = '他低头看药碗，许久：「……他要是看见你，会更松口气。」他喝了药，「笑到现在，头一回有人跟我说，不笑没关系。」'; break;
                 case 'drug': aff = 7; msg = '他接过药，看了你一眼：「……你倒像我的病人。」他喝了，碗底朝天，「药喝完，笑不笑，我自己定。」但他那晚，确实没再笑——却也没再绷着。'; break;
             }
@@ -185,7 +193,7 @@ var SU_MAIN_EVENTS = {
             { speaker: 'npc', text: '「我跟你说最后一件事。」他声音温润，「我学毒，是因为我师父。他救不了那个人，病倒走的——他若懂毒，以毒攻毒，那个人能活。」' },
             { speaker: 'npc', text: '「我学了毒，就成了医和毒两个东西。药王谷容不下毒。」他看着断肠草，看你，「可我容得下。因为我想——医该医的，毒该毒的。你别怕我。」' },
             { speaker: 'player_select', text: '你如何回应？', options: [
-                { text: '「我不怕。我帮你分清。」', effect: 'share', affection: 10 },
+                { text: '「我不怕。我帮你分清。」', effect: 'share', affection: 12 },
                 { text: '「医和毒，都是救人。」', effect: 'same', affection: 8 },
                 { text: '接过断肠草，放回药篓', effect: 'take', affection: 9 }
             ]}
@@ -193,7 +201,9 @@ var SU_MAIN_EVENTS = {
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'share': aff = 10; msg = '他看了你很久，浅褐眼底终于没藏：「……行。」他把断肠草递你，「那你跟我，一起分。」——药王谷的毒草圃，从那夜起，多了一个人。'; break;
+                case 'share': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 5; msg = '你撑不住先歪了头，他把你送回房。那句「一起担」，改日再说。（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 12; msg = '他看了你很久，浅褐眼底终于没藏：「……行。」他把断肠草递你，「那你跟我，一起分。」——药王谷的毒草圃，从那夜起，多了一个人。' + '（精力-15）'; break; }
                 case 'same': aff = 8; msg = '他笑了一下，温润但到眼底：「……你看得比我还清。」他把断肠草放回药篓，「医和毒，都是救人。这句话，我师父没说过。」'; break;
                 case 'take': aff = 9; msg = '你没说话，把他手里的断肠草接过来，放回药篓。他看着你把毒草收好，许久：「……你替我收毒，我替你收命。」他低声，「这账，我记得。」'; break;
             }
@@ -208,7 +218,7 @@ var SU_MAIN_EVENTS = {
         scenes: [
             { speaker: 'narrator', text: '药庐。芩木把一张方子摊在你面前——发黄的那张，最后「无效」二字，被他改成「有效」。', type: 'description' },
             { speaker: 'npc', text: '「改到第十八遍了。」他温润地笑，到眼底，「我师父没改成的方，我改成了——因为等的人，来了。」' },
-            { speaker: 'npc', text: '「{playerName}。」他把方子推向你，「这张方，连同开方的人，你要不要？」' },
+            { speaker: 'npc', text: '「{playerName}。」他把方子推向你，「这方子里每一味药我都先尝过，药性不写在纸上。方名我起好了——两个字：同归。」' },
             { speaker: 'player_select', text: '你的选择将决定你们的关系走向', options: [
                 { text: '「要。我带你和这张方下山——医毒济世，哪里有病就去哪里。」', effect: 'lover_travel', affection: 30 },
                 { text: '「要。但哪儿也不去。我留在药王谷，陪你守每一炉药。」', effect: 'lover_stay', affection: 28 },
@@ -217,8 +227,9 @@ var SU_MAIN_EVENTS = {
             ]}
         ],
         effects: function(npc, choice) {
+            // v20.25 门槛 5→3：三度伤透即寒心（旧 5 门槛对本线数学不可达，坏结局形同虚设）
             var negCount = (window._negativeChoiceCount && window._negativeChoiceCount[SU_NPC_ID]) || 0;
-            if (negCount >= 5 && (choice === 'lover_travel' || choice === 'lover_stay')) {
+            if (negCount >= 3 && (choice === 'lover_travel' || choice === 'lover_stay')) {
                 return { affection: 0, msg: '他看着你，温润的笑没变，但眼底什么都没了：「……改了十八遍，等的是这么一句。」他把方子收回，那「有效」二字被他亲手划掉。「你走吧。这方，我留着自己看。」', ending: '错过' };
             }
             switch (choice) {
@@ -236,7 +247,7 @@ var SU_ENDINGS = {
     'su_ending_医毒同道': {
         id: 'su_ending_医毒同道', npcId: SU_NPC_ID, title: '结局·医毒同道', icon: '⚖️', route: '医毒同道',
         scenes: [
-            { speaker: 'narrator', text: '三日后，芩木把谷主继承人之印交还李时珍。', type: 'description' },
+            { speaker: 'narrator', text: '三日后，芩木回谷一趟，把谷主继承人之印还到李时珍案上。老头子掂着印看了他半晌：「绝方留了没有？」他拍拍药箱：「方子都在我这儿。」李时珍哼了一声，收了印，却把茶推给他——谷规写着：喝过这盏茶的离人，谷门永远给他留一道缝。', type: 'description' },
             { speaker: 'npc', text: '「药圃托付给您了。」他背一只药篓，跟你并肩下山，「我自个儿，就是一张方。」' },
             { speaker: 'narrator', text: '多年后，江湖有「医毒双圣」的传说：一人医该医的，一人毒该毒的。专治不治之症。', type: 'description' },
             { speaker: 'narrator', text: '有人见过他们在瘟疫的村落歇脚。他难得没端着温润，靠在{playerTa}肩上打了个盹——药篓搁在脚边，半夏与解药并排。他不装了。', type: 'description' }

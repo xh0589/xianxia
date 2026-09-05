@@ -62,7 +62,16 @@ var _RESOURCE_ACTION_LABELS = {
     forge: '🔨 入炉锻造',
     herb: '🌿 采集灵药',
     mine: '⛏️ 开采矿石',
-    explore: '🔍 探索一番'
+    explore: '🔍 探索一番',
+    // v20.8：其余地标类型补真交互（此前 default 分支"留待日后机缘"+无 label=按钮永久灰置）
+    personal: '🧘 闭户小坐',
+    affection: '💞 陪道侣坐会儿',
+    storage: '📦 清点寄存',
+    military: '🥋 操练器械',
+    intel: '🕵️ 寻个由头买消息',
+    formation: '🌀 参坐观图',
+    craft: '🛠️ 上手做点活',
+    torture: '🔥 自省鞭励'
 };
 function _sectResourceActionLabel(type) {
     return _RESOURCE_ACTION_LABELS[type] || '';
@@ -108,8 +117,23 @@ function useSectResource(sectName, resourceId) {
             return _gatherOre(res);
         case 'explore':
             return _exploreArea(res);
+        case 'personal':
+            return _restInChamber(res);
+        case 'affection':
+            return _withDaoCompanion(res);
+        case 'storage':
+            return _sortStorage(res);
+        case 'military':
+            return _drillMilitary(res);
+        case 'intel':
+            return _buyIntel(res);
+        case 'formation':
+            return _studyFormation(res);
+        case 'craft':
+            return _routeCrafting(res, 'forging');
+        case 'torture':
+            return _whipSelf(res);
         default:
-            // formation/military/storage/torture/intel/craft/personal/affection 等
             if (window.showMessage) window.showMessage('【' + res.name + '】' + (res.desc || '') + '（此处暂无可执行的动作，留待日后机缘。）', 'info');
             return false;
     }
@@ -209,6 +233,142 @@ function _gatherOre(res) {
     return true;
 }
 
+// ---- 灵石收支统一走真源（v20.8：修复 _exploreArea 直写 currentCharData 与背包货币双轨漂移） ----
+function _gainStones(n) {
+    var inv = window.inventory && window.inventory.currency;
+    if (inv) {
+        inv.spiritStones = (inv.spiritStones || 0) + n;
+        if (window.currentCharData) window.currentCharData.spiritStones = inv.spiritStones;
+    } else if (window.currentCharData) {
+        window.currentCharData.spiritStones = (window.currentCharData.spiritStones || 0) + n;
+    }
+    if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI();
+}
+function _spendStones(n) {
+    var dm = window.XianXia && window.XianXia.DataManager;
+    if (dm && typeof dm.deductSpiritStones === 'function') return !!dm.deductSpiritStones(n);
+    var inv = window.inventory && window.inventory.currency;
+    if (inv && (inv.spiritStones || 0) >= n) {
+        inv.spiritStones -= n;
+        if (window.currentCharData) window.currentCharData.spiritStones = inv.spiritStones;
+        if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI();
+        return true;
+    }
+    return false;
+}
+
+// ---- 静室（personal）：闭门静坐养真气，约束是时辰 ----
+function _restInChamber(res) {
+    var cd = window.currentCharData;
+    cd.qi = Math.min(Number(cd.maxQi) || 100, (cd.qi || 0) + 25);
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(120, '静室小坐');
+    if (window.showMessage) window.showMessage('你在【' + (res.name || '静室') + '】掩上门坐了两个时辰，真气缓缓回涨（+25）。', 'success');
+    if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+    return true;
+}
+
+// ---- 道侣去处（affection）：有道侣才成立——破费20灵石哄人开心，心境历练+8 ----
+function _withDaoCompanion(res) {
+    var dc = (typeof window.getDaoCompanionBond === 'function') ? window.getDaoCompanionBond() : null;
+    if (!dc || !dc.bond) {
+        if (window.showMessage) window.showMessage('【' + (res.name || '景致') + '】是给人散心的，可你的道侣席上还空着。', 'info');
+        return false;
+    }
+    if (!_spendStones(20)) {
+        if (window.showMessage) window.showMessage('想哄道侣开心，总得破费20灵石买些灵果点心——灵石不够。', 'warning');
+        return false;
+    }
+    var cd = window.currentCharData;
+    cd.tempering = (cd.tempering || 0) + 8;
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '陪伴道侣');
+    if (window.showMessage) window.showMessage('你买了灵果点心，与道侣在【' + (res.name || '景致处') + '】坐了一个时辰。心平气和，历练+8。', 'success');
+    if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+    return true;
+}
+
+// ---- 库房（storage）：清点寄存，偶尔翻出尘封碎银 ----
+function _sortStorage(res) {
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '清点库房');
+    if (Math.random() < 0.25) {
+        var n = 5 + Math.floor(Math.random() * 11);
+        _gainStones(n);
+        if (window.showMessage) window.showMessage('你在【' + (res.name || '库房') + '】的旧箱底翻出一撮尘封碎银，折算灵石 +' + n + '。', 'success');
+    } else {
+        if (window.showMessage) window.showMessage('你在【' + (res.name || '库房') + '】把货架清点了一遍，灰扑扑的，什么新鲜东西也没有。', 'info');
+    }
+    return true;
+}
+
+// ---- 武备处（military）：出力操练，换贡献与见识 ----
+function _drillMilitary(res) {
+    var cd = window.currentCharData;
+    if ((cd.energy || 0) < 20) {
+        if (window.showMessage) window.showMessage('操练是力气活，精力不足20就别去丢人了。', 'warning');
+        return false;
+    }
+    cd.energy -= 20;
+    if (window.discipleState) window.discipleState.contribution = (window.discipleState.contribution || 0) + 15;
+    cd.tempering = (cd.tempering || 0) + 5;
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(120, '操练');
+    if (window.showMessage) window.showMessage('你在【' + (res.name || '武备处') + '】卖力操练了半个时辰，执事记了贡献+15，手上也有了准头（历练+5）。', 'success');
+    if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+    return true;
+}
+
+// ---- 耳目处（intel）：10灵石买个话头，话头会自己长腿 ----
+var _INTEL_POOL = [
+    '听说北岭夜里有妖啸，商路怕是要断几日',
+    '城中某家老字号在暗里收一种无名的石头',
+    '邻派内讧，两个执事带着门下弟子各奔了东西',
+    '有云游僧在城外施药，据说药方出自药王谷弃徒',
+    '黑市这阵子货少——上头镇邪司盯得紧',
+    '官府漕帮的水路近来被人截了两趟货，没人认账'
+];
+function _buyIntel(res) {
+    if (!_spendStones(10)) {
+        if (window.showMessage) window.showMessage('耳目收钱办事：一条消息10灵石。你掏不出这个价。', 'warning');
+        return false;
+    }
+    var info = _INTEL_POOL[Math.floor(Math.random() * _INTEL_POOL.length)];
+    if (window.playerPushDeed) {
+        try { window.playerPushDeed('neutral', '有人在' + (res.name || '耳目处') + '嚼舌根：' + info); } catch (eRm) {}
+    }
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '打听消息');
+    if (window.showMessage) window.showMessage('你在【' + (res.name || '耳目处') + '】花10灵石换来一句：「' + info + '」', 'info');
+    return true;
+}
+
+// ---- 阵法平台（formation）：观图入定，耗真气换领悟 ----
+function _studyFormation(res) {
+    var cd = window.currentCharData;
+    if ((cd.qi || 0) < 20) {
+        if (window.showMessage) window.showMessage('阵图以神识描摹，真气不足20描不动笔画。', 'warning');
+        return false;
+    }
+    cd.qi -= 20;
+    cd.tempering = (cd.tempering || 0) + 10;
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(90, '参悟阵图');
+    if (window.showMessage) window.showMessage('你在【' + (res.name || '阵法平台') + '】对着阵图坐了三个时辰，气路理清了几条，历练+10。', 'success');
+    if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+    return true;
+}
+
+// ---- 刑律房（torture）：痛楚醒神——伤换真气与悟性 ----
+function _whipSelf(res) {
+    var cd = window.currentCharData;
+    if ((cd.health || 0) <= 20) {
+        if (window.showMessage) window.showMessage('你已经是强弩之末——这时进' + (res.name || '刑房') + '，是要死在里面人的手上。', 'warning');
+        return false;
+    }
+    cd.health = Math.max(1, (cd.health || 0) - 15);
+    cd.qi = Math.min(Number(cd.maxQi) || 100, (cd.qi || 0) + 40);
+    cd.tempering = (cd.tempering || 0) + 8;
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '自省');
+    if (window.showMessage) window.showMessage('刑罚拷打之下痛得神魂一凛，淤滞的真气反被冲开了（真气+40，伤15，历练+8）。', 'warning');
+    if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+    return true;
+}
+
 // ---- 探索：耗费时辰，机缘性产出（材料/灵石/空） ----
 function _exploreArea(res) {
     if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(120, '探索');
@@ -224,7 +384,7 @@ function _exploreArea(res) {
     } else if (roll < 0.75) {
         // 灵石
         var ss = 3 + Math.floor(Math.random() * 5);
-        cd.spiritStones = (cd.spiritStones || 0) + ss;
+        _gainStones(ss);
         if (window.showMessage) window.showMessage('你在【' + (res.name || '秘境') + '】探索，寻得灵石 +' + ss + '。', 'success');
     } else {
         if (window.showMessage) window.showMessage('你在【' + (res.name || '秘境') + '】转了一圈，一无所获——机缘未到。', 'info');

@@ -326,18 +326,49 @@ var DAILY_EVENT_LIST = [
                 text: '拱手打招呼',
                 effect: function() {
                     var noto = (window.currentCharData && window.currentCharData.notoriety) || 0;
-                    if (noto > 25) {
-                        _deMsg('兵丁神色戒备：「夜深了，少在街上晃。」', 'warning');
-                    } else {
+                    var r = (typeof window.patrolConsequence === 'function') ? window.patrolConsequence(noto) : { action: 'none' };
+                    if (r.action === 'none' && noto <= 25) {
                         _deMsg('兵丁点头：「夜里不太平，少主早些归歇。」', 'success');
+                        return;
                     }
+                    if (r.action === 'none') {
+                        _deMsg('兵丁神色戒备，灯罩晃过你的脸：「夜深了，少在街上晃。」', 'warning');
+                        return;
+                    }
+                    // 恶名有牙齿：罚酒钱（v20.21）——灵石照罚，掏不出就被扭送铺里饿一宿
+                    var fine = r.fine || 30;
+                    var paid = false;
+                    if (window.XianXia && window.XianXia.DataManager && typeof window.XianXia.DataManager.deductSpiritStones === 'function') {
+                        paid = !!window.XianXia.DataManager.deductSpiritStones(fine);
+                    } else if (window.currentCharData && (window.currentCharData.spiritStones || 0) >= fine) {
+                        window.currentCharData.spiritStones -= fine; paid = true;
+                    }
+                    if (paid) {
+                        _deMsg('班头上下打量你，伸手一摊：「' + (noto > 60 ? '通缉画影上可有你半张脸——' : '') + '宵禁前夜游，酒钱 ' + fine + ' 灵石。」你掏了 ' + fine + ' 灵石才走脱。', 'warning');
+                    } else {
+                        _deMsg('你掏不出 ' + fine + ' 灵石的酒钱，被扭进城西铺子拘了一宿，天亮才放人——饿得前胸贴后背。', 'error');
+                        if (window.currentCharData) window.currentCharData.health = Math.max(1, (window.currentCharData.health || 1) - 10);
+                    }
+                    if (r.action === 'detain') {
+                        if (window.currentCharData) window.currentCharData.qi = Math.max(0, (window.currentCharData.qi || 0) - (r.qi || 15));
+                        _deMsg('班头还命人按着你搜了一遍身，真气被震散一截。', 'warning');
+                    }
+                    if (window.updateStatusPanel) window.updateStatusPanel();
                 }
             },
             {
                 id: 'avoid',
                 text: '侧身避开',
                 effect: function() {
-                    _deMsg('你转入小巷，避开灯笼光。', 'info');
+                    var noto = (window.currentCharData && window.currentCharData.notoriety) || 0;
+                    if (noto > 60) {
+                        _deMsg('你一进小巷，身后灯笼齐刷刷转过来——「那个站住！」夜巡最恨躲的。你绕了三条街才甩脱，巡逻队记了脸：躲夜巡等于心虚。', 'warning');
+                        if (window.currentCharData) window.currentCharData.notoriety = Math.min(100, noto + 1);
+                    } else if (noto > 25) {
+                        _deMsg('你转入小巷，隐约听见兵丁嘟囔：「那人怎么看着眼熟……」', 'warning');
+                    } else {
+                        _deMsg('你转入小巷，避开灯笼光。', 'info');
+                    }
                 }
             }
         ]

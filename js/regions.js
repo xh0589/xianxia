@@ -8,7 +8,10 @@ const mapData = {
     '西漠': { desc: '黄沙万里，佛法东渐。金城盛产灵石矿脉，大漠深处有古佛国遗址。', cities: ['金城', '大漠孤城', '佛国遗址'] },
     '北冥': { desc: '极寒冰原，剑气纵横。万剑宗屹立北境，极寒之地传闻镇压着远古大妖。', cities: ['冰原城', '极寒之地', '万剑宗'] },
     '蜀地': { desc: '蜀道之难，剑修圣地。剑阁藏天下名剑，青城山乃道门祖庭之一。', cities: ['剑阁', '青城山'] },
-    '东南海域': { desc: '碧波万顷，仙岛棋布。碧落仙宫为海外散修聚集之地，鲛人镇以珍珠闻名。', cities: ['碧落仙宫', '鲛人镇'] }
+    '东南海域': { desc: '碧波万顷，仙岛棋布。碧落仙宫为海外散修聚集之地，鲛人镇以珍珠闻名。', cities: ['碧落仙宫', '鲛人镇'] },
+    // v20.53 高位面：灵气/魔气成界，寻常脚力到不了（跨界只走位面之门，见 map/high-planes.js）
+    '灵界': { desc: '位面之上，灵气凝成实质。蓬莱仙境是仙家会盟之地，九天罡风带则连元婴修士也要以护体真元遮身。', cities: ['灵界·蓬莱仙境', '灵界·九天罡风带'] },
+    '魔界': { desc: '浊气下沉所化的疆土。九幽深渊有魔修立市交易，血海荒原上魔物逐血而行，无人引路者进得去出不来。', cities: ['魔界·九幽深渊', '魔界·血海荒原'] }
 };
 
 // ==================== 区域特性系统 ====================
@@ -230,3 +233,12 @@ window.getRegionDangerLevel = getRegionDangerLevel;
 window.getTravelDistance = getTravelDistance;
 window.getTravelTimePreview = getTravelTimePreview;
 window.CITY_DISTANCE_MAP = CITY_DISTANCE_MAP;
+// v20.53 断线补电：mapData/REGION_FEATURES 此前只活在脚本顶层 const 里，从不挂 window——
+// 而 travel-system / beast-taming / location-system / reputation-system / app 十来处读的全是 window.mapData，
+// 等于所有"按地区反查"一直落空。此处补挂，行为由各消费方既有的 `window.mapData || {}` 兜底保证不变。
+window.mapData = mapData;
+window.REGION_FEATURES = REGION_FEATURES;
+window.getRegionMonsters = getRegionMonsters;
+window.getRegionResources = getRegionResources;
+window.getRegionSpecialEvent = getRegionSpecialEvent;
+window.getRegionBonus = getRegionBonus;

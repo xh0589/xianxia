@@ -49,31 +49,76 @@ function _playerTier() {
 function _canGraduate(npc) {
     if (!npc || npc._graduated) return false;
     if (_stageIndex(npc) < 2) return false; // 需大成（idx>=2）
-    if ((Number(npc.affection) || 0) < GRAD_AFFECTION) return false;
+    // v20.24 修字段误读：好感真源在 npc.relationship.affection（此前读裸字段恒 0，出师永远不可达成）
+    if (_npcAffection(npc) < GRAD_AFFECTION) return false;
     if (_playerTier() < GRAD_PLAYER_TIER) return false;
     return true;
 }
 
+function _npcAffection(npc) {
+    if (!npc) return 0;
+    if (npc.relationship && isFinite(Number(npc.relationship.affection))) return Number(npc.relationship.affection) || 0;
+    if (isFinite(Number(npc.affection))) return Number(npc.affection) || 0;
+    return 0;
+}
+
+// v20.14 灵根生效第二批：弟子受性看灵根——传功进境 = 基准 5 × 灵根倍率。
+// 倍率与江湖传闻同一把尺（NPCLife.npcRootGrowthMul）：天才一点就透，庸才需反复提点。
+// 成本一分不变（灵石/好感/时辰/声望照旧），只有"吸收了多少"随资质浮动；
+// 灵根数据或换算缺位时按常速 1.0——不拿猜测当事实。
+function _teachMul(npc) {
+    try {
+        if (window.NPCLife && typeof window.NPCLife.npcRootGrowthMul === 'function') {
+            var m = Number(window.NPCLife.npcRootGrowthMul(npc));
+            if (isFinite(m) && m > 0) return m;
+        }
+    } catch (e) {}
+    return 1.0;
+}
+
+// 资质档位（面板展示用，纯由倍率换算，不另存字段）
+function _rootTierLabel(mul) {
+    if (mul >= 2) return '天灵根';
+    if (mul >= 1.2) return '上品灵根';
+    if (mul >= 0.8) return '中庸之资';
+    if (mul >= 0.5) return '下品灵根';
+    return '杂灵根';
+}
+
 // 传功：推进弟子修炼进度 + 好感 + 玩家声望 + 阶段突破提示
-function teachDisciple(npcId) {
+// v20.52：usePill 为真且自家宗门库中有丹药时，用宗门丹药布置（不花灵石）——丹药从库房来，总得有用处
+function teachDisciple(npcId, usePill) {
     var cd = window.currentCharData;
     if (!cd) { if (window.showMessage) window.showMessage('请先创建角色', 'warning'); return false; }
     var npc = window.npcManager && window.npcManager.getNPC(npcId);
     if (!npc) { if (window.showMessage) window.showMessage('查无此弟子。', 'warning'); return false; }
     if (npc._graduated) { if (window.showMessage) window.showMessage(npc.name + '已出师，无需再传功。', 'info'); return false; }
-    if (window.DataManager && window.DataManager.deductSpiritStones && !window.DataManager.deductSpiritStones(TEACH_COST)) {
-        if (window.showMessage) window.showMessage('传功需 ' + TEACH_COST + ' 灵石布置。', 'warning');
-        return false;
+    // 布置费：宗门丹药优先，库空则照旧花灵石
+    var _ps = (window.PlayerSect && typeof window.PlayerSect.listMySects === 'function') ? (window.PlayerSect.listMySects() || [])[0] : null;
+    var pillUsed = false;
+    if (usePill && _ps && (Number(_ps.resources && _ps.resources.elixir) || 0) >= 1) {
+        var pr = window.PlayerSect.consumeResource(_ps.id, 'elixir', 1);
+        if (pr && pr.ok) pillUsed = true;
+    }
+    if (!pillUsed) {
+        if (window.DataManager && window.DataManager.deductSpiritStones && !window.DataManager.deductSpiritStones(TEACH_COST)) {
+            if (window.showMessage) window.showMessage('传功需 ' + TEACH_COST + ' 灵石布置' +
+                (usePill ? '（宗门库里没丹药了，只好花灵石）' : '') + '。', 'warning');
+            return false;
+        }
     }
     var oldStage = _stageIndex(npc);
-    npc._cultivationProgress = (Number(npc._cultivationProgress) || 0) + 5;
+    var mul = _teachMul(npc);
+    var gain = Math.round(5 * mul * 10) / 10; // v20.14 受性看灵根：基准 5 浮动，成本不变
+    npc._cultivationProgress = (Number(npc._cultivationProgress) || 0) + gain;
     if (typeof npc.changeAffection === 'function') npc.changeAffection(5);
     cd.fame = Math.min(100, (cd.fame || 0) + 3);
     if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
         window.timeSystem.advanceTime(60, '传功弟子');
     }
     var newStage = _stageIndex(npc);
-    var msg = '📖 你为' + npc.name + '传功讲道，感悟+5，好感+5，你声望+3。';
+    var flavor = mul >= 1.5 ? '（一点就透，好资质！）' : (mul <= 0.6 ? '（资质愚钝，需多讲几遍）' : '');
+    var msg = '📖 你为' + npc.name + '传功讲道' + (pillUsed ? '（以宗门丹药布置，未花灵石）' : '') + '，感悟+' + gain + '，好感+5，你声望+3。' + flavor;
     if (newStage > oldStage) {
         msg += '\n✨ ' + npc.name + ' 培养突破至「' + STAGES[newStage].name + '」！';
     }
@@ -102,7 +147,7 @@ function tryGraduateDisciple(npcId) {
     if (!_canGraduate(npc)) {
         var need = [];
         if (_stageIndex(npc) < 2) need.push('培养至大成');
-        if ((Number(npc.affection) || 0) < GRAD_AFFECTION) need.push('好感≥' + GRAD_AFFECTION);
+        if (_npcAffection(npc) < GRAD_AFFECTION) need.push('好感≥' + GRAD_AFFECTION);
         if (_playerTier() < GRAD_PLAYER_TIER) need.push('你达金丹期');
         if (window.showMessage) window.showMessage('出师条件未满：' + need.join('、') + '。', 'warning');
         return false;
@@ -163,7 +208,8 @@ function getDiscipleRoster() {
             progress: Number(npc._cultivationProgress) || 0,
             affection: Number(npc.affection) || 0,
             graduated: !!npc._graduated,
-            canGraduate: _canGraduate(npc)
+            canGraduate: _canGraduate(npc),
+            rootTier: _rootTierLabel(_teachMul(npc)) // v20.14 资质档位（由灵根倍率即时换算，不另存）
         };
     }).filter(Boolean);
 }
@@ -184,14 +230,21 @@ function openDisciplePanel() {
             if (d.graduated) {
                 btns = '<span class="text-green-400 text-xs">✅ 已出师·每日反哺</span>';
             } else {
-                btns = '<button onclick="teachDisciple(\'' + d.npcId + '\'); window.openDisciplePanel();" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 text-xs font-bold px-3 py-1 rounded mr-2">📖 传功(30灵石)</button>';
+                // v20.52：自家宗门有丹药时，布置费可用丹药抵（不花灵石）
+                var _psElixir = 0;
+                try {
+                    var _ps0 = (window.PlayerSect && typeof window.PlayerSect.listMySects === 'function') ? (window.PlayerSect.listMySects() || [])[0] : null;
+                    _psElixir = (_ps0 && Number(_ps0.resources && _ps0.resources.elixir)) || 0;
+                } catch (e) {}
+                var costLabel = _psElixir >= 1 ? '传功(丹药布置)' : '传功(30灵石)';
+                btns = '<button onclick="teachDisciple(\'' + d.npcId + '\', true); window.openDisciplePanel();" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 text-xs font-bold px-3 py-1 rounded mr-2">📖 ' + costLabel + '</button>';
                 if (d.canGraduate) {
                     btns += '<button onclick="tryGraduateDisciple(\'' + d.npcId + '\'); window.openDisciplePanel();" class="bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-3 py-1 rounded">🎓 出师</button>';
                 }
             }
             return '<div class="bg-gray-900/50 p-3 rounded border border-gray-700 mb-2">'
                 + '<div class="flex justify-between items-center">'
-                + '<div><span class="text-gray-200 font-bold">' + d.name + '</span> <span class="text-xs text-yellow-400">[' + d.stage + ']</span></div>'
+                + '<div><span class="text-gray-200 font-bold">' + d.name + '</span> <span class="text-xs text-yellow-400">[' + d.stage + ']</span> <span class="text-xs text-cyan-400">' + (d.rootTier || '') + '</span></div>'
                 + '<div class="text-xs text-gray-400">感悟' + d.progress + ' | 好感' + d.affection + '</div>'
                 + '</div>'
                 + '<div class="mt-2">' + btns + '</div>'

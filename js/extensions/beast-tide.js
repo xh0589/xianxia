@@ -32,6 +32,7 @@
         tides: {},     // {tideId: {level, startedDay, expireDay, rareAdded: [], opts}}
         gardens: {}    // {gardenId: {sectId, builtDay, beasts: []}}
     };
+    var _gardenSeq = 0; // 园 id 防撞序号（同毫秒连建也不撞 key）
 
     function _today() { return (window.WorldCalendar && window.WorldCalendar.day) || 0; }
     function _emit(name, payload) {
@@ -156,7 +157,12 @@
         // v20.0：真扣 100 灵石
         var pay = _payGardenCost(GARDEN_COST, opts.skipPay === true);
         if (!pay.ok) return pay;
-        var gardenId = 'garden_' + sectId + '_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        // 防撞 id：此前 Date.now+千分随机，同毫秒连建两园会撞 key 静默覆盖（丢园丢钱）。
+        var gardenId;
+        do {
+            _gardenSeq = (_gardenSeq || 0) + 1;
+            gardenId = 'garden_' + sectId + '_' + Date.now() + '_' + _gardenSeq + '_' + Math.floor(Math.random() * 1000);
+        } while (_state.gardens[gardenId]);
         _state.gardens[gardenId] = {
             sectId: sectId,
             builtDay: _today(),

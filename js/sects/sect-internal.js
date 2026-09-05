@@ -172,15 +172,30 @@ function getSectSummary(sectName) {
 
 // ============ 召开门派会议 ============
 function holdSectMeeting(sectName) {
-    if (typeof window.showMessage === 'function') {
-        window.showMessage('🏛️ ' + sectName + '召开了门派会议，讨论宗门事务。', 'info');
-    }
     var data = SECT_INTERNAL[sectName];
-    if (data) {
-        data.morale = Math.min(100, data.morale + 5);
-        data.meetings.push({ time: Date.now(), topic: '宗门事务' });
-        if (data.meetings.length > 20) data.meetings.shift();
+    if (!data) return false;
+    // v20.8：开会不再免费——你张罗这场会要出20贡献（茶水、封场、执事应酬都是公中出的）。
+    // 议事频率的约束是世界性的：一桩事务一天只够议一次（机构节奏，非玩家次数配额）。
+    var ds = window.discipleState || {};
+    var contrib = Number(ds.contribution) || 0;
+    if (contrib < 20) {
+        if (typeof window.showMessage === 'function') window.showMessage('张罗一场门派议事要应承20贡献的开销，你的贡献还不够。', 'warning');
+        return false;
     }
+    var today = (window.timeSystem && window.timeSystem.gameTime && window.timeSystem.gameTime.currentDay) || 1;
+    if (data._lastMeetingDay === today) {
+        if (typeof window.showMessage === 'function') window.showMessage('今日该议的事已经议过了——执事们抱着茶碗摆手：明日请早。', 'info');
+        return false;
+    }
+    if (ds.contribution != null) ds.contribution = contrib - 20;
+    data._lastMeetingDay = today;
+    if (typeof window.showMessage === 'function') {
+        window.showMessage('🏛️ 你出贡献20张罗了' + sectName + '的门派议事，众人齐心，士气+5。', 'info');
+    }
+    data.morale = Math.min(100, data.morale + 5);
+    data.meetings.push({ time: Date.now(), topic: '宗门事务' });
+    if (data.meetings.length > 20) data.meetings.shift();
+    return true;
 }
 
 // ============ 获取门派弟子士气 ============
@@ -511,6 +526,41 @@ var SECT_SPECIFIC_ARTS = {
         { id: 'art_fx_xiewang', name: '蝎王噬心刺', type: '奇门', grade: '仙品', tier: 4, wuxingReq: 27, bonus: { dexterity: 13, intelligence: 10 }, copyPrice: 3000, desc: '坞主亲传的一刺封喉' }
     ]
 };
+
+// v20.8：核心阁（tier3，亲传弟子准入，见 canAccessScriptureTier）此前全派空置——
+// 每派补一部"承脉要诀"，属性加成取本派二/四层功法的中段，填补 良→珍→仙 的成长台阶。
+(function fillTier3Arts() {
+    var seq = 0;
+    for (var sectName in SECT_SPECIFIC_ARTS) {
+        var arts = SECT_SPECIFIC_ARTS[sectName];
+        if (!Array.isArray(arts) || !arts.length) continue;
+        var has3 = false, t2 = null, t4 = null;
+        for (var i = 0; i < arts.length; i++) {
+            if (arts[i].tier === 3) has3 = true;
+            if (arts[i].tier === 2) t2 = arts[i];
+            if (arts[i].tier === 4) t4 = arts[i];
+        }
+        if (has3) continue;
+        var bonus = {};
+        var src = [t2, t4];
+        for (var s = 0; s < src.length; s++) {
+            var b = src[s] && src[s].bonus;
+            if (!b) continue;
+            for (var k in b) bonus[k] = Math.max(bonus[k] || 0, Math.round(b[k] * (s === 0 ? 1.3 : 0.6)));
+        }
+        seq++;
+        arts.push({
+            id: 'art_core_' + seq,
+            name: sectName + '·承脉要诀',
+            type: (t4 && t4.type) || (t2 && t2.type) || '内功',
+            grade: '珍品',
+            tier: 3,
+            bonus: bonus,
+            copyPrice: 1500,
+            desc: '历代执堂长老接续补注的本派要诀，接了本派的脉才读得懂。'
+        });
+    }
+})();
 
 function getSectEquipment(sectName) { return SECT_SPECIFIC_EQUIPMENT[sectName] || null; }
 function getSectArts(sectName) { return SECT_SPECIFIC_ARTS[sectName] || []; }

@@ -41,15 +41,15 @@ var MAIN_STORY_ARC = [
     },
     {
         id: 'main_008',
-        title: '天界魔气',
+        title: '灵界魔气',
         type: 'main',
         priority: 'critical',
-        description: '飞升后天界忽传魔气，疑玄冥子残魂遁走重修成魔仙。前往天界查探（需飞升后）。',
+        description: '灵界东方忽传魔气，疑玄冥子残魂遁走重修成魔仙。渡界前往灵界查探（元婴+，需位面穿梭）。',
         objectives: [
-            { type: 'visit', location: '天界', count: 1, completed: false }
+            { type: 'visit', location: '灵界', count: 1, completed: false }
         ],
         rewards: { exp: 20000, spiritStones: 5000, items: [{ itemId: 'mat_chaos_stone', count: 3 }] },
-        story: '你白日飞升，安居天界。忽有一日，天界东方魔气冲霄——当年玄冥子灵体被你击退，残魂竟遁走重修，如今已飞升为「魔仙」，欲吞天界气运，卷土重来。此战避无可避。',
+        story: '护脉一战胜而不胜——玄冥子灵体被你击散，残魂却顺着气运的裂缝遁走，直上位面。灵界东方如今魔气冲霄，蓬莱会盟连下三道手书催你去看。此战避无可避。',
         accepted: false,
         completed: false,
         turnedIn: false
@@ -59,12 +59,12 @@ var MAIN_STORY_ARC = [
         title: '天界决战·魔仙',
         type: 'main',
         priority: 'critical',
-        description: '与魔仙玄冥子终极决战，三阶段。击败其本源魔相，方可终结这场气运之争。',
+        description: '与魔仙玄冥子终极决战，三阶段。其人已遁入魔界血海荒原，击败其本源魔相，方可终结这场气运之争。',
         objectives: [
             { type: 'kill', target: '魔仙·本源', count: 1, completed: false }
         ],
         rewards: { exp: 50000, spiritStones: 20000, items: [{ itemId: 'mat_chaos_stone', count: 5 }] },
-        story: '魔仙玄冥子立于天界之上，本源魔相渐显：「当年你护脉败我，今日天界，便是了结之地。」终极决战，三阶段——魔仙·人形、魔仙·法相、魔仙·本源。',
+        story: '魔仙玄冥子立于血海之上，本源魔相渐显：「当年你护脉败我，今日魔界，便是了结之地。」终极决战，三阶段——魔仙·人形、魔仙·法相、魔仙·本源。',
         accepted: false,
         completed: false,
         turnedIn: false
@@ -247,15 +247,27 @@ function openMainStoryPanel() {
 
 // 接受主线章节任务
 function acceptMainStoryQuest() {
+    // v20.53：四章按序开——上一章交付/了结，下一章才有得接。
+    // 旧写法只接 006/007，008/009 全库没有任何接取路径，主线在第三章就断头。
     try {
+        var chain = ['main_006', 'main_007', 'main_008', 'main_009'];
         var accepted = 0;
-        ['main_006', 'main_007'].forEach(function (qid) {
-            if (typeof window.acceptQuest === 'function') {
-                try { window.acceptQuest(qid); accepted++; } catch (e) {}
+        for (var i = 0; i < chain.length; i++) {
+            var q = (window.QuestRegistry && window.QuestRegistry.get) ? window.QuestRegistry.get(chain[i]) : null;
+            if (!q) continue;
+            if (q.accepted && !q.completed) break;          // 当前章未完，不开下一章
+            if (q.accepted && q.completed) continue;         // 当前章已成，往后开
+            if (i > 0) {
+                var prev = window.QuestRegistry.get(chain[i - 1]);
+                if (prev && !prev.completed) break;          // 前一章没完，不开
             }
-        });
+            if (typeof window.acceptQuest === 'function') {
+                try { window.acceptQuest(chain[i]); accepted++; } catch (e) {}
+            }
+            break;                                           // 一次只接一章
+        }
         if (window.showMessage) {
-            window.showMessage(accepted > 0 ? '📜 已接受主线任务，前往任务面板查看。' : '主线任务已接受或不可接。', 'info');
+            window.showMessage(accepted > 0 ? '📜 已接受主线任务，前往任务面板查看。' : '主线暂无可接的章节——先把眼前这章了结。', 'info');
         }
     } catch (e) {}
 }

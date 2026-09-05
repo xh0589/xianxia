@@ -851,7 +851,11 @@ function collectSectResources() {
 
     var rankIndex = RANKS.findIndex(function(r) { return r.id === discipleState.rank; });
     if (rankIndex < 0) rankIndex = 7;
-    var baseStones = 10 + (7 - rankIndex) * 5;
+    // v20.8：同门关系真实影响份例（此前 addRelation 写入的 _sectRelation 零读者=安慰剂）——
+    // 处得好用度多两成，处得生分少两成，封顶 ±20%
+    var rel = Number(discipleState._sectRelation) || 0;
+    var relBonus = Math.max(-0.2, Math.min(0.2, rel * 0.02));
+    var baseStones = Math.max(1, Math.round((10 + (7 - rankIndex) * 5) * (1 + relBonus)));
     if (window.inventory && window.inventory.currency) {
         window.inventory.currency.spiritStones = (window.inventory.currency.spiritStones || 0) + baseStones;
         if (window.currentCharData) window.currentCharData.spiritStones = window.inventory.currency.spiritStones;
@@ -868,48 +872,97 @@ function collectSectResources() {
 }
 
 // 宗门战争
+// v20.48 修断线：sectsData.power 是「巨擘/大派/中等/小/极小/未知」文字档位，
+// 旧码 (power||50)*10 把文字当数字乘 → NaN → Math.random()<NaN 恒 false——「征讨」是必败按钮。
+var SECT_POWER_TIERS = { '巨擘': 100, '大派': 70, '中等偏上': 55, '中等': 40, '小': 22, '极小': 12, '未知': 40 };
+function sectPowerValue(sect) {
+    if (!sect) return 40;
+    var tier = SECT_POWER_TIERS[sect.power];
+    return tier != null ? tier : 40;
+}
+
 function initiateSectWar(targetSectId) {
-    if (!discipleState.isInSect) {
+    var _ds = getDs();
+    if (!_ds || !_ds.isInSect) {
         showMessage('未加入门派', 'error');
         return false;
     }
-    
+
     var targetSect = window.sectsData?.[targetSectId];
     if (!targetSect) {
         showMessage('目标门派不存在', 'error');
         return false;
     }
-    
-    // 计算战力
+    if (targetSectId === _ds.sectId) {
+        showMessage('本门弟子不打本门', 'warning');
+        return false;
+    }
+
+    // 计算战力（对方档位折数值）
     var ourPower = sectResourceState.morale * 2 + sectResourceState.defense + sectResourceState.memberCount;
-    var theirPower = (targetSect.power || 50) * 10;
+    var theirPower = sectPowerValue(targetSect) * 10;
     var winChance = ourPower / (ourPower + theirPower) * 100;
-    
+
     var result = Math.random() < winChance / 100;
-    
+
+    // v20.48 外交落账：仗打完，两门关系必须变——此前 relation 只被渲染，胜负不留痕迹
+    var _mySect = _ds.sectId;
+    var _diplo = window.SECT_DIPLOMACY_STATE;
+    function _settleRelation(delta) {
+        try {
+            if (_diplo && _diplo[_mySect] && _diplo[_mySect][targetSectId]) {
+                var cell = _diplo[_mySect][targetSectId];
+                cell.relation = Math.max(-100, Math.min(100, (cell.relation || 0) + delta));
+                cell.conflicts = (cell.conflicts || 0) + 1;
+                cell.lastEvent = (window.timeSystem && window.timeSystem.gameTime) ? (window.timeSystem.gameTime.currentDay || 0) : 0;
+                if (typeof window.saveSectDiplomacy === 'function') window.saveSectDiplomacy();
+            }
+        } catch (eDip) {}
+    }
+
     if (result) {
-        // 胜利
-        var spoils = Math.floor(100 + Math.random() * 500);
+        // 胜利：缴获随对方档位走——打巨擘与打极小不是一个量级
+        var spoils = Math.floor((60 + Math.random() * 240) * (sectPowerValue(targetSect) / 40));
         if (window.inventory) {
             window.inventory.currency.spiritStones = (window.inventory.currency.spiritStones || 0) + spoils;
         }
+        if (window.currentCharData) window.currentCharData.spiritStones = window.inventory.currency.spiritStones;
         sectResourceState.morale = Math.min(100, sectResourceState.morale + 10);
-        changeFactionReputation('demon_cult', -20);
-        
+        // v20.48 修硬编码：旧码无论打谁一律扣魔道声望——打邪派反倒折了魔道声望。
+        // 改按对方阵营结账：讨邪则正道同盟抬高、魔道侧记恨；伐正则反之。
+        try {
+            if (typeof changeFactionReputation === 'function') {
+                if (targetSect.type === '邪派') {
+                    changeFactionReputation('righteous_alliance', 12);
+                    changeFactionReputation('demon_cult', -6);
+                } else if (targetSect.type === '正道') {
+                    changeFactionReputation('demon_cult', 12);
+                    changeFactionReputation('righteous_alliance', -10);
+                } else {
+                    changeFactionReputation('rogue_cultivators', 5);
+                }
+            }
+        } catch (eFaction) {}
+        _settleRelation(-35);
+
         if (window.showMessage) {
-            window.showMessage('⚔️ 宗门战争胜利！缴获灵石+' + spoils + '，士气+' + 10, 'success');
+            window.showMessage('⚔️ 宗门战争胜利！缴获灵石+' + spoils + '，士气+10，' + targetSectId + '与你门关系恶化（记仇了）', 'success');
         }
     } else {
         // 失败
         sectResourceState.morale = Math.max(0, sectResourceState.morale - 20);
         sectResourceState.defense = Math.max(0, sectResourceState.defense - 10);
-        
+        _settleRelation(-20);
+
         if (window.showMessage) {
-            window.showMessage('⚔️ 宗门战争失败…士气-20，防御-10', 'error');
+            window.showMessage('⚔️ 宗门战争失败…士气-20，防御-10，' + targetSectId + '记下这一仗', 'error');
         }
     }
-    
+
     sectResourceState.lastWarTime = Date.now();
+    if (window.StateRegistry && typeof window.StateRegistry.markDirty === 'function') {
+        try { window.StateRegistry.markDirty('sectInternal'); } catch (eSr) {}
+    }
     return result;
 }
 
@@ -943,6 +996,10 @@ function dualCultivate(npcId) {
     var baseExp = 50;
     var affectionBonus = Math.floor((npc.relationship?.affection || 50) / 10);
     var totalExp = baseExp + affectionBonus * 5;
+    // v20.36 深情共鸣：深情积自真诚里程碑（结契/陪节/坦白立誓），满 50 时双修心意相通——经验×1.5
+    if ((Number(npc.relationship?.love) || 0) >= 50) {
+        totalExp = Math.round(totalExp * 1.5);
+    }
     
     // 经验加成
     if (typeof addPlayerExp === 'function') {
@@ -953,7 +1010,20 @@ function dualCultivate(npcId) {
 
     // 好感度提升
     npc.changeAffection(2);
-    
+
+    // v20.12 情分积累：双修日久生情，攒满 10 分情分且情投意合（好感≥80）升一档道侣位分。
+    // 修复旧死结：诞育首胎要求 bond.level≥2，但旧版全游戏没有任何把 bond.level 升过 1
+    // 的路径（唯一写入点在诞育之后）——首胎永远生不出。升档成本=精力 20+时辰 1 刻+真情分，
+    // 无每日配额。
+    bond.bondHeart = (bond.bondHeart || 0) + 1;
+    if (bond.bondHeart >= 10 && (npc.relationship?.affection || 0) >= 80) {
+        bond.bondHeart = 0;
+        bond.level = (bond.level || 1) + 1;
+        if (window.showMessage) {
+            window.showMessage('💞 情分圆满，你与' + npc.name + '的道侣位分升至 ' + bond.level + ' 档。', 'success');
+        }
+    }
+
     // 时间消耗
     if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
         window.timeSystem.advanceTime(60, '双修');
@@ -1484,25 +1554,35 @@ function acceptElderTask(taskType) {
     }
     var sectName = sectNameOf();
     if (!sectName) return false;
-    var rewards, title;
+    var rewards, title, cost;
     if (taskType === 'teach') {
         title = '教导新弟子';
         rewards = { contribution: 80, exp: 60, spiritStones: 30 };
+        cost = { energy: 25, minutes: 120 };
     } else if (taskType === 'diplomacy') {
         title = '外交出访';
         rewards = { contribution: 120, exp: 90, spiritStones: 50, fame: 5 };
+        cost = { energy: 35, minutes: 240 };
     } else {
         return false;
     }
-    // 简单实现：直接给奖励 + 扣宗门资源（任务有"成本"）
+    // v20.53 长者事务有工夫：教导要真讲一上午，外交要真走一趟。
+    // 之前无冷却无成本，150 连点就能白嫖到副掌门的贡献。
+    // 先验后扣：精力、宗门资源都够才动账，不做"差事没成、力气先没了"的半截账。
+    var cdChk = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
     var internal = window.SECT_INTERNAL && window.SECT_INTERNAL[sectName];
     if (!internal) return false;
-    var cost = taskType === 'diplomacy' ? 50 : 0;
-    if ((Number(internal.resources) || 0) < cost) {
-        if (window.showMessage) window.showMessage('宗门资源不足（需 ' + cost + '）', 'error');
+    var resCost = taskType === 'diplomacy' ? 50 : 0;
+    if (cdChk && (Number(cdChk.energy) || 0) < (Number(cost.energy) || 0)) {
+        if (window.showMessage) window.showMessage('精力不足（需 ' + cost.energy + '），这趟差事今日做不动。', 'warning');
         return false;
     }
-    internal.resources = Math.max(0, (Number(internal.resources) || 0) - cost);
+    if ((Number(internal.resources) || 0) < resCost) {
+        if (window.showMessage) window.showMessage('宗门资源不足（需 ' + resCost + '）', 'error');
+        return false;
+    }
+    if (cdChk) cdChk.energy = (Number(cdChk.energy) || 0) - (Number(cost.energy) || 0);
+    internal.resources = Math.max(0, (Number(internal.resources) || 0) - resCost);
     var ds = getDs();
     if (ds) {
         ds.contribution = (Number(ds.contribution) || 0) + rewards.contribution;
@@ -1522,11 +1602,60 @@ function acceptElderTask(taskType) {
         var msg = '👑 长者事务：' + title + '（贡献+' + rewards.contribution;
         if (rewards.spiritStones) msg += '、灵石+' + rewards.spiritStones;
         if (rewards.fame) msg += '、名气+' + rewards.fame;
-        msg += '）';
+        msg += '，耗时 ' + cost.minutes + ' 分钟、精力 -' + cost.energy + '）';
         window.showMessage(msg, 'success');
+    }
+    if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
+        window.timeSystem.advanceTime(cost.minutes, '长者事务·' + title);
+    }
+    if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+    return true;
+}
+
+/**
+ * v20.53 通用捐献：灵石入宗门公账，换贡献。
+ * 全库此前唯一的灵石→贡献通道只对丐帮净衣派开放（还有期限额度），
+ * 其余三十五门晋升只能靠做差事一点点攒。
+ * 规矩写在账上：捐十文记五文功劳，另一半入公账——宗门库真变厚（门派大事防备、修葺都花它）。
+ * @param {number} amount 捐赠灵石数
+ */
+function donateSectStones(amount) {
+    var ds = getDs();
+    if (!ds || !ds.isInSect) { if (window.showMessage) window.showMessage('你并未入宗，捐给谁去？', 'warning'); return false; }
+    var sectName = sectNameOf();
+    if (!sectName) { if (window.showMessage) window.showMessage('门名不清，账记不上去。', 'warning'); return false; }
+    amount = Math.floor(Number(amount) || 0);
+    if (amount <= 0) { if (window.showMessage) window.showMessage('请写明捐多少。', 'warning'); return false; }
+    var inv = window.inventory;
+    if (!inv || !inv.currency || (Number(inv.currency.spiritStones) || 0) < amount) {
+        if (window.showMessage) window.showMessage('手头灵石不足（需 ' + amount + '）。', 'warning');
+        return false;
+    }
+    if (!window.RewardService) { if (window.showMessage) window.showMessage('账房未开张，改日再来。', 'warning'); return false; }
+    // 一笔交割：钱进公账，功劳记你名下（对半）
+    var credit = Math.max(1, Math.floor(amount / 2));
+    var res = window.RewardService.apply({ stones: -amount, contribution: credit }, { source: 'sect-donate:' + sectName });
+    if (!res || res.success === false) {
+        if (window.showMessage) window.showMessage('这笔捐赠没走成账：' + ((res && res.reason) || '账房摇头'), 'warning');
+        return false;
+    }
+    // 公账真涨——门派大事的防备、修葺都从这里出
+    var internal = window.SECT_INTERNAL && window.SECT_INTERNAL[sectName];
+    var storeNote = '';
+    if (internal && typeof internal.resources === 'number') {
+        internal.resources = internal.resources + amount;
+        storeNote = '，宗门库 +' + amount;
+    }
+    if (window.showMessage) {
+        window.showMessage('🪙 你捐了 ' + amount + ' 灵石入' + sectName + '公账（记你功劳 +' + credit + storeNote + '）。管事长老记了你的名。', 'success');
+    }
+    if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+    if (window.EventBus && typeof window.EventBus.emit === 'function') {
+        try { window.EventBus.emit('sect:donation', { sect: sectName, amount: amount, contribution: credit }); } catch (eD) {}
     }
     return true;
 }
+window.donateSectStones = donateSectStones;
 
 /**
  * B3：开启一次宗门议事投票（仅掌门 rank=0；长老可投票）

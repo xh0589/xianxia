@@ -27,6 +27,34 @@
 
     // 工具
     function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, Number(v) || 0)); }
+
+    // v20.10 灵根饼图归一：全游戏唯一口径——五行是一张饼（总和恒 100，单行 0~100），
+    // 与创角滑块、功法兼容判断、修炼倍率(0.8+val/200)同一单位。
+    // 旧版 NPC 侧自搞"单行强度+总和≤200削峰"（等比缩放取整偶发 201 红叉），已并入饼图。
+    // 最大余数法分配整数份额：无取整漂移，任何输入都精确落到 100，且对已是饼图的输入幂等。
+    var ROOT_KEYS = ['metal', 'wood', 'water', 'fire', 'earth'];
+    function pieRoots(roots) {
+        var vals = ROOT_KEYS.map(function (k) { return Math.max(0, Number(roots && roots[k]) || 0); });
+        var sum = vals.reduce(function (a, b) { return a + b; }, 0);
+        var out = {};
+        if (sum <= 0) { ROOT_KEYS.forEach(function (k) { out[k] = 20; }); return out; } // 无数据饼：五行均衡
+        var exact = vals.map(function (v) { return v / sum * 100; });
+        var fl = exact.map(function (v) { return Math.floor(v); });
+        var rem = 100 - fl.reduce(function (a, b) { return a + b; }, 0);
+        var order = exact.map(function (v, i) { return { i: i, frac: v - fl[i] }; })
+            .sort(function (a, b) { return b.frac - a.frac || a.i - b.i; });
+        for (var t = 0; t < rem; t++) fl[order[t % ROOT_KEYS.length].i]++;
+        ROOT_KEYS.forEach(function (k, j) { out[k] = fl[j]; }); // sum=100 非负 → 单行天然 ≤100
+        return out;
+    }
+    // 自愈入口：把任意存量 NPC 的灵根（旧强度口径）就地修成饼图；已是饼图则原样不动
+    function normalizeRootPie(npc) {
+        if (!npc) return null;
+        var sum = ROOT_KEYS.reduce(function (a, k) { return a + (Number(npc.spiritualRoots && npc.spiritualRoots[k]) || 0); }, 0);
+        if (npc.spiritualRoots && sum === 100) return npc.spiritualRoots;
+        npc.spiritualRoots = pieRoots(npc.spiritualRoots);
+        return npc.spiritualRoots;
+    }
     function pickOne(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
     function genId(prefix) {
         return (prefix || 'n') + '_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
@@ -99,9 +127,9 @@
         var la = ensureLineage(a); var lb = ensureLineage(b);
         if (la.daoCompanion && la.daoCompanion !== bId) return { ok: false, reason: 'a-not-single' };
         if (lb.daoCompanion && lb.daoCompanion !== aId) return { ok: false, reason: 'b-not-single' };
-        // 前置 2：好感≥80
-        var affA = Number(a.affection) || 0;
-        var affB = Number(b.affection) || 0;
+        // 前置 2：好感≥80（v20.24 修字段误读：真源在 relationship.affection，此前裸字段恒 0、婚配永远跑不动）
+        var affA = (a.relationship && isFinite(Number(a.relationship.affection))) ? (Number(a.relationship.affection) || 0) : (Number(a.affection) || 0);
+        var affB = (b.relationship && isFinite(Number(b.relationship.affection))) ? (Number(b.relationship.affection) || 0) : (Number(b.affection) || 0);
         if (affA < 80 || affB < 80) return { ok: false, reason: 'affection-low', affA: affA, affB: affB };
         // 前置 3：同宗门（宽松：同 location）
         if (a.location && b.location && a.location !== b.location) {
@@ -132,10 +160,11 @@
         if (lf.daoCompanion !== motherId || lm.daoCompanion !== fatherId) return null;
         // 不近亲（自动满足：道侣已校验过）
 
-        // 1) 灵根继承
-        var fRoots = father.spiritualRoots || guessRoots(father);
-        var mRoots = mother.spiritualRoots || guessRoots(mother);
-        var childRoots = { metal: 0, wood: 0, water: 0, fire: 0, earth: 0 };
+        // 1) 灵根继承（v20.10 饼图口径）：父母先各自归一成饼，
+        //    每行 50/50 选父/母的份额 ±20 扰动，掷完再整体归饼（总和精确 100，无取整漂移）
+        var fRoots = pieRoots(father.spiritualRoots || guessRoots(father));
+        var mRoots = pieRoots(mother.spiritualRoots || guessRoots(mother));
+        var rawRoots = { metal: 0, wood: 0, water: 0, fire: 0, earth: 0 };
         var ELEMENTS = ['metal', 'wood', 'water', 'fire', 'earth'];
         for (var i = 0; i < ELEMENTS.length; i++) {
             var k = ELEMENTS[i];
@@ -144,14 +173,9 @@
             // 50/50 选 + 扰动
             var base = Math.random() < 0.5 ? fv : mv;
             var noise = (Math.random() - 0.5) * 40; // ±20
-            childRoots[k] = clamp(Math.round(base + noise), 0, 100);
+            rawRoots[k] = Math.max(0, Math.round(base + noise));
         }
-        // 总值上限：若超过 200 削峰
-        var total = childRoots.metal + childRoots.wood + childRoots.water + childRoots.fire + childRoots.earth;
-        if (total > 200) {
-            var ratio = 200 / total;
-            for (var j = 0; j < ELEMENTS.length; j++) childRoots[ELEMENTS[j]] = Math.round(childRoots[ELEMENTS[j]] * ratio);
-        }
+        var childRoots = pieRoots(rawRoots);
         // 2) 变异灵根：30% 概率遗传
         var fMut = father.mutatedRoots || {};
         var mMut = mother.mutatedRoots || {};
@@ -240,13 +264,15 @@
     /**
      * 没灵根数据时按 realm 猜 5 行
      */
+    // v20.10 饼图口径：估算出的五行份额总和恒为 100（旧版金丹估算总和 260，
+    // 与玩家占比口径、"总和≤200"削峰互相矛盾）。境界越高，主根越纯、杂根越薄。
     function guessRoots(npc) {
         var realm = (npc.combat && npc.combat.realm) || '炼气';
         var level = {
-            '炼气': [60, 40, 30, 20, 10],
-            '筑基': [70, 50, 40, 30, 20],
-            '金丹': [80, 60, 50, 40, 30]
-        }[realm] || [50, 30, 20, 10, 5];
+            '炼气': [40, 25, 15, 12, 8],   // 杂而不纯
+            '筑基': [45, 28, 14, 8, 5],    // 主根渐显
+            '金丹': [50, 25, 12, 8, 5]     // 主根独旺
+        }[realm] || [30, 25, 20, 15, 10];
         return { metal: level[0], wood: level[1], water: level[2], fire: level[3], earth: level[4] };
     }
 
@@ -473,6 +499,9 @@
         areCloseRelatives: areCloseRelatives,
         // 内部
         _index: function () { return LINEAGE_INDEX; },
+        _pieRoots: pieRoots,
+        _guessRoots: guessRoots,
+        normalizeRootPie: normalizeRootPie,
         // UI
         showLineagePanel: showLineagePanel,
         renderLineagePanel: renderLineagePanel
@@ -501,7 +530,15 @@
         var descs = getDescendants(npcId, 2);
         if (descs.length) {
             html += '<p class="text-sm text-cyan-300">👶 后代：</p><ul class="text-xs ml-4">';
-            for (var j = 0; j < descs.length && j < 10; j++) html += '<li>第 ' + descs[j].gen + ' 代：' + descs[j].name + '</li>';
+            for (var j = 0; j < descs.length && j < 10; j++) {
+                var dNpc = getNpc(descs[j].id);
+                var dRoots = dNpc && dNpc.spiritualRoots ? pieRoots(dNpc.spiritualRoots) : null;
+                var dMain = '', dMainV = -1;
+                if (dRoots) ROOT_KEYS.forEach(function (k) { if (dRoots[k] > dMainV) { dMainV = dRoots[k]; dMain = k; } });
+                var ROOT_CN = { metal: '金', wood: '木', water: '水', fire: '火', earth: '土' };
+                html += '<li>第 ' + descs[j].gen + ' 代：' + descs[j].name
+                    + (dMain ? '　<span class="text-[10px] text-gray-500">主根' + ROOT_CN[dMain] + ' ' + dRoots[dMain] + '%</span>' : '') + '</li>';
+            }
             html += '</ul>';
         }
         // 师父
@@ -536,6 +573,15 @@
             import: function (data) {
                 LINEAGE_INDEX.byParent = (data && data.byParent) || {};
                 LINEAGE_INDEX.byMaster = (data && data.byMaster) || {};
+                // v20.10 读档自愈：旧档后代灵根是"总和≤200 强度"口径，就地归饼（幂等，已是饼则不动）
+                try {
+                    for (var pid in LINEAGE_INDEX.byParent) {
+                        (LINEAGE_INDEX.byParent[pid] || []).forEach(function (cid) {
+                            var n = getNpc(cid);
+                            if (n && n.spiritualRoots) normalizeRootPie(n);
+                        });
+                    }
+                } catch (e) {}
             },
             reset: function () { LINEAGE_INDEX.byParent = {}; LINEAGE_INDEX.byMaster = {}; }
         });

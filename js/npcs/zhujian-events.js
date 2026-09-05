@@ -117,19 +117,19 @@ var LU_MAIN_EVENTS = {
             { speaker: 'narrator', text: '他抱一柄没开刃的剑过来，往你手里一塞。剑身朴素，却轻得不像铁。', type: 'description' },
             { speaker: 'npc', text: '「试一剑。」他抱臂，「看顺不顺手。我照着你这把，调的。」' },
             { speaker: 'player_select', text: '你如何试剑？', options: [
-                { text: '劈一剑，稳而利', effect: 'strike', affection: 8 },
+                { text: '劈一剑，稳而利', effect: 'strike', affection: 6 },
                 { text: '「你怎么知道我的手型？」', effect: 'how', affection: 7 },
                 { text: '把剑还他：「太贵重，我不收。」', effect: 'refuse', affection: -3 }
             ]}
         ],
         effects: function(npc, choice) {
-            var aff = 0, msg = '';
+            var aff = 0, msg = '', item = null;
             switch (choice) {
-                case 'strike': aff = 8; msg = '一剑劈出，破风利落。他眼睛亮了，一把夺回剑看了看刃：「成了——这柄，归你。」他难得话多，「我照着你虎口的茧调的配重，别人用不顺。」'; break;
+                case 'strike': aff = 6; item = 'mat_cold_iron'; msg = '一剑劈出，破风利落。他眼睛亮了，一把夺回剑看了看刃：「成了——这柄归我，你的另行开炉。」他难得话多，「我照着你虎口的茧调的配重，别人用不顺。」当日那柄试剑被他回炉，炼成一块巴掌大的寒铁递你：「剑有主，铁没主。铁没主，等它的第二炉。」'; break;
                 case 'how': aff = 7; msg = '他挠头：「……我看你握过几次。」他咳了一声，「铸剑的，看人手型是本分。」——可他记住的，是你虎口那道茧的位置。'; break;
                 case 'refuse': aff = -3; msg = '他脸色一沉，把剑收回鞘：「……行。」他转身，「我铸多了。」——那柄剑后来挂在他炉房的墙上，没再给第二个人看过。'; break;
             }
-            return { affection: aff, msg: msg };
+            return { affection: aff, msg: msg, item: item };
         }
     },
     'lu_event_006': {
@@ -141,16 +141,16 @@ var LU_MAIN_EVENTS = {
             { speaker: 'narrator', text: '他递水给你，你握住杯子——也握住了他指节上一片连到掌心的旧烫疤，硬而亮。', type: 'description' },
             { speaker: 'npc', text: '他要抽手，没抽。半晌：「铸剑的，都有。」他声音有点哑，「这一片是十二岁那年，替师父挡一炉塌的火。我师姐那年刚走，师父犯了糊涂。」' },
             { speaker: 'player_select', text: '你如何回应？', options: [
-                { text: '不放手，拇指轻按那片疤', effect: 'touch', affection: 9 },
-                { text: '「以后烫了别瞒我。」', effect: 'promise', affection: 7 },
+                { text: '不放手，拇指轻按那片疤', effect: 'touch', affection: 7 },
+                { text: '「以后烫了别瞒我。」', effect: 'promise', affection: 9 },
                 { text: '松手：「以后小心点。」', effect: 'let', affection: 3 }
             ]}
         ],
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'touch': aff = 9; msg = '他整个人僵住，连呼吸都顿了。许久，他低声：「……你按着它，比火还烫。」——他没抽手，任你按到掌心都暖了。'; break;
-                case 'promise': aff = 7; msg = '他笑了一下：「行。」他没说「好」也没说「不」——但他把杯子换了只手，空出烫疤那只，递到你跟前，「那你看着。」'; break;
+                case 'touch': aff = 7; msg = '他整个人僵住，连呼吸都顿了。许久，他低声：「……你按着它，比火还烫。」——他没抽手，任你按到掌心都暖了。'; break;
+                case 'promise': aff = 9; msg = '他笑了一下：「行。」他没说「好」也没说「不」——但他把杯子换了只手，空出烫疤那只，递到你跟前，「那你看着。」'; break;
                 case 'let': aff = 3; msg = '他收回手，揣进袖里。「嗯。」他说，端起自己的水喝了一口，那夜他没再靠近你。'; break;
             }
             return { affection: aff, msg: msg };
@@ -165,7 +165,7 @@ var LU_MAIN_EVENTS = {
             { speaker: 'narrator', text: '一声脆响。冶砚铸了三年的那柄剑，在最后一锤断了。他举着断成两截的剑，没动。', type: 'description' },
             { speaker: 'npc', text: '「……断了。」他声音很平，平得吓人。半晌他把断剑扔进炉，「三年。又是三年。」' },
             { speaker: 'player_select', text: '你如何回应？', options: [
-                { text: '进炉房，把断剑从火里夹出来', effect: 'salvage', affection: 10 },
+                { text: '进炉房，把断剑从火里夹出来', effect: 'salvage', affection: 12 },
                 { text: '「断了就断了。下一柄更利。」', effect: 'next', affection: 5 },
                 { text: '什么都不说，站他旁边', effect: 'silent', affection: 8 }
             ]}
@@ -173,7 +173,9 @@ var LU_MAIN_EVENTS = {
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'salvage': aff = 10; msg = '你用钳子把断剑从炉火里夹出来，断口还红着。他看着你，琥珀眼底红了：「……你捡它干嘛，废铁。」你说：「断口干净，能接。」他沉默良久，接过断剑——他接的不是剑，是你。'; break;
+                case 'salvage': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 5; msg = '炉火烘得人迷糊，后半截话你是睡着听完的。他守到剑凉才去睡。（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 12; msg = '你用钳子把断剑从炉火里夹出来，断口还红着。他看着你，琥珀眼底红了：「……你捡它干嘛，废铁。」你说：「断口干净，能接。」他沉默良久，接过断剑——他接的不是剑，是你。' + '（精力-15）'; break; }
                 case 'next': aff = 5; msg = '他点头：「嗯。」他重新坐回锤前，抓起一块新料。但你看见他握锤的手在抖——他没让你看见。'; break;
                 case 'silent': aff = 8; msg = '你在他旁边站了很久。炉火噼啪。许久他开口，声音哑：「你站这儿，炉子都没那么冷了。」——他没看你，但往你这边靠了半步。'; break;
             }
@@ -190,7 +192,7 @@ var LU_MAIN_EVENTS = {
             { speaker: 'npc', text: '「我跟你说个事。」他没看你，看着火，「我五岁被师父从炉灰里捡回来——我不记得爹娘。我只记得，小时候冷。」' },
             { speaker: 'npc', text: '「铸剑的火再旺，我一个人坐炉前，还是冷。」他终于看你，琥珀眼底有东西碎开，「……直到你肯进这炉房。」' },
             { speaker: 'player_select', text: '你如何回应？', options: [
-                { text: '「那我以后天天来炉房。」', effect: 'come', affection: 10 },
+                { text: '「那我以后天天来炉房。」', effect: 'come', affection: 12 },
                 { text: '坐他旁边，肩挨肩', effect: 'sit', affection: 9 },
                 { text: '「你不用再一个人扛冷了。」', effect: 'carry', affection: 8 }
             ]}
@@ -198,7 +200,9 @@ var LU_MAIN_EVENTS = {
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'come': aff = 10; msg = '他咧嘴笑，虎牙全露出来：「……行。炉房我给你留个位。」他顿了顿，「你别嫌我身上烫——也别说出去。怕冷这话，我头回跟人说。」'; break;
+                case 'come': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 5; msg = '炭火暖得人头沉，你在炉房歪头睡过去，是他把你背出去的。（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 12; msg = '他咧嘴笑，虎牙全露出来：「……行。炉房我给你留个位。」他顿了顿，「你别嫌我身上烫——也别说出去。怕冷这话，我头回跟人说。」' + '（精力-15）'; break; }
                 case 'sit': aff = 9; msg = '你没说话，坐到他旁边，肩挨着肩。他没动，许久，把头靠过来一点点，搁在你肩上——很轻，像怕压碎什么。「……你不走，炉子就不冷了。」'; break;
                 case 'carry': aff = 8; msg = '他看了你很久，忽然伸手把你拢过来——整个人，不是手。他身上很烫，像一座炉。「……行。」他声音闷在你肩窝里，「那你扛着。」'; break;
             }
@@ -213,7 +217,7 @@ var LU_MAIN_EVENTS = {
         scenes: [
             { speaker: 'narrator', text: '天工炉房。冶砚把一柄剑横在你面前——剑身亮得像一炉新火，配重是你虎口的茧型。三年未成之剑，开刃了。', type: 'description' },
             { speaker: 'npc', text: '「成了。」他声音哑哑的，「我铸了三年。第一年差口气，第二年差火候，第三年——差个人。」' },
-            { speaker: 'npc', text: '「{playerName}。」他把剑推向你，「这柄剑，连同铸剑的人，你要不要？」' },
+            { speaker: 'npc', text: '「{playerName}。」他把剑推向你，「这柄剑在淬火池边我看了三年。今日它出匣——往后我不看剑了，改看你。」' },
             { speaker: 'player_select', text: '你的选择将决定你们的关系走向', options: [
                 { text: '「要。我带你和这柄剑下山——一剑走江湖，哪里有不平就去哪里。」', effect: 'lover_travel', affection: 30 },
                 { text: '「要。但哪儿也不去。我留在铸剑山庄，陪你守每一炉火。」', effect: 'lover_stay', affection: 28 },
@@ -222,8 +226,9 @@ var LU_MAIN_EVENTS = {
             ]}
         ],
         effects: function(npc, choice) {
+            // v20.25 门槛 5→3：三度伤透即寒心（旧 5 门槛对本线数学不可达，坏结局形同虚设）
             var negCount = (window._negativeChoiceCount && window._negativeChoiceCount[LU_NPC_ID]) || 0;
-            if (negCount >= 5 && (choice === 'lover_travel' || choice === 'lover_stay')) {
+            if (negCount >= 3 && (choice === 'lover_travel' || choice === 'lover_stay')) {
                 return { affection: 0, msg: '他看着你，慢慢收回了剑。「……我铸了三年，等的不是这句话。」他把剑挂回炉房最高的梁，「你走吧。这柄剑，我留着自己听火。」', ending: '错过' };
             }
             switch (choice) {
@@ -243,7 +248,7 @@ var LU_ENDINGS = {
         id: 'lu_ending_炉火同道', npcId: LU_NPC_ID, title: '结局·炉火同道', icon: '⚔️',
         route: '炉火同道',
         scenes: [
-            { speaker: 'narrator', text: '三日后，冶砚把少庄主之印交还欧冶子。', type: 'description' },
+            { speaker: 'narrator', text: '三日后，冶砚回庄，双手把少庄主之印放回欧冶子案头。老头子把印对着剑光翻来覆去看了两遍：「铸了二十年的剑头一回出庄，铸剑的人也跟着跑——罢。印我收，你那炉子给你留着，想铸了回来。」', type: 'description' },
             { speaker: 'npc', text: '「炉子托付给您了。」他背一柄剑，跟你并肩下山，「我自个儿，就是一柄剑。」' },
             { speaker: 'narrator', text: '多年后，江湖有「炉火双剑」的传说：一柄是他铸的，一柄是他自己。专斩不平。', type: 'description' },
             { speaker: 'narrator', text: '有人见过他们在雪夜的酒馆歇脚。他难得没拢炉火，靠在{playerTa}肩上打了个盹——那柄剑搁在桌上，刃口映着火光。他不冷了。', type: 'description' }

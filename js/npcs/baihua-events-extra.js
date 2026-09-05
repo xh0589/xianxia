@@ -34,7 +34,7 @@ var BAIHUA_DAILY_EVENTS = {
             case 'use': aff = 4; msg = '几天后她看到你肘上的痂：「愈合得不错。」语气像在自夸。'; break;
             case 'ignore': aff = -1; msg = '那罐药膏后来不见了。她再没提过。'; break; } return { affection: aff, msg: msg }; }
     },
-    'bh_event_017': { id: 'bh_event_017', npcId: BAIHUA_NPC_ID, title: '花粥', icon: '🥣', desc: '你随口说胃口不好。', minAffection: 20, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e017_done', autoTrigger: { timeRange: [6, 10], random: 0.3 },
+    'bh_event_017': { id: 'bh_event_017', npcId: BAIHUA_NPC_ID, title: '花粥', icon: '🥣', desc: '你随口说胃口不好。', minAffection: 22, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e017_done', autoTrigger: { timeRange: [6, 10], random: 0.3 },
         scenes: [
             { speaker: 'narrator', text: '你随口抱怨了一句「最近胃口不好」。', type: 'description' },
             { speaker: 'narrator', text: '第二天的早饭碗里，是一碗百合莲子粥，清甜软糯。', type: 'description' },
@@ -49,7 +49,7 @@ var BAIHUA_DAILY_EVENTS = {
             case 'ask': aff = 4; msg = '「厨房随手煮的。」她说。——但配方里那味安神的合欢花，是她的私藏。'; break;
             case 'leftover': aff = -1; msg = '她路过看到你的碗，什么都没说。第二天的粥换回了白粥。'; break; } return { affection: aff, msg: msg }; }
     },
-    'bh_event_018': { id: 'bh_event_018', npcId: BAIHUA_NPC_ID, title: '驱虫香囊', icon: '🌿', desc: '夏天蚊虫多，门口挂上了香囊。', minAffection: 20, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e018_done', autoTrigger: { random: 0.3 },
+    'bh_event_018': { id: 'bh_event_018', npcId: BAIHUA_NPC_ID, title: '驱虫香囊', icon: '🌿', desc: '夏天蚊虫多，门口挂上了香囊。', minAffection: 24, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e018_done', autoTrigger: { random: 0.3 },
         scenes: [
             { speaker: 'narrator', text: '入夏，谷里蚊虫渐多。', type: 'description' },
             { speaker: 'narrator', text: '不知何时，你门口挂上了一只驱虫香囊——艾草和薄荷的味道，针脚细密。', type: 'description' },
@@ -64,7 +64,7 @@ var BAIHUA_DAILY_EVENTS = {
             case 'study': aff = 5; msg = '她挑眉：「看出来了？」然后真的给你讲了一下午驱虫药理。——那是你听她讲课讲得最久的一次。'; break;
             case 'remove': aff = -1; msg = '香囊被摘下来那天，她在廊下看了很久。'; break; } return { affection: aff, msg: msg }; }
     },
-    'bh_event_019': { id: 'bh_event_019', npcId: BAIHUA_NPC_ID, title: '手绘地图', icon: '🗺️', desc: '你想去北边采一味主药。', minAffection: 25, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e019_done', autoTrigger: { random: 0.3 },
+    'bh_event_019': { id: 'bh_event_019', npcId: BAIHUA_NPC_ID, title: '手绘地图', icon: '🗺️', desc: '你想去北边采一味主药。', minAffection: 28, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e019_done', autoTrigger: { random: 0.3 },
         scenes: [
             { speaker: 'narrator', text: '你提到想去北边采一味主药，说说也就忘了。', type: 'description' },
             { speaker: 'narrator', text: '第二天，你门口贴着一张手绘地图：三条采集路线，每条都标了危险等级。末尾一行小字：「走中路。近的那条有蛇。」', type: 'description' },
@@ -108,7 +108,7 @@ var BAIHUA_DAILY_EVENTS = {
             case 'ask': aff = 4; msg = '「买的。」她说，「一只两只，价钱一样。」——可那对杯子的釉色纹样，是定制的。'; break;
             case 'untouched': aff = 0; msg = '杯子一直在那里，落了灰又被擦净，再落灰。'; break; } return { affection: aff, msg: msg }; }
     },
-    'bh_event_022': { id: 'bh_event_022', npcId: BAIHUA_NPC_ID, title: '暖房旁的院子', icon: '🏠', desc: '入冬，你的住处被安排到暖房旁。', minAffection: 40, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e022_done', autoTrigger: { random: 0.3 },
+    'bh_event_022': { id: 'bh_event_022', npcId: BAIHUA_NPC_ID, title: '暖房旁的院子', icon: '🏠', desc: '入冬，你的住处被安排到暖房旁。', minAffection: 42, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e022_done', autoTrigger: { random: 0.3 },
         scenes: [
             { speaker: 'narrator', text: '入冬第一天，管事的师姐通知你搬院子——新院子在暖房旁边，「仓库腾出来的」。', type: 'description' },
             { speaker: 'narrator', text: '你搬进去才发现：屋里温度刚好，窗边还留着一个空花架。', type: 'description' },
@@ -123,7 +123,7 @@ var BAIHUA_DAILY_EVENTS = {
             case 'thanks': aff = 3; msg = '「暖房余温，不用白不用。」她说得理直气壮。'; break;
             case 'refuse': aff = 0; msg = '那个冬天有点冷。花架空着。'; break; } return { affection: aff, msg: msg }; }
     },
-    'bh_event_023': { id: 'bh_event_023', npcId: BAIHUA_NPC_ID, title: '药膳', icon: '🍲', desc: '养伤期间，每餐都有对症的药膳。', minAffection: 30, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e023_done', autoTrigger: { random: 0.3 },
+    'bh_event_023': { id: 'bh_event_023', npcId: BAIHUA_NPC_ID, title: '药膳', icon: '🍲', desc: '养伤期间，每餐都有对症的药膳。', minAffection: 26, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e023_done', autoTrigger: { random: 0.3 },
         scenes: [
             { speaker: 'narrator', text: '你受伤休养期间，每一餐都出现了对症的药膳——一日三餐，顿顿不重样。', type: 'description' },
             { speaker: 'player_select', text: '你如何回应？', options: [
@@ -137,7 +137,7 @@ var BAIHUA_DAILY_EVENTS = {
             case 'kitchen': aff = 5; msg = '厨房师姐神秘一笑：「方子是谷主开的，火候是她盯的。」——她明明每天忙得脚不沾地。'; break;
             case 'complain': aff = -2; msg = '第二天起，药膳没有了。换成普通饭菜。你竟然有点想念那个味道。'; break; } return { affection: aff, msg: msg }; }
     },
-    'bh_event_024': { id: 'bh_event_024', npcId: BAIHUA_NPC_ID, title: '她记得', icon: '💭', desc: '三个月前你随口说过的话，她记得。', minAffection: 45, trigger: { random: 0.2 }, cooldown: 0, flag: 'bh_e024_done', autoTrigger: { random: 0.25 },
+    'bh_event_024': { id: 'bh_event_024', npcId: BAIHUA_NPC_ID, title: '三个月前的话', icon: '💭', desc: '三个月前你随口说过的话，她记得。', minAffection: 45, trigger: { random: 0.2 }, cooldown: 0, flag: 'bh_e024_done', autoTrigger: { random: 0.25 },
         scenes: [
             { speaker: 'narrator', text: '你三个月前随口提过一嘴：你对某味常见药材过敏。', type: 'description' },
             { speaker: 'narrator', text: '今天你偶然发现——之后所有开给你的方子里，都没有那味药。包括其他医师开的。', type: 'description' },
@@ -170,7 +170,7 @@ var BAIHUA_APPROACH_EVENTS = {
             case 'stool': aff = 6; msg = '她看着凳子愣了一下，然后坐下了。「……这花畦确实高，蹲久了腿麻。」——她之前可是站了一个时辰。'; break;
             case 'ask': aff = 3; msg = '「花需要人浇。」她说得理直气壮，「你练你的剑。」'; break; } return { affection: aff, msg: msg }; }
     },
-    'bh_event_026': { id: 'bh_event_026', npcId: BAIHUA_NPC_ID, title: '借你医经', icon: '📖', desc: '她丢给你一本《百花医经》残卷。', minAffection: 30, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e026_done', autoTrigger: { random: 0.3 },
+    'bh_event_026': { id: 'bh_event_026', npcId: BAIHUA_NPC_ID, title: '借你医经', icon: '📖', desc: '她丢给你一本《百花医经》残卷。', minAffection: 33, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e026_done', autoTrigger: { random: 0.3 },
         scenes: [
             { speaker: 'narrator', text: '她路过你的院子，随手丢给你一本书：「多余的。」', type: 'description' },
             { speaker: 'narrator', text: '你翻开一看——《百花医经》残卷。谷里藏经阁都没有的孤本。', type: 'description' },
@@ -200,7 +200,7 @@ var BAIHUA_APPROACH_EVENTS = {
             case 'silent': aff = 3; msg = '一路无话。但她的步子始终配合着你的速度。'; break;
             case 'point': aff = 1; msg = '「谁等你了。」她加快脚步走在前面，「我在看晚霞。」——那天阴天，没有晚霞。'; break; } return { affection: aff, msg: msg }; }
     },
-    'bh_event_028': { id: 'bh_event_028', npcId: BAIHUA_NPC_ID, title: '送花糕', icon: '🧁', desc: '她端着一碟花糕到你的院子。', minAffection: 45, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e028_done', autoTrigger: { timeRange: [14, 18], random: 0.3 },
+    'bh_event_028': { id: 'bh_event_028', npcId: BAIHUA_NPC_ID, title: '送花糕', icon: '🧁', desc: '她端着一碟花糕到你的院子。', minAffection: 48, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e028_done', autoTrigger: { timeRange: [14, 18], random: 0.3 },
         scenes: [
             { speaker: 'narrator', text: '午后，她端着一碟花糕出现在你的院子门口：「厨房多做。」', type: 'description' },
             { speaker: 'narrator', text: '碟子里只有四块——刚好两人份。', type: 'description' },
@@ -215,7 +215,7 @@ var BAIHUA_APPROACH_EVENTS = {
             case 'feed': aff = 8; msg = '她猝不及防咬了一口，瞪圆了眼睛瞪你。半晌，她鼓着腮帮子含糊道：「……甜的。」耳朵红透了。'; break;
             case 'thanks': aff = 4; msg = '「嗯。」她把碟子放下就走了。第二天你发现桌上多了一小罐蜂蜜——配糕吃的。'; break; } return { affection: aff, msg: msg }; }
     },
-    'bh_event_029': { id: 'bh_event_029', npcId: BAIHUA_NPC_ID, title: '她记得', icon: '🍋', desc: '你上周随口说过喜欢吃酸的。', minAffection: 40, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e029_done', autoTrigger: { random: 0.3 },
+    'bh_event_029': { id: 'bh_event_029', npcId: BAIHUA_NPC_ID, title: '一碗梅子', icon: '🍋', desc: '你上周随口说过喜欢吃酸的。', minAffection: 40, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e029_done', autoTrigger: { random: 0.3 },
         scenes: [
             { speaker: 'narrator', text: '你上周随口说过一句：喜欢吃酸的东西。', type: 'description' },
             { speaker: 'narrator', text: '今天你的碗里多了几颗醋渍梅子——开胃，生津，酸得恰到好处。', type: 'description' },
@@ -230,7 +230,7 @@ var BAIHUA_APPROACH_EVENTS = {
             case 'look': aff = 5; msg = '她正假装专心吃饭，察觉你的目光，耳根慢慢红了：「……看什么，吃饭。」'; break;
             case 'miss': aff = 0; msg = '梅子有点酸。你没吃出来。'; break; } return { affection: aff, msg: msg }; }
     },
-    'bh_event_030': { id: 'bh_event_030', npcId: BAIHUA_NPC_ID, title: '门边的药筐', icon: '🧺', desc: '门边放着一筐要晾晒的药材。', minAffection: 50, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e030_done', autoTrigger: { location: '百花谷', random: 0.3 },
+    'bh_event_030': { id: 'bh_event_030', npcId: BAIHUA_NPC_ID, title: '门边的药筐', icon: '🧺', desc: '门边放着一筐要晾晒的药材。', minAffection: 52, trigger: { random: 0.3 }, cooldown: 0, flag: 'bh_e030_done', autoTrigger: { location: '百花谷', random: 0.3 },
         scenes: [
             { speaker: 'narrator', text: '你出门时，发现门边放着一筐要送去晾晒的药材——而晾药架明明就在隔壁院子。', type: 'description' },
             { speaker: 'narrator', text: '廊子那头，她正站在花丛边「赏花」，眼神却时不时往这边飘。', type: 'description' },
@@ -245,7 +245,7 @@ var BAIHUA_APPROACH_EVENTS = {
             case 'callout': aff = 6; msg = '她慢悠悠踱过来，拿起一束药看了看：「是不轻。」然后很自然地和你一人抬一边——那段路，你们走了平时三倍的时间。'; break;
             case 'ignore': aff = 0; msg = '傍晚回来，药筐还在。只是摆得更整齐了，像在等。'; break; } return { affection: aff, msg: msg }; }
     },
-    'bh_event_031': { id: 'bh_event_031', npcId: BAIHUA_NPC_ID, title: '她承认了', icon: '💬', desc: '你终于问了那个问题。', minAffection: 60, trigger: { random: 0.2 }, cooldown: 0, flag: 'bh_e031_done', autoTrigger: { random: 0.2 },
+    'bh_event_031': { id: 'bh_event_031', npcId: BAIHUA_NPC_ID, title: '等灯匠', icon: '💬', desc: '你终于问了那个问题。', minAffection: 60, trigger: { random: 0.2 }, cooldown: 0, flag: 'bh_e031_done', autoTrigger: { random: 0.2 },
         scenes: [
             { speaker: 'narrator', text: '你终于问出了口：「你是不是在等我？」', type: 'description' },
             { speaker: 'narrator', text: '她沉默了整整三息，然后移开视线。', type: 'description' },

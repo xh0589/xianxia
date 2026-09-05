@@ -101,7 +101,7 @@ const SECT_EVENTS_POOL = {
         desc: function(sectName) { return '一位云游商人来到' + sectName + '，出售稀有物品。'; },
         effect: function(sectName) {
             if (typeof window.addItem === 'function') {
-                var goods = ['pill_spring_recovery', 'mat_meteorite', 'talisman_fire', 'food_roasted_meat'];
+                var goods = ['pill_spring_recovery', 'mat_meteorite', 'tal_fireball', 'food_roasted_meat'];
                 window.addItem(goods[Math.floor(Math.random() * goods.length)], 1);
             }
             return '获得随机物品一件';
@@ -198,6 +198,90 @@ const SECT_EVENTS_POOL = {
             return '全派士气 +30，影响力 +20';
         },
         minMorale: 0, maxMorale: 100
+    },
+
+    // v20.46 通用池扩充：门派日常，月月有戏
+    'sect_exam': {
+        type: 'internal', icon: '📝', name: '门内大考',
+        desc: function(sectName) { return sectName + '举行季度大考，弟子们演武比试，检验修行。'; },
+        effect: function(sectName) {
+            var ds = window.discipleState || {};
+            if (ds.isInSect && ds.sectId === sectName) {
+                ds.points = (ds.points || 0) + 30;
+            }
+            var data = getSectInternal(sectName);
+            if (data) data.morale = Math.min(100, (data.morale || 50) + 5);
+            return '考核积分 +30，全派士气 +5';
+        },
+        minMorale: 0, maxMorale: 100
+    },
+    'new_disciples': {
+        type: 'internal', icon: '🧒', name: '新弟子入门',
+        desc: function(sectName) { return '一批新弟子通过考核拜入' + sectName + '，山门添了人气。'; },
+        effect: function(sectName) {
+            var data = getSectInternal(sectName);
+            if (data) {
+                data.disciples = (data.disciples || 20) + 2;
+                data.morale = Math.min(100, (data.morale || 50) + 5);
+            }
+            return '弟子 +2，全派士气 +5';
+        },
+        minMorale: 0, maxMorale: 100
+    },
+    'ancestor_worship': {
+        type: 'internal', icon: '🕯️', name: '祖师祭祀',
+        desc: function(sectName) { return sectName + '举行祖师祭祀，香烟缭绕，全派肃立。'; },
+        effect: function(sectName) {
+            var ds = window.discipleState || {};
+            if (ds.isInSect && ds.sectId === sectName) {
+                ds.points = (ds.points || 0) + 15;
+            }
+            var data = getSectInternal(sectName);
+            if (data) data.morale = Math.min(100, (data.morale || 50) + 10);
+            return '积分 +15，全派士气 +10';
+        },
+        minMorale: 0, maxMorale: 100
+    },
+    'friendly_visit': {
+        type: 'external', icon: '🏮', name: '友派来访',
+        desc: function(sectName) { return '友派弟子到访' + sectName + '，切磋交流，气氛热络。'; },
+        effect: function(sectName) {
+            var data = getSectInternal(sectName);
+            if (data) data.influence = (data.influence || 50) + 5;
+            var ds = window.discipleState || {};
+            if (ds.isInSect && ds.sectId === sectName) {
+                ds.points = (ds.points || 0) + 15;
+            }
+            return '影响力 +5，切磋积分 +15';
+        },
+        minMorale: 0, maxMorale: 100
+    },
+    'arena_open': {
+        type: 'external', icon: '🏟️', name: '演武设擂',
+        desc: function(sectName) { return sectName + '在山下设擂，广邀豪杰切磋，胜者有名。'; },
+        effect: function(sectName) {
+            var ds = window.discipleState || {};
+            if (ds.isInSect && ds.sectId === sectName) {
+                ds.contribution = (ds.contribution || 0) + 25;
+            }
+            var data = getSectInternal(sectName);
+            if (data) data.influence = (data.influence || 50) + 8;
+            return '贡献 +25，影响力 +8';
+        },
+        minMorale: 0, maxMorale: 100
+    },
+    'poor_harvest': {
+        type: 'disaster', icon: '🍂', name: '岁收歉薄',
+        desc: function(sectName) { return sectName + '山下田产歉收，门派粮用吃紧。'; },
+        effect: function(sectName) {
+            var data = getSectInternal(sectName);
+            if (data) {
+                data.resources = Math.max(0, (data.resources || 100) - 25);
+                data.morale = Math.max(0, (data.morale || 50) - 8);
+            }
+            return '资源 -25，士气 -8';
+        },
+        minMorale: 0, maxMorale: 100
     }
 };
 
@@ -237,7 +321,17 @@ function generateSectEvent(sectName) {
             pool.push({ id: key, event: ev });
         }
     }
-    
+
+    // v20.46 门派专属事件：每门每派的戏，与通用池同权混抽
+    var exclusive = (window.SECT_EXCLUSIVE_EVENTS && window.SECT_EXCLUSIVE_EVENTS[sectName]) || {};
+    for (var ek in exclusive) {
+        var eev = exclusive[ek];
+        if (!eev) continue;
+        if (morale >= (eev.minMorale || 0) && morale <= (eev.maxMorale || 100)) {
+            pool.push({ id: ek, event: eev });
+        }
+    }
+
     if (pool.length === 0) return null;
     
     // 加权随机：灾难事件概率随士气降低而增加
@@ -330,7 +424,9 @@ function handleSectEvent(sectName, eventId) {
     }
     
     var event = active.event;
-    var definition = SECT_EVENTS_POOL[event.id];
+    var definition = SECT_EVENTS_POOL[event.id]
+        || ((window.SECT_EXCLUSIVE_EVENTS && window.SECT_EXCLUSIVE_EVENTS[sectName]) || {})[event.id]
+        || null;
     if (!definition || typeof definition.effect !== 'function') {
         delete sectEventState.activeEvents[sectName];
         if (typeof window.showMessage === 'function') window.showMessage('事件数据异常，已安全取消。', 'error');

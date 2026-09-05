@@ -1,6 +1,8 @@
 // ==================== lifespan-system.js - 寿命系统 ====================
 // 寿元概念、修炼增加寿元、时间不可逆
 // 加载顺序：在 time-system.js 之后
+// v20.40 做深：历法口径对齐世界历（360 日一年）；凶兆分四档（一年/百日/三十日/十日，
+// 各报一次）；将死之相上脸（面板变色）。延寿途：突破抬上限（既有）、延寿丹（物品既有接线）。
 
 var LIFESPAN_CONFIG = {
     base: { years: 100, desc: '凡人寿元' },
@@ -31,8 +33,9 @@ function saveLifespan() {
 
 function updatePlayerLifespan(daysPassed) {
     if (playerLifespan.isImmortal) return;
-    playerLifespan.currentAge += daysPassed / 365;
-    playerLifespan.remainingDays = Math.max(0, (playerLifespan.maxAge - playerLifespan.currentAge) * 365);
+    // v20.40 世界历 360 日一年（与节日账同一把尺），不再按 365 计
+    playerLifespan.currentAge += daysPassed / 360;
+    playerLifespan.remainingDays = Math.max(0, (playerLifespan.maxAge - playerLifespan.currentAge) * 360);
     var ratio = playerLifespan.currentAge / Math.max(1, playerLifespan.maxAge);
     playerLifespan.agePenalty = ratio >= 0.9 ? 0.85 : (ratio >= 0.8 ? 0.92 : 1.0);
     if (playerLifespan.remainingDays <= 0 && !playerLifespan.isImmortal) {
@@ -42,9 +45,25 @@ function updatePlayerLifespan(daysPassed) {
         } else if (window.showMessage) {
             window.showMessage('⚠️ 寿元已尽……', 'error');
         }
-    } else if (playerLifespan.remainingDays < 30 && !playerLifespan._warn30) {
-        playerLifespan._warn30 = true;
-        if (window.showMessage) window.showMessage('⚠️ 寿元不足三十日！', 'error');
+    } else {
+        // v20.40 凶兆四档：各报一次——死讯不该只有一声，暮年是一步一步暗下去的
+        var days = playerLifespan.remainingDays;
+        if (days <= 360 && !playerLifespan._warn365) {
+            playerLifespan._warn365 = true;
+            if (window.showMessage) window.showMessage('🌒 你忽觉气血迟滞——寿数已不足一年。修行之路，从今日开始倒计时。', 'warning');
+        }
+        if (days <= 100 && !playerLifespan._warn100) {
+            playerLifespan._warn100 = true;
+            if (window.showMessage) window.showMessage('🌘 鬓边一夜白了几缕——寿元不足百日。该见的故人，趁早去见。', 'warning');
+        }
+        if (days <= 30 && !playerLifespan._warn30) {
+            playerLifespan._warn30 = true;
+            if (window.showMessage) window.showMessage('⚠️ 寿元不足三十日！大限将临——延寿丹、突破，或安排后事。', 'error');
+        }
+        if (days <= 10 && !playerLifespan._warn10) {
+            playerLifespan._warn10 = true;
+            if (window.showMessage) window.showMessage('🕯️ 油尽灯枯之相——寿元不足十日。', 'error');
+        }
     }
     updateLifespanDisplay();
     saveLifespan();
@@ -54,12 +73,26 @@ function extendLifespan(years, source) {
     if (playerLifespan.isImmortal) return false;
     years = years || 10;
     playerLifespan.maxAge += years;
-    playerLifespan.remainingDays = Math.max(0, (playerLifespan.maxAge - playerLifespan.currentAge) * 365);
+    playerLifespan.remainingDays = Math.max(0, (playerLifespan.maxAge - playerLifespan.currentAge) * 360);
     playerLifespan._endingShown = false;
     playerLifespan._warn30 = false;
     updateLifespanDisplay();
     saveLifespan();
     if (window.showMessage) window.showMessage('⌛ 寿元延长' + years + '年' + (source ? '（' + source + '）' : ''), 'success');
+    return true;
+}
+
+// v20.53：以寿元换力量的代价出口（魔界血池淬体等）——年龄往前推，凶兆警示照常接手
+function spendLifespan(years, source) {
+    if (playerLifespan.isImmortal) return false;
+    years = Number(years) || 1;
+    playerLifespan.currentAge += years;
+    playerLifespan.remainingDays = Math.max(0, (playerLifespan.maxAge - playerLifespan.currentAge) * 360);
+    updateLifespanDisplay();
+    saveLifespan();
+    if (window.showMessage) {
+        window.showMessage('⌛ 寿元折去' + years + '年' + (source ? '（' + source + '）' : '') + '，镜中鬓边似乎又白了几分。', 'warning');
+    }
     return true;
 }
 
@@ -111,7 +144,7 @@ function _lifespanNewGamePlus() {
     if (typeof window.startNewGamePlus === 'function') window.startNewGamePlus();
     else {
         playerLifespan.currentAge = 18;
-        playerLifespan.remainingDays = (playerLifespan.maxAge - 18) * 365;
+        playerLifespan.remainingDays = (playerLifespan.maxAge - 18) * 360;
         playerLifespan._endingShown = false;
         saveLifespan();
         updateLifespanDisplay();
@@ -135,7 +168,7 @@ function increaseLifespanOnBreakthrough(realm) {
     if (!config) return;
     if (config.years === null) { playerLifespan.isImmortal = true; playerLifespan.remainingDays = -1; }
     else { playerLifespan.maxAge = Math.max(playerLifespan.maxAge, config.years); }
-    playerLifespan.remainingDays = Math.max(0, (playerLifespan.maxAge - playerLifespan.currentAge) * 365);
+    playerLifespan.remainingDays = Math.max(0, (playerLifespan.maxAge - playerLifespan.currentAge) * 360);
     if (window.showMessage) window.showMessage('🎉 突破至' + realm + '期，寿元增加至' + playerLifespan.maxAge + '年！', 'success');
     updateLifespanDisplay();
     saveLifespan();
@@ -144,8 +177,15 @@ function increaseLifespanOnBreakthrough(realm) {
 function updateLifespanDisplay() {
     var el = document.getElementById('lifespan-display');
     if (!el) return;
-    if (playerLifespan.isImmortal) el.innerHTML = '♾️ 永生';
-    else el.innerHTML = '⌛ ' + Math.floor(playerLifespan.currentAge) + '岁 / ' + playerLifespan.maxAge + '年（余' + Math.floor(playerLifespan.remainingDays) + '天）';
+    if (playerLifespan.isImmortal) {
+        el.innerHTML = '♾️ 永生';
+        el.style.color = '';
+        return;
+    }
+    // v20.40 将死之相上脸：暮年一步步暗下去
+    var days = playerLifespan.remainingDays;
+    el.style.color = days <= 30 ? '#f87171' : (days <= 360 ? '#fbbf24' : '');
+    el.innerHTML = '⌛ ' + Math.floor(playerLifespan.currentAge) + '岁 / ' + playerLifespan.maxAge + '年（余' + Math.floor(days) + '天）';
 }
 
 // 突破寿元由成功事件驱动，禁止通过包裹 performBreakthrough 猜测结果。
@@ -168,6 +208,7 @@ if (typeof window !== 'undefined') {
     window.updatePlayerLifespan = updatePlayerLifespan;
     window.increaseLifespanOnBreakthrough = increaseLifespanOnBreakthrough;
     window.extendLifespan = extendLifespan;
+    window.spendLifespan = spendLifespan;
     window.getAgePenaltyMultiplier = getAgePenaltyMultiplier;
     window.triggerLifespanEnd = triggerLifespanEnd;
     window._tryUseLongevityFromEnd = _tryUseLongevityFromEnd;

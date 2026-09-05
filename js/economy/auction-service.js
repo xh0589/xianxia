@@ -23,8 +23,15 @@
     function bal() {
         return (global.XianXia && global.XianXia.Balance && global.XianXia.Balance.auction) || {
             listingDurationMinutes: 1440, listingFeeRate: 0.02, settlementTaxRate: 0.08,
-            minListingPrice: 1,
-            saleChanceByPriceRatio: [{ maxRatio: 1, chance: 0.85 }, { maxRatio: 2, chance: 0.2 }, { maxRatio: Infinity, chance: 0.05 }]
+            unsoldStorageFeeRate: 0.05, maxActiveListings: 6, minListingPrice: 1,
+            saleChanceByPriceRatio: [
+                { maxRatio: 0.75, chance: 0.95 }, { maxRatio: 1.0, chance: 0.85 },
+                { maxRatio: 1.25, chance: 0.68 }, { maxRatio: 1.5, chance: 0.45 },
+                { maxRatio: 2.0, chance: 0.20 }, { maxRatio: 2.5, chance: 0.13 },
+                { maxRatio: 3.0, chance: 0.09 }, { maxRatio: 4.0, chance: 0.055 },
+                { maxRatio: 6.0, chance: 0.03 }, { maxRatio: 10.0, chance: 0.018 },
+                { maxRatio: Infinity, chance: 0.01 }
+            ]
         };
     }
 
@@ -100,7 +107,21 @@
             if (!returned) return false; // 背包满时保留任务，下次继续尝试，绝不吞物品
             item.status = 'unsold';
             item.settledMinute = nowMinute();
-            notify('📦 拍卖流拍：' + item.itemName + ' x' + item.quantity + ' 已退回背包', 'warning');
+            // v20.53 流拍压柜费：货在柜上压了 24 小时占着柜面，寄卖行照收一笔保管钱。
+            // 天价挂单从此不只是"卖不掉"，是真的要付代价——高价赌输的成本不再是零。
+            var storageFee = Math.max(0, Math.floor(item.unitPrice * item.quantity * (bal().unsoldStorageFeeRate || 0)));
+            if (storageFee > 0 && global.EconomyTransaction) {
+                var paid = global.EconomyTransaction.debit('spiritStones', storageFee);
+                if (!paid) {
+                    // 拿不出压柜费：货先退回，账记到下一次（不吞物，也不无限欠账）
+                    item.storageOwed = (item.storageOwed || 0) + storageFee;
+                    notify('📦 拍卖流拍：' + item.itemName + ' x' + item.quantity + ' 已退回背包；压柜费 ' + storageFee + ' 灵石你暂时拿不出，寄卖行记了账。', 'warning');
+                    return true;
+                }
+                notify('📦 拍卖流拍：' + item.itemName + ' x' + item.quantity + ' 已退回背包，压柜费 ' + storageFee + ' 灵石。', 'warning');
+            } else {
+                notify('📦 拍卖流拍：' + item.itemName + ' x' + item.quantity + ' 已退回背包', 'warning');
+            }
         }
         return true;
     }
@@ -118,6 +139,23 @@
         if ((slot.count || 1) > 1) {
             quantity = parseInt(prompt('输入上架数量（1-' + slot.count + '）:', String(Math.min(slot.count, 1))), 10);
             if (!Number.isFinite(quantity) || quantity < 1 || quantity > slot.count) { notify('无效数量', 'error'); return false; }
+        }
+        // v20.53 摊位有限：掌柜只留六个柜面，占满了就得等上一批出结果
+        var cap = bal().maxActiveListings || 6;
+        var activeCount = state.items.filter(function (x) { return x.sellerType === 'player' && x.status === 'active'; }).length;
+        if (activeCount >= cap) {
+            notify('寄卖行掌柜摊手："柜面就这么大，你那 ' + activeCount + ' 件还没出结果，等出结果再来。"', 'warning');
+            return false;
+        }
+        // 有欠着的压柜费先清账——寄卖行不做赊账生意
+        var owed = state.items.reduce(function (acc, x) { return acc + (x.sellerType === 'player' ? (x.storageOwed || 0) : 0); }, 0);
+        if (owed > 0 && global.EconomyTransaction) {
+            if (!global.EconomyTransaction.debit('spiritStones', owed)) {
+                notify('你还欠着寄卖行 ' + owed + ' 灵石压柜费，先清账再上架。', 'warning');
+                return false;
+            }
+            state.items.forEach(function (x) { if (x.sellerType === 'player') x.storageOwed = 0; });
+            notify('🧾 你把欠寄卖行的 ' + owed + ' 灵石压柜费结清了。', 'info');
         }
         var suggested = Math.max(1, Number(template.price || template.basePrice) || 100);
         var unitPrice = parseInt(prompt('输入' + (template.name || slot.templateId) + '的单件起拍价（灵石）:', String(suggested)), 10);

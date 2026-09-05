@@ -825,7 +825,7 @@ class NPC {
         this.memory.lastActionGameMinute = npcNowGameMinute();
         if (action === 'gift') this.memory.totalGifts++;
         else if (action === 'help') this.memory.totalHelps++;
-        else if (action === 'attack') { this.memory.totalAttacks++; this.addStress(20); }
+        else if (action === 'attack') { this.memory.totalAttacks++; this.addStress(20); this.changeFear(10); } // v20.37 威压账：挨过打的人怕你
         else if (action === 'refuse_quest') this.memory.totalRefusals++;
         else if (action === 'talk' || action === 'greet') {
             this.memory.meetCount++;
@@ -1024,7 +1024,16 @@ class NPC {
     changeRespect(amount) { this.relationship.respect = clamp(this.relationship.respect + amount, 0, 100); this.updateRelationship(); return this.relationship.respect; }
     canAffordRequest(requestCost) { return this.relationship.favor >= requestCost; }
     executeRequest(requestCost, effectFn) {
-        if (!this.canAffordRequest(requestCost)) return { success: false, msg: '情分不足' };
+        if (!this.canAffordRequest(requestCost)) {
+            // v20.37 威压轨：情分不够时，威压可代付（二比一）——应你不是因为情分，是因为怕。
+            // 威压是消耗品（代付减半），且这笔勉强的情要记怨。威压是资源，不是白送的通行证。
+            const _fear = Number(this.relationship.fear) || 0;
+            if (_fear < requestCost * 2) return { success: false, msg: '情分不足' };
+            this.changeFear(-Math.ceil(requestCost / 2));
+            this.changeHatred(2);
+            if (effectFn && typeof effectFn === 'function') return effectFn(this);
+            return { success: true, msg: '请求成功' };
+        }
         this.changeFavor(-requestCost);
         if (effectFn && typeof effectFn === 'function') return effectFn(this);
         return { success: true, msg: '请求成功' };
@@ -1036,6 +1045,8 @@ class NPC {
         if (rel.hatred >= 60 && rel.respect < 30) return { type: 'enemy', name: '死敌', color: 'text-red-600' };
         if (rel.hatred >= 60 && rel.respect >= 60) return { type: 'fear_enemy', name: '敢怒不敢言', color: 'text-orange-400' };
         if (rel.affection >= 60 && rel.respect >= 60) return { type: 'follower', name: '追随者', color: 'text-purple-400' };
+        // v20.37 威压轨露出：怕你到这份上，关系形态就叫畏惧（情深者不受此判——前面几档先接住）
+        if (rel.fear >= 60) return { type: 'intimidated', name: '畏惧', color: 'text-red-300' };
         if (rel.affection < 20 && rel.respect < 30) return { type: 'stranger', name: '路人', color: 'text-gray-400' };
         if (rel.respect >= 60) return { type: 'awe', name: '敬畏', color: 'text-yellow-400' };
         return { type: 'neutral', name: '普通', color: 'text-blue-400' };
@@ -1283,7 +1294,13 @@ class NPC {
                 _loveAccepted_confess: this.memory._loveAccepted_confess || false,
                 // F-18：送礼疲倦持久化
                 giftFatigue: this.memory.giftFatigue || 0,
-                lastGiftDay: this.memory.lastGiftDay || 0
+                lastGiftDay: this.memory.lastGiftDay || 0,
+                // v20.25/v20.30：日常小事重入日头（小心眼等），不随档走则读档后永远不再触发
+                _ambientLastDay: this.memory._ambientLastDay ? {...this.memory._ambientLastDay} : null,
+                // 深谈分支进度/选择史/记忆事件同为白名单制，漏一则读档清零（嵌套结构走 JSON 深拷贝）
+                _branchState: this.memory._branchState ? JSON.parse(JSON.stringify(this.memory._branchState)) : null,
+                _choiceHistory: this.memory._choiceHistory ? JSON.parse(JSON.stringify(this.memory._choiceHistory)) : null,
+                _events: this.memory._events ? JSON.parse(JSON.stringify(this.memory._events)) : null
             } : null,
             state: this.state ? {
                 mood: this.state.mood ?? 50,
@@ -1434,7 +1451,13 @@ class NPC {
                 _loveAccepted_confess: data.memory._loveAccepted_confess || false,
                 // F-18：送礼疲倦恢复
                 giftFatigue: data.memory.giftFatigue || 0,
-                lastGiftDay: data.memory.lastGiftDay || 0
+                lastGiftDay: data.memory.lastGiftDay || 0,
+                // v20.25/v20.30：日常小事重入日头恢复
+                _ambientLastDay: data.memory._ambientLastDay ? {...data.memory._ambientLastDay} : null,
+                // 深谈分支进度/选择史/记忆事件恢复
+                _branchState: data.memory._branchState ? JSON.parse(JSON.stringify(data.memory._branchState)) : null,
+                _choiceHistory: data.memory._choiceHistory ? JSON.parse(JSON.stringify(data.memory._choiceHistory)) : null,
+                _events: data.memory._events ? JSON.parse(JSON.stringify(data.memory._events)) : null
             };
         }
         if (data.state) {
@@ -2839,7 +2862,6 @@ function showCultivationGuide(npcId, guideType) {
             msg = '突破之道在于心境与积累，切忌急功近利。';
             if (aff >= 20 && cd) {
                 cd.tempering = (cd.tempering || 0) + 20;
-                // 设置突破buff（下次突破成功率+5%）
                 extraMsg = '历练+20';
             }
             break;
@@ -2854,8 +2876,7 @@ function showCultivationGuide(npcId, guideType) {
             msg = '战斗不在蛮力，而在先机与应变。';
             if (aff >= 20 && cd) {
                 cd.tempering = (cd.tempering || 0) + 15;
-                // 战斗心得buff
-                extraMsg = '历练+15（下次战斗攻击+5%）';
+                extraMsg = '历练+15';
             }
             break;
         case '灵根修炼':
@@ -2879,7 +2900,10 @@ function showCultivationGuide(npcId, guideType) {
             }
     }
     if (aff >= 20) {
-        showMessage('🧘 ' + npc.name + ' 为你讲解' + guideType + '：' + msg + (extraMsg ? '（' + extraMsg + '）' : ''), 'success');
+        // v20.24 兑现"请教要耗情谊"的旧承诺：教人的意愿是有限资源，每问一次折一层情面
+        // （配置里 affectionCost:10 此前从未落账——写价的没扣钱，如今价实相符）
+        if (typeof npc.changeAffection === 'function') npc.changeAffection(-10);
+        showMessage('🧘 ' + npc.name + ' 为你讲解' + guideType + '：' + msg + (extraMsg ? '（' + extraMsg + '，情面-10）' : ''), 'success');
         if (typeof window.updateCharacterStatus === 'function') {
             try { window.updateCharacterStatus(); } catch (e) {}
         }
@@ -2910,11 +2934,14 @@ if (cdD > 0) {
         showMessage(name + ' 的心绪还没平复，频繁提起反而生分。（冷却中）', 'warning');
         return false;
     }
-    npc.memory._loveCd[interactionType] = dayN;
 }
-if ((interactionType === 'intimate' || interactionType === 'bond_dao') && interactionType !== '__sect__') {
-    var isSectLeader = (npcId === 'sect_leader_修罗宫' || npcId === 'sect_leader_百花谷' || npcId === 'sect_leader_天山派' || npcId === 'sect_leader_五仙教' || npcId === 'sect_leader_铸剑山庄' || npcId === 'sect_leader_药王谷' || npcId === 'sect_leader_茅山派' || npcId === 'sect_leader_金刚宗');
-    if (!isSectLeader && !npc.memory._loveAccepted_confess) {
+// v20.25 冷却只记成功：旧版开一次口（哪怕被拒）就写 3/7 日冷却——被拒反而"安全"，
+// 攒够好感前反复试探零成本。现在：成的才记账；败的折情面（见 confess 分支）。
+var _markLoveCd = function () { if (cdD > 0) npc.memory._loveCd[interactionType] = dayN; };
+if (interactionType === 'intimate' || interactionType === 'bond_dao') {
+    // v20.25 掌门人豁免取消：执一教之旗也是血肉之躯，牵手也得先过了告白这一关——
+    // 旧版八位掌门可跳过告白直接亲密，关系递进没有门槛，情分贬值。
+    if (!npc.memory._loveAccepted_confess) {
         showMessage(name + ' 后退半步，眼神认真起来：「……我们还没到那一步。」', 'warning');
         return false;
     }
@@ -2933,11 +2960,11 @@ switch (interactionType) {
             else { showMessage(name + ' 婉拒：「下次吧。」', 'warning'); }
             break;
         case 'confess':
-        if (aff >= 60) { showMessage('💕 ' + name + ' 怔住了，随后低声道：「我……我需要时间考虑。」好感度+5', 'success'); npc.changeAffection(5); npc.changeLove(8); npc.memory._loveAccepted_confess = true; }
-        else { showMessage(name + ' 摇头：「我们不合适。」', 'warning'); }
+        if (aff >= 60) { showMessage('💕 ' + name + ' 怔住了，随后低声道：「我……我需要时间考虑。」好感度+5', 'success'); npc.changeAffection(5); npc.changeLove(8); npc.memory._loveAccepted_confess = true; _markLoveCd(); }
+        else { if (typeof npc.changeAffection === 'function') npc.changeAffection(-2); showMessage(name + ' 摇头：「我们不合适。」——这话砸在地上，两个人都僵了一瞬。（情面-2）', 'warning'); }
         break;
         case 'intimate':
-            if (aff >= 70) { showMessage('💕 你轻轻握住' + name + '的手，她没有拒绝。好感度+5', 'success'); npc.changeAffection(5); npc.changeLove(10); }
+            if (aff >= 70) { showMessage('💕 你轻轻握住' + name + '的手，' + (npc.gender === 'male' ? '他' : '她') + '没有拒绝。好感度+5', 'success'); npc.changeAffection(5); npc.changeLove(10); _markLoveCd(); }
             else { showMessage(name + ' 后退一步：「请自重。」', 'warning'); }
             break;
         case 'bond_dao':
@@ -2981,7 +3008,9 @@ switch (interactionType) {
                 showMessage('赫渊沉静地看你一眼，唇线紧抿——修闭口禅，不开口。', 'info');
                 break;
             }
-            if (aff >= 80) { showMessage('💕 ' + name + ' 郑重道：「天地为证，从今往后你我便是道侣！」好感度+10', 'success'); npc.changeAffection(10); npc.changeLove(20); npc.setFlag('dao_companion'); }
+            if (aff >= 80) { showMessage('💕 ' + name + ' 郑重道：「天地为证，从今往后你我便是道侣！」好感度+10', 'success'); npc.changeAffection(10); npc.changeLove(20); npc.setFlag('dao_companion'); _markLoveCd();
+                // v20.24 名册落笔：旗与册同源，双修/随行/护法/子嗣自此有据可依
+                if (window.ensureDaoBond) window.ensureDaoBond(npcId); }
             else { showMessage(name + ' 沉默片刻：「对不起，我还没准备好。」', 'warning'); }
             break;
     }
@@ -3177,9 +3206,6 @@ function showNPCDialog(npcId, screen = 'main') {
     // P1-6: 远程查看不记录见面/问候
     var isRemote = screen === 'remote';
     let greeting = ''; try { greeting = getGreeting(npc, { name: playerName }); } catch (e) { greeting = '你好。'; }
-    if (!isRemote && typeof npc.recordPlayerAction === 'function') {
-    // P1-6: 远程查看不记录见面/问候
-    var isRemote = screen === 'remote';
     if (!isRemote && typeof npc.recordPlayerAction === 'function') {
         if (!npc.memory.firstMet) npc.recordPlayerAction('first_meet', 'neutral');
         npc.recordPlayerAction('greet', 'neutral');
@@ -3381,7 +3407,13 @@ function showNPCDialog(npcId, screen = 'main') {
         ${occHtml ? `<div class="mt-3">${occHtml}</div>` : ''}
 
         <!-- 个人事件 -->
-        ${!isRemote && typeof window.getPersonalEventButtons === 'function' ? window.getPersonalEventButtons(npc, npcId) : ''}
+        ${typeof window.getPersonalEventButtons === 'function' ? window.getPersonalEventButtons(npc, npcId) : ''}
+
+        <!-- v20.5 介入恩怨：居中调停 / 添油加醋 / 澄清辟谣（远程给需亲至锁定） -->
+        ${typeof window.getInterventionButtons === 'function' ? window.getInterventionButtons(npc, npcId, isRemote) : ''}
+
+        <!-- v20.6 他们耳朵里你的风声：玩家传闻印象（无风声则整块不显） -->
+        ${typeof window.getPlayerRumorSection === 'function' ? window.getPlayerRumorSection(npc, npcId) : ''}
     </div>`;
     modal.innerHTML = html;
     document.body.appendChild(modal);
@@ -4317,4 +4349,3 @@ if (typeof window !== 'undefined') {
     window.checkNPCStorylines = checkNPCStorylines;
     window.showStorylineDialogue = showStorylineDialogue;
     }
-}

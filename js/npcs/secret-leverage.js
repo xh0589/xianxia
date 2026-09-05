@@ -366,15 +366,18 @@
             if (_st.hostile.indexOf(npc.id) < 0) _st.hostile.push(npc.id);
             if (typeof npc.setFlag === 'function') npc.setFlag('leverage_hostile');
             _st.used[key(npc.id, sid)] = 'used_coerce';
-            window.showMessage('💔 ' + (d.coerceRefuseMsg || '对方勃然变色，与你决裂。'), 'error');
+            // v20.25 锁门如实告知：私人线自此闭，情面养回五成前不会重开（门禁见 canPlayerAccessPersonalEvent）
+            window.showMessage('💔 ' + (d.coerceRefuseMsg || '对方勃然变色，与你决裂。') + '（其人的私人情谊线已锁——情面养回五成前，不会再单独见你。）', 'error');
         } else {
             var got = grantGain(npc, d.coerceGain);
             rel(npc, 'affection', TUNE.coerceAffectionHit, -100);
             rel(npc, 'trust', TUNE.coerceTrustFloor - (npc.relationship.trust || 0));
             rel(npc, 'respect', TUNE.coerceRespectHit);
+            // v20.37 威压账：要挟得手的一刻威压落账——顺从不是信服，是怕
+            rel(npc, 'fear', 15, 0, 100);
             if (npc.state) npc.state.mood = Math.max(5, (npc.state.mood || 50) + TUNE.coerceMoodHit);
             _st.used[key(npc.id, sid)] = 'used_coerce';
-            window.showMessage('🃏 ' + d.coerceMsg + '（获得：' + got + '；好感' + TUNE.coerceAffectionHit + '，信任归零）', 'success');
+            window.showMessage('🃏 ' + d.coerceMsg + '（获得：' + got + '；好感' + TUNE.coerceAffectionHit + '，信任归零，威压+15）', 'success');
             // 隐忍型NPC的记恨提示
             var b5 = npc.personalityBig5 || {};
             if ((b5.neuroticism != null ? b5.neuroticism : 50) >= 55) {

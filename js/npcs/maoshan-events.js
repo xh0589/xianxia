@@ -89,7 +89,8 @@ var MS_MAIN_EVENTS = {
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '「我陪你守。」坐下', effect: 'stay', affection: 8 },
                 { text: '「你不冷吗？我去拿件衣裳。」', effect: 'cloak', affection: 7 },
-                { text: '「你守了我几夜了？」', effect: 'howlong', affection: 6 }
+                { text: '「你守了我几夜了？」', effect: 'howlong', affection: 6 },
+                { text: '「被咒师守着，倒显得我是凶案在逃。」', effect: 'sneer', affection: -3 }
             ]}
         ],
         effects: function(npc, choice) {
@@ -98,6 +99,8 @@ var MS_MAIN_EVENTS = {
                 case 'stay': aff = 8; msg = '他看了你一眼，没赶你。「……行。」他往旁边挪了挪，给你让了廊下一个位。两人守了一夜，他左眼银光没灭，但他说：「你在，比桃木剑管用。」'; break;
                 case 'cloak': aff = 7; msg = '他接过衣裳，指尖顿了一下：「……我不冷。」但他披上了，「你倒记着我不冷。」他声音清冷，耳根却看不清颜色——暗里。'; break;
                 case 'howlong': aff = 6; msg = '他沉默一瞬：「……七月整月。」他没回头，「你每晚睡不着，我就守着。」——他守了你整整一个月，没让你知道。'; break;
+                // v20.25 真负选项：他把守夜当本分，你拿它当笑话——记账
+                case 'sneer': aff = -3; msg = '「哦。」他应了一声，再没下文。此后几夜，廊下空着——墓群那边照旧不平静，只是再没人替你守着门。'; break;
             }
             return { affection: aff, msg: msg };
         }
@@ -112,18 +115,21 @@ var MS_MAIN_EVENTS = {
             { speaker: 'npc', text: '「……那道，是替我师兄画的。」他声音清冷，「三年前他伏魔，魂散了。我画渡魂符想替他聚——画了三年，画不成。」' },
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '「他魂散了，你渡不了。」', effect: 'truth', affection: 7 },
-                { text: '「我帮你画。」', effect: 'help', affection: 8 },
-                { text: '把符折好还他', effect: 'return', affection: 6 }
+                { text: '「我帮你画。」', effect: 'help', affection: 6 },
+                { text: '把符折好还他', effect: 'return', affection: 6 },
+                { text: '「画了三年的废纸，烧了吧。」', effect: 'scorn', affection: -5 }
             ]}
         ],
         effects: function(npc, choice) {
-            var aff = 0, msg = '';
+            var aff = 0, msg = '', item = null;
             switch (choice) {
                 case 'truth': aff = 7; msg = '他闭眼：「……我知道。」许久，「可画着，就觉得他还在。」他睁眼，左眼银光里有点红，「你看得清，比我自己清。」'; break;
-                case 'help': aff = 8; msg = '他看了你很久：「……你画不来符。」但他把笔递你，「你握笔，我执手。」——那一夜，他握着你的手，画完了那道符。没渡成，但他画完了。'; break;
+                case 'help': aff = 6; item = 'tal_shield'; msg = '他看了你很久：「……你画不来符。」但他把笔递你，「你握笔，我执手。」——那一夜，他握着你的手，画完了那道符。没渡成，但他画完了。临走一张护身符塞进你袖口：「这类符我平日不画。画了，怕你走夜路。」'; break;
                 case 'return': aff = 6; msg = '他接过符，指尖摩挲那道没画完的线。「……谢了。」他把它压回镇纸下——和那些渡过的游魂的空符放在一起。'; break;
+                // v20.25 真负选项：那是他给亡师兄留的念想，一句"废纸"戳的是三年
+                case 'scorn': aff = -5; msg = '他没发怒。他只是把那张符从你手里抽回去，动作轻得像怕纸疼，然后压好镇纸，背过身去：「……出去。」那一夜符箓阁的灯亮到天明，灯下只有他一个人。'; break;
             }
-            return { affection: aff, msg: msg };
+            return { affection: aff, msg: msg, item: item };
         }
     },
     'ms_event_006': {
@@ -136,16 +142,16 @@ var MS_MAIN_EVENTS = {
             { speaker: 'npc', text: '「不怕。」他声音清冷，「我七岁死过一次。死没什么可怕的——黑，然后有人喊你回来。」' },
             { speaker: 'npc', text: '「我怕的是活人。」他抬眼，左眼银光里映着你，「鬼要走的，我能渡。活人不走，我渡不了——你，就是那个不走的。」' },
             { speaker: 'player_select', text: '你如何回应？', options: [
-                { text: '「我不走。你渡不了，就别渡。」', effect: 'stay', affection: 9 },
-                { text: '「那你怕我，还是怕自己？」', effect: 'probe', affection: 7 },
+                { text: '「我不走。你渡不了，就别渡。」', effect: 'stay', affection: 7 },
+                { text: '「那你怕我，还是怕自己？」', effect: 'probe', affection: 10 },
                 { text: '「我也怕活人。怕你。」', effect: 'fear', affection: 8 }
             ]}
         ],
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'stay': aff = 9; msg = '他怔了很久，左眼银光动了一下：「……行。」他低头继续磨朱砂，「你不走，我就不渡。我守着——比守古墓群上心。」'; break;
-                case 'probe': aff = 7; msg = '他沉默半晌：「……都怕。」他没看你，「怕你走，更怕你为我不走。我守了一辈子魂，头一回，想守个活人。」'; break;
+                case 'stay': aff = 7; msg = '他怔了很久，左眼银光动了一下：「……行。」他低头继续磨朱砂，「你不走，我就不渡。我守着——比守古墓群上心。」'; break;
+                case 'probe': aff = 10; msg = '他沉默半晌：「……都怕。」他没看你，「怕你走，更怕你为我不走。我守了一辈子魂，头一回，想守个活人。」'; break;
                 case 'fear': aff = 8; msg = '他罕见地笑了一下，清冷里裂一线暖：「……你怕我？」他收了朱砂，「那你跑啊。」——他没动，但他知道你不会跑。'; break;
             }
             return { affection: aff, msg: msg };
@@ -163,7 +169,7 @@ var MS_MAIN_EVENTS = {
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '「被丢回来，是因为还有人等你。」', effect: 'wait', affection: 9 },
                 { text: '「你不该一个人守这些。」', effect: 'share', affection: 8 },
-                { text: '坐他旁边，肩挨肩', effect: 'sit', affection: 10 }
+                { text: '坐他旁边，肩挨肩', effect: 'sit', affection: 12 }
             ]}
         ],
         effects: function(npc, choice) {
@@ -171,7 +177,9 @@ var MS_MAIN_EVENTS = {
             switch (choice) {
                 case 'wait': aff = 9; msg = '他看了你很久，银光里第一次没在渡魂：「……你说对了。」他声音轻，「我守了二十年，等的就是这个。」——等的不是魂，是有人跟他说一句，被丢回来，是因为有人等。'; break;
                 case 'share': aff = 8; msg = '他点头：「……行。」他往旁边挪了挪，给你让位，「你守着我——我守着墓群。今晚换班。」他罕见地，有了点人气。'; break;
-                case 'sit': aff = 10; msg = '你没说话，坐他旁边。他没动，许久，肩靠过来一点点——很轻。「……你不怕黑。」他说。「有你在，我也不怕了。」'; break;
+                case 'sit': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 5; msg = '三更的灯花爆了一次，你先闭了眼。醒来人已在廊下，肩头搭着他的外氅。（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 12; msg = '你没说话，坐他旁边。他没动，许久，肩靠过来一点点——很轻。「……你不怕黑。」他说。「有你在，我也不怕了。」' + '（精力-15）'; break; }
             }
             return { affection: aff, msg: msg };
         }
@@ -186,7 +194,7 @@ var MS_MAIN_EVENTS = {
             { speaker: 'npc', text: '「……这道，是给你画的。」他声音清冷，但没赶你，「渡魂符。我画了一道，防着——万一你走在前头。」' },
             { speaker: 'npc', text: '「我渡了一辈子魂。若是你，」他抬眼，银光里映着你，「我不让你迷路。」' },
             { speaker: 'player_select', text: '你如何回应？', options: [
-                { text: '「那我走在后头。你先走，我渡你。」', effect: 'reverse', affection: 10 },
+                { text: '「那我走在后头。你先走，我渡你。」', effect: 'reverse', affection: 12 },
                 { text: '「我们都不先走。一起走。」', effect: 'together', affection: 9 },
                 { text: '接过那道符，收好', effect: 'take', affection: 8 }
             ]}
@@ -194,7 +202,9 @@ var MS_MAIN_EVENTS = {
         effects: function(npc, choice) {
             var aff = 0, msg = '';
             switch (choice) {
-                case 'reverse': aff = 10; msg = '他怔住，银光里第一次有了水色——又压下去。「……你渡不了我。你没阴阳眼。」他顿了顿，「但你肯——这一句，比符管用。」'; break;
+                case 'reverse': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 5; msg = '你撑到一半就伏在案上睡了过去，剩下的时辰，是他一个人渡的。（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 12; msg = '他怔住，银光里第一次有了水色——又压下去。「……你渡不了我。你没阴阳眼。」他顿了顿，「但你肯——这一句，比符管用。」' + '（精力-15）'; break; }
                 case 'together': aff = 9; msg = '他看了你很久，半晌：「……行。」他把那道符折好，塞进你袖里，「一起走。走远了，我替你画符——你替我留灯。」'; break;
                 case 'take': aff = 8; msg = '他看你把符收进最贴身的地方，左眼银光敛了：「……你收着。」他低头继续画下一道，「我给你画的，不止这一道。」'; break;
             }
@@ -209,7 +219,7 @@ var MS_MAIN_EVENTS = {
         scenes: [
             { speaker: 'narrator', text: '符箓阁。昴既明把一道金边符推到你面前——不是渡魂符，是护身符，朱砂画成，比往日浓。', type: 'description' },
             { speaker: 'npc', text: '「画成了。」他声音清冷，但银光里映着你，「我渡了二十年魂。头一回，画一道护活人的符。」' },
-            { speaker: 'npc', text: '「{playerName}。」他把符推向你，「这道符，连同画符的人，你要不要？」' },
+            { speaker: 'npc', text: '「{playerName}。」他把符推向你，朱砂还没干透，「符胆里押着我的名讳。符烧成灰，名讳也归你。」' },
             { speaker: 'player_select', text: '你的选择将决定你们的关系走向', options: [
                 { text: '「要。我带你下山——伏魔渡魂，哪里有邪祟就去哪里。」', effect: 'lover_travel', affection: 30 },
                 { text: '「要。但哪儿也不去。我留在茅山，陪你守每一道符。」', effect: 'lover_stay', affection: 28 },
@@ -218,8 +228,9 @@ var MS_MAIN_EVENTS = {
             ]}
         ],
         effects: function(npc, choice) {
+            // v20.25 门槛 5→3：三度伤透即寒心（旧 5 门槛对本线数学不可达，坏结局形同虚设）
             var negCount = (window._negativeChoiceCount && window._negativeChoiceCount[MS_NPC_ID]) || 0;
-            if (negCount >= 5 && (choice === 'lover_travel' || choice === 'lover_stay')) {
+            if (negCount >= 3 && (choice === 'lover_travel' || choice === 'lover_stay')) {
                 return { affection: 0, msg: '他看着你，银光渐灭：「……我画了二十年，等的是这么一句。」他把那道护身符收回，朱砂被他亲手抹去。「你走吧。这道符，我留着自己画。」', ending: '错过' };
             }
             switch (choice) {
@@ -237,7 +248,7 @@ var MS_ENDINGS = {
     'ms_ending_符箓同道': {
         id: 'ms_ending_符箓同道', npcId: MS_NPC_ID, title: '结局·符箓同道', icon: '🪔', route: '符箓同道',
         scenes: [
-            { speaker: 'narrator', text: '三日后，昴既明把伏魔首席之印交还茅山老祖。', type: 'description' },
+            { speaker: 'narrator', text: '三日后，昴既明把伏魔首席之印封进木匣送还茅山，匣底压了张字条：符在人间，画符的人不回了。三日后老祖回了一符，只四个字——「符好人坏」。', type: 'description' },
             { speaker: 'npc', text: '「符阁托付给您了。」他背一道桃木剑，跟你并肩下山，「我自个儿，就是一道符。」' },
             { speaker: 'narrator', text: '多年后，江湖有「阴阳双符」的传说：一道渡魂，一道护人。专渡迷路的、护不该死的。', type: 'description' },
             { speaker: 'narrator', text: '有人见过他们在荒村的夜里歇脚。他难得没开阴阳眼，靠在{playerTa}肩上打了个盹——桃木剑搁在脚边，朱砂干透。他不渡了，因为要护的人在身边。', type: 'description' }
