@@ -117,7 +117,8 @@ let partyData = {
     formation: 'default',  // 阵型
     battleLog: [],         // 战斗日志
     totalBattles: 0,       // 总战斗数
-    wonBattles: 0          // 获胜战斗数
+    wonBattles: 0,         // 获胜战斗数
+    fallen: []             // v20.64 阵亡名录（战死的队员除名后记在这里）
 };
 
 // ============ 阵型定义 ============
@@ -214,6 +215,7 @@ function initPartySystem() {
             partyData.leaderId = parsed.leaderId || null;
             partyData.formation = parsed.formation || 'default';
             partyData.battleLog = parsed.battleLog || [];
+            partyData.fallen = Array.isArray(parsed.fallen) ? parsed.fallen : [];   // v20.64 阵亡名录随档走
             partyData.totalBattles = parsed.totalBattles || 0;
             partyData.wonBattles = parsed.wonBattles || 0;
             // 确保所有成员都是PartyMember实例
@@ -539,6 +541,18 @@ function updatePartyUI() {
     const formationSelect = document.getElementById('formation-select');
     if (formationSelect) {
         formationSelect.value = partyData.formation;
+    }
+    // v20.64 阵亡名录：战死的人该有个去处，不该像从没存在过
+    const fallenList = document.getElementById('party-fallen-list');
+    if (fallenList) {
+        const fallen = partyData.fallen || [];
+        if (!fallen.length) {
+            fallenList.innerHTML = '';
+        } else {
+            fallenList.innerHTML = '<p class="text-[10px] text-gray-500 mt-2 mb-1">⚰️ 阵亡名录</p>' + fallen.slice(-8).map(f =>
+                `<p class="text-xs text-gray-400">• ${f.name}（${f.level} 级 · ${f.cause || '战死'}）</p>`
+            ).join('');
+        }
     }
     // v12.3.1：阵型加成数值展示
     updateFormationBonusDisplay();
@@ -1024,22 +1038,25 @@ function partyRandomChoice(arr) {
 
 // ==================== P2：战后关系记忆系统 ====================
 // 根据玩家在战斗中的行为（保护、抛弃、救助）更新与队员的关系记忆
+// v20.64：battleLastTakenDamage 现在真有人写了（battle.js _notePartyDamage）；
+// 阵亡判定改用 _diedThisBattle（旧写法 !member.isAlive 比的是函数对象，永远不触发）；
+// 由 finalizeBattleOutcome 统一调用——打赢、打输、逃走都要结算，不再只认胜利。
 
 function processPostBattleRelationships(battle) {
-    if (!battle || !partyData.members.length) return;
-    
+    if (!battle) return;
+
     // 检查是否有队员在战斗中受伤或死亡
     partyData.members.forEach(member => {
         if (member.battleLastTakenDamage > 0) {
             // 队员受伤了，玩家应该给予关注
             const damageTaken = member.battleLastTakenDamage;
             const healthAfter = member.health;
-            
+
             // 如果玩家没有主动治疗，关系会下降
             if (healthAfter < member.maxHealth * 0.5 && damageTaken > 50) {
                 // 严重受伤且未治疗 - 关系下降
                 member.relationship.affection = Math.max(-100, member.relationship.affection - 10);
-                
+
                 member.recordPlayerAction('abandoned_in_battle', 'negative');
                 addBattleLog(`${member.name} 在战斗中受伤严重，感到被抛弃`, 'warning');
             } else if (damageTaken > 30) {
@@ -1047,23 +1064,67 @@ function processPostBattleRelationships(battle) {
                 member.relationship.affection = Math.max(-100, member.relationship.affection - 5);
                 member.recordPlayerAction('hurt_in_battle', 'neutral');
             }
-            
+
             // 重置伤害标记
             member.battleLastTakenDamage = 0;
         }
-        
-        // 检查队员是否在战斗中死亡（已移除队伍）
-        if (!member.isAlive && partyData.members.includes(member)) {
-            // 队员死亡 - 关系大幅下降
-            member.relationship.affection = Math.max(-100, member.relationship.affection - 20);
-            
-            member.recordPlayerAction('member_died_in_battle', 'negative');
-            addBattleLog(`${member.name} 在战斗中倒下，你感到非常内疚`, 'error');
-        }
     });
-    
-    // 保存更新后的数据
+
+    // 队员战死：关系大幅下降（看的是本场是否真倒了，不是函数对象）
+    const fallen = partyData.members.filter(m => m._diedThisBattle);
+    fallen.forEach(member => {
+        member.relationship.affection = Math.max(-100, member.relationship.affection - 20);
+        member.recordPlayerAction('member_died_in_battle', 'negative');
+        addBattleLog(`${member.name} 在战斗中倒下，你感到非常内疚`, 'error');
+    });
+
     savePartyData();
+    return fallen;
+}
+
+// ==================== v20.64 战后统一结算 ====================
+// 胜利/失败/逃走都走这一道，把「队员死了」从一句 health=0 变成真的有后事：
+//   · 阵亡者从队伍名单移除，进阵亡名录（fallen），不喂一口血就满状态归队
+//   · 牺牲阵（sacrifice）兑现承诺：阵亡者的力气筋骨分给活下来的人
+//   · 战后关系记忆一并结算（任何结局都算数）
+function finalizeBattleOutcome(battle) {
+    if (!battle) return { fallen: [], transfer: null };
+    const fallenRefs = partyData.members.filter(m => m._diedThisBattle);
+    if (!fallenRefs.length) {
+        processPostBattleRelationships(battle);   // 没死人也要算受伤这笔账
+        return { fallen: [], transfer: null };
+    }
+
+    // 牺牲阵：队员死亡后属性转移给存活队员（此前只是阵型描述里的一句空话）
+    let transfer = null;
+    if (partyData.formation === 'sacrifice') {
+        const survivors = partyData.members.filter(m => !m._diedThisBattle);
+        if (survivors.length) {
+            const share = fallenRefs.length / survivors.length;
+            survivors.forEach(s => {
+                const carry = Math.max(1, Math.round((s.level || 1) * 0.3 * share));
+                s.attributes.strength = Math.min(99, (s.attributes.strength || 10) + carry);
+                s.attributes.constitution = Math.min(99, (s.attributes.constitution || 10) + carry);
+            });
+            transfer = { from: fallenRefs.map(m => m.name), to: survivors.length };
+            addBattleLog(`💀 ${fallenRefs.map(m => m.name).join('、')}的遗志由余下的人担了起来`, 'warning');
+        }
+    }
+
+    // 除名入名录
+    if (!Array.isArray(partyData.fallen)) partyData.fallen = [];
+    fallenRefs.forEach(m => {
+        partyData.fallen.push({
+            name: m.name, level: m.level || 1,
+            diedAt: Date.now(), cause: '战死'
+        });
+    });
+    partyData.members = partyData.members.filter(m => !m._diedThisBattle);
+
+    processPostBattleRelationships(battle);
+    savePartyData();
+    updatePartyUI();
+    return { fallen: fallenRefs.map(m => m.name), transfer: transfer };
 }
 
 // ==================== 增强 PartyMember 类以支持战斗伤害追踪 ====================
@@ -1120,6 +1181,7 @@ window.partySystem = {
     FORMATIONS,
     partyData,
     processPostBattleRelationships: processPostBattleRelationships,
+    finalizeBattleOutcome: finalizeBattleOutcome,
     // ===== Step 3：位置同步函数 =====
     syncPartyLocationToPlayer: function(newLocation) {
         if (!window.npcManager || !partyData) return;

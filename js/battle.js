@@ -1543,6 +1543,37 @@ function _humanoidSubWeight(sub, level) {
     return sub.weight || 0;
 }
 
+// ==================== v20.64 队员出手：伤害类型跟着他自己的本事走 ====================
+// 此前队员永远普攻 slash——练剑的练刀的使拳的都是同一个砍法。这里从他的战斗技能/兵刃推。
+const _MEMBER_SKILL_DTYPE = {
+    '剑法': 'slash', '刀法': 'slash',
+    '长兵': 'blunt', '拳掌': 'blunt',
+    '射术': 'pierce', '奇门': 'pierce'
+};
+function _memberDamageType(member) {
+    if (!member) return 'slash';
+    // 兵刃优先（队员身上真挂着兵器就按兵刃来）
+    try {
+        var eq = member._partyMemberRef && member._partyMemberRef.equipment;
+        var w = eq && (eq.mainHand || eq.weapon);
+        var wid = w && (w.templateId || w.id || w);
+        var tpl = wid && (window.itemById || {})[wid];
+        var dt = (w && w.damageType) || (tpl && tpl.damageType);
+        if (dt === 'sharp') dt = 'slash';
+        if (dt === 'slash' || dt === 'blunt' || dt === 'pierce') return dt;
+    } catch (e) {}
+    // 没兵器就看练的是什么
+    var best = null, bestVal = -1;
+    var sk = (member.skills || {});
+    for (var name in _MEMBER_SKILL_DTYPE) {
+        if (Object.prototype.hasOwnProperty.call(sk, name) && sk[name] > bestVal) {
+            bestVal = sk[name]; best = _MEMBER_SKILL_DTYPE[name];
+        }
+    }
+    return best || 'blunt';   // 什么都没练：赤手空拳，是砸不是砍
+}
+
+
 // ==================== v17.0 战斗挑战梯度：词缀层 + 具名强敌 ====================
 // 设计（用户明令）：平衡靠新增更强的敌人，禁止全局数值缩放。
 // 词缀=修饰器思路（暗黑系共识）：只挂野外人形敌，属性倍率+额外绝技抽数+精英级掉落；
@@ -1948,7 +1979,7 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
 
 // ---------- 战斗类 ----------
 class Battle {
-    constructor(playerEntity, enemyEntity) {
+    constructor(playerEntity, enemyEntity, enemyAllies) {
         this.player = playerEntity;
         this.enemy = enemyEntity;
         this.turn = 0;
@@ -1958,6 +1989,12 @@ class Battle {
         this.log = [];
         this.onUpdate = null;
         this.onEnd = null;
+        // v20.64 队伍指令（assault 强攻 / cover 掩护 / guard 自保），UI 可切
+        this.partyOrder = 'assault';
+        // v20.64 生理结算按回合记账：一轮（玩家→敌→同伴→队员→灵兽）全场每人只走 6 秒
+        this._physTicked = false;
+        // v20.64 被打倒的敌方（主敌倒下后枪口转向同伴，倒下的记在这里，战后一并标尸）
+        this._fallenEnemies = [];
         // 出战灵兽作为盟友
         this.allyBeast = null;
         try {
@@ -2025,6 +2062,39 @@ class Battle {
             console.warn('[Battle] 加载队伍成员失败:', e);
         }
 
+        // ===== v20.64 敌方一组：兽群/同伙一起进场，不再是「几只一起围上来」的空话 =====
+        // 主敌仍是玩家锁定与战利品的对象；同伴每轮也动手，倒下了由下一只补位。
+        // 同伴不带战利品（exp/copper 全 0）——人多不该让赏钱翻倍。
+        this.enemyAllies = [];
+        try {
+            var alliesIn = Array.isArray(enemyAllies) ? enemyAllies : [];
+            var headLvl = (this.enemy && this.enemy.level) || 1;
+            for (var ai = 0; ai < alliesIn.length && this.enemyAllies.length < 3; ai++) {
+                var raw = alliesIn[ai];
+                var ad = raw && raw.data ? raw.data : raw;
+                if (!ad || ad.isCorpse || ad.isDead || ad.dead) continue;
+                var allyAttrs = ad.attrs || { strength: 10, dexterity: 10, intelligence: 10, willpower: 10, constitution: 10, meridian: 10 };
+                var allyEntity = new Entity({
+                    name: ad.name || '同伙',
+                    level: Math.max(ad.level || 1, headLvl),   // 同伙跟头兽一个量级，不然围上来只是来送死
+                    faction: ad.faction || '中立',
+                    sect: ad.sect || '散修',
+                    attrs: allyAttrs,
+                    skills: ad.skills || {},
+                    durabilities: ad.durabilities || initBodyDurability(allyAttrs),
+                    loot: { exp: 0, copper: 0 },
+                    aiBehavior: ad.aiBehavior || 'aggressive',
+                }, (raw && raw.type === 'beast') || ad.type === 'beast' ? 'beast' : 'enemy');
+                if (raw && raw.uid) allyEntity._mapEntity = raw;   // 战后按引用标尸，不靠名字猜
+                this.enemyAllies.push(allyEntity);
+            }
+            if (this.enemyAllies.length > 0) {
+                this.log.push({ msg: '⚔️ ' + this.enemyAllies.length + ' 个同伙跟着一起围了上来！' });
+            }
+        } catch (eAlly) {
+            console.warn('[Battle] 敌方同伴入场失败:', eAlly);
+        }
+
         // ===== v13.0 开战播报：敌方持有战斗技能时明示牌面（名字从 COMBAT_ABILITIES 取），玩家可据此决定战术 =====
         try {
             var enemyAbilities = (this.enemy && Array.isArray(this.enemy.combatAbilities)) ? this.enemy.combatAbilities : [];
@@ -2053,6 +2123,7 @@ class Battle {
         if (this.isFinished || !this.isPlayerTurn) return false;
         if (!this.enemy.isAlive) return false;
         this._tickMoveCD();
+        this._physTicked = false;   // v20.64 玩家动手即开新一轮
         let damageType = 'blunt';
         try {
             if (typeof window.resolveWeaponDamageType === 'function') {
@@ -2088,6 +2159,7 @@ class Battle {
         if (this.isFinished || !this.isPlayerTurn) return false;
         if (!this.enemy.isAlive) return false;
         this._tickMoveCD();
+        this._physTicked = false;   // v20.64 玩家动手即开新一轮
         // 1.2 CD制：强力招式用后有冷却，防刷
         var _cdKey = move.moveId || move.id;
         if (this._moveCD && this._moveCD[_cdKey] > 0) {
@@ -2261,27 +2333,18 @@ class Battle {
         }
 
         // ===== 修复6：敌人可攻击队员 =====
-        // 收集所有可攻击目标（玩家+灵兽+队员）
-        var possibleTargets = [this.player];
-        if (this.allyBeast && this.allyBeast.isAlive) possibleTargets.push(this.allyBeast);
-        // 加入存活的队员
-        var alivePartyMembers = this.partyMembers.filter(function(m) { return m.isAlive; });
-        alivePartyMembers.forEach(function(m) { possibleTargets.push(m); });
+        // v20.64：目标选择收进 _pickPlayerSideTarget，队员/灵兽权重均分（不再灵兽独吃 20%）
+        var attackTarget = this._pickPlayerSideTarget(playerTargetBias);
 
-        // 随机选择目标（v12.8 行为偏置：默认玩家33%/灵兽20%/队员平分；狂战提高至50%）
-        var attackTarget = this.player;
-        if (possibleTargets.length > 1) {
-            var roll = Math.random();
-            if (roll < playerTargetBias || possibleTargets.length === 1) {
-                attackTarget = this.player;
-            } else if (roll < playerTargetBias + 0.20 && this.allyBeast && this.allyBeast.isAlive) {
-                attackTarget = this.allyBeast;
-            } else {
-                // 从队员中随机选一个
-                var aliveTargets = possibleTargets.filter(function(t) { return t !== this.player && t !== this.allyBeast; }.bind(this));
-                if (aliveTargets.length > 0) {
-                    attackTarget = aliveTargets[Math.floor(Math.random() * aliveTargets.length)];
-                }
+        // ===== v20.64 掩护指令：有人站出来挡在你身前 =====
+        if (attackTarget === this.player) {
+            var cover = (this.partyMembers || []).filter(function (m) {
+                return m.isAlive && m._partyOrder === 'cover';
+            });
+            if (cover.length > 0 && Math.random() < cover.length / (cover.length + 1)) {
+                var shield = cover[Math.floor(Math.random() * cover.length)];
+                this.log.push({ msg: '🛡️ ' + shield.name + ' 抢步挡在你身前！' });
+                attackTarget = shield;
             }
         }
 
@@ -2314,10 +2377,14 @@ class Battle {
                 return Math.max(1, Math.floor(base * painPenalty));
             };
         }
-        const result = this._executeAttack(enemy, attackTarget, selectedPart, enemyDamageType);
-        // 恢复原始攻击
-        if (painPenalty < 1) {
-            enemy.getAttack = origGetAttack;
+        // v20.64 补丁必须保证还原：_executeAttack 一旦抛错，原来会把减伤补丁永久留在敌人身上
+        let result;
+        try {
+            result = this._executeAttack(enemy, attackTarget, selectedPart, enemyDamageType);
+        } finally {
+            if (painPenalty < 1) {
+                enemy.getAttack = origGetAttack;
+            }
         }
         this.log.push(result);
         if (attackTarget !== this.player && attackTarget.isAlive === false) {
@@ -2328,23 +2395,35 @@ class Battle {
             }
         }
         this.turn++;
+        // v20.64 敌方同伴也动手（兽群是真的几只一起围上来）
+        this._enemyAlliesAct();
         // 每回合末处理生理
         this._processRoundPhysiology();
         if (this._checkEnd()) return;
         
         // ===== 修复6：队员自动攻击 =====
-        // 所有存活队员自动攻击敌人
+        // 队员按本场的队伍指令行动（v20.64：不再人人无脑普攻 slash）
         if (this.enemy && this.enemy.isAlive) {
             var aliveMembers = this.partyMembers.filter(function(m) { return m.isAlive; });
             for (var mi = 0; mi < aliveMembers.length; mi++) {
                 var member = aliveMembers[mi];
-                var mPart = targetParts[Math.floor(Math.random() * targetParts.length)];
-                var mResult = this._executeAttack(member, this.enemy, mPart, 'slash');
-                // 同步回PartyMember的health
-                if (member._partyMemberRef) {
-                    member._partyMemberRef.health = member.health != null ? member.health : member._partyMemberRef.health;
+                var order = member._partyOrder || this.partyOrder || 'assault';
+                if (order === 'guard') {
+                    // 自保：先把自己身上最重的血止住，没血可止就摆守御架势
+                    var gmsg = this._memberSelfPreserve(member);
+                    if (gmsg) this.log.push(gmsg);
+                } else if (order === 'cover') {
+                    // 掩护：不抢人头，凝神戒备（敌侧选目标时已会优先咬他）
+                    this.log.push({ msg: '🛡️ ' + member.name + ' 戒备着，护在你侧翼' });
+                } else {
+                    var mPart = targetParts[Math.floor(Math.random() * targetParts.length)];
+                    var mResult = this._executeAttack(member, this.enemy, mPart, _memberDamageType(member));
+                    // 同步回PartyMember的health
+                    if (member._partyMemberRef) {
+                        member._partyMemberRef.health = member.health != null ? member.health : member._partyMemberRef.health;
+                    }
+                    this.log.push(mResult);
                 }
-                this.log.push(mResult);
                 this.turn++;
                 this._processRoundPhysiology();
                 if (this._checkEnd()) return;
@@ -2378,13 +2457,88 @@ class Battle {
     }
 
     // 每回合末处理生理
+    // ===== v20.64 目标选择（玩家侧）=====
+    // 玩家仍占大头，灵兽与队员权重均分——不再「灵兽独吃 20%，队员四个人分剩下的」
+    _pickPlayerSideTarget(playerBias) {
+        var targets = [this.player];
+        if (this.allyBeast && this.allyBeast.isAlive) targets.push(this.allyBeast);
+        (this.partyMembers || []).forEach(function (m) { if (m.isAlive) targets.push(m); });
+        if (targets.length <= 1) return this.player;
+        if (Math.random() < playerBias) return this.player;
+        var others = targets.filter(function (t) { return t !== this.player; }, this);
+        return others[Math.floor(Math.random() * others.length)];
+    }
+
+    // ===== v20.64 敌方同伴动手 =====
+    // 兽群是真的几只一起围上来：主敌行动后，每只存活的同伴也出手一次。
+    // 同伴不走主敌那套自救/遁逃/守御的高级行为——它们是兽群与杂兵，只管扑上来。
+    _enemyAlliesAct() {
+        if (this.isFinished || !this.player.isAlive) return;
+        var allies = (this.enemyAllies || []).filter(function (a) { return a && a.isAlive; });
+        if (!allies.length) return;
+        for (var i = 0; i < allies.length; i++) {
+            if (!this.enemy || !this.enemy.isAlive) break;   // 玩家这边已经了账
+            var ally = allies[i];
+            var target = this._pickPlayerSideTarget(0.22);
+            // 掩护指令同样拦得住同伴
+            if (target === this.player) {
+                var cover = (this.partyMembers || []).filter(function (m) { return m.isAlive && m._partyOrder === 'cover'; });
+                if (cover.length > 0 && Math.random() < cover.length / (cover.length + 1)) {
+                    target = cover[Math.floor(Math.random() * cover.length)];
+                }
+            }
+            var parts = PART_IDS;
+            var part = parts[Math.floor(Math.random() * parts.length)];
+            var dtype = ally.damageType === 'sharp' ? 'slash' : (ally.damageType || 'slash');
+            var r = this._executeAttack(ally, target, part, dtype);
+            this.log.push(r);
+            if (target !== this.player && target.isAlive === false) {
+                this.log.push({ msg: target === this.allyBeast
+                    ? '🐾 灵兽不支倒地，退出本场战斗'
+                    : '👥 队员「' + target.name + '」被击败！' });
+            }
+            this.turn++;
+            if (this._checkEnd()) return;
+        }
+    }
+
+    // ===== v20.64 队员自保 =====
+    // 先把自己身上最重的血止住；没血可止就摆守御架势（下轮挨打少受些）
+    _memberSelfPreserve(member) {
+        try {
+            if (typeof bandageWound === 'function' && member.physiology) {
+                var wounds = (member.physiology.wounds || []).filter(function (w) { return w.bleeding; });
+                if (wounds.length) {
+                    wounds.sort(function (a, b) { return (b.externalBleedRate || 0) - (a.externalBleedRate || 0); });
+                    if (bandageWound(member, wounds[0].id)) {
+                        return { msg: '🩹 ' + member.name + ' 退开半步，急忙包扎了自己的伤口' };
+                    }
+                }
+            }
+        } catch (eBd) {}
+        member._guardTurns = 1;
+        return { msg: '🛡️ ' + member.name + ' 收势自守，摆开架势护住要害' };
+    }
+
+    // 每回合末处理生理
+    // v20.64 按回合记账：此前每个动作后都对全场结算一遍 6 秒生理——独闯一轮每人走 12 秒，
+    // 带 3 个队员走 30 秒，队伍越大全场流血/疼痛/毒素越快。现在一轮（玩家→敌→同伴→队员→灵兽）
+    // 全场每人只走 6 秒，玩家的动作标志着一轮的开始。
     _processRoundPhysiology() {
+        if (this._physTicked) return;
+        this._physTicked = true;
         try {
             if (typeof processPhysiology === 'function') {
                 processPhysiology(this.player, 6);
                 processPhysiology(this.enemy, 6);
                 if (this.allyBeast && this.allyBeast.isAlive) {
                     processPhysiology(this.allyBeast, 6);
+                }
+                // 敌方同伴也走生理
+                for (var ei = 0; ei < (this.enemyAllies || []).length; ei++) {
+                    if (this.enemyAllies[ei] && this.enemyAllies[ei].isAlive) {
+                        processPhysiology(this.enemyAllies[ei], 6);
+                    }
                 }
                 // 修复6：队员的生理处理
                 for (var pi = 0; pi < this.partyMembers.length; pi++) {
@@ -2708,6 +2862,12 @@ class Battle {
             ? window.getDerivedCombatStats(defender)
             : { counter: 0 };
         var rate = dStats.counter || 0;
+        // v20.64 队员也会还手：派生表的反击率只按兵器技能算（队员几乎没有），
+        // 队员的反击改从身法里来——手脚麻利的人挨了一刀，总有机会回敬一下
+        if (rate <= 0 && defender._partyMemberRef) {
+            var cdDex = (defender.getEffectiveAttrs ? defender.getEffectiveAttrs().dexterity : 10) || 10;
+            rate = Math.max(0, Math.min(15, (cdDex - 10) * 0.8));
+        }
         if (rate <= 0 || Math.random() * 100 >= rate) return null;
         var dmg = Math.max(1, Math.floor(this._calculateDamage(defender, attacker, 0) * 0.5));
         // 反击打随机非致命部位简化：胸
@@ -2844,6 +3004,7 @@ class Battle {
                 : Math.min(0.7, 0.5 + defenderToughness * 0.005);
             damage = Math.floor(damage * (1 - blockReduction));
             const actual = defender.takeDamage(partId, Math.max(1, damage), damageType);
+            this._notePartyDamage(defender, actual);
             const afterBlock = this._applyOnHitAftermath(attacker, defender, actual);
             let msg = `${defender.name} 格挡了攻击！受到 ${actual} 点伤害${afterBlock}`;
             if (!defender.isAlive) msg += ` ${defender.name} 被击败！`;
@@ -2861,6 +3022,7 @@ class Battle {
             let damage = this._calculateDamage(attacker, defender, penetrate);
             damage = Math.floor(damage * 0.7);
             const actual = defender.takeDamage(partId, Math.max(1, damage), damageType);
+            this._notePartyDamage(defender, actual);
             const afterParry = this._applyOnHitAftermath(attacker, defender, actual);
             let msg = `${defender.name} 化解了部分伤害！受到 ${actual} 点伤害${afterParry}`;
             var c2 = this._tryCounter(defender, attacker, partId);
@@ -2928,6 +3090,7 @@ class Battle {
         }
 
         const actual = defender.takeDamage(partId, Math.max(1, damage), damageType);
+        this._notePartyDamage(defender, actual);
         const partLabel = BODY_PARTS.find(p => p.id === partId)?.label || partId;
         let msg = `${attacker.name} 攻击了 ${defender.name} 的 ${partLabel}，造成 ${actual} 点伤害！`;
         if (isCrit) msg += ' ⚡暴击！';
@@ -2958,6 +3121,18 @@ class Battle {
         return { msg, part: partId, damage: actual, crit: isCrit, damageType: damageType };
     }
 
+    // ===== v20.64 队员挨打记账 =====
+    // 此前 battleLastTakenDamage 全项目无人写入，「战后关系记忆」整段是死代码。
+    // 队员挨的每一刀都记到他身上，死了打上标记，战后统一结算关系与后事。
+    _notePartyDamage(defender, actual) {
+        try {
+            var ref = defender && defender._partyMemberRef;
+            if (!ref) return;
+            if (actual > 0) ref.battleLastTakenDamage = (ref.battleLastTakenDamage || 0) + actual;
+            if (defender.isAlive === false) ref._diedThisBattle = true;
+        } catch (e) {}
+    }
+
     _checkEnd() {
         // 修复6：检查所有队员是否全部阵亡——但队员阵亡不影响战斗继续，仅玩家阵亡才算输
         if (!this.player.isAlive) {
@@ -2978,6 +3153,18 @@ class Battle {
                 pm._partyMemberRef.health = 0;
             } else if (pm._partyMemberRef && pm.isAlive) {
                 pm._partyMemberRef.health = pm.health != null ? pm.health : pm._partyMemberRef.health;
+            }
+        }
+        // ===== v20.64 敌方一组：主敌倒下，枪口转向下一个还站着的 =====
+        // 倒下的记进 _fallenEnemies（战后一并标尸）；同伴补位后战斗继续，UI 无需换目标
+        if (this.enemy && !this.enemy.isAlive) {
+            if (this._fallenEnemies.indexOf(this.enemy) < 0) this._fallenEnemies.push(this.enemy);
+            var nextFoe = (this.enemyAllies || []).filter(function (a) { return a && a.isAlive; })[0];
+            if (nextFoe) {
+                this.enemyAllies = this.enemyAllies.filter(function (a) { return a !== nextFoe; });
+                this.enemy = nextFoe;
+                this.log.push({ msg: '🎯 ' + nextFoe.name + ' 补了上来！' });
+                return false;
             }
         }
         // ===== v12.9 遁修遁逃：敌方成功遁走 → 战斗按玩家方结束但无战利品（noSpoils）=====
@@ -3005,10 +3192,8 @@ class Battle {
                 });
             }
             
-            // P2：战后处理队伍成员的关系记忆
-            if (window.partySystem && typeof window.partySystem.processPostBattleRelationships === 'function') {
-                window.partySystem.processPostBattleRelationships(this);
-            }
+            // P2：战后关系记忆改由 app.js closeBattle 的 finalizeBattleOutcome 统一结算（v20.64）
+            // 此前只在胜利时结算，且 battleLastTakenDamage 无人写入，整段是死代码
             
             if (typeof window.onBeastBattleEnd === 'function') {
                 try { window.onBeastBattleEnd(true); } catch (e) {}

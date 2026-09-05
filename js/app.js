@@ -828,6 +828,10 @@ function switchPanel(panelId) {
         if (typeof restoreMapMainView === 'function') {
             try { restoreMapMainView(); } catch (eRestore) {}
         }
+        // 天下疆界上图：九州之间的路画出来，「你在此」落在当下这一州
+        if (window.WorldMap && typeof window.WorldMap.refresh === 'function') {
+            try { window.WorldMap.refresh('world-map'); } catch (eWorld) {}
+        }
     }
     // v18.9 世界日程面板
     if (panelId === 'calendar') {
@@ -2081,7 +2085,13 @@ function generateRegionList() {
 }
 
 // ============ 打开指定地区的野外地图 ============
+// v20.63 起走天下疆界：邻州才走得过去，路上结里数与时辰的账；
+// 旧函数仍在，WorldMap 未就绪时按原样直开
 function openWildernessForRegion(regionName) {
+    if (window.WorldMap && typeof window.WorldMap.setOut === 'function') {
+        if (window.WorldMap.setOut(regionName)) return;
+        return;   // 走不通（不接壤/位面/脚力不济），WorldMap 已说明缘由
+    }
     if (window.openWildernessMap) {
         window.openWildernessMap(regionName);
     } else if (window.travelToRegion) {
@@ -2954,8 +2964,38 @@ function closeBattle() {
     try {
         if (currentBattle && currentBattle.winner === 'player' && !(currentBattle.noSpoils)) {
             markKilledEnemyAsCorpse(currentBattle);
+        } else if (currentBattle && typeof markFallenEnemyCorpses === 'function') {
+            // 逃走/败北收场：主敌没标尸，但已被打倒的同伙该躺在原地
+            var _cell = (typeof currentMap !== 'undefined' && currentMap && typeof playerPos !== 'undefined'
+                && currentMap[playerPos.y]) ? currentMap[playerPos.y][playerPos.x] : null;
+            if (_cell) {
+                var _alive = [];
+                for (var _i = 0; _i < _cell.entities.length; _i++) {
+                    var _e = _cell.entities[_i];
+                    if (!_e || _e.isCorpse || _e.dead || _e.type === 'building') continue;
+                    _alive.push(_e);
+                }
+                markFallenEnemyCorpses(currentBattle, _cell, function (ent) {
+                    if (!ent || _alive.indexOf(ent) < 0) return false;
+                    ent.isCorpse = true; ent.dead = true; ent.alive = false;
+                    ent.symbol = '💀'; ent.name = String(ent.name || '敌人').replace(/的尸体$/, '') + '的尸体';
+                    return true;
+                });
+            }
         }
     } catch (e) {}
+    // v20.64 战后统一结算：队员后事（阵亡除名/牺牲阵遗志）与关系记忆，胜负逃走都算数
+    try {
+        if (window.partySystem && typeof window.partySystem.finalizeBattleOutcome === 'function') {
+            var _fb = window.partySystem.finalizeBattleOutcome(currentBattle);
+            if (_fb && _fb.fallen && _fb.fallen.length && typeof showMessage === 'function') {
+                showMessage('⚰️ ' + _fb.fallen.join('、') + ' 战死了。' +
+                    (_fb.transfer ? '余下的人把他的遗志担了起来。' : ''), 'error');
+            }
+        }
+    } catch (eFinalize) {
+        console.warn('[战后结算] 异常:', eFinalize);
+    }
     try {
         if (currentBattle && currentBattle.player) {
             window._playerPhysiology = currentBattle.player;
@@ -3396,6 +3436,9 @@ function markKilledEnemyAsCorpse(battle) {
         if (markIdx >= 0) currentInteractionEntity = cell.entities[markIdx];
     }
 
+    // v20.64 敌方一组：一起围上来的同伙也各归各位（按引用标记，不靠名字猜）
+    try { markFallenEnemyCorpses(battle, cell, applyCorpse); } catch (ePack) {}
+
     // 刷新实体菜单与地图
     try {
         if (typeof updateEntityMenu === 'function') updateEntityMenu();
@@ -3407,6 +3450,19 @@ function markKilledEnemyAsCorpse(battle) {
     return marked;
 }
 
+
+// v20.64 敌方一组：被你打倒的同伙按引用标尸，不靠名字猜。
+// 胜利结算之外，逃走/败北收场时也走这道——已经倒下的兽不该在原地站起来。
+function markFallenEnemyCorpses(battle, cell, applyCorpse) {
+    if (!battle || !cell || !Array.isArray(cell.entities)) return;
+    var fallenList = battle._fallenEnemies || [];
+    for (var fi = 0; fi < fallenList.length; fi++) {
+        var fe = fallenList[fi];
+        if (!fe || fe === battle.enemy) continue;
+        var mapEnt = fe._mapEntity;
+        if (mapEnt && cell.entities.indexOf(mapEnt) >= 0 && typeof applyCorpse === 'function') applyCorpse(mapEnt);
+    }
+}
 
 function updateEntityMenu() {
     const entities = getCurrentCellEntities();
@@ -4079,6 +4135,14 @@ function openBattleWithEntity(entityArg) {
     const playerEntity = buildPlayerBattleEntity();
     if (!playerEntity) return;
 
+    // v20.60 地皮咬合战斗：开场说明脚下地皮帮你还是害你（城里不开口）
+    try {
+        if (window.WildGround && typeof window.WildGround.battleNote === 'function') {
+            var _groundNote = window.WildGround.battleNote();
+            if (_groundNote && typeof showMessage === 'function') showMessage(_groundNote, 'info');
+        }
+    } catch (eGroundNote) {}
+
     // 构建敌人Entity（确保 durabilities 存在）
     const enemyAttrs = data.attrs || { strength: 10, dexterity: 10, intelligence: 10, willpower: 10, constitution: 10, meridian: 10 };
     const enemyEntity = new Entity({
@@ -4095,7 +4159,10 @@ function openBattleWithEntity(entityArg) {
     // v10.0：竞技场对手标记透传到战斗实体，供战后结算识别
     if (data._isArenaOpponent) enemyEntity._isArenaOpponent = true;
 
-    const battle = new Battle(playerEntity, enemyEntity);
+    // v20.64 敌方一组：兽群同伙跟着头兽一起进场
+    const packMates = Array.isArray(currentInteractionEntity._packMates) ? currentInteractionEntity._packMates : [];
+
+    const battle = new Battle(playerEntity, enemyEntity, packMates);
     currentBattle = battle;
 
     // 隐藏交互面板，显示战斗
@@ -4643,6 +4710,22 @@ function _renderBattleActionsHTML() {
         html += '<button onclick="battleAttackPart(\'' + p.id + '\')" class="bg-gray-700 hover:bg-gray-600 text-xs px-2 py-1 rounded text-white">' + p.label + '</button>';
     });
     html += '</div></div>';
+    // v20.64 队伍指令：队员不再只会无脑扑上去，强攻/掩护/自保由你说了算
+    if (currentBattle && (currentBattle.partyMembers || []).length > 0) {
+        var orders = [
+            { key: 'assault', label: '⚔️ 强攻', tip: '都上，一起打' },
+            { key: 'cover',   label: '🛡️ 掩护', tip: '挡在我身前，替我挨刀' },
+            { key: 'guard',   label: '🍃 自保', tip: '别抢人头，先顾好自己' }
+        ];
+        var cur = currentBattle.partyOrder || 'assault';
+        html += '<p class="text-xs text-gray-400 mb-1">队伍指令（' + (currentBattle.partyMembers.length) + ' 名队员）：</p>';
+        html += '<div class="flex gap-1 mb-2">';
+        orders.forEach(function (o) {
+            html += '<button onclick="setPartyOrder(\'' + o.key + '\')" title="' + o.tip + '" class="text-xs px-2 py-1 rounded ' +
+                (cur === o.key ? 'bg-emerald-600 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-300') + '">' + o.label + '</button>';
+        });
+        html += '</div>';
+    }
     html += '<div class="flex gap-2 mt-2">';
     html += '<button onclick="openQuickMoveManager()" class="bg-yellow-800 hover:bg-yellow-700 px-3 py-1 rounded text-white text-xs">⚙️ 设置快捷</button>';
     html += '<button onclick="battleFlee()" class="bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded text-white text-xs">🏃 逃跑</button>';
@@ -4650,6 +4733,22 @@ function _renderBattleActionsHTML() {
     html += '</div>';
     return html;
 }
+
+// v20.64 下队伍指令：整队的性子当场就变，队员挨打时也知道该往哪站
+function setPartyOrder(order) {
+    if (!currentBattle) return;
+    currentBattle.partyOrder = order;
+    (currentBattle.partyMembers || []).forEach(function (m) { m._partyOrder = order; });
+    if (currentBattle.log) {
+        currentBattle.log.push({ msg: order === 'assault' ? '⚔️ 你喝令队伍一起压上！'
+            : order === 'cover' ? '🛡️ 你招呼队伍挡在你身前！'
+            : '🍃 你示意队伍各自当心，先保住性命！' });
+    }
+    var actionsDiv = document.getElementById('battle-actions');
+    if (actionsDiv) actionsDiv.innerHTML = _renderBattleActionsHTML();
+    if (typeof updateBattleUI === 'function') updateBattleUI();
+}
+window.setPartyOrder = setPartyOrder;
 
 function _updateMoveButtons() {
     // 由 selectBattleMove 处理

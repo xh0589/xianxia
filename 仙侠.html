@@ -634,6 +634,7 @@
                 <div class="mb-4">
                     <h3 class="text-lg font-bold text-blue-400 mb-2">队员列表</h3>
                     <div id="party-members-list"></div>
+                    <div id="party-fallen-list"></div>
                 </div>
                 
                 <!-- 战斗日志 -->
@@ -878,34 +879,81 @@
                     </div>
                     </div>
                     </div>
-                    <!-- 随机地图区域 -->
+                    <!-- 野外地图区域（v20.56 重做） -->
                     <div id="random-map-section" class="mt-4 hidden">
                         <div class="flex justify-between items-center mb-3">
-                            <h3 class="text-lg font-bold text-yellow-500" id="random-map-title">📍 当前区域 · 随机地图</h3>
+                            <h3 class="text-lg font-bold text-yellow-500" id="random-map-title">📍 当前区域 · 野外</h3>
                             <div class="flex gap-2">
-                                <button onclick="regenerateMap()" class="text-xs bg-gray-600 hover:bg-gray-500 text-gray-300 px-3 py-1 rounded transition">🔄 重新生成</button>
-                                <button onclick="closeRandomMap()" class="text-xs bg-gray-600 hover:bg-gray-500 text-gray-300 px-2 py-1 rounded transition">✕</button>
+                                <button onclick="closeRandomMap()" class="text-xs bg-gray-600 hover:bg-gray-500 text-gray-300 px-2 py-1 rounded transition">收起地图</button>
                             </div>
                         </div>
                         <div class="flex gap-4 flex-col lg:flex-row">
-                            <!-- 左侧：SVG地图 -->
+                            <!-- 左：SVG地图 -->
                             <div class="flex-1">
                                 <div class="bg-gray-700/20 rounded-lg border border-gray-600 p-3 overflow-x-auto">
-                                    <svg id="random-map-svg" viewBox="0 0 640 320" class="w-full" style="min-height:320px;"></svg>
-                                    <div class="mt-3 text-xs text-gray-500" id="random-map-info">点击地块移动 · 右键查看实体</div>
+                                    <svg id="random-map-svg" viewBox="0 0 640 360" class="w-full" style="min-height:360px;"></svg>
+                                    <div class="mt-3 text-xs text-gray-500" id="random-map-info">左键点远处地块 → 规划路线出发 · 右键看脚下细节 · 走过的路会记在心里 · 兽群商队也在赶路，撞上了当场了断</div>
                                 </div>
                             </div>
-                            <!-- 右侧：实体菜单 -->
-                            <div class="lg:w-64 flex-shrink-0">
+                            <!-- 右：小地图 / 脚下 / 地标 -->
+                            <div id="wild-sidebar" class="lg:w-80 flex-shrink-0 space-y-3">
                                 <div class="bg-gray-700/30 rounded-lg border border-gray-600 p-3">
-                                    <h3 class="text-sm font-bold text-yellow-500 mb-3 border-b border-gray-600 pb-2">📍 当前区域实体</h3>
-                                    <div id="entity-menu" class="space-y-2">
-                                        <p class="text-xs text-gray-500 text-center">移动至某个地块查看实体</p>
+                                    <div class="flex justify-between items-center">
+                                        <h3 class="text-sm font-bold text-yellow-500">🗺️ 一域全貌</h3>
+                                        <span class="text-xs text-gray-400" id="wild-env-info">--</span>
                                     </div>
+                                    <svg id="wild-minimap" viewBox="0 0 78 60" class="w-full mt-2 rounded" style="image-rendering: pixelated;"></svg>
+                                    <div id="wild-legend" class="mt-2 flex flex-wrap gap-2 text-[10px] text-gray-400"></div>
+                                </div>
+                                <div class="bg-gray-700/30 rounded-lg border border-gray-600 p-3">
+                                    <h3 class="text-sm font-bold text-yellow-500 mb-2 border-b border-gray-600 pb-2">📍 脚下</h3>
+                                    <div id="wild-tile-info" class="text-xs text-gray-300">--</div>
+                                    <div id="wild-actions" class="mt-2 space-y-1"></div>
+                                    <div class="mt-3 pt-2 border-t border-gray-600">
+                                        <h3 class="text-xs font-bold text-gray-300 mb-2">👥 此地之人</h3>
+                                        <div id="entity-menu" class="space-y-2">
+                                            <p class="text-xs text-gray-500 text-center">走过去才看得清</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="bg-gray-700/30 rounded-lg border border-gray-600 p-3">
+                                    <h3 class="text-sm font-bold text-yellow-500 mb-2 border-b border-gray-600 pb-2">🍃 野外的动静</h3>
+                                    <div id="wild-life-list" class="space-y-1"></div>
+                                </div>
+                                <div class="bg-gray-700/30 rounded-lg border border-gray-600 p-3">
+                                    <h3 class="text-sm font-bold text-yellow-500 mb-2 border-b border-gray-600 pb-2">🧭 出此境往</h3>
+                                    <div id="wild-exit-list" class="space-y-1"></div>
+                                </div>
+                                <div class="bg-gray-700/30 rounded-lg border border-gray-600 p-3">
+                                    <h3 class="text-sm font-bold text-yellow-500 mb-2 border-b border-gray-600 pb-2">🧭 已见地标</h3>
+                                    <div id="wild-poi-list" class="space-y-1"></div>
                                 </div>
                             </div>
                         </div>
                     </div>
+                    <style>
+                        /* 野外地图动效（v20.56） */
+                        @keyframes wildWater { 0%,100% { opacity:.85; } 50% { opacity:.65; } }
+                        #random-map-svg .wild-water { animation: wildWater 4s ease-in-out infinite; }
+                        @keyframes wildRain { from { transform: translate(0,0); } to { transform: translate(-4px,10px); } }
+                        #random-map-svg .wild-rain { animation: wildRain .7s linear infinite; }
+                        @keyframes wildSnow { from { transform: translate(0,0); } to { transform: translate(3px,8px); } }
+                        #random-map-svg .wild-snow { animation: wildSnow 2.4s linear infinite; }
+                        @keyframes wildPulse { 0%,100% { opacity:.15; } 50% { opacity:.7; } }
+                        #random-map-svg .wild-pulse { animation: wildPulse 2.2s ease-in-out infinite; }
+                        @keyframes wildPlayer { 0% { transform: scale(.6); opacity:.4; } 100% { transform: scale(1); opacity:1; } }
+                        #random-map-svg .wild-player { animation: wildPlayer .18s ease-out; transform-origin: center; transform-box: fill-box; }
+                        /* 独有地貌动效（v20.60） */
+                        @keyframes wildMiasma { 0%,100% { opacity:.25; transform: translateY(0); } 50% { opacity:.7; transform: translateY(-2px); } }
+                        #random-map-svg .wild-miasma { animation: wildMiasma 3.2s ease-in-out infinite; }
+                        @keyframes wildSwordqi { 0%,100% { opacity:.5; } 50% { opacity:1; } }
+                        #random-map-svg .wild-swordqi { animation: wildSwordqi 2.6s ease-in-out infinite; }
+                        @keyframes wildWhirl { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+                        #random-map-svg .wild-whirl { animation: wildWhirl 6s linear infinite; transform-box: fill-box; transform-origin: center; }
+                        /* 野外的活气动效（v20.62）：云影是会走的天象 */
+                        @keyframes wildDrift { 0%,100% { transform: translate(0,0); } 50% { transform: translate(2px,3px); } }
+                        #random-map-svg .wild-drift { animation: wildDrift 6s ease-in-out infinite; }
+                    </style>
                 </div>
             </div>
 
@@ -1591,6 +1639,8 @@
 
     <!-- 第4层：地图与战斗 -->
     <script src="js/qi-environment.js"></script>
+    <script src="js/map/wild-terrain.js"></script>
+    <script src="js/map/world-map.js"></script>
     <script src="js/map/randomMap.js"></script>
     <script src="js/battle.js"></script>
     <script src="js/combat-stats.js"></script>

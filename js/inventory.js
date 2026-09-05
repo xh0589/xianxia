@@ -1570,6 +1570,15 @@ function getCombatBonuses(baseBonuses) {
             Object.entries(artBonus).forEach(([key, value]) => { final[key] = (final[key] || 0) + value; });
         }
     } catch (eArt) {}
+    // v20.60 地皮咬合战斗：人在野外，脚下地皮给你好处或让你吃亏（沼泽拖足、剑冢借势…）
+    try {
+        if (window.WildGround && typeof window.WildGround.battleMods === 'function') {
+            var _groundMods = window.WildGround.battleMods() || {};
+            ['attack', 'defense', 'dodge', 'speed', 'crit', 'block', 'penetrate'].forEach(function (gk) {
+                if (_groundMods[gk]) final[gk] = (final[gk] || 0) + _groundMods[gk];
+            });
+        }
+    } catch (eGround) {}
     // v20.48 境界质变补电：block/dodge/penetrate/crit 四个百分点键此前无人读（乘数三键已接 _realmCombatMul）
     try {
         var _rzRealm = (window.currentCharData && window.currentCharData.realm) || '';
