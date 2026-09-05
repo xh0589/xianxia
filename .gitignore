@@ -13,7 +13,7 @@ evidence/
 *.pyc
 __pycache__/
 # vibex 源（外包交付工作区）
-html-0bd3fb25-source/
+html-0bd3fb25-source*/
 html-0bd3fb25-source.zip
 # 临时备份
 _backup_pre_*/
