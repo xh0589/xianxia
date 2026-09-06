@@ -9,6 +9,201 @@
 - 修正条目：① 装备槽 12→11，基础物品 38→41；② 扩展物品 305→~287，子文件 8→14；③ 门派正道 21→25；④ 大量行号/计数/API 名字修正
 - 详见：每节末尾加注"**[v20.0.2 修正]**"；§十七 集中记录 11 个 P0 修复
 
+【v20.52 已落地（2026-09-05）】玩家宗门：立派做庄+宗门总册（45 断言+既有套更新 78）：盘点修正——玩家建宗确实存在（§1.6），真洞是①收徒全库零调用（师徒线锁死）②立宗一键化（宗名自动/阵营恒中立/山门恒未知）③建完无任何界面④丹药兵器无处消费⑤备战流失 floor(0.5)=0 永不生效⑥职位任命零作用⑦与三十六门零交集。本批：① player-sect.js 增 FOUND_SITES 五址（山/城/水/漠/岛=命门档案词表，安家费 600-1000 有名目）+chooseSite+addHistory（宗门史上限 120）+tickDay 职位真管事（长老座镇灵石+1/声望+0.05·堂主管库兵器丹药各+0.5）+备战流失 _lossAcc 小数逐日累计修复+灵石见底记史+_importState 旧档补默认；② 新文件 player-sect-ui.js：openFoundSectPanel 立派流程（自拟宗名+备选/出身正中邪/五址择山门/开山当日来客——正道名宿贺喜+黑影伏笔、邪派黑道贺礼+官府登记+玩家声望-1、中立两边探底）+openPlayerSectPanel 宗门总册（五资源带净额预估与 tickDay 同口径/方针切换/弟子名录/收徒/任命/护宗战/宗门史/解散）+收徒规矩好感≥20（拜山门总得先认识）+_defendSectRaid 接武库（兵器≥10 妖兽攻势每件-0.5% 封顶三成+战后折损 30%，库空掌门独迎）+旧档补录山门不另收钱；③ master-teach.js teachDisciple(npcId,usePill) 宗门丹药优先布置（库空回落 30 灵石），弟子面板按钮文案随库存；④ cultivation.js 未立宗→立派流程、已立宗加「宗门总册」；⑤ app.js _quickFoundSect 转发新流程、_defendSectRaid 实现移入 UI 模块兜底保留；⑥ 仙侠.html 挂 player-sect-ui.js。新套 tests/v20.52-player-sect-node.js（45 断言：五址/旧档迁移 roundtrip/职位加成数值/十二入口/立派真跑/收徒规矩/丹药抵传功/武库护宗/挂载哨兵）挂入 run-all，全量 EXIT=0。未解决：宗门×三十六门外交（结盟无后效/贸易援助按钮缺/被真门派攻山）——大纲第四批。
+
+【v20.51 已落地（2026-09-05）】故事弧铺满 36 门（42 断言）：sect-story-arc.js 故事弧 9→36 门一次补齐——27 门各 3 折×每折 2 场 3 选（共 108 折 324 选，当场落账，无占位无换皮）：嵩山《并派章程》/大旗门《旗在人在》/恒山《山门外的拜》/全真《先修哪一条》/华山《气与剑》/侠隐阁《侠字怎么教》/天涯海阁《黑水洋》/泰山《封禅台下》/神机门《图样》/霹雳堂《引信》/茅山《符与反噬》/大隐阁《行藏》/天书阁《虫与火》/蓬莱《候风》/衡山《七弦》/铁掌帮《镖路》/百花谷《辨花》/五仙教《蛊》/昆仑《雪线以下》/金刚宗《十万长头》/天龙教《教众》/烈日教《水》/逍遥派《下山》/血手门《旧档》/青城《扫叶》/峨眉《金顶的灯》/飞蝎坞《大潮》；第三折一律落门派价值观抉择。测试 v20.50 扩 42 断言（36 门名单对齐+108 折折题无重名防换皮+新老五门真跑落账）；v20.45 S14 改「查无此派不弹空白戏」+新增 S14b 三十六门全有本；全量 run-all EXIT=0。
+
+【v20.50 已落地（2026-09-05）】门派内容第二批（22 断言）：故事弧 3→9 门（新增丐帮百结路/药王谷尝草记/唐门门里门外/铸剑山庄炉火录/天山派缥缈行/阎罗殿生死簿，每门三折×三选，同一引擎职级解锁+当场落账）；专属事件 26→36 门清零（零专属十门各补 2 桩贴营生日常：天山/逍遥/血手/青城/峨眉/唐门/铸剑山庄/飞蝎坞/烈日教/天龙教）；新套 tests/v20.50-sect-content-node.js 挂入 run-all。
+
+【v20.49 已落地（2026-09-05）】门派大事重置：从抽签到账目（43 断言）：原「随机门派大事件」是无门禁抽签（大漠遭山洪、冬日贼上门、无仇被寻衅、士气高长老出走）。本批整体重置——① 新文件 js/sects/sect-profiles.js：36 门命门档案（livelihood 吃什么饭 / fears 怕什么 / terrain 地界 / weightMods 族权重），一表三用（大事门禁、专属事件权重、故事弧取材）；② 新文件 js/sects/sect-crisis-events.js：20 桩大事覆盖 14 族，每桩 causality 读真账——强盛（档位+影响力+人手合计≥78）不出贼、外交账无仇家（≤-40）不出寻仇、士气≥48 不出长老离心、命门无香火不出大典、大漠无山洪/寒冬匪歇、近期无伤亡不出邪祟、无存货不出行会压价、山体无松动（无 ground_loose 档）不出古迹；③ 祸根闭环 scars：办砸留档成下一桩的因（得罪匪→旧怨发酵、结怨→再上门、山体松动→古迹、伤亡→邪祟、寒心→内乱）；④ 新文件 js/sects/sect-crisis-engine.js：酝酿（迹象+可花灵石防备消解）→爆发（2-3 抉择、check 掷骰、付不起走不通）→余波（日结自了或花钱善后）；外交账真读真写+存档；记功只归本门（修「别门大事给玩家记贡献」）；日结接 onNewDaySubscribe；档案走 StateRegistry；⑤ 接线：sect-visit.js 内院面板加「近日有异/门派大事/余波未平」卡；sects-deep-ui.js 大事当头时日常琐事让路不双弹；仙侠.html 挂三脚本。新套 tests/v20.49-sect-crisis-node.js（43 断言：池完整性/强盛不出贼/无仇不上门/天时地理/士气门禁/祸根闭环/全生命周期/办砸留痕/记功归门/防备降档）挂入 run-all。
+
+【v20.48 已落地（2026-09-05）】断线通电第一批（61 断言）：四线盘点揪出的"写好了却没通电"一次修一批——① **功法掌握通电**（新文件 js/cultivation/art-effects.js，ArtEffects 单一真源）：38 部秘籍 effect 对象 + 53 门功法 effect 字符串此前全库零消费/仅 3 种字样被认，学到仙品毫无变化；现统一解析（flat 点数/pct 百分点/元素表）按功法归组取最高（专精不叠、同门两层归一防双算、同名映射才是同门），接线 getCombatBonuses（加值）/buildPlayerBattleEntity（武器乘算+元素伤表+lifesteal 能力）/battle._calculateDamage（按敌型出力：火冰水金虚→元素生物、虚→亡灵、龙→妖兽、魔→邪道标 _evilFaction 透传）/naturalRecovery（恢复%）/getEffectiveMax('maxQi') 上限真源（客栈/灵泉/状态栏/自然恢复四处统一）/renderSkillBrowse 面板如实汇报；② **境界质变补电**（getRealmBonusPct 乘数≤3 折百分点）：block/dodge/penetrate/crit 并入 getCombatBonuses（渡劫格挡25/穿透25、金仙暴击35/闪避40）、大乘金仙修炼乘数接打坐、炼气 herb 接采药、炼虚 teleport_cost 接传送减半、qi 乘数走上限真源；③ **门派征讨必败修复**（power 文字档位当数字乘→NaN→恒败）：sectPowerValue 档位折值、缴获随档位、胜负落外交账（relation -35/-20+冲突计数+saveSectDiplomacy）、声望按对方阵营结账（不再无脑扣魔道）、本门不打本门；④ **道侣族谱断线**：dao-bridge 误拼 NPCLineage（实为 NpcLineage）致结契永不入族谱，两拼写都认；⑤ **消防司做实**：死按钮→火情检视（同城同日 seeded）+水龙当差（10 真气→功德+1/声望+2）+火场扑救（20 真气，六成得赏/两成半白烧/一成半挂彩）。新套 tests/v20.48-deadlinks-node.js（61 断言：功法通电/战斗接线/境界质变/征讨 vm 隔离真跑/族谱/消防司/挂载哨兵）挂入 run-all，全量 EXIT=0。未解决另立批次：门派内容面（故事弧 3/36、10 门零专属）、后期玩法（元婴+副本 2 个、灵界魔界空心）、战斗 build 决策面、经济价差连点、符箓 6/36 implemented。
+
+【v20.47 已落地（2026-09-04）】药王谷入门解禁（12 断言）：点名拆除的第二块禁止牌——药王谷原有一行硬门槛"医术达标"，医术不足直接弹大大的红色 ❌，连山门考核都见不着。硬门槛废除，接通闲置的药童认草考核（showSectGuardTrial 补药王谷分支→yaoWangHerb）：认对草+医术扎实入内门，认对草不懂医理先做杂役，认错草药童摇头回话。金刚宗/铸剑山庄/修罗宫硬门槛不误伤。新套 tests/v20.47-yaowang-entry-node.js。
+
+【v20.46 已落地（2026-09-04）】门派事件扩充（13 断言）：通用池 13→19（门派日常六桩）；二十六门专属事件各两桩共 52 桩（新文件 js/sects/sect-exclusive-events.js，与通用池同权混抽，结算定义查找扩两级）；游客内院"大大的禁止牌"拆除——门禁由代码与测试守，场面留给叙事。新套 tests/v20.46-sect-events-node.js。
+
+【v20.45 已落地（2026-09-04）】门派故事弧（18 断言）：拜门后贯穿叙事从无到有——故事随贡献职级逐折解锁（拜门0/内门500/亲传1000），每日至多一幕，弹窗演出当场选择当场落账。首批三门样板各三折：少林禅影/武当太极问道（接张三丰宋远桥真设定）/修罗宫血债簿（接绯泪）。进度入白名单不重演不丢戏。其余16门同构可追加。新文件 js/sects/sect-story-arc.js + tests/v20.45-sect-story-node.js。
+
+【v20.44 已落地（2026-09-04）】洞府做深（11 断言）：灵植不等懒汉（熟后三日宽限，过期即蔫收成减半，面板红给你看）；furniture 死字段通电（聚灵蒲团修炼+5%/暖玉炉灵田/聚灵灯储物+5，真扣不重购随档走）。新套 tests/v20.44-house-node.js。
+
+【v20.43 已落地（2026-09-04）】天象与灵气咬合（14 断言）：七天象各配五行，天时合地灵灵气共鸣+10%（海岛逢雨事半功倍，读真账面板标共鸣）；天象播报有味（各两段说法随机变，可钦定）；枯竭警示跌破一档报一次/回春再报不刷屏；顺手修 globalQiLevel 快照死值。新套 tests/v20.43-weather-qi-node.js。
+
+【v20.42 已落地（2026-09-04）】悟道树做深（14 断言）：平铺+5→二层真树（功能节点需道心底子、顶层道心通明需悟透任意三脉）；功能节点有牙（悟破境关突破+5%、静功生慧悟道点+1，真接突破流程）；面板挂锁显缘由；_enlightenedNodes 补入存档白名单（此前读档清零）。新套 tests/v20.42-enlightenment-node.js。
+
+【v20.41 已落地（2026-09-04）】炼丹三薄做深（21 断言）：丹毒解毒三途（茶-20半日/汗-35整日/医-50灵石200，只进不出的假账成真账可还）+分档警示+面板丹毒卡；自创丹方选料面板（毒性去向摆面上，材性定丹性）；试火耗精力5。新套 tests/v20.41-alchemy-depth-node.js。
+
+【v20.40 已落地（2026-09-04）】寿元做深（17 断言）：寿账全改世界历 360 日一年（四处换算）；凶兆四档各报一次（一年/百日/三十日/十日，暮年一步步暗下去不刷屏）；寿元面板一年内转黄、三十日内转红；延寿两途（突破抬上限/延寿丹）维持既有接线。新套 tests/v20.40-lifespan-node.js。
+
+【v20.39 已落地（2026-09-04）】修炼味做深（深度盘点首批，24 断言）：占卜一卦→四问卦阵（命/事/灾/人，灾事人三问全读真账，卦不编造；代价灵石100+半日+一日一卦）；走火入魔三途化解（静坐-20/顺势-40/道侣护法-30，各占时辰）+分级提醒+紊乱≥95锁突破（闸在唯一突破路由内，过所有权哨兵）；面板双入口接线；顺手补漏：气运与紊乱此前不在存档白名单（存读档归零）。新套 tests/v20.39-cultivation-depth-node.js。
+
+【v20.38 已落地（2026-09-04）】存读档往返防线：tests/npc-memory-roundtrip-node.js（9 断言挂 run-all）——真载 npc-system.js，设值→过盘→反序列化全量比对，四个前科键+嵌套里层+深拷贝纪律+七色关系账+角色账本白名单全盯死。白名单漏键从此当场报红，不再靠肉眼。
+
+【v20.37 已落地（2026-09-04）】fear 威压轨接通（最后一个死变量）：涨路=动手+10/要挟得手+15（翻脸不涨）；牙=请求情分不够时威压满二倍价可代付（代付减半且记怨+2）；露出=关系形态「畏惧」档（情深诸档先接住不误判）。npc-deep-loops N1–N4（51 断言）。至此好感/信任/情面/敬重/怨恨/深情/威压全部读写闭环，零死账。
+
+【v20.36 已落地（2026-09-04）】love 深情轨接通：relationship.love 原零读取纯死账（v20.28 留的半成品）。涨路三条全是事实：结契打底 30、陪节+1、吃醋场坦白/立誓+1；牙：深情满 50 双修经验×1.5；露出：道侣名册显示深情与共鸣标。顺带修面板「相伴半日」旧精力标价。v20.24 A2b/v20.28 C3c/v20.30 M3-M4 全绿。遗留：fear 威压轨仍死。
+
+【v20.35 已落地（2026-09-04）】面板类别标注：吃醋包 40 桩进面板后"已完成"计数虚增、可重演桩谎报完成。个人事件面板把 ambient 日常桩单列「日常相处（可重演）」——演过标「已上演·可重演」、账本驱动桩标「日子到了自然来」不给手动钮，「已完成 X/Y」只数一次性事件。v20.30 套件 M1/M2（44 断言），全量 EXIT=0。
+
+【v20.34 已落地（2026-09-04）】被晾提醒（42 断言）：吃醋包第 5 类，8 桩——道侣超三十日未见（既有 bond.lastMetDay 账实，零计数器），回门时 Ta 不闹、只让你看 Ta 怎么数的日子；两档选项接信任账（+3/-2）；旗 neglectFiredDay 写 bond 条目内，见一面翻新重数，零新增顶层键。钩子序：余波>信>被晾>试探>敲打>小心眼。tests/v20.30 套件 L1–L6。
+
+【v20.33 已落地（2026-09-04）】信任激活：感情线信任原本几乎无下游，吃醋事件的信任梯度悬空。补三件——折价有牙（试探/敲打安抚类选择，信任<10 时好感加成减半并明说只敢信一半，_jealTrustDiscount 在 jealousy-deep.js，引擎 typeof 守卫调用）、涨路能养回（赴约+1/陪节+2，到场即真，文案同步标价）、面板露出信任值。v20.30 套件 K1–K3、v20.24/v20.28 断言同改，全绿。
+
+【v20.32 已落地（2026-09-04）】飞鸽补账（33 断言）：余波原门要求节后十二日内人在其门——躲着不回门账就静默过期。补信路：窗口一过，每日钩子替 Ta 寄飞鸽信销这一回合（八人×推帖/放鸽各一段专属短信，spent 实证才点情敌名）；旗落既有账格 letterSent，寄成不落旗则改日再寄，一年一节一信。与当面余波互斥（窗口内不抢跑）。tests/v20.30 套件 I1–I5。
+
+【v20.31 已落地（2026-09-04）】记忆白名单补漏：NPC 存档白名单漏收四个在用记忆键（_ambientLastDay 重入日头/_branchState 深谈进度/_choiceHistory 选择史/_events 记忆事件），读档即清零——最疼的是读档后日常小事（含小心眼）永不再触发。双白名单补齐（嵌套走 JSON 深拷贝），v20.25 套件加 J1/J2 断言（62 断言），全量 EXIT=0。
+
+【v20.30 已落地（2026-09-04）】吃醋事件扩容（28 断言）：新包 jealousy-deep.js 一次补 32 桩（八位恋爱对象×4 类）——试探（8，一次性，好感≥40+有情敌，各以本行察觉分身乏术）/敲打（8，一次性，试探已过+情敌成契才立规矩）/节日余波（8，可每年每节重演，全读 festival-bridge 既有账格：declined/stood 才作伤、1–12 日窗口、账上 spent 实证才点情敌名、看过落旗不重复）/小心眼（8，ambient 30 日重入）。每日钩子优先级余波>试探>敲打>小心眼，一天一桩封顶；门禁包装 canPlayerAccessPersonalEvent 加 requireFestivalWound（同 male-lead-rivalry 覆写手法）；零新增存档键（旗写 bonds[*].festival 账格内与 NPC 记忆 _ambientLastDay）。接线在 male-lead-reconcile.js 之后。审查中修正两处偏差（钩子余波优先、重入 30 日落实）。回归 tests/v20.30-jealousy-deep-node.js 挂入 run-all。未解决：计划 §9 四个待审点（配比/暗线/参数/口味）待用户定夺。
+
+【v20.29 已落地（2026-09-04）】游玩不榨精力（现实化修正）：dao-bridge 赴约与 festival-bridge 赴节的"点一下扣 15 精力"假税全拆——游玩本身不累人，赶路的累由既有赶路账（步行/骑马/御剑/传送阵）去结，点帖不重复收税；代价只剩真时辰（约 30/节 60，advanceTime 真源），"精力不支误帖"假分支删除，弹窗与文案标价同步（"耗时半日，好感+5"/"一整天，好感+8"）。好感账、四档亏欠、跨年、账格纪律不动。回归 v20.24(23)/v20.25(60)/v20.28(51) 三段同改，全量 EXIT=0。未解决：v20.27 恋爱事件预支精力是否同样现实化，待用户定夺。
+
+【v20.28 已落地（2026-09-04）】节日的帖（52 断言）：新桥 festival-bridge.js 四节定点（上元/七夕/中秋/除夕，世界历 360 日一年）；节前两天每位道侣各发一帖（WorldCalendar npc_appointment 复用，不再轮转不掷骰）；到期一张帖面只能陪一人——时间冲突成为吃醋的唯一来源，无随机撞破。赴节精力15/时辰60/好感+8；亏欠四档 -3（好言推）/-4（已许别人）/-5（装死等散）/-6（两头都应且第二场不允）。账本写 bonds 条目内 festival 格（节_年分格），零新增存档键。回归 tests/v20.28-festival-time-node.js 挂入 run-all。未解决：非最高分档仍免费、love 轨/分手和离仍开。（赴节"精力15"价签已由 v20.29 撤回，改纯时辰。）
+
+【v20.27 已落地（2026-09-04）】恋爱事件挂价签（66 断言）：六线中段 18 个重头事件（007~011）最甜选项改预支制——常规预支精力 15、生死关（忘情散断/破蛊前夜/心障）预支 20、甜度各抬 2 分；精力不足当场降档（4~6 分）不硬扣，亏欠写进文案。扣账单点 `_payCost` 只认 currentCharData.energy 真源（存档既有字段，零新增），灵石旁路拒收、无账本环境放行。回归 tests/v20.27-priced-promises-node.js 挂入 run-all。未解决：非最高分档仍免费、love 轨/分手和离仍开（节日已于 v20.28 落地）。
+
+【v20.26 已落地（2026-09-04）】恋爱文本去复读加厚（58 断言）：终章告白七句一人一样（拆「这X连同Y你要不要」填空模板）；「做个常客」×3 与「三日后交还印」×5 各换各人收场；温蘅侧 8 处好感门槛改档、两线日常阶梯分家；五个撞名小事件各归各位（跨线线内零重名）；绯泪断簪事件标 8 实 4 改对齐＋永不可达假分支删除；接簪事件选项标数退役（真源两档 12/8/5 与 4/6/2）；六线中段假选择——信物六件（木数珠/护身符/千年灵芝/寒铁/毒牙/雪莲）全在物品表进背包、甜点换位各随人设。零新增存档字段。回归 tests/v20.26-text-thicken-node.js 挂入 run-all。未解决：六线中段每线仅动两处，全段逐事件重写另立批；love 轨/分手和离/节日事件仍开。
+
+【v20.25 已落地（2026-09-04）】情账清算（恋爱系统死线+名实不符，59 断言）：双修接通（工具条💞道侣面板，位分升档→子嗣/合击/护法解锁链恢复供血）；绯泪定情补结局回调落旗入册；坏结局门槛统一三度伤透且四线补齐真负选项（此前六线纸面存在实际够不着）；日常小事入萌芽期+14日可重遇（末日记 npc.memory，零新增存档字段）；告白冷却只记成功、被拒折情面-2、掌门免告白后门拆；撕破脸锁私人线上门禁（好感五成重开）；恋爱主线耗时辰；约会按日轮转+标价改30时辰一致；男主道侣代词/芩木文案改「他」；吃醋探测走全局八人版；栏目计数如实改账。回归 tests/v20.25-romance-fix-node.js 挂入 run-all。未解决：文本去复读加厚批 v20.26 已批未做（八线终章同句式/日常同款阶梯/死标签元数据/男主线中段假选择）；love 轨悬账、分手和离、节日事件仍开。
+
+【v20.24 已落地（2026-09-04）】道侣名册的桥：结契（八线终章/深谈 bond_dao）统一落笔进 bonds——双修/合击/随行/护法/子嗣/洞府同居/情缘成就/结局条件自此全活；旧档读尾补票（只翻译旧旗不发现金）；道侣偶发约会帖上日历"约定"栏（赴约耗精力占时辰涨好感、误帖掉好感）。另修三处死码（出师/NPC婚配/孤单提醒均因读错字段恒不可达）与两处虚夸文案（请教情面真扣、"下次+5%"拆除）。零新增存档字段。
+
+【v20.23 已落地（2026-09-04）】年景与私盐道：粮仓官价接本城行情浮价（一袋 18×行情，弹窗与扣款同源）；渡口私盐行收引私价=牌价×销地行情×1.12，成交恶名+3、25% 缉私拿问（罚 60 走账、凑不出挂彩）——盐路官私两道：商会抽佣稳当，私市利厚有官非。零新增存档字段，巡查领引旧规矩未动；无配额。
+
+【v20.22 已落地（2026-09-04）】四衙真生意：粮仓官价籴米（54/三袋，低于坊市三成）+捐米真消业障；镇邪司悬赏缴丹（牌价 100 官府 130 收，护城溢价）；工曹署承揽河工（20 真气换本城工价 80×行情，15% 摔伤四成挂彩）；盐铁局官盐引（80 领引→商会代售按销地行情，跨城套利真算得动）。四衙巡查旧规矩未动；零新增存档字段，全部走统一结算与城市行情真源；无配额。
+
+【v20.21 已落地（2026-09-04）】世界的牙齿：五处名实相符一次补齐（新存档字段仅"黑市信用簿"一项，旧档按初来乍到兜底）：
+- **动因**（用户全选五向 + 口径修正）：灵泉免费回满/户籍司白送历练/善堂"功德抵业障"空话/恶名无牙/回购双价表/三栋楼一个门面；**黑市不得按恶名压价——按实惠（成交记录）与信用（有无举报前科）定价**
+- **`js/core/world-teeth.js`**（新底座）：`FenceCredit._fence`{trust,deals,snitches}——deal(min) 门槛+成交+1、adjust(delta,kind)、settle() 100 灵石说和、describe() 牌面如实；`patrolConsequence(noto,rng)` 巡夜罚则纯函数（26-60 罚 30、61+ 罚 60/搜身）；`facilityBuyMod()` 本城买价真源
+- **引擎**：`eff.fence` 通道（trust/deal/settle，账本失败整笔不成交、error 原样上屏）；修潜伏 bug——账本键（bank/pawn/fence）成交后须从 eff 剥除再进 `RewardService`，否则混表整笔失败
+- **接线段**：夜巡真罚钱（掏不出拘一宿 health-10，躲巡 noto+1）；善堂捐赠真消业障（+1/+2/+4）、空头"祈福增运"删；黑市买卖/举报(-2)/说和/暗柜（信用≥2 开门、85-95 折来自交情）；拍卖=牌价×本城 buy×1.2 现算；灵泉沐浴 20 真气换部分恢复；户籍司 10 真气；悬赏楼接 `window.openBountyBoard` 真源；公会堂=商会（`guildSellMod/guildSellPrice/guildSellSlot`，行价×0.85 代售真交割）；`enhanced-shop.getRegionMultiplier` 接城市 sell 真源（旧地区表降为兜底）；`world-events.getCombinedShopPriceMultiplier` 死线修通（商店管线不双算）；`game-state.js` 白名单 `fence` 成对
+- 回归 `tests/v20.21-world-teeth-node.js`（47 断言：罚则/信用簿全环/引擎真跑/灵泉/回购/静态）挂入 `tests/run-all.sh`；存量迁移：v20.19 世界补装底座、city-depth M9 改按三栋楼新分工断言
+- **未解决**：茶馆与客栈近似重复；`pill_foundation`/`foundation_pill` 重号模板未合并（迁移风险）；当铺死当/钱庄逾期与黑市信用暂无连带（等事件流佐证）
+
+【v20.20 已落地（2026-09-04）】当铺真典当：真当票进账本，票面"当期一月"兑现（新存档字段仅"当票"一项，旧档无票兜底）：
+- **动因**：当铺票面文案"当期一月，月内不赎即为死当"是谎话——旧成交当场即死当卖断；250 灵石行价写死与行情无关
+- **`js/city-facilities/pawn-service.js`**（新，与 BankService 同款 IIFE）：`_pawn` 账本（item/count/loan/due）——`pawnItem(itemId,count,base)` 当金=`round(base×本城sell系数×0.7)` 一票一物、货银同笔走 `RewardService`（take 扣不够整体回滚）；`redeem()` 加息一成五（钱不足/背包放不下被拒账不动）；`forfeitCheck()` 跨赎期票销货没（`onNewDaySubscribe` 挂新日）；`describe()` 柜台如实播报
+- **`js/core/scenario-engine.js`**：`_apply` 新增 `eff.pawn` 通道（op pawn/redeem、账本失败整笔不成交、error 原样上屏——bank 钩子同款）
+- **`facility-batch2.js`** 当铺剧本三轨重写（典当/赎回/卖断现算价，`pw_do` 假当期节点拆除）；`game-state.js` 白名单 `pawn` 成对；卡面描述如实化；早批结构测试（sect-buildings C8-C10）迁移到新结构
+- 回归 `tests/v20.20-pawn-node.js`（21 断言：折当金/一票一物/加息赎/钱不足账不动/过期无补赎后门/跨城当金差/引擎真跑/新日销票/静态）挂入 `tests/run-all.sh`
+- **未解决**：粮仓/镇邪司/工曹/盐铁轻交互；当票只认硬货（收当目录扩面需接物品价值表真源）；钱庄挤兑/官府盯高频当客等世界事件留事件流批次
+
+【v20.19 已落地（2026-09-04）】设施厚一层：11 家第二剧本 + 引擎现算报价（**零新存档字段、零迁移**）：
+- **动因**：v20.18 遗留主线——11 家情景设施单剧本复读。拆剧本时另揪两颗钉：情景弹窗把完成剧本**永久灰锁**（与引擎"完成即重开"自相矛盾）；契约所护送 `require:{energy:30}` 只查不扣（掷签白拿 200 灵石）
+- **引擎现算**（`js/core/scenario-engine.js`）：`_resolveVals` 让效果数值/文案字段可为函数（结算一刻取值，roll 除外、bank.amount 解析，返回新对象不回写配置）；`eff.cost={qi,energy,stones…}` 经 `_foldCost`/`_mergeCost` **折进掷签命中分支同一笔事务**（胜=所得-本金、败=-本金，原子无两头空）；情景列表**完成即重玩**（✅ 仅记号，onclick 不再被 done 拦截）
+- **`js/city-facilities/facility-batch3.js`**（新）：`facilityAugment(id,scenario)` 给 11 家各 push 第二本——contract_bet 赌灵雨/escort_hitch 捎货/charity_kitchen 帮厨/arena_wildcard 外卡踢馆/observatory_rain 测雨/stele_rubbing 拓碑/museum_errand 买信/pawn_appraise 掌眼/auction_snipe 盲匣/black_fence 代销赃/villa_poetry 纳帖；helpers：`facilitySellMod()` 读 `getCityPriceModifier(city,'sell')` 现算卖价、`facilityRepOdds()` 经 `getReputationValue` 抬赔率；**每本真代价有输赢、无一白送**（黑市=业障恶名风险，园林=本金买名望）
+- **`facility-batch2.js`** 契约护送补 `cost:{energy:30}`；`仙侠.html` 挂载；**items[].count 保持静态整数**（结算台 floor 语义，动态值只用于标量键——本批全部如此）
+- 回归 `tests/v20.19-facility-depth-node.js`（85 断言：现算/原子净额/配置零污染/11 家双剧本/胜败双分支真跑落账/跨城价差/声望抬赔率/逐分支白送审计/静态）挂入 `tests/run-all.sh`
+- **未解决**：粮仓/镇邪司/工曹/盐铁维持轻交互；~~当铺无抵押赎回~~（v20.20 已落地真当票）；第二出戏均单幕，多幕分支与钱庄挤兑类世界事件留事件流批次
+
+【v20.18 已落地（2026-09-04）】钱庄真业务 + 两衙真职能（新存档字段仅"钱庄账本"一项，旧档空账兜底）：
+- **动因**：用户追问设施功能是否不足。逐家盘点实锤：12 家情景设施收付无空头（`RewardService` 认账全部内容键）、可重玩；但每家只有**一本固定剧本**，且钱庄"存灵石"是空头（旧选项只是听门道）、借 100 无借据无后续；司法堂纯风味；税课司数字是写死文案
+- **`js/city-facilities/bank-service.js`**（新）：`_bank` 账本（deposit/depStart/debt/debtDue/lastCol）——存款月息五利随本清、加存先结旧息再并账（利钱只认真实经过的游戏日）；借据 30 日到期，未销不放贷，提前还清只还本；**逾期每逢新日催收一笔**（够则整笔划走+恶名1，不足则划光+真气-20伤-15恶名2，欠款不灭、同日至多一轮）；银钱全走 `RewardService`→`EconomyTransaction` 统一事务；`describe()` 柜台话术共用
+- **`js/core/scenario-engine.js`**：`_apply` 新增 `eff.bank` 通道（账本先行、失败整笔不成交、其余键照常）；`choose` 对 `applied.error` 原样上屏（账本错误文案不再被吞）
+- **`js/app.js`**：`openTaxBureau` 查账读出本城 `priceModifier.buy` 实况与课税大宗（平价城报持平）；`openCourt` 35% 缉查委托（真气15→历练8+本城声望2 via `addReputation`，气力不济婉拒，旁听零收益不动）
+- **`js/city-facilities/facility-batch2.js`**：钱庄剧本换四笔真业务、柜台文案动态化；`game-state.js` 白名单 `bank` 成对；`location-system.js` 钱庄描述如实化；`仙侠.html` 挂载
+- 回归 `tests/v20.18-bank-node.js`（32 断言：起息/并账数学、借据与逾期催收全链路、引擎真跑剧本与错误直通、两衙分支真源码跑、静态）挂入 `tests/run-all.sh`
+- **未解决**：~~其余 11 家单剧本复读~~（v20.19 已落地第二剧本）；粮仓/镇邪司/工曹/盐铁维持轻交互；~~当铺无抵押赎回~~（v20.20 已落地真当票）；无钱庄倒闭/挤兑世界事件
+
+【v20.17 已落地（2026-09-04）】城市建筑全线接通（零新字段、零迁移，纯显示层+路由层+成本闸）：
+- **症状实锤**：城中面板"设施 46 处"实际只渲染 28 张卡——19 种设施（钱庄/契约所/镖局/善堂/斗法台/观星台/碑林/异闻馆/当铺/拍卖行/黑市暗巷/园林 + 税课司/粮仓/司法堂/镇邪司/医馆/工曹署/盐铁局）玩法与实现在后台俱全，但 BUILDING_TYPES 缺条目（`renderCityBuildings` 查不到就 return）致**卡根本不显示**；且 useBuilding 无路由、`openBuildingUI` 兜底又调回 useBuilding——**互弹栈溢出**（实测 51 层 RangeError 被 onclick 吞成死按钮）；"🔍 深入"按钮白名单写死三个从未注册进情境引擎的名字，从未渲染
+- **`js/location-system.js`**：BUILDING_TYPES 补 19 卡面（七衙门新分类 `office: '🏛️ 衙门'`）+ 19 条描述；useBuilding 新增**动态情景路由**（查 `scenarioEngine.facilities` 注册表 → `openFacilityScenario`，以后新增设施零接线）与 `officialOffices` 七衙门路由表；死按钮摘除
+- **`js/building-effects.js`**：`openBuildingUI` 回弹分支改如实提示（"此处暂无可为，且往别处看看"），循环根除
+- **`js/app.js`**：openTaxBureau/openGranary/openExorcistBureau 去白送——各耗 10 真气（对齐 openWorksBureau/openSaltIronOffice 样板"没真气提灯改日再来"），历练数额不变；司法堂无收益风貌与医馆收费不动
+- 回归 `tests/v20.17-buildings-node.js`（32 断言：卡面全覆盖"列多少挂多少"/47 种设施全量点击零抛错含栈溢出点名/五路点击捕获/未知建筑不回弹/三衙成本闸真源码提跑/工曹样板不回归/情境 12 注册齐全/静态）挂入 `tests/run-all.sh`
+- **未解决**：分城差异化配建（每城同挂 22 处官衙清单待重排，本批刻意不夹带）；~~七衙门深化事件流~~（v20.18 部分落地：税课司行情/司法堂委托/钱庄存贷，余四衙未展开）；旧黑市与黑市暗巷双玩法并存待并
+
+【v20.16 已落地（2026-09-04）】重塑灵根丹：后天改命线落地（新存档字段仅"重塑次数"一项，零迁移）：
+- **`js/items-extended/15-root-refine.js`**（新）：仙品「重塑灵根丹」模板（丹子类→服丹自动累丹毒），自注册进物品库（幂等，同 13/14 号策略）
+- **`js/extensions/root-refine.js`**（新）：`refineRootByPill()` 挪饼——本命主根目标 +6 后经族谱 `_pieRoots` 同一把尺配平回 100（其余按比例摊薄），**越纯越难挪、天然收益递减，无衰减表**；主根六成封顶拒服（拒服返回 error，调用方不扣丹——药力不白受丹也不白吃）；`_rootRefines` 计数器 +1、`advanceTime(120)` 两个时辰；`rootRefineInfo()` 只读口径供面板
+- **`js/crafting/alchemy-compound.js`**：新开放丹方 `recipe_root_refine_open`（炼制 70/真气 100/时辰 120）——主药槽"五行俱足且药性平和（40~70）"实测唯**五行灵髓**合格（混沌石药性 80 过烈被拦、一切高突破药材五行不全被拦，有测试锁），产出唯一路径=炼丹
+- **`js/inventory.js`**：useItem 新增 root_refine 分支（挂在丹毒累积之后：丹照吃毒照积；error 拒服不扣丹）
+- **`js/core/game-state.js`**：存档白名单 `rootRefines`（导出/回灌成对，旧档按 0 兜底）；灵根饼本体走既有 roots 字段
+- **`js/achievement-system.js`**：档案键 `p.rootRefines` + 两枚成就——「破而后立」（稀有 40 分，重塑 1 次）「洗尽铅华」（史诗 80 分隐藏，重塑 3 次）
+- 回归 `tests/v20.16-root-refine-node.js`（33 断言：模板注册幂等/主药唯一性/挪饼总和恒 100 与递减/封顶拒服零副作用/存档往返与旧档兜底/成就经真实读档补课+增量检查点亮且至多一条/静态）挂入 `tests/run-all.sh`
+- **未解决**：弟子/NPC 侧不可服用（改命只对玩家开放，NPC 成长轴仍另立批次）；洞府/面板暂无"服丹改命"引导入口（物品描述已写明用法）
+
+【v20.15 已落地（2026-09-04）】成就弹窗残留通道封死（用户二次实测"击败敌人弹一堆"）：
+- **`js/achievement-system.js`**：v20.11 补丁只封了"同刻多枚爆发"（≥2 合并一条），残留涓流通道——同刻单枚点亮仍弹"解锁"+"奖励"两条，且检查点有战斗/每日两处，连战逐场跨档时每场 2 条。现 `_settle()` 从机制封顶：**每次检查至多一条提示**（解锁名与奖励合并同一句），`complete()/applyReward()` 回传奖励列表供统一播报；判定/发奖金额/完成状态/积分全不变
+- 回归 `tests/v20.11-achievements-node.js` 扩至 44 断言（新增"单枚+奖励也只一条"+"逐场点亮每场至多 1 条"的用户现象复现锁）
+
+【v20.14 已落地（2026-09-04）】灵根生效第二批：弟子受性看灵根、资质档位上面板、传闻报根骨来历（零新字段零迁移）：
+- **`js/sects/master-teach.js`**：传功进境=基准 5×弟子灵根倍率（复用 `NPCLife.npcRootGrowthMul`，与传闻同一把尺不另立口径；缺位按常速）——天灵根 +12.5/次、杂灵根 +2.5/次，传功反馈带"一点就透/需多讲几遍"；**成本常量原样**（灵石 30/好感 +5/时辰 60/声望 +3/出师三条件全照旧，有测试锁）；资质五档称号（天灵根/上品/中庸/下品/杂灵根）由倍率即时换算，弟子名册 `rootTier`+面板标签，不落库
+- **`js/npcs/npc-life-actor.js`**：突破传闻报根骨来历——主根≥80（只认实测饼，估算饼至多 50 永不误标）报「X灵根，众人称天才——」；≤0.5 倍苦修者突破报「大器晚成——」；`dominantRootName` 导出
+- 回归 `tests/v20.14-disciple-roots-node.js`（27 断言：受性浮动/四项成本锁/五档全曲线/传闻三态与估算饼不报名号/静态）挂入 `tests/run-all.sh`
+- **未解决**：弟子面板只有档位称号未铺完整灵根饼；~~庸才弟子暂无后天改命途径（洗灵根类道具是天然钩子）~~ 玩家侧改命已由 v20.16 重塑灵根丹落地，弟子/NPC 侧仍开放
+
+【v20.13 已落地（2026-09-04）】灵根生效：NPC 灵根饼驱动自主修炼（零新字段零配额，天才进境快成为世界事实）：
+- **`js/npcs/npc-life-actor.js`**：自主修炼进度从固定 +1 改灵根驱动——`npcRootGrowthMul(npc)` 主根÷40 为倍率钳位 [0.4, 2.5]（均衡饼 0.5×、主根 40=1.0、单灵根封顶 2.5×；无灵根数据走族谱 `guessRoots` 境界估算，族谱缺载按常速不拿猜测当事实）；`cultivateStep(npc)` 保留旧版全部突破语义（阈值 10、归零、升层升境、心性回执、`_orders` 序列）只改进境速度；api 导出两函数供测试与后续系统复用同一把尺
+- **成本与真源**：成本仍是"一日一行 + 5% 进境机缘"（有测试锁）；进度唯一字段 `_cultivationProgress` 不变（`master-teach` 以 `Number()` 读取天然兼容小数）；灵根唯一所有者=NPC 本体 `spiritualRoots`（估算只发生在读取瞬间不回写）
+- 回归 `tests/v20.13-npc-roots-node.js`（28 断言：倍率曲线/估算兜底/缺载常速、突破语义五联、天才 4 步 vs 庸才 16 天确定性对局、tickDay 端到端、同日不重复、静态四项）挂入 `tests/run-all.sh`
+- **未解决**：灵根刻意不进 NPC 攻防战斗数值（全局数值缩放被明令禁止，"进境快"已让实战随境界自然变强）；玩家自身修炼速度未吃此倍率（玩家吃打坐/功法/洞府口径，独立决策）；~~"因灵根而快"的解释性传闻未做~~ 已由 v20.14 落地（传闻报根骨来历）
+
+【v20.12 已落地（2026-09-04）】道侣/子嗣闭环（存档除名修复、双修情分阶梯、首胎死结终结、4 枚情缘成就、成就墙扩至 37 枚）：
+- **`js/core/game-state.js`**：存档白名单新增 `bonds`/`children`（道侣关系含位分与情分进度、子嗣列表，深拷贝入档回灌；旧档按空处理零迁移）——旧版重开档道侣除名、战斗加成丢失、子嗣清零、上限守卫失效
+- **`js/sects/sects-system.js`**：双修新增情分阶梯（1 次攒 1 分，10 分+好感≥80 升一档位分）——修复 `bond.level` 全游戏无升档路径、而首胎又要求 `bond.level≥2` 的诞生死结；成本=精力 20+时辰+真实好感，无每日配额
+- **`js/achievement-system.js`**：档案快照加 `daoBond`/`children`，新增凤求凰/情深似海/血脉相承/兰阶玉盈 4 枚情缘成就
+- `js/npcs/marriage-offspring.js` 不动：`bond≥2` 门槛保留，修复走"修通"不走"拆门"
+- 回归 `tests/v20.12-bonds-node.js`（28 断言：升档不白送/好感不足不升/门槛仍在/端到端诞育/存档五件套守恒/成就跨档点亮）挂入 `tests/run-all.sh`
+- **未解决**：结道侣与升档首级好感门槛重合（梯度偏平）；玩家侧 `_children` 与族谱 `npcLineageIndex` 两套血脉并存待归一；~~NPC 灵根饼未进数值~~（修炼线已由 v20.13 接入；战斗数值刻意不进）；无头浏览器缺位；抄本价两列并存
+
+【v20.11 已落地（2026-09-04）】成就墙做实（33 枚成就全接真源；白送 bug/幽灵键/无 UI/仅战斗触发/读档隐身五病同治）：
+- **`js/achievement-system.js`**：`buildAchievementProfile()` 只读档案快照（击杀/境界/历练/气运/业障/名气/恶名/双币/功法数/藏品/好友/门派位分贡献/灵兽/试炼塔/剑意/历日，全取自真源零新状态）；33 枚预设条件全部对齐快照路径（防幽灵键有测试全表锁）；`applyReward` 经 DataManager/RewardService 真源发放；初始化不再 serialize 回环（旧版条件奖励双丢→空条件全体秒解锁的白送 bug 根源）；读档 `importMerged` 并档（新增成就旧档自动可见，积分按完成集 `recount` 重算）；`renderAchievementPanel()` 九分类面板（隐藏未完成显示 ???）
+- **`js/app.js`**：战斗胜利处新增击杀计数唯一写入点（`currentCharData._killCount`，遁走不算杀）——此前该字段只有读取方无写入方，收藏系统击杀柱恒 0；成就检查改档案入口；`switchPanel('achievements')` 接线
+- **`js/core/game-state.js`**：存档新增 `killCount`/`collectionClaimed` 并回灌（击杀数与收藏领奖记录不再随重开档归零）；`仙侠.html` 加「🏅 成就」入口与面板
+- **同日补丁（用户实测弹窗风暴）**：老档积压成就在首个检查点（首胜）一次性引爆致刷屏——判定/发奖分离（`evaluate()`+`_settle()`），≥2 枚合并一条汇总，读档 `syncQuiet()` 载入时静默补课，积压不再留到战斗时爆；回归扩至 39 断言
+- 回归 `tests/v20.11-achievements-node.js`（39 断言：幽灵键全表校验/空世界 0 点亮白送锁/满配奖励核账/并档可见性/弹窗合并与静默补课/面板渲染/静态接线）挂入 `tests/run-all.sh`；`tests/market-dynamic-node.js` 注入种子 rng 根除"10 天回归"概率性红叉（旧版约 15% flake）
+- **未解决**：~~bonds/children 不在存档白名单（道侣类成就因此未设）~~ 已由 v20.12 修复并补设 4 枚情缘成就；~~NPC 灵根饼未进 NPC 数值（v20.10 遗留）~~ 修炼线已由 v20.13 接入（战斗数值刻意不进，见 v20.13）；无头浏览器缺位无法截图验收；抄本价两列并存（v20.8 遗留）
+
+【v20.10 已落地（2026-09-04）】灵根饼图口径统一（全游戏一把尺：五行一张饼、总和恒 100；零新字段、读档自愈）：
+- **`js/npcs/npc-lineage.js`**：`pieRoots()` 最大余数法把任意输入精确配平到 100（幂等、无取整漂移）；遗传链归饼（父母各归饼→五行逐行 50/50 选源 ±20 扰动→整体再归饼），旧"总和≤200 削峰+等比取整"（201 红叉根源）拆除；`guessRoots` 三境界估算改总和 100（金丹主根 50%，旧版估 260 与玩家刻度矛盾）；族谱面板后代行加主根占比；StateRegistry import 旧档后代灵根自愈
+- **`js/app.js`**：修炼加成文案如实换算（占比/2），不再拿占比冒充百分比
+- **口径统一说明**：玩家侧本就是占比饼（创角归一 100、功法兼容 `>0`、修炼倍率 0.8+占比/200），NPC 侧"单行强度 0-100 + 总和≤200"是与玩家矛盾的平行刻度——本批以玩家饼为唯一真源合并（不动玩家数据零迁移）
+- 新增回归 `tests/roots-pie-node.js`（26 断言：饼守恒/幂等/兜底、三境界估算、种子 rng 对抗 300 胎每胎精确 100、自愈幂等、读档自愈、面板主根、静态）挂入 `tests/run-all.sh`；`tests/npc-lineage-node.js` 断言收紧为"总和精确 100"
+- **未解决**：~~NPC 灵根不参与 NPC 战斗/修炼数值（饼只服务遗传与展示）~~ 修炼线已由 v20.13 接入（战斗数值刻意不进）；"后天改灵根"玩家侧已由 v20.16 重塑灵根丹落地，作 NPC 成长轴仍另立批次
+
+【v20.9 已落地（2026-09-04）】灵兽坊真实购入 + 藏经阁口径统一 + 培养日限清除（零新存档字段）：
+- **购入线 `js/beast-taming.js`**：`BEAST_SHOP_STOCK` 八种驯化幼兽（风狼 200 → 火凤 2600，付血脉钱、Lv.1 起养）；`buyBeast()` DataManager 真扣款/两级退款、失败不动账，成兽与驯服链路同形态（技能带入、天赋掷骰、乘具复制、驯化亲和 45）；进化形态不上架；`app.js openBeastShop` 真货架面板（缺依赖退回旧面板）
+- **藏经阁口径归一 `js/sects/sect-facilities.js`**：`LIB_TIERS.maxRank` 对齐真源 `canAccessScriptureTier`（二层 5→4、三层 4→3、四层 3→2，此前三层各松一级）；新增唯一判定 `libTierUnlocked()`（真源优先、缺载回退且数值已对齐、-1/-2 无职位同判不可入）；面板/翻阅/参悟/请抄本四处门禁 + `app.js openLibrary` 第三份复制判断全数收拢
+- **`trainBeast` 删"每日 3 次"人为计数器**（违反"成本必须世界真实"戒律）：成本只剩精力 5 + 时辰 30 分钟
+- 新增回归 `tests/v20.9-beast-library-node.js`（44 断言：货架真实性/经济账/驯化形态/日限清除/rank×tier 全表口径一致/接线静态）挂入 `tests/run-all.sh`
+- **未解决**：请抄本价格表与功法自带 copyPrice 两列价并存（行为以功法价为准），口径合并留下一批
+
+【v20.8 已落地（2026-09-04）】门派建筑全补齐 + 城市印钞机封堵（一次性全做，零新存档字段零迁移）：
+- **结算原语扩展 `js/core/reward-service.js`**：`take:[{itemId,count}]` 交货（`EconomyTransaction.removeByTemplate` 同事务，缺货整体失败 `missing_item`，钱货原子联动）；`karma` 有符号业障（钳 ±100，复用 updateKarmaDisplay）
+- **剧本引擎硬能力 `js/core/scenario-engine.js`**：`roll:{prob,win,lose}` 成败分支（分支=完整效果表递归 `_apply`，prob 支持函数；rng=`window.__scenarioRng` 可注入）；`require.items` 持有物门槛（与 take 同款扫 slots，缺货禁用"缺少X"）
+- **门派坏按钮重接线 `js/app.js`**：演武场/洞府/医馆走 `useFacility`（洞府免费满血漏洞封堵，改静坐缓回真气）；炼丹/锻器走 `openCraftingUI`；贡献阁/藏经阁/门派任务接真面板；`building-effects.js` 同步
+- **地标真动作八类 `js/sects/sect-resource-actions.js`**：personal 静室/affection 陪道侣/storage 理库/military 操练/intel 买消息(进行迹)/formation 参阵/craft 转锻造/torture 自省，全部吃精力/真气/灵石/时辰真成本，灵石走 DataManager 真源；八类全有按钮文案（约 57 个地标灰置按钮消除）
+- **门派增益去安慰剂 `js/sects/sect-specialties.js`**：`sectBuffAttrBonus` 翻译约 20 个别名键进六维（app.js 合并环接入）、`getSectBuffCultivationMul` 让 cultivationSpeed 进修炼收益（building-effects 接入）；核心阁补货 `sect-internal.js:fillTier3Arts()`（每派一部 tier3 承脉要诀，id 全库唯一）；月俸吃 `_sectRelation`（sects-system ±20% 封顶）；议事厅真三动作 + `holdSectMeeting` 收 20 贡献同日一次（制度节律有叙事理由，非配额数值）；兵器库 rankReq:4；藏经阁 minAccess:2 对齐分层读书
+- **印钞机封堵 `js/city-facilities/facility-batch2.js`**：钱庄抵押/当铺死当交真货（`require.items`+`take`，当价 250<市价 500 无套利）；借贷挂业障；存款改诚实问询；斗法台/镖局改境界缩放 roll（会输会伤）；黑市举报/禁卷交易真扣真给挂业障（补模板 `mat_shihun_scroll` 于 items-extended/13）；碑林注册期 rng 归零；盐井工坊改真气工时
+- **假物品 id 清零**：sect-events/loot-system/sect-specialties 中 talisman_fire、mat_kirin_horn、mat_spacetime_crystal、art_wan_jian 等换成真实模板（掉落表两个幽灵 id 为全仓扫描揪出的存量 bug）
+- 新增回归 `tests/sect-buildings-node.js`（96 断言：take 原子性/karma 钳位/roll 注入 rng/持有物门槛/全设施 next 悬挂扫描/当铺无套利/必胜节点清除/假 id 全仓 walk/地标八类行为账/俸禄吃关系/核心阁每派有货）挂入 `tests/run-all.sh`；`tests/sect-management-node.js` 长老可见功法 3→4 + 亲传 tier3 断言
+- **未解决**：~~藏经阁两套口径并存~~、~~灵兽坊无真购买~~（均已随 v20.9 收口）；容器无浏览器无法截图视觉回归
+
+【v20.7 已落地（2026-09-04）】建筑盘点补齐（一次性全做：修坏 + 接薄 + 堵刷，唯一新档键 `cityProgress` 零迁移）：
+- **新增 `js/city-depth.js`**（`window.CityDepth`）：① 试炼塔层数制（每层 20 精力 + 30 灵石香火，胜率=道途强度 vs 层难，层数/最深随档；整五层赏筑基疗伤丹）② 剑冢剑意成长线（悟剑 −20 真气攒剑意钳 30；剑意≥8 方有拔剑资格、成则全江湖唯一古剑+剑意+2；挑战剑灵吃剑意定胜率，胜负两头皆有收获落账；每点剑意 +0.6% 攻击进 battle 乘数链）③ 僵尸字段接真消费：`blessing` 毒洞挡一毒（tryBlockPoison）、`_poisoned` 每日发作气血 −15% 直到服解毒丹（解毒丹清除路径原已存在）、`springBlessing` 修炼 ×1.15 逐坐消耗——**只写不读的字段全部清零** ④ 黄金宫/珍珠市场专属货架（真实模板 id、DataManager 真扣款、背包满原路退款）
+- **坏建筑修复 `js/building-effects.js`**：传送阵按钮 action 名与注册表协议错配致永远"没有该功能"——新增带参 `useBuildingEffect(buildingId, action, ...args)`，传送改 `go(city)`：先 travelSystem.startTravel 校验（未解锁拒了不扣费），成行才收 100 灵石；客栈 `room_upgrade`（50 灵石清负面+压毒 4 时辰）、演武场/寺庙 `meditate`、灵泉 `collect`（存 3 止）、寺庙 `pray`（20 灵石香火，庇佑自此有真实牙齿）等死按钮全部接活且注册表键与按钮字符串逐一核对
+- **假功能替换**：app.js `openBlackMarket` 硬编码货架 → 委托 `openCityShop('special')` 真商店；酒楼 `drink` 8 条硬编码文案掷骰 → 优先取 RUMOR_LOG 真传闻池（含 🌀 走形标记，池空才兜底）；`meet_npc` 死按钮 → 40 铜做东请同地活人入席 +2 好感并直接开对话（空座照付不退款）；茶馆 → 传闻堂（10 灵石茶资 + `renderRumorPanel` 面板，去掉白送历练）；公会大厅 → 并入真悬赏榜；藏经阁/洞府修炼收纸墨/香火钱堵免费刷（**世界成本，非日限配额**）
+- **委托改造 `js/location-system.js`**：黄金宫/珍珠市场接 CityDepth 货架（旧版调用不存在的 `openShop('special')`/空 if 死代码）；毒洞中掷毒前先问庇佑；试炼塔/剑冢三按钮委托 CityDepth（缺载退回旧行为）；**battle.js** getAttack 玩家链尾加剑意倍率（与阵法增益同款全局函数读取）
+- **顺手修复**：`js/extensions/beast-tide.js` 灵兽园 id `Date.now()+千分随机` 同毫秒连建撞 key 静默覆盖（丢园丢 100 灵石）→ 加防撞序号（回归中偶发红叉的根因）；`tests/browser-dom-smoke.py` 无 chromium 时改以 0 退出（环境性跳过≠失败）
+- 新增回归 `tests/city-depth-node.js`（137 断言：传送拒/成/透传、包间清毒、香火与余泽经济、情报吃真源、结识只认同地活人、剑冢资格/唯一性/钳位、试炼塔胜败与五层赏药、毒发日历回调、货架退款、cityProgress 往返与脏数据钳位、静态接线 10 项）挂入 `tests/run-all.sh`
+
+【v20.6 已落地（2026-09-04）】NPC 闭环深化（四条环全部落在 v20.5 底座上，零新存档字段）：
+- **闭环① 玩家进传闻网 `js/npcs/player-rumor.js`**（`window.PlayerRumor`）：`pushDeed(mood,summary)` 经 NPCLife.pushNote 把玩家事迹写入同一传闻池（npcId='player'，mood=good/bad）；订阅既有 EventBus 事件 `quest:completed`/`cultivation:breakthrough` 自动成闻（口碑/天象异动瞒不住人）
+- **闭环③ 传闻改变行为**（同文件）：`trustFactor(npc)` 五维可信度——S 眼见为实易信、N 多揣摩、T 算计多疑、A 沉稳不易带节奏、T起伏易信，∈[0.15,0.9]；`knownPlayerRumors(npcId)` 沿 NPC `heard` 清单 + `variantOf` 链回溯到原闻判定话题人物（变体 npcId 是转述者不作数）；`playerRumorAttitude` = Σ(善恶定性×信任)÷3 ∈[-1,1]——同一堆风声在不同人耳中浓淡不同；坏名声有牙齿：包装 `recruitNPCFromDialog`（attitude≤−0.55 婉拒同行，"名声可以慢慢洗"）；面板「👂 他们耳朵里你的风声」展示（失真标 🌀，−0.4/0.4 阈值给神态文案）
+- **闭环② 关系边产事件 `js/npcs/npc-rel-events.js`**（`window.NPCRelEvents`）：每日 `relTick` 遍历 npcRelationships（无序边去重）——enemy 边嫌隙≥40 按 1.2%/日掷骰寻衅（嫌隙+6、bad 传闻、双方本性−3 渐硬）；friend 边 0.6%/日回访（情谊+2、good 见闻）。玩家恰同地才弹「🗡️ 街头械斗」干预弹窗：帮一头（对面 −6 记名）/ 另一头 / 分劝（需 fame≥50，人微言轻则两头 −1；成则嫌隙 −12 + 双方好感 +2 + 声望 +2 + 本性 +3 回软）。概率制无配额， rng 可注入
+- **闭环④ 性格可被事件改变**：`P16Driver.driftPersonality(npc,dim,delta,reason)` 为全局唯一合法性格写入口（钳位 [−90,90] 留头寸、事由写 gameLog）；写入点：NPC 自主突破（identity −3 沉稳）、械斗（nature −3 渐硬）、分劝成（nature +3 回软）、调停成（nature +4 心软）/败（nature −4 更冷）、递话败露（当事人 identity +4 心思重）
+- 配套微改：`distortRumor` 透传 `mood`（走形不改立场，失真关闭分支同样透传）；`NPCLife.pushNote` 公开注入口（NOTE_SEQ 补 id）；`social-intervene.js` 三处漂移回执；`npc-system.js` 面板模板在介入恩怨栏之后注入 `getPlayerRumorSection`（缺载跳过）；`仙侠.html` 注册 npc-rel-events.js + player-rumor.js（在 social-intervene.js 后、npc-system/time-system 均已加载之后，包装当日生效）
+- 新增回归 `tests/npc-deep-loops-node.js`（47 断言：事迹入池/事件自动成闻/mood 随转述走/信任分化/恶名婉拒招募 vs 善名放行/在场弹窗/分劝声望门槛/帮一头落账/不同地照打世界不静止/回访/rng 高静默/漂移钳位）挂入 `tests/run-all.sh`
+
+【v20.5 已落地（2026-09-03）】NPC 性格驱动 + 传闻传播失真（P16Driver）：
+- 新增 `js/npcs/personality-driver.js`：纯函数驱动层 `window.P16Driver`，让 npc.personality16 五维从"仅展示"变"驱动行为"——`actionWeights`（E 多社交/I 多修炼/P 多动/J 定课/T起伏多静养）、`socialBias`（F 结善缘/T 起摩擦/A 稳/T起伏忽冷忽热）、`compat(a,b)`（五维相性 [-100,100]，本性/战术/身份双强对立有额外摩擦惩罚）、`distortRumor(npc,rumor,opts)`（传闻经听者按最强维转述失真，第二强维≥60 风格叠加；全维<40 中间性格照原样传返回 null；opts.randomSource 可注入供回归复现）
+- `js/npcs/npc-life-actor.js`：行动权重与社交善意概率委托 P16Driver（缺载自动回退基线权重，旧测试桩不受影响）；传闻条目补 `id`/`location` 并记录 NPC `heard` 清单（存 id，随池淘汰自然失效）；社交时把"发生在别处"的新闻转述给同城对面 NPC，听者按自己性格失真产生**变体**（`variantOf` 溯源、`glossStyle` 风格词：渲染/淡化/揣摩/凿实/苛评/共情/断语/存疑/平述/惊传）；本地事不转述（人尽皆知无新闻价值）；传闻池 `RUMOR_LOG` 经 StateRegistry 新键 `npcRumors` 持久化（旧档 import 空池，零迁移）；面板失真变体标 🌀 并注风格与地点
+- 真源纪律：关系仍唯一在 `npcRelationships`、传闻仍唯一在 `RUMOR_LOG`，P16Driver 零状态零存档字段，无平行状态
+- **M2 玩家介入 `js/npcs/social-intervene.js`**（`window.SocialIntervene`）：居中调停 `mediateNpcs`（三方同地+灵石50+120分钟；成败率=口才/双方好感/声望/五维相性−敌意深度；成=敌意清零+双方好感+5+声望+3，败=两头好感−3——成本制无配额）；传闻操纵 `playRumorAction`（`stoke` 添油加醋：假话必达但败露率 35−口才×0.3，败露反噬名声；`clear` 澄清：无嫌隙拒绝、成则敌意清零）；`getInterventionButtons` 注入 NPC 对话面板（npc-system.js 个人事件栏之后，远程给需亲至锁定不整栏消失）；效果全部写回既有真源，零新存档字段
+- 「🗣️ 传闻走形」难度设置开关（默认开，`_settings.rumorDistortion` 用户偏好，app.js `toggleRumorDistortion`；关闭后 spreadRumor 只扩散不改口）
+- 新增回归 `tests/p16-driver-node.js`（25 断言：相性梯度/权重分化/失真可复现/E 与 I 转述必不同/别处新闻才传染/npcRumors roundtrip/旧档零迁移）+ `tests/social-intervene-node.js`（31 断言：门禁零消耗/成败可复现/败露反噬/远程锁定不消失/失真开关行为）；两者已挂入 `tests/run-all.sh`；顺修 `tests/npc-life-actor-node.js` 第 7 项掷硬币误报（social 对面必动好感、行动者自身 50% 为 0，旧断言只看自身致随机挂）
+- `仙侠.html` 注册紧跟 personality16.js 之后（运行时读取，无加载顺序依赖）
+
 【版本】 v18.9 - 世界日历（WorldCalendar）单例 + 长期闭关"闭关至事件" + 出关世界摘要（见 `../游戏制作/旧计划/v18.9_世界日历实施计划.md`）；v15.3 - 社交文案人称修正（social-content.js ta(npc) 按性别输出他/她，静态池省主语）；v15.2 - 队友学绝技（PartyMember.combatAbilities 权威+玩家已掌握即可传授+采补功队友对称放宽；修复 Battle 构造器 forEach this 绑定致队员入战从未生效的存量bug）；v15.1 - 秘籍货架过滤（功法阁正店RARE保底+35%高阶×1.5价/黑市仅EPIC+40%空手×3价/境界门炼气-筑基-金丹）；v15.0 - 深谈追问层（12话题每题每日一追的二级选项对话，选择入 memory.impressions 驱动熟稔度换档开场）；v14.x - 社交页扩展（social-content.js 零侵入：话题×7+情报×5真实数据驱动、组合式问候告别时段×关系层×性格尾缀、16型性格模型personality16.js+五维微口吻、深谈回复入面板#socialReplyBox、SUB_AFF_GATE好感门禁与负面池惩罚复刻、同地点守卫npcNotCoLocated四入口、爱情动作防刷四重检查、随机对话池扩容）+ 审计5尾巴清零（NPC读档_goal恢复、npcRelationships关系唯一真源决策、同行死块/死buff/假按钮清理）；v12.3 - 温蘅（百花谷主）感情线落地（32事件+6结局+自动触发系统）+ 个人事件系统通用化（多NPC感情线支持）；v12.2 - 稳定性迭代；v12.1 - 稳定性/深度框架/石山治理（StateRegistry/GameScheduler/EconomyTransaction/EventBus/内容校验）；v12.0 - NPC问候系统扩展（首次见面名气阈值判定/后续问候每档3-5条随机池/绯泪专属问候含道侣情话）；v11.9 深谈系统2.0；v11.8 - 出售系统重构；v11.7 - NPC社交系统P0-P1修复；v11.6 修复绯泪秘密栏不显示问题；v11.5 修复resetNPCSystem未注册门派NPC；v11.4 P0/P1遗留问题修复；v11.3 NPC互动系统修复；v11.2 门派设施运行时修复；v11.1 物品系统全面修复；v10.3 门派晋升系统完整重做；v10.2 门派入门体系改造；v12.7 - 血量单一权威链路（currentCharData.health 为场外唯一血量权威，buildPlayerBattleEntity 统一战斗入口，closeBattle 写回，状态栏新增血量条）；v12.8 - 敌人类型差异化第一批（五AI行为真实生效/毒素循环poisonLoad/构装硬化/野兽猛扑/元素冰火/人形六亚型/精英魔头修饰）；v12.9 - 敌人第二批9亚型（吸血/反震/音修灵抗/幻术迷扰/遁逃noSpoils/摄气真气/金蚕蛊/剑修连击/叛徒门控）+ 修复 _consumeFormationBuff 身份错调用休眠缺陷；v13.0 - 战斗技能系统重构（COMBAT_ABILITIES注册表13项，机制从亚型解耦为招牌技+共享随机池，Entity.hasAbility 对称钩子）；v13.1 - 绝技玩家化（currentCharData.combatAbilities 权威+GameState存档，秘籍研读/敌人掉落/流浪修士传授三渠道，接触钩子门控移除实现攻防完全对称）
 【v12.1 已落地】状态注册表、游戏时间调度器、经济事务、真实拍卖、借物服务、竞技场拆分、符箓基础效果、玩家庇护、内容校验；修复制作只扣第一材料、NPC生命周期调用次数漂移、宗门事件查看即结算、突破跨境/材料不扣/寿元误触发等高风险问题；顶层全局声明冲突清零并锁定关键 API 唯一拥有者；新增 tests 自动回归。
 【当前已落地基线】v9.10：B1 GameState；B2 背包堆叠/出售/入口/缺失物品；B3 小时恢复累加/onNewDay 钩子/currentDay；v9.9 日常事件；v9.8.1 战斗修复；v10.0.2 面板hidden遗漏修复
@@ -997,35 +1192,86 @@ let facilityState = {
 - `validateFacilities()` 在 `openFacilityUI()` 时自动调用
 - 检查：所有设施必须有 `actions` 数组、每个 action 必须有 `type`、所有 type 必须在 `VALID_ACTION_TYPES` 中、禁止 `rankReq: 0`
 
-## 2.21 randomMap.js - 随机野外地图
+## 2.21 野外地图（wild-terrain.js + randomMap.js，v20.56 重做）
 
-### MAP_CONFIG
-ROWS:12, COLS:16, CELL_SIZE:40, VIEWPORT_ROWS/COLS
+### 2.21.1 wild-terrain.js - 地形生成器（纯函数、种子确定、可在 node 验收）
+IIFE 暴露 `window.WildTerrain`：
+- `TERRAIN`：24 种地形 {name, base/accent 色, moveCost(刻), passable, qi(灵气系数), kind}
+  通用 12：PLAIN/FOREST/MOUNTAIN/SNOW/FROZEN/WATER(不可通行)/FORD/DESERT/SWAMP/VOLCANO/SPRING/ROAD(0.5刻)
+  独有 12（v20.60，SIGNATURE_LANDFORMS 一地一貌，只在属地图上长）：南疆 MIASMA 瘴沼 /
+  西漠 OASIS 绿洲+QUICKSAND 流沙 / 北冥 GLACIER 冰川+CREVASSE 冰隙(不可通行) / 蜀地 SWORDTOMB 剑冢 /
+  中州 OLDFIELD 古战场 / 东荒 PRIMFOREST 荒古林 / 东南海域 WRECK 沉船+WHIRLPOOL 漩涡(不可通行) /
+  灵界 QIPOOL 灵池 / 魔界 BONEFIELD 骨原
+- `REGION_PROFILES`：九大地区（含灵界/魔界）风貌参数 sea/mount/forest/cold/arid/swamp/volcano/spring/rivers/roads/tint
+- `createSeededRandom / hashStringToSeed`：Mulberry32 种子随机
+- `generate({seed,region,rows,cols,landmarks,resources,dungeons})` → `{grid,pois,start,ok,stats}`
+  流程：分形值噪声(高度/湿度/温度三场) → 阈值分层 → 多数表决平滑×2 → 灵泉(灵气场峰值)
+  → 河流(高处下行) → carveSignatures 独有地貌(按 where 安土长片, 冰隙漩涡会切地皮) → bridgeIslands 跨海礁路 → largestComponent 主陆 → POI 落位(只落主陆)
+  → carveRoads 古道连 POI(穿水成浅滩) → 验收(POI 全可达 + 连片度≥0.8)，8 个盐次取最优
+- `findPath(grid,from,to)`：Dijkstra，按地形 moveCost 加权 → `{path,cost}` | null
+- `passable(cell)` / `floodFill(grid,start)` / `largestComponent(grid)`
+- POI 类型：town 村镇 / market 坊市 / cave 洞府 / ruin 遗迹 / landmark 图鉴地标 /
+  spring 灵泉 / resource 资源点 / dungeon 秘境入口 / ferry 渡口(v20.59: waterside 摆位,
+  必临水, 海区两处内河一处; carveRoads 锚点带上渡口)
 
-### TERRAIN
-PLAIN/FOREST/MOUNTAIN/WATER/DESERT/SNOW/FROZEN_LAND/VOLCANO/SWAMP/SPIRIT_SPRING
-REGION_TERRAIN_WEIGHTS - 七大地区地形权重
+### 2.21.2 randomMap.js - 野外地图状态/渲染/交互
+MAP_CONFIG：ROWS 20, COLS 26, CELL_SIZE 40, VIEWPORT 9×16（SVG viewBox 640×360）
+BUILDINGS：TOWN/MARKET/CAVE/RUIN（语义常量；地形表在 WildTerrain.TERRAIN）
+REGION_ALIASES：地图地区 ↔ 资源点/秘境表的 region 叫法对齐（空数组视为未配置，退回本名）
 
-### BUILDINGS
-TOWN(城镇/休息), SECT(门派), RUIN(遗迹/探索宝物), CAVE(洞府/修炼), MARKET(坊市/交易)
+状态：currentMap(格: terrainKey/terrain/qi/deco/elev/entities/fog/poiId/node) / playerPos /
+viewportOffset / currentPois / wildTravel(寻路预览) / wildState{regions:[地区差量]}
 
-### generateRandomMap(rows, cols, region)
-实体生成：
-- 建筑 15%
-- 人物 20%：personType = normal | merchant(游商约25%) | wanderer(流浪修士约20%)
-  游商 symbol🛒 名称前缀「游商·」；流浪修士🗡️「流浪修士·」
-- 野兽 15% type=beast
-
-### 交互与移动
-renderMap / onCellClick(x,y) - 仅相邻格移动；耗时 moveCost*10；3%奇遇
-tryBeastAmbush() - 相邻野兽30%追击：移入玩家格 → 提示 → openBattleWithEntity 自动开战
-getCurrentCellEntities() - 当前格实体列表
-triggerBuildingEffect(building)
-
-### 导出
-window.getCurrentCellEntities, window.tryBeastAmbush, initRandomMap...
+迷雾三态：fog 0 未知 / 1 已见(记忆,变暗) / 2 可见；
+`revealAround` 先把旧可见降为已见再点亮新视野；半径随地形(山地3.6/密林1.9)+天象(雾/雷雨-0.8)+夜(-0.5)
+建图 `buildWildMap(region)`：WildTerrain.generate → 落格 → scatterGatherNodes(采集节点,
+NODE_BY_TERRAIN 按地皮定品类——林泽/雪原/水域/平原=药草、山漠火山=矿苗、灵泉=灵机之物(💠)；
+  池取 REGION_FEATURES resources.herb/mine/special，itemById 真源就绪时筛掉空名目（采了必有货），
+  采后 regrowDay=+3~6 日) → scatterEntities(野兽循栖息地密度,
+人循道途聚落; 亡灵/构装体/元素归为怪物; 兽/人名字按 HABITAT_FLAVOR×REGION_WILDLIFE 随地皮取,
+entity 记 habitat) → 起点安全区净空 → applyWildState → revealAround
+交互：
+- `onCellClick(x,y)`：迷雾未探明→提示；相邻→stepTo；远格→findPath 出预览(虚线框)，
+  侧栏「出发(N步·约X时辰)」→ `confirmTravel` 逐格走，途中 rollWildEncounter(基础5%，
+  夜+6%，雷雨/雾+2%) 触发即打断行程并开战；撞上谁由脚下地皮说了算——道上多遇人，
+  水泽/火山必是活物，名字从当地名录抽（v20.57）
+- `stepTo`：advanceTime(moveCost×10×weatherTravelMul×seasonTravelMul)，moveCost≥2 再扣 1 精力；
+  落格即结环境账 applyTerrainHazard（v20.58：TERRAIN_HAZARD 沼泽瘴气/火山灼气/雪线冻土寒气/
+  荒漠暑渴/浅滩湿寒，夜 ×1.5、雨雪天瘴气 ×1.3、境界减免每境 6% 封顶六成，中招真扣气血/精力/真气，
+  侧栏脚下挂 ⚠️ 提示）；日常事件(dailyEvents.wilderness)与奇遇(3%)与旧版同源
+- 野兽追击 `tryBeastAmbush`：相邻野兽 30%(夜+15%) 扑入玩家格并 openBattleWithEntity
+脚下动作 `poiAction(act)`（右侧栏事件委托 data-act，不内联 onclick）：
+- gather 采集→addItemToInventory(按钮按品类叫名：药草/矿石/灵机之物) + 节点枯竭 / rest 打尖(4时辰, 灵石3, 没钱睡柴房恢复减半)
+- shop→openCityShop('general') / cultivate→startCultivation / explore→exploreLandmark(地标)
+  或就地翻遗迹(35% 惊醒守护兽) / spring 汲灵(灵气×20 真气) / meditate 打坐(灵气×8 真气)
+- harvest→ResourcePoints.harvest(本门产地) 或暗采(40% 被看守撞见开战) / dungeon→DungeonDynamic.enter
+- ferry 雇舟(v20.59)：站渡口列出已见过的其他渡口(ferryOptions，未见过不上船)→ ferryTravel(id)
+  扣船钱 5 灵石、结行程 30+曼哈顿距离×20 分钟、水路遭遇按 WATER 地皮单独 roll 一次、直达对岸
+足迹(v20.59)：markPoiVisited/poiIsVisited —— 亲脚到过的地物在差量档记 visited{poiId:1}，
+  图上画金环(#fde68a 外圈)、侧栏记「已至 · N 格」、跨存档保留
+渲染（v20.56 舆图化：不画格线）：drawWildCell 底色取 smoothShadeField 平滑明度场（邻格融色不逐格跳）；
+  地形交界只画 wavyEdgeD 弯曲晕染（宽淡+窄实两道，水岸用浅沫色），不描方块边；古道按四邻连成
+  roadConnectorD 连续线（FORD 也续线）；drawPoi(分类配色, 秘境脉冲)；drawEntities(仅可见格)；
+drawPlayer(脉冲光圈)；drawPathPreview；drawTimeWeatherOverlay(昼夜色调 + 四时罩层(春嫩/夏暖/秋赭/
+冬灰, 冬日无雪也飘雪沫) + 雨雪雾粒子)；drawMapDress(舆图题跋：图名随地区+地区首字小印+罗盘指北+
+外粗内细边框，pointer-events:none 且一律 path 画线——「方块零描边」是格线门禁)；drawPoi 已见(fog=1)
+地标留灰字名；独有地貌各有手绘印(瘴雾浮动 wild-miasma / 剑气闪烁 wild-swordqi / 漩涡旋转 wild-whirl)；
+updateMinimap(#wild-minimap 全图小地图 + 视口框)；renderWildSidebar(四季/天时/脚下/动作/已见地标/图例)
+地皮咬合战斗(v20.60)：TERRAIN_BATTLE_MODS 逐格攻防速闪修正（沼泽拖足 dodge-12/speed-15、
+  剑冢借势 attack+12、荒古林 dodge+12/attack-10、古道 defense+5、平地无修正）——经 WildGround
+  (window.WildGround 显式导出) 由 getCombatBonuses 并入玩家战斗数值，openBattleWithEntity 开场
+  用 battleNote 说一句利害；本地活物不吃这亏，只有玩家吃
+存档：`StateRegistry.register('wildMap')` export/import/reset —— 每地区一份差量
+{fog:520字符, dead:{uid}, gathered:{'x,y':regrowDay}, px, py}；读档按种子重生成地形后回填，
+战死(尸首)由 syncDeadUids 在渲染时记入；旧档无此键自然跳过，无需迁移
+导出：window.openWildernessMap / initRandomMap / renderMap / closeRandomMap / travelToRegion /
+getCurrentCellEntities / tryBeastAmbush / isEntityDead / onCellClick / buildWildMap / saveWildState /
+wildMapApi{confirmTravel,gotoPoi,poiAction,gatherWildNode,stepTo,revealAround,...} / getMapSeed / setMapSeed
+`regenerateMap` 已无意义（一域一图，重开会回到同一片山河）→ 只提示不重掷；`generateSeededMap`
+保留为兼容包装（返回 WildTerrain 网格）
 
 ========================================
+【三、app.js主逻辑详解】========================================
 【三、app.js主逻辑详解】
 ========================================
 
@@ -1337,7 +1583,7 @@ DOMContentLoaded:
 ```
 js/
 ├── 根目录：achievement-system / app / battle-injuries / battle / beast-taming /
-│   building-effects / combat-stats / crafting / data / debug-panel / enhanced-shop /
+│   building-effects / city-depth(v20.7 建筑补齐：试炼塔层数/剑冢剑意/挡毒庇佑/毒发日结/黄金宫珍珠货架) / combat-stats / crafting / data / debug-panel / enhanced-shop /
 │   enhancement / equipment / event-system / global-utils / house-system / inventory /
 │   items-extended.js / items.js / lifespan-system / location-system / loot-system /
 │   mail-system(-ui/-styles) / party-system / physiology-config / poison-system /
@@ -1356,6 +1602,8 @@ js/
 ├── npcs/              baihua-events-extra/-main / baihua-personal-events / data / item-tags /
 │                      name-generator / npc-borrow-service / npc-daily-life / npc-emotions /
 │                      npc-life-system / npc-personal-events / npc-system / personality16(v14.2 十六型+五维) /
+│                      personality-driver(v20.5 五维行为驱动：行动权重/社交倾向/相性/传闻失真，纯函数；v20.6 增 driftPersonality 唯一性格写入口) /
+│                      npc-rel-events(v20.6 关系边产事件：仇家寻衅/好友回访，在场弹窗干预) / player-rumor(v20.6 玩家进传闻网：事迹入池/信任分化印象/恶名拒募) /
 │                      secret-leverage(v13.6-13.8 筹码系统) / social-content(v14.0-v15.3 社交内容生成层) /
 │                      special-npcs / storylines-v2/(batch1.js — v12.6 故事线重写第一批；npc-storylines.js 已废弃，html 引用移除，文件暂留)
 ├── quest/             choice-memory / quest-system(任务追踪v10.0) / scene-performance（自根目录迁入）
@@ -1405,7 +1653,7 @@ js/
 
 ### 第3层：地图与战斗
 6. qi-environment.js → 14地点灵气浓度，引导修炼
-7. randomMap.js → MAP_CONFIG, TERRAIN, BUILDINGS, generateRandomMap, tryBeastAmbush
+7. wild-terrain.js → WildTerrain（地形生成器，无顶层全局）→ randomMap.js → MAP_CONFIG, BUILDINGS, REGION_ALIASES, buildWildMap, tryBeastAmbush（TERRAIN 已随 WildTerrain）
 8. battle.js → BODY_PARTS, Entity, Battle, generateRandomEnemy
 
 ### 第4层：扩展物品
