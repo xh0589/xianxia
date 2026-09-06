@@ -62,7 +62,7 @@ mockWindow.TalismanSystem = (function () {
 
 // 加载
 var fs = require('fs');
-var src = fs.readFileSync('D:/Download Game/仙侠世界/js/extensions/talisman-advanced.js', 'utf8');
+var src = fs.readFileSync('' + (process.env.XIANXIA_ROOT || __dirname + '/..') + '/js/extensions/talisman-advanced.js', 'utf8');
 var wrapped = '(function(window){' + src + '})(mockWindow);';
 eval(wrapped);
 var TA = mockWindow.TalismanAdvanced;

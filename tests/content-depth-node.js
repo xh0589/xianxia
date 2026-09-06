@@ -32,9 +32,11 @@ global.timeSystem = { gameTime:{currentHour:0,currentDay:1,totalMinutes:0}, onNe
 assert(canPlayerAccessPersonalEvent(NPC_PERSONAL_EVENTS.xl_event_001, feilei) === false, '游客未见面竟可进入修罗宫主个人线');
 assert(maybeAutoTriggerFeiLeiEvent('sect') === false, '游客进入修罗宫仍会排队自动事件');
 feilei.memory.firstMet = true; feilei.memory.meetCount = 1;
-assert(canPlayerAccessPersonalEvent(NPC_PERSONAL_EVENTS.xl_event_001, feilei) === false, '仅见过但未入门竟可进入个人线');
+// v20.4 门禁重构：感情线散在八派而玩家只能入门一派，「必须入门」会锁死其余七线。
+// 新规则：见过面 + 身处当地即可推进个人线，入门与否不再是一刀切门槛。
+assert(canPlayerAccessPersonalEvent(NPC_PERSONAL_EVENTS.xl_event_001, feilei) === true, '未入门散修在修罗宫见过面竟被拦在个人线外');
 global.discipleState = { isInSect:true, sectId:'百花谷' };
-assert(canPlayerAccessPersonalEvent(NPC_PERSONAL_EVENTS.xl_event_001, feilei) === false, '异派弟子竟可进入修罗宫主个人线');
+assert(canPlayerAccessPersonalEvent(NPC_PERSONAL_EVENTS.xl_event_001, feilei) === true, '异派弟子在修罗宫见过面竟被拦在个人线外（八线不应被入门锁死）');
 global.discipleState = { isInSect:true, sectId:'修罗宫' };
 assert(canPlayerAccessPersonalEvent(NPC_PERSONAL_EVENTS.xl_event_001, feilei) === true, '本门已见面弟子被错误拦截');
 global.currentCharData.location = '洛阳';

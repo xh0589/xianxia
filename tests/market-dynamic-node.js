@@ -25,8 +25,14 @@ var mockWindow = {
     }
 };
 var fs = require('fs');
-var src = fs.readFileSync('D:/Download Game/仙侠世界/js/extensions/market-dynamic.js', 'utf8');
-var wrapped = '(function(window){' + src + '})(mockWindow);';
+// 种子 rng：供需回归含随机噪声，"10 天后更靠近基准"是概率命题——
+// v20.11 起注入可复现随机源（同 roots-pie 手法），根除偶发红叉。
+var seed = 20110904;
+function sRnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+var seededMath = Object.create(Math);
+seededMath.random = sRnd;
+var src = fs.readFileSync('' + (process.env.XIANXIA_ROOT || __dirname + '/..') + '/js/extensions/market-dynamic.js', 'utf8');
+var wrapped = '(function(window, Math){' + src + '})(mockWindow, seededMath);';
 eval(wrapped);
 var M = mockWindow.MarketDynamic;
 assert(!!M, 'MarketDynamic 已注册');

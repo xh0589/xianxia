@@ -118,6 +118,9 @@ assert(typeCount.move > 0 || typeCount.rest > 0, 'move/rest 出现 (count: ' + J
 assert(typeCount.social > 0 || typeCount.cultivate > 0, 'social/cultivate 出现');
 
 // 7) social 行动真实改 affection
+// v20.5 修正旧断言的掷硬币误报：social 时对面 NPC 必然 ±1，行动者自己 50% 为 0，
+// 原断言只看 npc_5 自身 → 随机挂。正确断言：social 发生后全场必有好感受影响。
+var affSnap = npcData.map(function (n) { return n.affection; });
 var beforeAff = npcData[5].affection;
 mockWindow.NPCLife._store()['npc_5'] = { lastActionDay: 0, actionHistory: [] };
 mockWindow.NPCLife.tickDay(13);
@@ -125,7 +128,8 @@ mockWindow.NPCLife.tickDay(13);
 var day13Log = mockWindow.NPCLife.getRumorLog(100).filter(function (r) { return r.day === 13 && r.npcId === 'npc_5'; });
 if (day13Log.length > 0 && day13Log[0].type === 'social') {
     var afterAff = npcData[5].affection;
-    assert(afterAff !== beforeAff, 'social 行动改 affection (' + beforeAff + ' → ' + afterAff + ')');
+    var anyChanged = npcData.some(function (n, idx) { return n.affection !== affSnap[idx]; });
+    assert(anyChanged, 'social 行动真实改 affection (npc_5 ' + beforeAff + ' → ' + afterAff + '，某方受影响=' + anyChanged + ')');
 }
 
 // ============ C: 性能 ============

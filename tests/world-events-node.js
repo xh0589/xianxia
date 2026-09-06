@@ -65,7 +65,7 @@ var mockWindow = {
 };
 
 var fs = require('fs');
-var src = fs.readFileSync('D:/Download Game/仙侠世界/js/world-events.js', 'utf8');
+var src = fs.readFileSync('' + (process.env.XIANXIA_ROOT || __dirname + '/..') + '/js/world-events.js', 'utf8');
 // 脚本式（非 IIFE）：包一层提供 window + 暴露内部 activateWorldEvent 供测试
 var wrapped = '(function(window){' + src + '\nwindow._testActivate = activateWorldEvent;\nwindow._testGetWorldEventsPanel = getWorldEventsPanelHtml;\n})(mockWindow);';
 eval(wrapped);

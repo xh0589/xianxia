@@ -99,11 +99,13 @@ assert(arts_inner.length >= arts_outer.length, '内门可见数 >= 外门');
 mockWindow.discipleState = freshDs(3); // 亲传
 var arts_qt = mockWindow.getReadableSectArts('少林寺');
 assert(arts_qt.every(function (a) { return a.tier <= 3; }), '亲传只看 tier<=3');
+// v20.8：核心阁补齐后，亲传第一次有 tier3 书可看（此前 tier3 全派空置）
+assert(arts_qt.some(function (a) { return a.tier === 3; }), '亲传应看到 tier3 承脉要诀');
 
 mockWindow.discipleState = freshDs(2); // 长老
 var arts_elder = mockWindow.getReadableSectArts('少林寺');
 assert(arts_elder.every(function (a) { return a.tier <= 4; }), '长老看全部 tier<=4');
-assert(arts_elder.length === 3, '少林长老应看全 3 部（tier 1/2/4）');
+assert(arts_elder.length === 4, '少林长老应看全 4 部（tier 1/2/3/4，v20.8 补核心阁）');
 
 // 未入宗 → 空
 mockWindow.discipleState.isInSect = false;

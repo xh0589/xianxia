@@ -66,11 +66,11 @@ var mockWindow = {
 };
 // 先加载 v19.13 Reincarnation
 var fs = require('fs');
-var src1 = fs.readFileSync('D:/Download Game/仙侠世界/js/extensions/reincarnation.js', 'utf8');
+var src1 = fs.readFileSync('' + (process.env.XIANXIA_ROOT || __dirname + '/..') + '/js/extensions/reincarnation.js', 'utf8');
 var wrapped1 = '(function(window){' + src1 + '})(mockWindow);';
 eval(wrapped1);
 // 再加载 v19.14 Integration
-var src2 = fs.readFileSync('D:/Download Game/仙侠世界/js/extensions/reincarnation-integration.js', 'utf8');
+var src2 = fs.readFileSync('' + (process.env.XIANXIA_ROOT || __dirname + '/..') + '/js/extensions/reincarnation-integration.js', 'utf8');
 var wrapped2 = '(function(window){' + src2 + '})(mockWindow);';
 eval(wrapped2);
 

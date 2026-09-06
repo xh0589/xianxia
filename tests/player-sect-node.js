@@ -25,7 +25,7 @@ var mockWindow = {
     }
 };
 var fs = require('fs');
-var src = fs.readFileSync('D:/Download Game/仙侠世界/js/extensions/player-sect.js', 'utf8');
+var src = fs.readFileSync('' + (process.env.XIANXIA_ROOT || __dirname + '/..') + '/js/extensions/player-sect.js', 'utf8');
 var wrapped = '(function(window){' + src + '})(mockWindow);';
 eval(wrapped);
 var P = mockWindow.PlayerSect;
@@ -183,17 +183,17 @@ log('beforeStones: ' + beforeStones + ', afterStones: ' + afterStones);
 log('expected: +8 stones (5 base + 13-5) + 0.13 rep + 1 elixir + 1 weapon');
 
 var stonesDelta = afterStones - beforeStones;
-assert(stonesDelta === 8, 'internal 政策 spiritStones +8 (got ' + stonesDelta + ')');
+// v20.52 职位真管事：2 长老座镇各 +1 灵石 → 10*1.3 + 2 = 15, cons 5, net +10
+assert(stonesDelta === 10, 'internal 政策 spiritStones +10（13 + 长老 2×1 − 消耗 5）(got ' + stonesDelta + ')');
 
 // 政策：militarize → 武器 ×2
 P.focusPolicy(s3, 'militarize');
 var beforeW = P.getResource(s3, 'weapon');
 P.tickDay();
 var afterW = P.getResource(s3, 'weapon');
-// militarize: prod weapon ×2 = 1*2 = 2 (default prod weapon is 1)
-// 但 militari 也有 discipleLoss = 0.5，floor=0，无流失
+// militarize: prod weapon ×2 = 2，堂主管库 +0.5 → 2.5（v20.52 职位加成）
 log('militarize weapon: before ' + beforeW + ', after ' + afterW + ', delta ' + (afterW - beforeW));
-assert(afterW - beforeW === 2, 'militarize 武器 +2');
+assert(Math.abs((afterW - beforeW) - 2.5) < 0.001, 'militarize 武器 +2.5（×2 + 堂主管库 0.5）');
 
 // 政策：expand → 消耗 ×1.5
 P.focusPolicy(s3, 'expand');
@@ -209,11 +209,30 @@ log('current consumption: ' + JSON.stringify(sState.consumption));
 var stonesDeltaExpand = P.getResource(s3, 'spiritStones') - beforeS;
 log('expand spiritStones delta: ' + stonesDeltaExpand);
 // 默认 5 生产, 1.5 倍消费, delta = -2.5? 但 prod 10 之前设过
-// 实际: prod 10 * 1.0 (expand prodMul=1) = 10, cons 5 * 1.5 = 7.5, net +2.5
-// 资源变整数 floor 行为：10 - 7.5 = 2.5, 但代码是直接 -5*1.5=7.5, 结果是 2.5
-// 但 test 预期整数差
-// 让我容差
-assert(Math.abs(stonesDeltaExpand - 2.5) < 0.01, 'expand spiritStones ~+2.5 (got ' + stonesDeltaExpand + ')');
+// 实际: prod 10 * 1.0 (expand prodMul=1) + 长老 2 = 12, cons 5*1.5 = 7.5, net +4.5
+assert(Math.abs(stonesDeltaExpand - 4.5) < 0.01, 'expand spiritStones ~+4.5（10 + 长老 2 − 消耗 7.5）(got ' + stonesDeltaExpand + ')');
+
+// ---- v20.52 备战政策的弟子流失：小数逐日累计，满一人走一人 ----
+section('6b) militarize 弟子流失（v20.52 修复：原先 floor(0.5)=0 一年也流不走一人）');
+var sL = P.create({ name: '试兵庄' }).sectId;
+P.recruitDisciple(sL, 'npc_l1');
+P.recruitDisciple(sL, 'npc_l2');
+P.recruitDisciple(sL, 'npc_l3');
+P.focusPolicy(sL, 'militarize');
+P.tickDay();
+assert(P.listDisciples(sL).length === 3, '练兵第一天：尚无一人辞门（累计 0.5）');
+P.tickDay();
+assert(P.listDisciples(sL).length === 2, '练兵第二天：走了一人（累计满 1）');
+P.tickDay(); P.tickDay();
+assert(P.listDisciples(sL).length === 1, '再过两日又走一人（逐日累计不丢账）');
+assert((P.getSect(sL).history || []).map(function (h) { return h.text; }).join('').indexOf('辞门') >= 0, '辞门之事记入宗门史');
+// 灵石见底：清空库存后入不敷出（耗 8 > 产 5）且门中有人，才叫断粮
+var sF = P.create({ name: '断粮庄' }).sectId;
+P.recruitDisciple(sF, 'npc_f1');
+P.consumeResource(sF, 'spiritStones', 100);
+P.setConsumptionRule(sF, 'spiritStones', 8);
+P.tickDay();
+assert((P.getSect(sF).history || []).map(function (h) { return h.text; }).join('').indexOf('灵石见底') >= 0, '灵石见底记入宗门史');
 
 // tickDay 多次
 P.focusPolicy(s3, 'internal');
@@ -222,8 +241,8 @@ P.setConsumptionRule(s3, 'spiritStones', 0);
 var bal0 = P.getResource(s3, 'spiritStones');
 for (var di = 0; di < 30; di++) P.tickDay();
 var bal30 = P.getResource(s3, 'spiritStones');
-// internal: 1 * 1.3 = 1.3/day × 30 = 39
-var expectedIncrease = 1.3 * 30;
+// internal: 1*1.3 + 长老 2×1 = 3.3/day × 30 = 99（v20.52 职位加成）
+var expectedIncrease = (1.3 + 2) * 30;
 var actualIncrease = bal30 - bal0;
 log('30 天 internal 增长: ' + actualIncrease + ' (期望 ~' + expectedIncrease + ')');
 assert(Math.abs(actualIncrease - expectedIncrease) < 1, '30 天增长 ~' + expectedIncrease);

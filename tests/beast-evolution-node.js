@@ -25,7 +25,7 @@ var mockWindow = {
     }
 };
 var fs = require('fs');
-var src = fs.readFileSync('D:/Download Game/仙侠世界/js/extensions/beast-evolution.js', 'utf8');
+var src = fs.readFileSync('' + (process.env.XIANXIA_ROOT || __dirname + '/..') + '/js/extensions/beast-evolution.js', 'utf8');
 var wrapped = '(function(window){' + src + '})(mockWindow);';
 eval(wrapped);
 var B = mockWindow.BeastEvolution;

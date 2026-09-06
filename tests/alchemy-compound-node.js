@@ -46,7 +46,7 @@ var mockWindow = {
 };
 // 在 node 端通过 eval 加载 alchemy-compound
 var fs = require('fs');
-var src = fs.readFileSync('D:/Download Game/仙侠世界/js/crafting/alchemy-compound.js', 'utf8');
+var src = fs.readFileSync('' + (process.env.XIANXIA_ROOT || __dirname + '/..') + '/js/crafting/alchemy-compound.js', 'utf8');
 // 改 IIFE：注入 mockWindow
 var wrapped = '(function(window){' + src + '})(mockWindow);';
 eval(wrapped);

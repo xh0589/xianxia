@@ -7,7 +7,9 @@ Requires: chromium and websocket-client.
 import subprocess, tempfile, shutil, time as _time, urllib.request as _ur, os, signal, atexit
 _chromium=shutil.which('chromium') or shutil.which('chromium-browser')
 if not _chromium:
-    raise SystemExit('SKIP: chromium not found')
+    # 环境性跳过不是失败：无 chromium 时以 0 退出，让 run-all.sh 的退出码只反映真实测试结果
+    print('SKIP: chromium not found')
+    raise SystemExit(0)
 _profile=tempfile.mkdtemp(prefix='xianxia_browser_')
 _proc=subprocess.Popen([_chromium,'--headless=new','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--disable-background-networking','--disable-component-update','--disable-default-apps','--disable-extensions','--disable-sync','--no-first-run','--remote-allow-origins=*','--remote-debugging-address=127.0.0.1','--remote-debugging-port=9333','--user-data-dir='+_profile,'about:blank'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 def _cleanup():

@@ -25,7 +25,7 @@ var mockWindow = {
     }
 };
 var fs = require('fs');
-var src = fs.readFileSync('D:/Download Game/仙侠世界/js/extensions/codex-tutorial.js', 'utf8');
+var src = fs.readFileSync('' + (process.env.XIANXIA_ROOT || __dirname + '/..') + '/js/extensions/codex-tutorial.js', 'utf8');
 var wrapped = '(function(window){' + src + '})(mockWindow);';
 eval(wrapped);
 var T = mockWindow.CodexTutorial;

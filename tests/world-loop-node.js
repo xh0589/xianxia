@@ -109,7 +109,7 @@ mockWindow.WorldCalendar = {
 };
 
 var fs = require('fs');
-var src = fs.readFileSync('D:/Download Game/仙侠世界/js/core/world-loop.js', 'utf8');
+var src = fs.readFileSync('' + (process.env.XIANXIA_ROOT || __dirname + '/..') + '/js/core/world-loop.js', 'utf8');
 var wrapped = '(function(window){' + src + '})(mockWindow);';
 eval(wrapped);
 

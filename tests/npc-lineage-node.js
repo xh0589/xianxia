@@ -167,7 +167,8 @@ if (kids > 0) {
     var allValid = roots.metal >= 0 && roots.metal <= 100 && roots.wood >= 0 && roots.wood <= 100 && roots.water >= 0 && roots.water <= 100;
     assert(allValid, '后代灵根在 0~100 范围');
     var totalRoots = roots.metal + roots.wood + roots.water + roots.fire + roots.earth;
-    assert(totalRoots <= 200, '后代灵根总和 ≤ 200 (实际 ' + totalRoots + ')');
+    // v20.10 饼图口径：总和精确 100（旧"≤200 强度+削峰"偶发 201 的根源已拆）
+    assert(totalRoots === 100, '后代灵根总和精确 100 (实际 ' + totalRoots + ')');
 }
 
 // 10) 父母 lineage.children 含 child
