@@ -158,12 +158,12 @@ mockWindow.SectYearGoal.choose('cultivate_disciples');
 st = mockWindow.SectYearGoal._getStore()['少林寺'];
 assert(st.currentValue === 20, '基线值=20');
 
-// 日结：disciples+10 → 进度 30/30 完成
+// 日结：disciples 20→50（第一百零九波改增量口径：本年净增 +30 才算达成，存量不再冒充进度）
 setDay(2);
-mockWindow.SECT_INTERNAL['少林寺'].disciples = 30;
+mockWindow.SECT_INTERNAL['少林寺'].disciples = 50;
 mockWindow.SectYearGoal.tickDay('少林寺', 2);
 st = mockWindow.SectYearGoal._getStore()['少林寺'];
-assert(st.currentValue === 30, 'tickDay 后 currentValue=30');
+assert(st.currentValue === 50, 'tickDay 后 currentValue=50');
 
 // ============ C4 跨年检测（day 361 触发 settleYear）============
 setDay(361);
@@ -191,9 +191,11 @@ mockWindow.discipleState = freshDs(0);   // v20.x：掌门
 mockWindow.discipleState.contribution = 0;
 mockWindow.inventory.currency.spiritStones = 0;
 setDay(1);
-mockWindow.SECT_INTERNAL['少林寺'].disciples = 30; // 已达成
+mockWindow.SECT_INTERNAL['少林寺'].disciples = 30; // 立目标的基线
 mockWindow.SectYearGoal.choose('cultivate_disciples');
 var st3 = mockWindow.SectYearGoal._getStore()['少林寺'];
+// 第一百零九波：增量口径——基线 30 之后真收满 30 个新弟子（30→60）才算达成
+mockWindow.SECT_INTERNAL['少林寺'].disciples = 60;
 mockWindow.SectYearGoal.settleYear('少林寺', 1);
 var st3after = mockWindow.SectYearGoal._getStore()['少林寺'];
 assert(st3after.history[st3after.history.length - 1].completed === true, '已达成');
@@ -236,6 +238,9 @@ mockWindow.SECT_INTERNAL['少林寺'].disciples = 30;
 setDay(20);
 mockWindow.discipleState = freshDs(0);   // v20.x：掌门
 mockWindow.SectYearGoal.choose('cultivate_disciples');
+// 第一百零九波：进度看基线之后的净增——立完目标真收 15 个新弟子（30→45），进度才是 15/30
+mockWindow.SECT_INTERNAL['少林寺'].disciples = 45;
+mockWindow.SectYearGoal.tickDay('少林寺', 20);
 var prog = mockWindow.SectYearGoal.getProgress('少林寺');
 assert(prog > 0 && prog <= 1, 'progress 在 [0,1]');
 var card = mockWindow.SectYearGoal.renderProgressCard('少林寺');

@@ -213,8 +213,29 @@ function canAffordEnhance(type, level) {
 
 function payEnhanceCost(needS, needG) {
     if (!window.inventory || !window.inventory.currency) return false;
-    window.inventory.currency.spiritStones -= needS;
-    window.inventory.currency.copper -= needG;
+    // 第九十五波·NEW-31：扣费统一走 EconomyTransaction.debit（事务流水 + 自动回填 currentCharData 镜像）。
+    // 旧版裸写 inventory.currency 只动背包钱包，两本账从此漂移（强化一次漂 20 灵石，还会跟着存档活下来）。
+    // debit 自带余额校验（不足返回 false）：灵石腿扣成、铜钱腿不足时把灵石回补——任一失败整笔不成交。
+    var ET = window.EconomyTransaction;
+    if (ET && typeof ET.debit === 'function') {
+        if (needS > 0 && !ET.debit('spiritStones', needS)) return false;
+        if (needG > 0 && !ET.debit('copper', needG)) {
+            if (needS > 0 && typeof ET.credit === 'function') ET.credit('spiritStones', needS);
+            return false;
+        }
+        if (window.updateCurrencyUI) window.updateCurrencyUI();
+        return true;
+    }
+    // 兜底：事务模块未加载时先查够再扣，真账与镜像同笔双写（不留第二本账）
+    var st = Number(window.inventory.currency.spiritStones) || 0;
+    var cp = Number(window.inventory.currency.copper) || 0;
+    if (st < needS || cp < needG) return false;
+    window.inventory.currency.spiritStones = st - needS;
+    window.inventory.currency.copper = cp - needG;
+    if (window.currentCharData) {
+        window.currentCharData.spiritStones = window.inventory.currency.spiritStones;
+        window.currentCharData.copper = window.inventory.currency.copper;
+    }
     if (window.updateCurrencyUI) window.updateCurrencyUI();
     return true;
 }
@@ -246,7 +267,16 @@ function enhanceEquipmentSlot(type, slotId) {
         return { success: false, reason: 'cost' };
     }
 
-    payEnhanceCost(cost.needS, cost.needG);
+    // 第九十五波·NEW-31：付账失败整笔不成交——不进炉、不推时间、不掷成功率
+    if (!payEnhanceCost(cost.needS, cost.needG)) {
+        if (window.showMessage) window.showMessage('强化费没能付清，这一炉不成交。', 'error');
+        return { success: false, reason: 'cost' };
+    }
+
+    // v23.1 锻打要真花时间：进炉、淬火、锤定三刻钟（旧版点击即出结果，炉子都没热）
+    if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
+        try { window.timeSystem.advanceTime(30, cfg.name || '锻造强化'); } catch (e) {}
+    }
 
     var rate = getEnhanceSuccessRate(type, level);
     var roll = Math.random();
@@ -258,6 +288,7 @@ function enhanceEquipmentSlot(type, slotId) {
             item.enchantType = ENCHANT_POOL[Math.floor(Math.random() * ENCHANT_POOL.length)].id;
         }
         enhanceSuccess(type);
+        if (typeof window.growLifeSkill === 'function') window.growLifeSkill('锻造', 2, { reason: '强化装备' }); // v20.94 熟能生巧
         if (typeof window.updateEquippedStats === 'function') window.updateEquippedStats();
         if (typeof window.renderEquipmentPanel === 'function') window.renderEquipmentPanel();
         if (window.showEffect) window.showEffect('level_up');
@@ -265,10 +296,8 @@ function enhanceEquipmentSlot(type, slotId) {
             '（成功率 ' + Math.floor(rate * 100) + '%）';
         if (window.showMessage) window.showMessage(msg, 'success');
         if (window.gameLog) window.gameLog.add(msg, 'success');
-        // 副职业经验
-        if (typeof window.addProfessionExp === 'function') {
-            window.addProfessionExp('blacksmith', 5 + level * 2);
-        }
+        // 第一百一十波 · NEW-103：副职业经验系统全库无定义——这几行守卫恒假纯噪声，
+        // 长进的真账是上面那行 growLifeSkill('锻造')，幽灵调用删掉
         return { success: true, level: level + 1, item: item };
     }
 
@@ -288,6 +317,7 @@ function enhanceEquipmentSlot(type, slotId) {
     }
     if (typeof window.updateEquippedStats === 'function') window.updateEquippedStats();
     if (typeof window.renderEquipmentPanel === 'function') window.renderEquipmentPanel();
+    if (typeof window.growLifeSkill === 'function') window.growLifeSkill('锻造', 1, { reason: '强化失手，长了记性' }); // v20.94 熟能生巧
     return { success: false, downgraded: downgraded, pity: enhancementPity[type] };
 }
 

@@ -1124,7 +1124,7 @@ function finishTianshugeJoin() {
 // 完整考核：旧有 19 派；轻量特色问：v18.7 为其余 14 个此前通用/空白门派补齐。
 
 var FULL_GUARD_TRIAL_SECTS = [
-    '金刚宗','铸剑山庄','蓬莱派','天山派','少林寺','武当派','太虚剑宗','丐帮','药王谷','阎罗殿',
+    '金刚宗','铸剑山庄','蓬莱派','天山派','少林寺','武当派','丐帮','药王谷','阎罗殿',
     '大旗门','侠隐阁','天涯海阁','神机门','霹雳堂','峨眉派','五仙教','唐门','逍遥派'
 ];
 
@@ -1271,17 +1271,6 @@ function showSectGuardTrial(sectId) {
         html += '<button onclick="wuDangQ1(\'wind\')" class="w-full bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded text-sm">「风」</button>';
         html += '<button onclick="wuDangQ1(\'heart\')" class="w-full bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded text-sm">「人心」</button>';
         html += '<button onclick="wuDangQ1(\'dunno\')" class="w-full bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">「不知道」</button>';
-        html += '</div></div>';
-    } else if (sectId === '太虚剑宗') {
-        html += '<div class="space-y-4">';
-        html += '<div class="bg-gray-800/60 p-3 rounded border-l-4 border-purple-500">';
-        html += '<p class="text-xs text-gray-400 mb-1">🚶 山门守卫：</p>';
-        html += '<p class="text-sm text-gray-200 italic">一个背剑弟子拦住了你的去路，手按剑柄。</p>';
-        html += '<p class="text-sm text-purple-300 mt-2 italic">「想入太虚剑宗？先接我一剑，不退即过。」</p>';
-        html += '</div>';
-        html += '<div class="mt-3 space-y-2">';
-        html += '<button onclick="taiXuFight()" class="w-full bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded text-sm">「请」</button>';
-        html += '<button onclick="taiXuFail()" class="w-full bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">「我认输」</button>';
         html += '</div></div>';
     } else if (sectId === '丐帮') {
         html += '<div class="space-y-4">';
@@ -1561,48 +1550,6 @@ function wuDangQ2(answer) {
     wuDangScore = 0;
 }
 
-// === 太虚剑宗 ===
-function taiXuFight() {
-    var player = window.currentCharData || {};
-    var dex = (player.attrs && player.attrs.dexterity) || (player.mainAttributes && player.mainAttributes['灵巧']) || 0;
-    var sword = (player.combatSkills && player.combatSkills['剑法']) || 0;
-    document.querySelectorAll('#xianxia-modal-overlay').forEach(function(el) { el.remove(); });
-    var isStrong = (dex + sword) >= 30;
-    var html = '<div class="space-y-4"><div class="bg-gray-800/60 p-3 rounded border-l-4 border-purple-500"><p class="text-xs text-gray-400 mb-1">🚶 山门守卫：</p>';
-    if (isStrong) {
-        html += '<p class="text-sm text-gray-200 italic">你侧身避开剑势，稳稳站住。</p><p class="text-sm text-purple-300 mt-2 italic">弟子收剑：「剑心已备，可入内门。」</p><p class="text-sm text-purple-300 mt-2 italic">「剑道为何？」</p></div>';
-        html += '<div class="mt-3 space-y-2"><button onclick="taiXuResolve(true)" class="w-full bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded text-sm">「斩妖除魔」</button>';
-        html += '<button onclick="taiXuResolve(true)" class="w-full bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded text-sm">「守护所爱」</button>';
-        html += '<button onclick="taiXuResolve(false)" class="w-full bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">「为了变强」</button></div></div>';
-    } else {
-        html += '<p class="text-sm text-gray-200 italic">你勉强躲过剑势，略显狼狈。</p><p class="text-sm text-purple-300 mt-2 italic">弟子收剑：「剑术尚浅，先从杂役练起。」</p><p class="text-sm text-purple-300 mt-2 italic">「剑道为何？」</p></div>';
-        html += '<div class="mt-3 space-y-2"><button onclick="taiXuResolveMisc()" class="w-full bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded text-sm">「斩妖除魔」</button>';
-        html += '<button onclick="taiXuResolveMisc()" class="w-full bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded text-sm">「守护所爱」</button>';
-        html += '<button onclick="taiXuResolve(false)" class="w-full bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">「为了变强」</button></div></div>';
-    }
-    if (typeof window.showModal === 'function') window.showModal('📝 太虚剑宗 · 考核', html);
-}
-function taiXuFail() {
-    document.querySelectorAll('#xianxia-modal-overlay').forEach(function(el) { el.remove(); });
-    var html = '<div class="space-y-4"><div class="bg-gray-800/60 p-3 rounded border-l-4 border-red-500"><p class="text-xs text-gray-400 mb-1">🚶 山门守卫：</p><p class="text-sm text-gray-200 italic">弟子收剑：「剑者，当勇往直前。连剑都不敢拔，不配入我剑宗。」</p></div></div>';
-    if (typeof window.showModal === 'function') window.showModal('❌ 太虚剑宗', html);
-}
-function taiXuResolve(passed) {
-    document.querySelectorAll('#xianxia-modal-overlay').forEach(function(el) { el.remove(); });
-    setTrialResult(passed ? TRIAL_RESULT.PASS : TRIAL_RESULT.FAIL);
-    if (passed) {
-        var html = '<div class="space-y-4"><div class="bg-gray-800/60 p-3 rounded border-l-4 border-purple-500"><p class="text-xs text-gray-400 mb-1">🚶 山门守卫：</p><p class="text-sm text-gray-200 italic">弟子点头：「剑心已明。从今以后你就是太虚剑宗弟子了。」</p></div><div class="flex gap-2 justify-end mt-4"><button onclick="finishGuardTrialAsInnerDisciple()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded text-sm font-bold">正式入门</button></div></div>';
-        if (typeof window.showModal === 'function') window.showModal('🎉 太虚剑宗 · 入门', html);
-    } else {
-        var html = '<div class="space-y-4"><div class="bg-gray-800/60 p-3 rounded border-l-4 border-red-500"><p class="text-xs text-gray-400 mb-1">🚶 山门守卫：</p><p class="text-sm text-gray-200 italic">弟子摇头：「剑不是用来逞凶的。你走吧。」</p></div></div>';
-        if (typeof window.showModal === 'function') window.showModal('❌ 太虚剑宗', html);
-    }
-}
-function taiXuResolveMisc() {
-    document.querySelectorAll('#xianxia-modal-overlay').forEach(function(el) { el.remove(); });
-    var html = '<div class="space-y-4"><div class="bg-gray-800/60 p-3 rounded border-l-4 border-purple-500"><p class="text-xs text-gray-400 mb-1">🚶 山门守卫：</p><p class="text-sm text-gray-200 italic">弟子点头：「剑心尚可，先做杂役练剑吧。」</p></div><div class="flex gap-2 justify-end mt-4"><button onclick="finishGuardTrialJoin()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded text-sm font-bold">正式入门</button></div></div>';
-    if (typeof window.showModal === 'function') window.showModal('📝 太虚剑宗 · 杂役', html);
-}
 
 // === 丐帮 ===
 function gaiBangGive() {
@@ -2160,11 +2107,16 @@ function evaluateSectEntry(sectId, player) {
 
 // ============ 名气系统 ============
 // 名气等级定义
+// v21.9 名望尺度统一：终局大事一次裸加数百（国师伏诛+400 等），此前日常侧 0-100 钳死——
+// 通关后名望条爆格、档位标尺失效。现在 100 以上加两档，全游戏同一把尺（FAME_CAP 统一钳制）。
+var FAME_CAP = 99999;
 var FAME_LEVELS = [
     { id: 0, name: '无名之辈', min: 0,   max: 25,  desc: '门派对你一无所知，只看表面' },
     { id: 1, name: '小有名气', min: 26,  max: 50,  desc: '部分门派听说过你的传闻' },
     { id: 2, name: '名动一方', min: 51,  max: 75,  desc: '大部分门派知道你的倾向' },
-    { id: 3, name: '天下皆知', min: 76,  max: 100, desc: '所有人都知道你的立场' }
+    { id: 3, name: '天下皆知', min: 76,  max: 100, desc: '所有人都知道你的立场' },
+    { id: 4, name: '威震九州', min: 101, max: 400, desc: '你的名号能止小儿夜啼，也能聚天下豪杰' },
+    { id: 5, name: '万古流芳', min: 401, max: FAME_CAP, desc: '说书人把你的故事编进了话本，一茬一茬传下去' }
 ];
 
 // 获取当前名气等级
@@ -2185,7 +2137,8 @@ function getFameName(player) {
 function addFame(amount) {
     var player = window.currentCharData;
     if (!player) return;
-    player.fame = Math.min(100, Math.max(0, (player.fame || 0) + amount));
+    // v21.9：钳制上限从 100 提到 FAME_CAP——终局大额名望不再把尺子顶爆
+    player.fame = Math.min(FAME_CAP, Math.max(0, (player.fame || 0) + amount));
 }
 
 // 名气值获取途径（由外部系统调用）：
@@ -2236,6 +2189,7 @@ window.getRealmTier = getRealmTier;
 window.checkSectRequirements = checkSectRequirements;
 window.startSectJoinFlow = startSectJoinFlow;
 window.FAME_LEVELS = FAME_LEVELS;
+window.FAME_CAP = FAME_CAP;
 window.getFameLevel = getFameLevel;
 window.getFameName = getFameName;
 window.addFame = addFame;
@@ -2282,10 +2236,6 @@ window.shaoLinResolve = shaoLinResolve;
 window.shaoLinResolveMisc = shaoLinResolveMisc;
 window.wuDangQ1 = wuDangQ1;
 window.wuDangQ2 = wuDangQ2;
-window.taiXuFight = taiXuFight;
-window.taiXuFail = taiXuFail;
-window.taiXuResolve = taiXuResolve;
-window.taiXuResolveMisc = taiXuResolveMisc;
 window.gaiBangGive = gaiBangGive;
 window.gaiBangGiveFood = gaiBangGiveFood;
 window.gaiBangRefuse = gaiBangRefuse;

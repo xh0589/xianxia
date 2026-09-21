@@ -33,14 +33,46 @@ function npcNowGameMinute() {
 
 function npcLastMeetGameMinute(npc) {
     if (!npc || !npc.memory) return null;
-    var value = Number(npc.memory.lastMeetGameMinute);
-    if (Number.isFinite(value) && value >= 0) return value;
+    // NEW-39 修：先看原值，别先 Number()——Number(null)===0 会把「从未谋面」误判成第0分钟见过，
+    // 下游关系衰减于是对全世界 NPC 开扣，好感一路塌到 -100（一城仇人的根因）。
+    var raw = npc.memory.lastMeetGameMinute;
+    if (raw !== null && raw !== undefined) {
+        var value = Number(raw);
+        // 0 同样按「没见过」处理：正常初见落点在开局之后，0 只会是脏数据/默认值
+        if (Number.isFinite(value) && value > 0) return value;
+        return null;
+    }
     // 旧存档只有现实时间戳，无法无损映射到游戏历法；从加载时刻重新起算，避免瞬间衰减。
     if (npc.memory.lastMeetTime || npc.memory.firstMet) {
         npc.memory.lastMeetGameMinute = npcNowGameMinute();
         return npc.memory.lastMeetGameMinute;
     }
     return null;
+}
+
+// NEW-43⑤：旧档没有家锚点——cres_/sect_* 的命名本就把本城/门派写进了 id，按 id 推导归处
+function npcHomeFromId(id) {
+    if (typeof id !== 'string') return null;
+    var m = /^cres_(.+?)_\d+$/.exec(id);          // cres_金城_1 → 金城
+    if (m) return m[1];
+    m = /^sect_[A-Za-z]+_(.+?)(?:_\d+)?$/.exec(id);   // sect_disciple_少林寺_4 → 少林寺
+    if (m) return m[1];
+    return null;
+}
+
+// NEW-43 修：判断一个地名是否「世界地点」（城名/门派名）。
+// 旅馆/军营/后山/山洞这类设施格不算——NPC 游走与读档迁移都用这把尺。
+// 真源未装载时退回已知设施格黑名单，宁可漏判也不错送人回家。
+var NPC_FACILITY_TILES = ['旅馆', '军营', '后山', '山洞', '田地', '菜园', '讲堂', '家中', '大隐阁', '矿洞', '集市', '演武场'];
+function isWorldLocationName(loc) {
+    if (!loc || typeof loc !== 'string') return false;
+    var hasSource = false;
+    var ls = window.locationSystem;
+    if (ls && ls.cityData) { hasSource = true; if (ls.cityData[loc]) return true; }
+    var sects = window.sectsData;
+    if (sects) { hasSource = true; if (sects[loc]) return true; }
+    if (hasSource) return false;
+    return NPC_FACILITY_TILES.indexOf(loc) < 0;
 }
 
 function markNPCMetNow(npc) {
@@ -102,11 +134,15 @@ const DEEP_TALK_CATEGORIES = {
         // P1-4: 门槛与 ADVANCED_REQUEST_TYPES 统一，affectionCost 仅为UI提示，实际扣费在执行时
         subOptions: [
             { id: 'teach_skill', name: '请教功法', desc: 'NPC传授功法', minAffection: 60, affectionCost: 0, minFavor: 30 },
+            // v20.88 传功反向线：把你会的教给TA（TA真学会，切磋可用；你得情分/好感/历练）
+            { id: 'transmit_skill', name: '传授功法', desc: '把你学会的功法教给TA', minAffection: 30, affectionCost: 0, minFavor: 0 },
             { id: 'request_heal', name: '请求治疗', desc: '恢复生命/真气', minAffection: 30, affectionCost: 0, minFavor: 5 },
             { id: 'request_accompany', name: '请求陪同', desc: 'NPC陪你去某地', minAffection: 50, affectionCost: 0, minFavor: 20 },
             { id: 'borrow_item', name: '请求借物', desc: '借装备/书籍', minAffection: 40, affectionCost: 0, minFavor: 10 },
             { id: 'request_guidance', name: '请求指点', desc: '修炼方向建议', minAffection: 20, affectionCost: 0, minFavor: 5 },
-            { id: 'request_asylum', name: '请求庇护', desc: '躲避仇家', minAffection: 70, affectionCost: 0, minFavor: 40 }
+            { id: 'request_asylum', name: '请求庇护', desc: '躲避仇家', minAffection: 70, affectionCost: 0, minFavor: 40 },
+            // 第十八波：招揽入门——社交面板自己就能招人（自建宗门走游说；身在门派按位分：长老直邀，其余荐人面试）
+            { id: 'recruit_sect', name: '招揽入门', desc: '请你自建的宗门，或荐入你所在的门派', minAffection: 20, affectionCost: 0, minFavor: 0 }
         ]
     },
     quests: {
@@ -361,12 +397,35 @@ const OCCUPATION_SPECIFIC_ACTIONS = {
         }
     },
     '治疗师': {
-        id: 'heal', name: '💊 诊治', desc: '治疗伤势', minAffection: 0,
+        id: 'heal', name: '💊 诊治', desc: '治疗伤势（诊金20灵石，好感60+免费）', minAffection: 0,
         action: function(npc, player) {
-            const healed = player.health < (player.maxHealth || 100) || player.qi < (player.maxQi || 50);
-            player.health = player.maxHealth || 100;
-            player.qi = player.maxQi || 50;
-            return { success: true, msg: healed ? '伤势已痊愈，真气已恢复！' : '你状态很好，无需诊治。' };
+            const injured = player.health < (player.maxHealth || 100) || player.qi < (player.maxQi || 50);
+            if (!injured) return { success: true, msg: '你状态很好，无需诊治。' };
+            // v23.0 诊治要诊金、要花时间，疗效随医者手气分档（旧版免费瞬间回满，医馆都没生意了）
+            var aff = (npc.relationship && npc.relationship.affection) || 0;
+            if (aff < 60) {
+                var fee = 20, paid = false;
+                if (window.inventory && window.inventory.currency && (window.inventory.currency.spiritStones || 0) >= fee) {
+                    window.inventory.currency.spiritStones -= fee;
+                    if (typeof window.updateCurrencyUI === 'function') { try { window.updateCurrencyUI(); } catch (e) {} }
+                    paid = true;
+                } else if ((player.spiritStones || 0) >= fee) {
+                    player.spiritStones -= fee;
+                    paid = true;
+                }
+                if (!paid) return { success: false, msg: '医者指了指案上木牌：诊金二十灵石。（与其交好至60，可免费诊治）' };
+            }
+            if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
+                window.timeSystem.advanceTime(30, '接受诊治');
+            }
+            var rate = 0.7 + Math.random() * 0.3;
+            var mh = player.maxHealth || 100, mq = player.maxQi || 50;
+            player.health = Math.min(mh, Math.round((player.health || 0) + (mh - (player.health || 0)) * rate));
+            player.qi = Math.min(mq, Math.round((player.qi || 0) + (mq - (player.qi || 0)) * rate));
+            if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e) {} }
+            return { success: true, msg: aff >= 60
+                ? '医者摆手免了你的诊金，细细为你施针用药——伤势恢复了' + Math.round(rate * 100) + '%。'
+                : '望闻问切，针药并施——伤势恢复了' + Math.round(rate * 100) + '%（诊金20灵石）。' };
         }
     },
     '铁匠': {
@@ -400,8 +459,10 @@ const OCCUPATION_SPECIFIC_ACTIONS = {
     '长老': {
         id: 'report', name: '👑 请示', desc: '门派事务', minAffection: 0,
         action: function(npc, player) {
-            if (typeof window.openSectTasks === 'function') {
-                window.openSectTasks();
+            // 第一百一十波：openSectTasks 全库无定义（真名 openSectTaskUI，sects-system.js）——
+            // 长老「👑 请示」此前每次点都只会回一句「门派系统未就绪」
+            if (typeof window.openSectTaskUI === 'function') {
+                window.openSectTaskUI();
             } else {
                 return { success: false, msg: '门派系统未就绪' };
             }
@@ -409,11 +470,22 @@ const OCCUPATION_SPECIFIC_ACTIONS = {
         }
     },
     '隐士': {
-        id: 'dao_discuss', name: '🧘 论道', desc: '交流修行', minAffection: 20,
+        id: 'dao_discuss', name: '🧘 论道', desc: '交流修行（每日一次，耗精力10）', minAffection: 20,
         action: function(npc, player) {
+            // v23.0 论道不是经验印钞机（旧版零耗时无冷却可连点刷）：一日一论、耗神
+            if (window.actionGate && window.actionGate.cooled('dao_discuss', 1)) {
+                return { success: false, msg: '隐士闭目不应——今日已与你论过道了。「去吧，明日再来。」' };
+            }
+            if (window.actionGate && !window.actionGate.spend('energy', 10, '精力')) {
+                return { success: false, msg: '你精力已惫，坐下论道也定不住心神。' };
+            }
+            if (window.actionGate) window.actionGate.mark('dao_discuss');
+            if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
+                window.timeSystem.advanceTime(60, '与隐士论道');
+            }
             const expGain = 10 + Math.floor(Math.random() * 20);
             if (player.exp !== undefined) player.exp += expGain;
-            return { success: true, msg: `论道获益良多，获得${expGain}点修炼经验！` };
+            return { success: true, msg: `一席话如拨云见日，论道获益良多，获得${expGain}点修炼经验！` };
         }
     },
     '村民': {
@@ -569,6 +641,8 @@ class NPC {
         this.personality = options.personality || {};
         this.occupation = options.occupation || '';
         this.location = options.location || 'unknown';
+        // NEW-43①：家锚点——注册时的初始地点另行钉住，游走只改 location，读端/迁移认 homeLocation
+        this.homeLocation = options.homeLocation || this.location;
         this.isFollowing = false;   // 是否跟随玩家（队友NPC专用）
         this.followTarget = null;   // 跟随目标ID（通常是玩家）
         this.relationship = {
@@ -1252,6 +1326,8 @@ class NPC {
             gender: this.gender,
             age: this.age,
             location: this.location,
+            homeLocation: this.homeLocation || this.location || null,   // NEW-43①：家锚点随档
+            lastHostileMailDay: this._lastHostileMailDay ?? null,        // NEW-40①：敌意信冷却日头随档
             isFollowing: this.isFollowing || false,
             followTarget: this.followTarget || null,
             // 关系
@@ -1356,6 +1432,10 @@ class NPC {
             // F-19 修：v20.0 master-teach.js 字段显式持久化（旧版 serialize 逐字段列出漏了，读档后弟子培养进度全丢）
             _cultivationProgress: Number(this._cultivationProgress) || 0,
             _graduated: !!this._graduated,
+            // 批四：道侣心情/需求随档（此前 _companionData 从不序列化，读档即失忆——需求做实的前提是它记得住）
+            _companionData: this._companionData ? JSON.parse(JSON.stringify(this._companionData)) : null,
+            _retired: !!this._retired,   // 方案五·执事养老：挂了牌的同门随档记住
+            _masterIsPlayer: !!this._masterIsPlayer,
             // P2-10: 生命周期系统存档
             protectionLevel: this._protectionLevel || null,
             criticalDays: this._criticalDays || 0,
@@ -1375,6 +1455,8 @@ class NPC {
     static deserialize(data) {
         const npc = new NPC(data.id, data.name, { gender: data.gender, age: data.age });
         npc.location = data.location;
+        // NEW-43①：家锚点还原——旧档没有该字段时按 id 推导（cres_*/sect_* 的家乡/门派写在名字里），再退回读档位置
+        npc.homeLocation = data.homeLocation || npcHomeFromId(data.id) || data.location || npc.homeLocation;
         npc.relationship = { ...data.relationship, flags: new Set(data.relationship.flags || []), history: data.relationship.history || [] };
         // F-19：旧存档无 trust 字段，载入补默认 0（信任轨）
         if (npc.relationship.trust == null) npc.relationship.trust = 0;
@@ -1421,6 +1503,10 @@ class NPC {
         // F-19 修：v20.0 master-teach.js 字段还原（旧档→默认 0/false）
         npc._cultivationProgress = Number(data._cultivationProgress) || 0;
         npc._graduated = !!data._graduated;
+        // 批四：道侣心情/需求还原（旧档没有则为 null，首次互动时重建）
+        if (data._companionData) npc._companionData = JSON.parse(JSON.stringify(data._companionData));
+        if (data._retired) { npc._retired = true; try { npc.occupation = '养老'; } catch (eR) {} }
+        npc._masterIsPlayer = !!data._masterIsPlayer;
         // v13.9 恢复行囊与装备（v11.8联动的存档补全）
         if (data.inventory && Array.isArray(data.inventory.items)) {
             npc.inventory = { items: JSON.parse(JSON.stringify(data.inventory.items)), maxSlots: data.inventory.maxSlots || 10 };
@@ -1538,6 +1624,23 @@ class NPC {
         npc._lastNeedCheck = data.lastNeedCheckGameMinute == null ? null : Number(data.lastNeedCheckGameMinute);
         npc._lastNeedRequestGameMinute = data.lastNeedRequestGameMinute == null ? null : Number(data.lastNeedRequestGameMinute);
         npc._lastActiveBehaviorGameMinute = data.lastActiveBehaviorGameMinute == null ? null : Number(data.lastActiveBehaviorGameMinute);
+        npc._lastHostileMailDay = data.lastHostileMailDay == null ? null : Number(data.lastHostileMailDay);
+        // ===== 第九十五波·读档一次性清洗（NEW-39 / NEW-43⑤，幂等：条件自限，重复读档不会误伤）=====
+        try {
+            // ① 从未谋面者不该深仇：旧版 Number(null)===0 把「没见过」误判成第0分钟见过，
+            //    关系衰减对全体 NPC 开扣，好感被写脏到 -30 以下——归零回正（道侣之盟除外，结契情分不随未见磨蚀）
+            var _isBonded = !!(npc.relationship && npc.relationship.flags && typeof npc.relationship.flags.has === 'function' && npc.relationship.flags.has('dao_companion'));
+            var _mem = npc.memory || {};
+            if (!_isBonded && _mem.firstMet === false && !_mem.meetCount && (npc.relationship.affection || 0) < -30) {
+                npc.relationship.affection = 0;
+            }
+            // ② 送人回家：旧版无归宿游走会把城中人物/门派成员漂进旅馆、军营、后山这类设施格，
+            //    读档时位置不合规（非世界地点）者送回各自的家锚点（sect_* 的家即门派驻地，cres_* 的家即本城）
+            if (npc.homeLocation && npc.homeLocation !== 'unknown' && npc.location && npc.location !== npc.homeLocation && !isWorldLocationName(npc.location)) {
+                npc.location = npc.homeLocation;
+                if (npc.state) npc.state.location = npc.homeLocation;
+            }
+        } catch (eMig) { console.warn('[NPC读档清洗] 迁移失败:', eMig); }
         return npc;
     }
 }
@@ -1545,7 +1648,9 @@ class NPC {
 // ==================== NPC管理器 ====================
 class NPCManager {
     constructor() { this.npcs = new Map(); this.activeNPCs = []; this.dialogueQueue = []; }
-    addNPC(npc) { if (npc instanceof NPC) { this.npcs.set(npc.id, npc); this.activeNPCs.push(npc); gameLog.add(`NPC "${npc.name}" 加入了游戏`, 'info'); return true; } return false; }
+    // NEW-14 修：NPC 注册不再写 gameLog——开局几百人入册会把真实结算流水（银钱/任务/事件）整体挤掉，
+    // 注册属内部事务，降为调试输出；离册（removeNPC）低频且有审计价值，保留。
+    addNPC(npc) { if (npc instanceof NPC) { if (!npc.homeLocation || npc.homeLocation === 'unknown') npc.homeLocation = npc.location; this.npcs.set(npc.id, npc); this.activeNPCs.push(npc); if (typeof console !== 'undefined' && console.debug) console.debug('[NPC注册] ' + npc.name); return true; } return false; }
     removeNPC(npcId) {
         const npc = this.npcs.get(npcId);
         if (npc) { this.npcs.delete(npcId); this.activeNPCs = this.activeNPCs.filter(n => n.id !== npcId); gameLog.add(`NPC "${npc.name}" 离开了游戏`, 'info'); return true; }
@@ -1554,6 +1659,8 @@ class NPCManager {
     getNPC(npcId) { return this.npcs.get(npcId); }
     getAllNPCs() { return Array.from(this.npcs.values()); }
     getNPCsAtLocation(location) { return this.activeNPCs.filter(npc => npc.location === location); }
+    // NEW-43④：按「家锚点」查人——城中人物卡这类归属读端用它，NPC 出门串门不再把城面板清空
+    getNPCsByHomeLocation(location) { return this.activeNPCs.filter(npc => (npc.homeLocation || npc.location) === location); }
     talkToNPC(npcId, topic = null) {
         const npc = this.npcs.get(npcId);
         if (!npc) { showMessage('找不到这个NPC', 'error'); return null; }
@@ -1713,61 +1820,16 @@ class NPCManager {
     }
     
     // ===== v11.8 NPC自主生活：主动行为 =====
+    // NEW-46 修：主动行为曾有三套实现并行——本函数里的纯飘字分支（不发邮件、不给物品）与
+    // npc-life-system.js 的 executeActiveBehavior（真邮件/真物品）互相重复，且本函数开头还无条件
+    // 再调一次后者，而 time-system 每次推进已通过 checkAllNPCLifeSystems（带 6 游戏小时节流）调过它，
+    // 同一窗口双摇骰、好感双记账。现收口为一处：主动行为只由 npc-life-system.js 产生，
+    // 本函数不再重复掷骰，只保留「NPC 主动求助」这一个别处没有的请求入账入口
+    // （深谈面板的应答区块读 _pendingRequests，v23.2 人情线的真源）。
     checkActiveBehavior(npc) {
-        // P2-10e: 先调用生命周期系统（垂危检查/寿命/主动行为真实化）
-        if (window.NPCLifeSystem) {
-            try {
-                if (npc._protectionLevel === undefined) {
-                    npc._protectionLevel = window.NPCLifeSystem.getAutoProtectionLevel(npc);
-                }
-                window.NPCLifeSystem.checkCriticalCondition(npc);
-                // 已被垂危机制处理的NPC不再产生主动行为
-                if (npc._isCritical || npc._isGone) return;
-                // 调用P2-10d主动行为真实化
-                window.NPCLifeSystem.executeActiveBehavior(npc);
-            } catch (e) { console.warn('[NPCLifeSystem] checkActiveBehavior error', e); }
-        }
+        if (!npc || npc._isCritical || npc._isGone) return;
         var aff = npc.relationship?.affection || 0;
-        var mood = npc.state?.mood || 50;
 
-        // 好感度>60 且 心情不错 → 可能主动找玩家
-        if (aff > 60 && mood > 50 && Math.random() < 0.1) {
-            var behaviors = ['send_message', 'give_gift', 'invite'];
-            var chosen = behaviors[Math.floor(Math.random() * behaviors.length)];
-            switch (chosen) {
-                case 'send_message':
-                    if (window.showMessage) {
-                        window.showMessage('📩 ' + npc.name + '给你传音：「最近可好？有空来坐坐。」', 'info');
-                    }
-                    npc.recordPlayerAction('active_contact', 'positive');
-                    npc.changeAffection(1);
-                    break;
-                case 'give_gift':
-                    if (window.showMessage) {
-                        window.showMessage('🎁 ' + npc.name + '托人送来了一份小礼物。', 'success');
-                    }
-                    npc.recordPlayerAction('active_gift', 'positive');
-                    break;
-                case 'invite':
-                    if (window.showMessage) {
-                        window.showMessage('📩 ' + npc.name + '邀请你一同探索秘境。', 'info');
-                    }
-                    npc.recordPlayerAction('active_invite', 'positive');
-                    break;
-            }
-            return;
-        }
-        
-        // 好感度<-30 且 心情差 → 可能找麻烦
-        if (aff < -30 && mood < 30 && Math.random() < 0.08) {
-            if (window.showMessage) {
-                window.showMessage('💢 你听说' + npc.name + '在背后说了你的坏话。', 'warning');
-            }
-            npc.recordPlayerAction('active_hostile', 'negative');
-            npc.changeHatred(5);
-            return;
-        }
-        
         // NPC需要帮助（随机请求）
         if (aff > 20 && Math.random() < 0.05) {
             var requests = [
@@ -1777,11 +1839,11 @@ class NPCManager {
             ];
             var req = requests[Math.floor(Math.random() * requests.length)];
             if (window.showMessage) {
-                window.showMessage('🙏 ' + npc.name + '：' + req.msg + '（' + req.reward + '）', 'info');
+                window.showMessage('🙏 ' + npc.name + '：' + req.msg + '（' + req.reward + '）——下次与TA交谈时可应答', 'info');
             }
-            // 标记NPC有请求
+            // 标记NPC有请求（v23.2 请求带全字段入账：旧版只存 msg，item/action 全丢——想应答也无从应起）
             if (!npc._pendingRequests) npc._pendingRequests = [];
-            npc._pendingRequests.push({ type: 'auto', msg: req.msg, expiredDay: this._getCurrentDay() + 3 });
+            npc._pendingRequests.push({ type: 'auto', msg: req.msg, item: req.item || null, action: req.action || null, rewardAff: req.action === 'spar' ? 3 : (req.action === 'gather' ? 4 : 5), expiredDay: this._getCurrentDay() + 3 });
         }
     }
     
@@ -2788,10 +2850,13 @@ const DEEP_TALK_REAL_HANDLERS = {
     give_gift: function(npcId) { closeNpcModal(); if (typeof window.giveGiftToNPC === 'function') { window.giveGiftToNPC(npcId); return true; } return false; },
     // 请求（高级请求系统）
     teach_skill: function(npcId) { closeNpcModal(); return callAdvancedRequest(npcId, 'teach_skill'); },
+    transmit_skill: function(npcId) { closeNpcModal(); return callAdvancedRequest(npcId, 'transmit_skill'); },
     request_heal: function(npcId) { closeNpcModal(); return callAdvancedRequest(npcId, 'request_heal'); },
     borrow_item: function(npcId) { closeNpcModal(); return callAdvancedRequest(npcId, 'borrow_item'); },
     request_guidance: function(npcId) { closeNpcModal(); return callAdvancedRequest(npcId, 'guidance'); },
     request_asylum: function(npcId) { closeNpcModal(); return callAdvancedRequest(npcId, 'request_asylum'); },
+    // 第十八波：招揽入门（自建宗门走游说话术；身在门派按位分——长老直邀，其余荐人面试）
+    recruit_sect: function(npcId) { closeNpcModal(); return callAdvancedRequest(npcId, 'recruit_sect'); },
     // 同行
     request_accompany: function(npcId) { closeNpcModal(); return callAdvancedRequest(npcId, 'accompany'); },
     // 委托（接入NPCQuestSystem任务系统）
@@ -2845,9 +2910,12 @@ function callAdvancedRequest(npcId, requestId) {
     if (!npc) { showMessage('NPC不存在', 'error'); return false; }
     var result = executeAdvancedRequest(npc, requestId);
     if (result && result.success) {
-        showMessage(result.msg, 'success');
-        // 延时重新打开NPC面板
-        setTimeout(function() { if (typeof window.showNPCDialog === 'function') window.showNPCDialog(npcId); }, 500);
+        // v20.88 传功面板自带交互：skipReopen 时不再重开NPC对话（避免盖住选功法面板）
+        if (result.msg) showMessage(result.msg, 'success');
+        if (!result.skipReopen) {
+            // 延时重新打开NPC面板
+            setTimeout(function() { if (typeof window.showNPCDialog === 'function') window.showNPCDialog(npcId); }, 500);
+        }
     } else {
         showMessage(result ? result.msg : '请求失败', 'warning');
     }
@@ -3014,6 +3082,151 @@ switch (interactionType) {
                 showMessage('赫渊沉静地看你一眼，唇线紧抿——修闭口禅，不开口。', 'info');
                 break;
             }
+            // v20.72 夙孤鸿：关系走向由终章「第七条戒」决定
+            if (npcId === 'sect_leader_峨眉派') {
+                showMessage('夙孤鸿垂眸看着腰间那把木戒尺，指尖抚过尺尾那片空白：「……第七条还没刻，急什么。」', 'info');
+                break;
+            }
+            // v20.72 竺听雨：关系走向由终章「石壁最后一笔」决定
+            if (npcId === 'sect_leader_华山派') {
+                showMessage('竺听雨笑着摆手，眼底却认真：「……石壁上还差最后一笔。刻完了，咱再谈这个。」', 'info');
+                break;
+            }
+            // v20.74 晏万解：关系走向由终章「解字」决定
+            if (npcId === 'sect_leader_唐门') {
+                showMessage('晏万解把白丝手套的指尖卷了卷，半晌才说：「……万解丹第十八方还没出炉。丹出了——我再答你这三个字。」', 'info');
+                break;
+            }
+            // v20.74 阙守拙：关系走向由终章「一争」决定
+            if (npcId === 'sect_leader_武当派') {
+                showMessage('阙守拙低头看着没有鞘的「不争」，慢慢说：「……这个『争』字，我一生只打算用一回。别催。」', 'info');
+                break;
+            }
+            // v20.75 瀛晚照：关系走向由终章「海市」决定
+            if (npcId === 'sect_leader_蓬莱派') {
+                showMessage('瀛晚照看着手里的潮信图录，抬眼望向远处的海：「……今晚的潮还没上来。潮上来——我再答你。」', 'info');
+                break;
+            }
+            // v20.75 闻人酌：关系走向由终章「一执」决定
+            if (npcId === 'sect_leader_逍遥派') {
+                showMessage('闻人酌晃着酒盏，笑得慵懒：「……逍遥派的『不执』戒，我打算破一回例。别急。」', 'info');
+                break;
+            }
+            // v20.76 祁清禅：关系走向由终章「经圆」决定
+            if (npcId === 'sect_leader_恒山派') {
+                showMessage('祁清禅把案上木鱼轻轻拢住，声音一如平常的轻：「……最后一页经，还没落回向。落了——我再答你。」', 'info');
+                break;
+            }
+            // v20.76 逵佩南：关系走向由终章「第一百零八条」决定
+            if (npcId === 'sect_leader_嵩山派') {
+                showMessage('逵佩南合上执法卷宗，语气一如既往地精确：「……第一百零八条还空着。别催。」', 'info');
+                break;
+            }
+            // v20.76 岳清晓：关系走向由终章「第一缕」决定
+            if (npcId === 'sect_leader_泰山派') {
+                showMessage('岳清晓指了指东边的天，说得亮堂：「……明日卯时，第一缕出来——我再答你。」', 'info');
+                break;
+            }
+            // v20.76 幽翠微：关系走向由终章「初雪」决定
+            if (npcId === 'sect_leader_青城派') {
+                showMessage('幽翠微捧着焙茶的手顿了顿，头也没抬：「……茶还没到火候。这话，先搁着。」', 'info');
+                break;
+            }
+            // v20.76 奚湘筠：关系走向由终章「夜雨阑」决定
+            if (npcId === 'sect_leader_衡山派') {
+                showMessage('奚湘筠按弓止了弦，半晌，只说了几个字：「……下半阙还没长出来。不急。」', 'info');
+                break;
+            }
+            // v20.76 桑拾玖：关系走向由终章「拾玖」决定
+            if (npcId === 'sect_leader_丐帮') {
+                showMessage('桑拾玖把竹签收进袖里，笑了笑，压低声音：「……这条消息不入册。只讲给一个人听。」', 'info');
+                break;
+            }
+            // v20.77 聂明泽：关系走向由终章「命格未定」决定
+            if (npcId === 'sect_leader_阎罗殿') {
+                showMessage('聂明泽握朱笔的手停住，说三个字停一下，语气像在念档：「……命格未定。此页，尚在复核。」', 'info');
+                break;
+            }
+            // v20.77 耿雪衣：关系走向由终章「普通日子」决定
+            if (npcId === 'sect_leader_血手门') {
+                showMessage('耿雪衣搁下药碾，骨碌一声很轻，语气还是平的：「……年集还没赶。这话，等赶完集我再答你。」', 'info');
+                break;
+            }
+            // v20.77 拓银沙：关系走向由终章「不蛰」决定
+            if (npcId === 'sect_leader_飞蝎坞') {
+                showMessage('拓银沙把蝎册往你面前一推，指背敲了敲那一笔，咧嘴：「……册上那一笔还没描完，急什么。」', 'info');
+                break;
+            }
+            // v20.77 伏璃茵：关系走向由终章「真日出」决定
+            if (npcId === 'sect_leader_烈日教') {
+                showMessage('伏璃茵四下瞥了一眼，圣女腔卸下来一半，小声吐槽：「……急什么——真日出还没看着呢，等那天再答你。」', 'info');
+                break;
+            }
+            // v20.77 檀望舒：关系走向由终章「名字」决定
+            if (npcId === 'sect_leader_天龙教') {
+                showMessage('檀望舒顿了顿，（用黑袍知客的调子）开口：「……这道令，今夜不传。」话音落，她自己先把脸别开了。', 'info');
+                break;
+            }
+            // v20.78 戚巧机：关系走向由终章「不算」决定
+            if (npcId === 'sect_leader_神机门') {
+                showMessage('戚巧机把黄铜小齿轮攥进手心，袖里的滴答声忽然乱了拍：「……算不出这道。这道题，算多少遍都算不出。」', 'info');
+                break;
+            }
+            // v20.78 雷惊蛰：关系走向由终章「静夜」决定
+            if (npcId === 'sect_leader_霹雳堂') {
+                showMessage('雷惊蛰握方子册的手停了停，声音压得更轻：「……无声的花还没配成。这话，等雪夜试场放完了，我再念一遍给你听。」', 'info');
+                break;
+            }
+            // v20.78 宓书言：关系走向由终章「无从校起」决定
+            if (npcId === 'sect_leader_天书阁') {
+                showMessage('宓书言眉头一蹙，语气像在勘误：「这句，嗯——无典可引，无从校起。……待残卷校讫，我另纸答你。」', 'info');
+                break;
+            }
+            // v20.78 隗九爻：关系走向由终章「卦破」决定
+            if (npcId === 'sect_leader_大隐阁') {
+                showMessage('隗九爻捻了一颗山楂，嚼到一半停住：「你今日……罢了，卦说莫尽。等这根签子数完，再讲。」', 'info');
+                break;
+            }
+            // v20.78 简知忆：关系走向由终章「这一栏你填」决定
+            if (npcId === 'sect_leader_侠隐阁') {
+                showMessage('简知忆的档笔悬在半空，批注只写了半行：「危险程度：——此条无法归档。……等我把自个儿那页写完，再答你。」', 'info');
+                break;
+            }
+            // v20.78 狄长亭：关系走向由终章「站站有灯」决定
+            if (npcId === 'sect_leader_天涯海阁') {
+                showMessage('狄长亭垂眼写路引，笔尖微颤：「前路不利。……不利之处，此句不入公文。改日，我私底下讲与你听。」', 'info');
+                break;
+            }
+            // v20.78 樊惊筹：关系走向由终章「三十七针」决定
+            if (npcId === 'sect_leader_大旗门') {
+                showMessage('樊惊筹穿针的手没停，只憋出几个字：「跟上。别掉队。……这话，还差三十七针。」', 'info');
+                break;
+            }
+            // v20.78 裘霜莺：关系走向由终章「那句话」决定
+            if (npcId === 'sect_leader_铁掌帮') {
+                showMessage('裘霜莺把泥哨抵到唇边又放下，凶着脸，耳根却红：「哨还没烧成。这话——等开窑那天，我用人话说。」', 'info');
+                break;
+            }
+            // v20.78 姬云锦：关系走向由终章「无名之舞」决定
+            if (npcId === 'sect_leader_昆仑派') {
+                showMessage('姬云锦按住剑，声音端得像仪轨：「名目不当夜许。……等谱末那一套跳完，我自会讲与你听。」', 'info');
+                break;
+            }
+            // v20.78 翀玉衡：关系走向由终章「全押」决定
+            if (npcId === 'sect_leader_全真教') {
+                showMessage('翀玉衡的算盘珠拨到一半停住，她抬眼：「此债记账。……只是这一栏，今日不讫。等日记写满那页，我再答你。」', 'info');
+                break;
+            }
+            // v20.79 竺照禅：关系走向由终章「骂不出」决定
+            if (npcId === 'sect_leader_少林寺') {
+                showMessage('竺照禅合十，佛号念到一半停住，张了张口又合上，末了只说：「……这一句，贫尼骂不出。等那页批注落了笔，再答你。」', 'info');
+                break;
+            }
+            // v20.79 无咎：关系走向由终章「第五百零一条」决定（特殊紧凑线，独立 NPC）
+            if (npcId === 'shaolin_wujiu') {
+                showMessage('无咎把豁口钵擦得干干净净，咧嘴一笑，话还是那么平：「……第五百零一条戒，还没念完呢。等吃了饭，慢慢说给你听。」', 'info');
+                break;
+            }
             if (aff >= 80) { showMessage('💕 ' + name + ' 郑重道：「天地为证，从今往后你我便是道侣！」好感度+10', 'success'); npc.changeAffection(10); npc.changeLove(20); npc.setFlag('dao_companion'); _markLoveCd();
                 // v20.24 名册落笔：旗与册同源，双修/随行/护法/子嗣自此有据可依
                 if (window.ensureDaoBond) window.ensureDaoBond(npcId); }
@@ -3026,8 +3239,90 @@ switch (interactionType) {
 // 深谈子选项执行：优先调度真实处理器，回退到通用对话
 // 新增：分支对话树检测 + 秘密对话选项
 // v14.11 审计5：同地点守卫（队伍跟随视为同行；地名含·取尾段比对，互含亦视为同城）
-function npcNotCoLocated(npc) {
-    try {
+// ============ v23.2 NPC 主动请求：可应答了（旧版弹出「想要灵草/想切磋」后全库无人消费——纯布景） ============
+function _npcRequestDay() {
+    try { if (window.timeSystem && window.timeSystem.gameTime) return window.timeSystem.gameTime.currentDay; } catch (e) {}
+    return 0;
+}
+function buildNpcRequestHtml(npc, npcId) {
+    if (!npc || !Array.isArray(npc._pendingRequests) || !npc._pendingRequests.length) return '';
+    var day = _npcRequestDay();
+    // 顺手清过期
+    npc._pendingRequests = npc._pendingRequests.filter(function (r) { return r && (!r.expiredDay || r.expiredDay >= day); });
+    if (!npc._pendingRequests.length) return '';
+    var html = '<div class="mt-3 bg-amber-900/30 border border-amber-700/50 rounded p-2">' +
+        '<p class="text-xs text-amber-300 font-bold mb-1">🙏 ' + npc.name + ' 有事相求</p>';
+    npc._pendingRequests.forEach(function (r, idx) {
+        html += '<div class="flex items-center justify-between gap-2 mb-1">' +
+            '<span class="text-xs text-gray-300 flex-1">「' + (r.msg || '想请你帮个忙') + '」<span class="text-gray-500">（应了：好感+' + (r.rewardAff || 3) + '）</span></span>' +
+            '<button onclick="respondNpcRequest(\'' + npcId + '\',' + idx + ',true)" class="text-xs px-2 py-0.5 rounded bg-green-700 hover:bg-green-600 text-white shrink-0">应下</button>' +
+            '<button onclick="respondNpcRequest(\'' + npcId + '\',' + idx + ',false)" class="text-xs px-2 py-0.5 rounded bg-gray-600 hover:bg-gray-500 text-white shrink-0">婉拒</button>' +
+            '</div>';
+    });
+    return html + '</div>';
+}
+function respondNpcRequest(npcId, idx, accept) {
+    var npc = window.npcManager && window.npcManager.getNPC ? window.npcManager.getNPC(npcId) : null;
+    if (!npc || !Array.isArray(npc._pendingRequests) || !npc._pendingRequests[idx]) {
+        showMessage('这桩请求已经不在了。', 'info');
+        return;
+    }
+    if (npcNotCoLocated(npc)) { showMessage('你与' + npc.name + '并不在一处——当面应承才算数。', 'warning'); return; }
+    var req = npc._pendingRequests[idx];
+    if (!accept) {
+        npc._pendingRequests.splice(idx, 1);
+        npc.changeAffection(-2);
+        showMessage(npc.name + ' 笑了笑没再提，只是眼神淡了一分。（好感-2）', 'info');
+        if (typeof window.showNPCDialog === 'function') window.showNPCDialog(npcId);
+        return;
+    }
+    // 应下：按请求类型真办——交物扣物、切磋陪练、采集搭手，都花时间花力气
+    if (req.item) {
+        var have = 0;
+        if (window.inventory && window.inventory.slots) {
+            for (var i = 0; i < window.inventory.slots.length; i++) {
+                var s = window.inventory.slots[i];
+                if (s && (s.itemId === req.item || s.templateId === req.item) && s.count > 0) { have += s.count; }
+            }
+        }
+        if (have < 1) {
+            showMessage('你翻了翻行囊——没有' + ((window.itemById && window.itemById[req.item] && window.itemById[req.item].name) || req.item) + '，应承了也交不出。（先去备一份再来）', 'warning');
+            return;
+        }
+        // 扣一件
+        var left = 1;
+        for (var j = 0; j < window.inventory.slots.length && left > 0; j++) {
+            var sl = window.inventory.slots[j];
+            if (!sl || (sl.itemId !== req.item && sl.templateId !== req.item) || sl.count <= 0) continue;
+            var take = Math.min(sl.count, left);
+            if (typeof sl.removeCount === 'function') sl.removeCount(take); else sl.count -= take;
+            left -= take;
+            if (sl.count <= 0) window.inventory.slots[j] = null;
+        }
+        if (typeof window.updateInventoryUI === 'function') window.updateInventoryUI();
+        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(10, '送交物件'); } catch (e) {}
+        showMessage('🎁 你把东西交到 ' + npc.name + ' 手上，TA 眉开眼笑：「正是急用，谢了！」（好感+' + (req.rewardAff || 5) + '）', 'success');
+    } else if (req.action === 'spar') {
+        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '陪练切磋'); } catch (e2) {}
+        var _cdS = window.currentCharData;
+        if (_cdS) _cdS.energy = Math.max(0, (_cdS.energy || 0) - 15);
+        showMessage('⚔️ 你陪 ' + npc.name + ' 拆了几十招，彼此都有进益。（精力-15，好感+' + (req.rewardAff || 3) + '）', 'success');
+        if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e3) {} }
+    } else {
+        // gather 及其他：搭手跑腿
+        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(90, '帮忙采集'); } catch (e4) {}
+        var _cdG = window.currentCharData;
+        if (_cdG) _cdG.energy = Math.max(0, (_cdG.energy || 0) - 20);
+        showMessage('🧺 你陪 ' + npc.name + ' 跑了一趟山里，材料凑齐了。（精力-20，好感+' + (req.rewardAff || 4) + '）', 'success');
+        if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e5) {} }
+    }
+    npc.changeAffection(req.rewardAff || 3);
+    npc.recordPlayerAction('help', 'positive');
+    npc._pendingRequests.splice(idx, 1);
+    if (typeof window.showNPCDialog === 'function') window.showNPCDialog(npcId);
+}
+
+function npcNotCoLocated(npc) {    try {
         if (!npc || !window.currentCharData || !window.currentCharData.location) return false;
         if (npc.isFollowing) return false;
         var pl = String(window.currentCharData.location);
@@ -3046,6 +3341,19 @@ function executeDeepTalkSubOption(npcId, categoryId, subOptionId) {
     if (!npc) { showMessage('NPC不存在', 'error'); return; }
     // v14.11 审计5：远程当面互动守卫
     if (npcNotCoLocated(npc)) { showMessage('你与' + npc.name + '并不在一处——隔空喊话是听不见的。', 'warning'); return; }
+    // v23.3 与人说话讲人情之理：一席话费一个时辰，话越说茶越凉——对方反应随倦意递进
+    // （话头淡了→面露倦色→直言乏了，再缠着人家要恼），不设计数（宪法：后果链替代配额）
+    var _dtFatigue = 0;
+    if (window.currentCharData) {
+        var _dtCd = window.currentCharData;
+        _dtCd._deepTalkLog = _dtCd._deepTalkLog || {};
+        var _dtDay = (window.actionGate && typeof window.actionGate.day === 'function') ? window.actionGate.day() : ((window.timeSystem && window.timeSystem.gameTime) ? window.timeSystem.gameTime.currentDay : 1);
+        var _dtRec = _dtCd._deepTalkLog[npcId];
+        if (!_dtRec || _dtRec.day !== _dtDay) _dtRec = _dtCd._deepTalkLog[npcId] = { day: _dtDay, n: 0 };
+        _dtRec.n++;
+        _dtFatigue = _dtRec.n; // 今日第几席（内部记账，永不报数）
+        try { if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') window.timeSystem.advanceTime(10, '与' + npc.name + '深谈'); } catch (e) {}
+    }
     const aff = npc.relationship?.affection || 0;
     let subOption = null, cat = null;
     for (const key in DEEP_TALK_CATEGORIES) {
@@ -3122,10 +3430,18 @@ function executeDeepTalkSubOption(npcId, categoryId, subOptionId) {
         npcResponse = getFarewell(npc, { name: playerName });
     }
 
+    // v23.3 茶凉话淡：倦意写在对方脸上，不写在系统提示里
+    if (!insufficientAff && categoryId !== 'farewell') {
+        if (_dtFatigue === 3) npcResponse += '\n\n（聊到香尽，' + npc.name + '的话头明显淡了下来，频频以袖掩口。）';
+        else if (_dtFatigue >= 4) npcResponse = npc.name + ' 起身收了茶盏，掩口打了个哈欠，歉意一笑：「今日实在提不起精神，眼皮直打架——改日再陪你叙。」';
+    }
+
     const actionType = insufficientAff ? 'forced_talk' : 'deep_talk';
     const actionResult = insufficientAff ? 'negative' : 'positive';
     npc.recordPlayerAction(actionType, actionResult);
-    npc.relationship.affection = clamp(aff + (insufficientAff ? penalty : 1), -100, 100);
+    // v23.3 前两席话投机（+1），第三席话淡了（不再长），再硬缠着说人家要恼（-1）——递进后果，无硬闸
+    var _dtGain = insufficientAff ? penalty : (_dtFatigue >= 4 ? -1 : (_dtFatigue === 3 ? 0 : 1));
+    npc.relationship.affection = clamp(aff + _dtGain, -100, 100);
     markNPCMetNow(npc);
 
     if (subOption.affectionCost > 0) {
@@ -3167,7 +3483,7 @@ function executeDeepTalkSubOption(npcId, categoryId, subOptionId) {
                 '<span class="text-gray-200 text-sm">' + npcResponse + '</span>' +
             '</div>' +
         '</div>' +
-        '<div class="text-xs text-gray-500 text-center">' + (insufficientAff ? '好感度 ' + penalty : (subOption.affectionCost > 0 ? '情分 -' + subOption.affectionCost : '好感度 +1')) + '</div>' +
+        '<div class="text-xs text-gray-500 text-center">' + (insufficientAff ? '好感度 ' + penalty : (subOption.affectionCost > 0 ? '情分 -' + subOption.affectionCost : (_dtGain > 0 ? '好感度 +1' : (_dtGain === 0 ? '话已说淡，好感不再长' : '把人缠乏了，好感 -1')))) + '</div>' +
         extraHtml +
     '</div>';
 }
@@ -3211,22 +3527,34 @@ function showNPCDialog(npcId, screen = 'main') {
     const playerName = window.currentCharData?.name || '道友';
     // P1-6: 远程查看不记录见面/问候
     var isRemote = screen === 'remote';
+    // v22.0 远程旗：各线 greet 钩子挂在 getGreeting 上，远程翻档案也会路过——
+    // 置旗让 maybeAutoTriggerPersonalEvent 的 greet 源见旗即止（人不在跟前，不该弹「她叫住了你」）。
+    window._npcDialogIsRemote = isRemote;
     let greeting = ''; try { greeting = getGreeting(npc, { name: playerName }); } catch (e) { greeting = '你好。'; }
+    window._npcDialogIsRemote = false;
     if (!isRemote && typeof npc.recordPlayerAction === 'function') {
         if (!npc.memory.firstMet) npc.recordPlayerAction('first_meet', 'neutral');
         npc.recordPlayerAction('greet', 'neutral');
         markNPCMetNow(npc);
         // v20.4：问候自动触发只在亲至在场时进行——远程查看不该弹出「她叫住了你」的事件场景。
-        if (npc.id === 'sect_leader_修罗宫' && typeof window.maybeAutoTriggerFeiLeiEvent === 'function') {
-            try { window.maybeAutoTriggerFeiLeiEvent('greet'); } catch (e) { console.warn('[绯泪线] 自动触发失败:', e); }
-        }
-        if (npc.id === 'sect_leader_百花谷' && typeof window.maybeAutoTriggerBaihuaEvent === 'function') {
-            try { window.maybeAutoTriggerBaihuaEvent('greet'); } catch (e) { console.warn('[温蘅线] 自动触发失败:', e); }
-        }
+        // v22.0：逐线硬编码（修罗宫/百花谷）已撤——下方 personalEventGreetGate 对全线通用接线。
         // F-1.2 重构：补全 npc:talked 事件 emit。quest-system.js 事件桥监听此事件推进 talk_to_npc/talk objective
         if (window.EventBus && typeof window.EventBus.emit === 'function') {
             try { window.EventBus.emit('npc:talked', { npcId: npcId, npcName: npc.name }); } catch (e) {}
         }
+    }
+    // v22.1 山下邀约：掌门下山游历时在城里与你相识、情分到线，她会递话「来我门中报我名讳」——
+    // 此后游客上山可在外院「应约求见」，不必拜师也够得着整条恋爱线（事件本体仍在门内上演）。
+    if (!isRemote && typeof window.tryGrantSectInvitation === 'function') {
+        try { window.tryGrantSectInvitation(npcId); } catch (e) { console.warn('[游历] 邀约接线失败:', e); }
+    }
+    // v22.0 交谈即入戏：凡有私人线的故人，亲至交谈统一走通用闸——
+    // 沉浸模式（默认，社交面板不罗列事件清单）下，就绪的低门槛事件直接开场、拦住社交面板；
+    // 其余带自动弹出标记的走「她叫住了你」概率路。返回 true = 事件已开场，面板不再显示。
+    if (!isRemote && typeof window.personalEventGreetGate === 'function') {
+        try {
+            if (window.personalEventGreetGate(npc, npcId)) return;
+        } catch (e) { console.warn('[个人事件] 交谈接线失败:', e); }
     }
     const occAction = OCCUPATION_SPECIFIC_ACTIONS[npc.occupation] || null;
     let occHtml = '';
@@ -3376,14 +3704,14 @@ function showNPCDialog(npcId, screen = 'main') {
                 <div class="flex-1 bg-gray-700 rounded h-1.5">
                     <div class="h-1.5 rounded bg-gradient-to-r from-red-500 via-yellow-500 to-green-500 transition-all" style="width: ${mood}%"></div>
                 </div>
-                <span class="text-xs text-gray-400">${mood}</span>
+                <span class="text-xs text-gray-400">${Math.round(mood)}</span>
             </div>
             <div class="flex items-center gap-2">
                 <span class="text-xs text-gray-500">压力</span>
                 <div class="flex-1 bg-gray-700 rounded h-1.5">
                     <div class="h-1.5 rounded ${stress > 60 ? 'bg-yellow-500' : stress > 80 ? 'bg-red-500' : 'bg-green-500'} transition-all" style="width: ${stress}%"></div>
                 </div>
-                <span class="text-xs text-gray-400">${stress}</span>
+                <span class="text-xs text-gray-400">${Math.round(stress)}</span>
             </div>
         </div>
 
@@ -3397,20 +3725,13 @@ function showNPCDialog(npcId, screen = 'main') {
             ${goalHtml}
         </div>
 
-        <!-- 故事线 -->
-        ${window.NPC_STORYLINES && npcId ? `
-            <div class="mt-3">
-                ${checkNPCStorylines(npcId) ?
-                    `<button onclick="showStorylineDialogue('${npcId}')" class="w-full bg-purple-700 hover:bg-purple-600 px-3 py-2 rounded text-sm text-white transition-colors flex items-center gap-2">
-                        <span>📖</span>
-                        <span>触发故事线</span>
-                    </button>` : ''
-                }
-            </div>
-        ` : ''}
+        <!-- v22.0 沉浸修订：旧版此处有一枚系统话按钮（文案即调度动词，穿帮），且渲染期调用 checkNPCStorylines
+             会当场弹出故事线对话、500ms 后兜底检查又弹一次（双重弹窗）。按钮已撤——
+             故事线就绪时由下方包装层的延时检查统一自然弹出。 -->
 
         <!-- 职业交互 -->
         ${occHtml ? `<div class="mt-3">${occHtml}</div>` : ''}
+        ${(typeof buildNpcRequestHtml === 'function' && buildNpcRequestHtml(npc, npcId)) || ''}
 
         <!-- 个人事件 -->
         ${typeof window.getPersonalEventButtons === 'function' ? window.getPersonalEventButtons(npc, npcId) : ''}
@@ -3465,7 +3786,8 @@ function showSubCategoryDialog(npcId, categoryId) {
     for (var si = 0; si < cat.subOptions.length; si++) {
         var s = cat.subOptions[si];
         var insufficient = affection < s.minAffection;
-        var warnHtml = insufficient ? ' <span class="text-[10px] text-amber-400" title="好感不足，强行交谈将损失好感">⚠-' + (s.minAffection ? -Math.floor(s.minAffection / 10) : 2) + '</span>' : '';
+        // NEW-18 修：角标旧版写死 '⚠-' 前缀又接 -Math.floor(...)，负号重复成「⚠--3」——负号只留一个
+        var warnHtml = insufficient ? ' <span class="text-[10px] text-amber-400" title="好感不足，强行交谈将损失好感">⚠' + (s.minAffection ? -Math.floor(s.minAffection / 10) : -2) + '</span>' : '';
         subsHtml += '<button onclick="executeDeepTalkSubOption(\'' + npcId + '\', \'' + categoryId + '\', \'' + s.id + '\')" class="flex items-center gap-2 ' + (insufficient ? 'bg-gray-700 hover:bg-gray-600 border-l-2 border-amber-500/70' : 'bg-gray-700 hover:bg-gray-600') + ' px-3 py-2 rounded text-sm text-white w-full transition-colors">' +
             '<span class="text-gray-300">' + s.name + '</span>' +
             '<span class="text-xs ml-auto ' + (insufficient ? 'text-amber-300/80' : 'text-gray-400') + '">' + s.desc + (s.affectionCost > 0 ? ' (情分-' + s.affectionCost + ')' : '') + warnHtml + '</span>' +
@@ -3905,13 +4227,16 @@ var ADVANCED_REQUEST_TYPES = {
     borrow_item: { name: '借物', icon: '📦', minAffection: 40, minFavor: 10, desc: '向NPC借用物品' },
     request_heal: { name: '求医', icon: '🏥', minAffection: 30, minFavor: 5, desc: '请求NPC治疗' },
     breakthrough_help: { name: '求助突破', icon: '⬆️', minAffection: 50, minFavor: 20, desc: '请求NPC帮助突破' },
-    teach_skill: { name: '传授功法', icon: '📖', minAffection: 60, minFavor: 30, desc: '请求传授功法' },
+    teach_skill: { name: '请教功法', icon: '📖', minAffection: 60, minFavor: 30, desc: '请教NPC会的功法（挑一门，耗情分+灵石，过领悟检定）' },
+    transmit_skill: { name: '传授功法', icon: '🎁', minAffection: 30, minFavor: 0, desc: '把你学会的功法教给NPC' },
     introduce: { name: '介绍他人', icon: '🤝', minAffection: 40, minFavor: 15, desc: '请NPC介绍认识其他人' },
     request_asylum: { name: '请求庇护', icon: '🛡️', minAffection: 70, minFavor: 40, desc: '请求NPC庇护' },
     accompany: { name: '同行', icon: '🚶', minAffection: 50, minFavor: 20, desc: '请求NPC同行动' },
     mediate: { name: '调解关系', icon: '☮️', minAffection: 60, minFavor: 25, desc: '请NPC帮忙调解关系' },
     // P1-3: 补充guidance定义，供request_guidance调用
-    guidance: { name: '请求指点', icon: '🧘', minAffection: 20, minFavor: 5, desc: '修炼方向建议' }
+    guidance: { name: '请求指点', icon: '🧘', minAffection: 20, minFavor: 5, desc: '修炼方向建议' },
+    // 第十八波：招揽入门——位分决定能不能直接邀请（自建宗门走游说；身在门派：长老以上直邀，其余荐人面试，杂役的话递不进执事堂）
+    recruit_sect: { name: '招揽入门', icon: '🏮', minAffection: 20, minFavor: 0, desc: '请TA入你自建的宗门，或荐入你所在的门派' }
 };
 
 function getAvailableAdvancedRequests(npc) {
@@ -3921,6 +4246,12 @@ function getAvailableAdvancedRequests(npc) {
     var available = [];
     for (var key in ADVANCED_REQUEST_TYPES) {
         var req = ADVANCED_REQUEST_TYPES[key];
+        // 第十八波：招揽只对有门庭的人显示（自建的或在籍的），且这人得招得了
+        if (key === 'recruit_sect') {
+            var _canR = false;
+            try { _canR = !!(window.PSectVenture && window.PSectVenture.canRecruit && window.PSectVenture.canRecruit(npc)); } catch (e) {}
+            if (!_canR) continue;
+        }
         if (aff >= req.minAffection && favor >= req.minFavor) {
             available.push({ id: key, name: req.name, icon: req.icon, desc: req.desc, minAffection: req.minAffection, minFavor: req.minFavor });
         }
@@ -3940,9 +4271,21 @@ function executeAdvancedRequest(npc, requestId) {
     // v15.6 登门相求亦耗时辰（开口求人，无论成否）
     try { if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') window.timeSystem.advanceTime(15, '登门相求'); } catch (e) {}
 
+    // v23.2 开口求人就是花情分：旧版 minFavor 只是门票，进门后分文不扣——人情可以无限白嫖。
+    // 现在按请求轻重扣情分票子，成与不成都算欠了一回（favor 归零后大门自然关上，攒情分靠平日）。
+    var FAVOR_COST = { request_heal: 10, breakthrough_help: 15, teach_skill: 20, introduce: 10, request_asylum: 20, accompany: 10, mediate: 15, guidance: 5, borrow_item: 10 };
+    var _favCost = FAVOR_COST[requestId] || 0;
+    if (_favCost > 0 && npc.relationship) {
+        npc.relationship.favor = Math.max(0, (npc.relationship.favor || 0) - _favCost);
+    }
+
     var cd = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
     var result = null;
     switch (requestId) {
+        case 'recruit_sect':
+            // 第十八波：招揽入门——自建宗门走游说四话术，身在门派按位分（长老直邀/其余荐面试），全在 PSectVenture
+            if (!window.PSectVenture || typeof window.PSectVenture.recruitFromSocial !== 'function') return { success: false, msg: '招揽这一线还没通电' };
+            return window.PSectVenture.recruitFromSocial(npc);
         case 'borrow_item':
             if (!window.NPCBorrowService || typeof window.NPCBorrowService.borrowFromNPC !== 'function') {
                 return { success: false, msg: '借物契约系统未就绪' };
@@ -3978,6 +4321,12 @@ function executeAdvancedRequest(npc, requestId) {
             }
             return { success: true, msg: npc.name + ' 助你修炼，获得50点修炼经验！' };
         case 'teach_skill':
+            // v20.88 传功系统接管：打开「挑一门」面板（NPC 持有真实功法、按品阶收费、过领悟检定）。
+            // 旧逻辑保留为兜底（传功模块缺失时不至于退化成纯指点）。
+            if (window.SkillTransmission && typeof window.SkillTransmission.openRequestUI === 'function') {
+                window.SkillTransmission.openRequestUI(npc.id);
+                return { success: true, msg: '', skipReopen: true };
+            }
             // v12.1：只允许传授 skillPages 中真实存在的功法；无可教功法时改为修炼指点。
             if (cd) cd.tempering = (cd.tempering || 0) + 60;
             var taughtSkill = null;
@@ -4004,6 +4353,13 @@ function executeAdvancedRequest(npc, requestId) {
                 return { success: true, msg: npc.name + ' 传授了你「' + ((taughtDef && taughtDef.name) || taughtSkill) + '」！' };
             }
             return { success: true, msg: npc.name + ' 暂无适合传授的完整功法，转而指点你的修炼关窍。修炼经验+60。' };
+        case 'transmit_skill':
+            // v20.88 反向传功：玩家把自己学会的功法教给 NPC
+            if (window.SkillTransmission && typeof window.SkillTransmission.openTeachUI === 'function') {
+                window.SkillTransmission.openTeachUI(npc.id);
+                return { success: true, msg: '', skipReopen: true };
+            }
+            return { success: false, msg: '传功系统尚未就绪' };
         case 'introduce':
             // P2-5: 优先从NPC关系网（同门/朋友/师徒/仇敌）选择被介绍者
             var allNpcs = window.npcManager.getAllNPCs();
@@ -4122,6 +4478,8 @@ if (typeof window !== 'undefined') {
     window.setNPCRelationshipPair = setNPCRelationshipPair;
     window.adjustNPCRelationshipPair = adjustNPCRelationshipPair;
     window.migrateLegacyRelationships = migrateLegacyRelationships;
+    // NEW-39：公共读取口导出——各处判「上次见面」一律走这里，不再就地绕行（口径统一，null=从未谋面）
+    window.npcLastMeetGameMinute = npcLastMeetGameMinute;
     window.generateNPCRelations = generateNPCRelations;
     // 新游戏重置NPC系统
     window.resetNPCSystem = function() {
@@ -4152,6 +4510,8 @@ if (typeof window !== 'undefined') {
     window.propagateHelpToRelations = propagateHelpToRelations;
     window.propagateHarmToRelations = propagateHarmToRelations;
     window.showNPCDialog = showNPCDialog;
+    window.buildNpcRequestHtml = buildNpcRequestHtml;
+    window.respondNpcRequest = respondNpcRequest;
     window.showSubCategoryDialog = showSubCategoryDialog;
     window.executeDeepTalkSubOption = executeDeepTalkSubOption;
     window.showBranchDialog = showBranchDialog;
@@ -4167,7 +4527,7 @@ if (typeof window !== 'undefined') {
     window.executeNPCRequest = function(npcId, requestType) {
         if (window.requestSystem && typeof window.requestSystem.executeRequest === 'function') {
             const result = window.requestSystem.executeRequest(npcId, requestType);
-            if (result.success) { showMessage(result.msg, 'success'); const m = document.querySelector('.fixed.inset-0.z-50'); if (m) m.remove(); showNPCDialog(npcId); }
+            if (result.success) { showMessage(result.msg, 'success'); if (typeof window.closeRuntimeModals === 'function') window.closeRuntimeModals(); showNPCDialog(npcId); }   // 第一百一十波 · NEW-49：通配删除改保护版
             else showMessage(result.msg, 'error');
         }
     };
@@ -4335,9 +4695,12 @@ if (typeof window !== 'undefined') {
     showNPCDialog = function(npcId) {
         // 先显示原对话框
         originalShowNPCDialog(npcId);
-        
+
         // 延迟检查故事线，确保对话框已显示
         setTimeout(() => {
+            // v22.0 不叠台：个人事件在演（含「交谈即入戏」拦面板开场）时，故事线弹窗让路——
+            // 两层全屏弹窗摞在一起既穿帮又点不动。事件演完再开对话，故事线自有下次机会。
+            if (typeof document !== 'undefined' && document.querySelector && document.querySelector('.personal-event-modal')) return;
             checkNPCStorylines(npcId);
         }, 500);
     };

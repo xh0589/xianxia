@@ -1,0 +1,403 @@
+/* 仙路长青 · quests 面板专属样式（v21.x 界面整改）
+   只允许出现 #panel-quests / 本面板相关选择器，跨面板的规则请放进 ui-tokens.css
+
+   结构由 js/quest/quest-system.js 的渲染函数产出：
+     .qg-bar          列表首 child，吸顶计数条（共 N 章 / 在做 N / 下方还有 N 条）
+     .qg-card         一条任务 = 左 .qg-card__body（可换行）+ 右 .qg-card__side（按钮列）
+     .qg-card--todo/doing/ready/done/locked + .is-focus（当前该动的那一条）
+     .qg-empty        空态：为什么空 + 下一步做什么
+   挤成竖排的根因：旧结构里正文与按钮同为可伸缩 flex 项，长中文描述一撑，按钮列就被压到一个字宽。
+   这里靠「正文列 min-width:0 + 按钮列 shrink-0/nowrap/min-width」根治，不靠截断描述。
+   配色分级：主色金只给当前推荐的那一颗按钮，其余走中性描边；交付用绿，锁定用暗。
+   选择器一律带 #panel-quests 前缀——Tailwind 运行时注入的样式排在 head 末尾，同特异度会盖过来。 */
+
+/* ---------- 面板骨架 ---------- */
+
+#panel-quests {
+    --x-qg-line: #374151;
+    --x-qg-card: #1f2937;
+    --x-qg-card-lock: #1a2230;
+}
+
+/* 两列网格不再等高：右列「活跃任务」空的时候不该被左列顶成半屏空白 */
+#panel-quests > [class~="grid"] { align-items: start; }
+
+#panel-quests h3 {
+    font-size: 17px;
+    line-height: 1.5;
+    color: var(--x-text);
+}
+
+/* 主线列表自带滚动：48 章全铺在页面上，玩家既看不到底也找不到北 */
+#panel-quests #main-quest-list {
+    max-height: clamp(340px, 62vh, 620px);
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+    padding-right: 6px;
+}
+
+/* 布告委托同理：html 里写死的 max-h-72 只露得出三张告示，改成跟着窗口给的高度 */
+#panel-quests #random-quest-list {
+    max-height: clamp(340px, 62vh, 620px);
+    scrollbar-gutter: stable;
+    padding-right: 6px;
+}
+
+/* ---------- 吸顶计数条 ---------- */
+
+#panel-quests .qg-bar {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    padding: 6px 8px;
+    border: 1px solid var(--x-qg-line);
+    border-radius: 8px;
+    background: #172033;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, .35);
+}
+
+#panel-quests .qg-bar__title {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--x-text);
+    white-space: nowrap;
+}
+
+#panel-quests .qg-bar__stat,
+#panel-quests .qg-bar__hint,
+#panel-quests .qg-bar__rest {
+    font-size: 13px;
+    color: var(--x-muted);
+    white-space: nowrap;
+}
+
+#panel-quests .qg-bar__rest:empty { display: none; }
+
+#panel-quests .qg-bar__now {
+    flex: 1 1 auto;
+    min-width: 12em;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--x-gold);
+    text-align: right;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---------- 任务卡 ---------- */
+
+#panel-quests .qg-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--x-qg-line);
+    border-left: 3px solid #4b5563;
+    border-radius: 10px;
+    background: var(--x-qg-card);
+}
+
+/* 正文列：min-width:0 才允许被压缩（中文才会换行），否则它把按钮列顶没 */
+#panel-quests .qg-card__body {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* 动作列：永不伸缩、永不换行、给足最小宽度——「接取」再不会被挤成竖排 */
+#panel-quests .qg-card__side {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+    min-width: 84px;
+    white-space: nowrap;
+}
+
+#panel-quests .qg-card__side:empty { display: none; }
+
+#panel-quests .qg-card__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 3px;
+}
+
+#panel-quests .qg-card__no {
+    padding: 1px 7px;
+    border: 1px solid var(--x-qg-line);
+    border-radius: 999px;
+    background: #172033;
+    font-size: 13px;
+    color: var(--x-muted);
+    white-space: nowrap;
+}
+
+#panel-quests .qg-card__title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1.4;
+    color: var(--x-text);
+}
+
+#panel-quests .qg-card__desc {
+    margin: 2px 0 0;
+    font-size: var(--x-fs-sm);
+    line-height: 1.6;
+    color: var(--x-text-2);
+    overflow-wrap: anywhere;
+}
+
+#panel-quests .qg-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin-top: 7px;
+}
+
+#panel-quests .qg-card__pct,
+#panel-quests .qg-card__reward,
+#panel-quests .qg-card__note {
+    font-size: var(--x-fs-xs);
+    color: var(--x-muted);
+    white-space: nowrap;
+}
+
+#panel-quests .qg-card__reward { color: var(--x-dim); }
+
+#panel-quests .qg-card__lock {
+    margin: 7px 0 0;
+    padding: 4px 8px;
+    border: 1px dashed #4b5563;
+    border-radius: 6px;
+    background: rgba(17, 24, 39, .55);
+    font-size: var(--x-fs-xs);
+    line-height: 1.5;
+    color: var(--x-muted);
+}
+
+/* ---------- 芯片：状态与优先级从「同色同量级」拆成三层 ---------- */
+
+#panel-quests .qg-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border: 1px solid #4b5563;
+    border-radius: 999px;
+    font-size: var(--x-fs-xs);
+    font-weight: 700;
+    line-height: 1.6;
+    color: var(--x-muted);
+    white-space: nowrap;
+}
+
+#panel-quests .qg-chip--prio-critical { border-color: #7f1d1d; background: rgba(127, 29, 29, .35); color: #fca5a5; }
+#panel-quests .qg-chip--prio-high { border-color: #92400e; background: rgba(146, 64, 14, .3); color: #fcd34d; }
+#panel-quests .qg-chip--prio-medium { border-color: #1e40af; background: rgba(30, 64, 175, .28); color: #bfdbfe; }
+#panel-quests .qg-chip--prio-low { border-color: #374151; color: var(--x-muted); }
+
+#panel-quests .qg-chip--todo { color: var(--x-muted); }
+#panel-quests .qg-chip--doing { border-color: #1e40af; background: rgba(30, 64, 175, .28); color: #dbeafe; }
+#panel-quests .qg-chip--ready { border-color: #15803d; background: rgba(21, 128, 61, .28); color: #bbf7d0; }
+#panel-quests .qg-chip--done { border-color: #14532d; color: #86efac; }
+
+#panel-quests .qg-chip--tag {
+    border-color: var(--x-gold);
+    background: rgba(251, 191, 36, .16);
+    color: var(--x-gold);
+}
+
+/* ---------- 目标与进度 ---------- */
+
+#panel-quests .qg-objs {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed #374151;
+}
+
+#panel-quests .qg-obj {
+    display: grid;
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 6px;
+    margin: 2px 0 0;
+    font-size: var(--x-fs-xs);
+    line-height: 1.55;
+    color: var(--x-muted);
+}
+
+#panel-quests .qg-obj__mark { color: var(--x-dim); }
+#panel-quests .qg-obj__text { min-width: 0; overflow-wrap: anywhere; }
+#panel-quests .qg-obj__num { color: var(--x-text-2); font-variant-numeric: tabular-nums; }
+#panel-quests .qg-obj.is-done { color: #86efac; }
+#panel-quests .qg-obj.is-done .qg-obj__mark { color: #4ade80; }
+#panel-quests .qg-obj--rest { display: block; color: var(--x-dim); }
+
+#panel-quests .qg-meter {
+    width: 84px;
+    height: 6px;
+    border-radius: 999px;
+    background: #111827;
+    overflow: hidden;
+}
+
+#panel-quests .qg-meter > i {
+    display: block;
+    height: 100%;
+    min-width: 2px;
+    border-radius: 999px;
+    background: var(--x-gold);
+}
+
+/* ---------- 状态底色：当前该动的最亮，锁定/已了结压暗 ---------- */
+
+#panel-quests .qg-card.is-focus {
+    border-color: var(--x-gold);
+    border-left-color: var(--x-gold);
+    background: #24303f;
+}
+
+#panel-quests .qg-card--doing { border-left-color: #3b82f6; }
+#panel-quests .qg-card--ready { border-left-color: #22c55e; }
+
+#panel-quests .qg-card--locked,
+#panel-quests .qg-card--done {
+    border-color: #2b3441;
+    background: var(--x-qg-card-lock);
+}
+
+#panel-quests .qg-card--locked .qg-card__title,
+#panel-quests .qg-card--done .qg-card__title {
+    font-size: 15px;
+    color: var(--x-text-2);
+}
+
+/* 锁着的章节只留剧情钩子前 3 行，全量文案等解锁后自然看得到 */
+#panel-quests .qg-card--locked .qg-card__desc {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
+}
+
+#panel-quests .qg-card--done .qg-card__desc {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+}
+
+/* ---------- 按钮：一屏一颗金色主行动 ---------- */
+
+#panel-quests .qg-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 84px;
+    padding: 6px 12px;
+    border: 1px solid #4b5563;
+    border-radius: 6px;
+    background: #2b3441;
+    color: var(--x-text);
+    font-family: inherit;
+    font-size: var(--x-fs-sm);
+    font-weight: 700;
+    line-height: 1.4;
+    white-space: nowrap;
+    cursor: pointer;
+    transition: background-color .15s, border-color .15s, color .15s;
+}
+
+#panel-quests .qg-btn:hover { background: #374151; border-color: #6b7280; }
+
+#panel-quests .qg-btn--primary {
+    border-color: var(--x-gold-deep);
+    background: var(--x-gold);
+    color: #111827;
+}
+#panel-quests .qg-btn--primary:hover { background: #fcd34d; border-color: #fcd34d; }
+
+#panel-quests .qg-btn--turnin {
+    border-color: #15803d;
+    background: rgba(21, 128, 61, .22);
+    color: #bbf7d0;
+}
+#panel-quests .qg-btn--turnin:hover { background: rgba(21, 128, 61, .38); border-color: #22c55e; }
+
+#panel-quests .qg-btn--track {
+    min-width: 0;
+    padding: 5px 10px;
+    font-weight: 400;
+    color: var(--x-muted);
+}
+#panel-quests .qg-btn--track.is-on {
+    border-color: var(--x-gold);
+    background: rgba(251, 191, 36, .14);
+    color: var(--x-gold);
+    font-weight: 700;
+}
+
+/* ---------- 空态 ---------- */
+
+#panel-quests .qg-empty {
+    padding: 14px 14px 15px;
+    border: 1px dashed #4b5563;
+    border-radius: 10px;
+    background: rgba(31, 41, 55, .55);
+}
+
+#panel-quests .qg-empty__title {
+    margin: 0 0 5px;
+    font-size: var(--x-fs-base);
+    font-weight: 700;
+    line-height: 1.45;
+    color: var(--x-text);
+}
+
+#panel-quests .qg-empty__why,
+#panel-quests .qg-empty__hint {
+    margin: 0 0 4px;
+    font-size: var(--x-fs-sm);
+    line-height: 1.65;
+    color: var(--x-muted);
+}
+
+#panel-quests .qg-empty__next {
+    margin: 0 0 4px;
+    font-size: var(--x-fs-sm);
+    font-weight: 700;
+    line-height: 1.6;
+    color: var(--x-gold);
+}
+
+#panel-quests .qg-empty__hint { font-size: var(--x-fs-xs); color: var(--x-dim); }
+
+/* ---------- 窄屏：按钮整排放到正文下面，谁也不挤谁 ---------- */
+
+@media (max-width: 767px) {
+    #panel-quests .qg-card { flex-wrap: wrap; gap: 8px; padding: 10px; }
+    /* 酬劳一串写全比排成一行重要：窄屏放开小签的换行，否则长酬劳被切尾 */
+    #panel-quests .qg-card__pct,
+    #panel-quests .qg-card__reward,
+    #panel-quests .qg-card__note { white-space: normal; }
+    #panel-quests .qg-card__body { flex: 1 1 100%; }
+    #panel-quests .qg-card__side {
+        flex: 1 1 100%;
+        flex-direction: row;
+        min-width: 0;
+    }
+    #panel-quests .qg-btn { flex: 1 1 auto; }
+    #panel-quests .qg-bar__now { text-align: left; }
+    #panel-quests #main-quest-list,
+    #panel-quests #random-quest-list { max-height: none; }
+}

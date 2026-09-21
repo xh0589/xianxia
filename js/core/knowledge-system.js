@@ -94,7 +94,18 @@
         art_soft_palm: 'skill_04',        // 绵掌功
         art_diamond_palm: 'skill_04',     // 金刚掌
         art_dragon_subdue_palm: 'skill_04',// 降龙掌
-        art_taixu_fist: 'skill_04'        // 太虚拳
+        art_taixu_fist: 'skill_04',       // 太虚拳
+
+        // ===== 第八十一波·方向秘艺（毒/灼/反击/吸血/闪避九门，专页专映） =====
+        art_wu_du: 'skill_51',            // 五毒功（内功·毒）
+        art_wan_du: 'skill_52',           // 万毒归元诀（内功·毒，三品）
+        art_fen_tian: 'skill_53',         // 焚天诀（内功·灼）
+        art_jin_wu: 'skill_54',           // 金乌诀（内功·灼，三品）
+        art_shi_xue: 'skill_55',          // 噬血功（内功·吸血）
+        art_du_chang: 'skill_56',         // 断肠毒掌（拳掌·毒）
+        art_lie_yan: 'skill_57',          // 烈焰掌（拳掌·灼）
+        art_zhan_shou: 'skill_58',        // 沾手功（轻功·反击）
+        art_you_ying: 'skill_59'          // 幽影步（轻功·闪避）
     };
 
     /** 按名称模糊匹配（秘籍名 → skillPages） */
@@ -164,7 +175,13 @@
     }
 
     function canEquip(skillId) {
-        return knows(skillId, 'learned');
+        if (knows(skillId, 'learned')) return true;
+        // 第八十一波·老档认账：方向秘艺九门此前没有映射，学会记的是秘籍 id（art_wu_du 等）；
+        // 补映射后新学的记 skill_XX——老档凭旧 id 也认，只读不补写
+        for (var mid in MANUAL_TO_SKILL) {
+            if (MANUAL_TO_SKILL[mid] === skillId && knows(mid, 'learned')) return true;
+        }
+        return false;
     }
 
     function canPractice(skillId) {
@@ -239,6 +256,17 @@
         };
         techniqueKnowledge[skillId] = entry;
         syncLearnedSecretsList();
+        // 第九十五波·NEW-42：功法图鉴此前零生产者——学会功法也从没往 codex_gongfa 写过一条。
+        // 学会/参透（learned/mastered）就在此收录（图鉴面板与数据层本就是好的，缺的只是写入方）
+        if (nextState === 'learned' || nextState === 'mastered') {
+            try {
+                if (global.Codex && typeof global.Codex.discover === 'function') {
+                    var _nm = skillId;
+                    if (global.findSkillById) { var _d = global.findSkillById(skillId); if (_d && _d.name) _nm = _d.name; }
+                    global.Codex.discover('codex_gongfa', skillId, { name: _nm });
+                }
+            } catch (eCodexG) {}
+        }
         return entry;
     }
 
@@ -271,9 +299,13 @@
             skillId: skillId,
             skillName: skillName || manualName || skillId,
             state: state,
+            // 第九十五波·NEW-24 附带：书名与功法名不同时要说清传承——「《凝气诀》载的吐纳术」，
+            // 此前只播功法名，玩家以为读错了书
             msg: state === 'learned'
-                ? ('你学会了功法：' + (skillName || skillId) + '！')
-                : ('你开始研读：' + (skillName || skillId))
+                ? ((manualName && skillName && manualName !== skillName)
+                    ? ('你掩卷长吁——《' + manualName + '》所载的「' + skillName + '」通读入门！')
+                    : ('你学会了功法：' + (skillName || skillId) + '！'))
+                : ('你开始研读：' + (manualName || skillName || skillId))
         };
     }
 

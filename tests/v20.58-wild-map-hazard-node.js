@@ -198,10 +198,12 @@ console.log('\n[H2] 夜里更凶、高人无惧、坦途无苦');
     assert(master < day, '渡劫修士应比凡人扛得住（' + day.toFixed(3) + ' → ' + master.toFixed(3) + '）');
     assert(Math.abs(master - day * 0.46) < 1e-9, '渡劫应吃满六成减免（实得 ' + master.toFixed(4) + '）');
     global.currentCharData.realm = '凡人';
-    // 坦途与灵泉无苦
-    ['PLAIN', 'ROAD', 'SPRING', 'FOREST'].forEach(function (k) {
+    // 坦途与灵泉无苦（第四十五波：山地补了落石、林海补了荆棘——险地才像险地，FOREST 移出无苦名单）
+    ['PLAIN', 'ROAD', 'SPRING'].forEach(function (k) {
         assert(api.terrainHazard({ terrainKey: k }) === null, k + ' 不该凭空伤人');
     });
+    assert(api.terrainHazard({ terrainKey: 'FOREST' }) !== null, '林海有荆棘（第四十五波新险）');
+    assert(api.terrainHazard({ terrainKey: 'MOUNTAIN' }) !== null, '山地有落石（第四十五波新险）');
     console.log('    夜 ×1.5 / 渡劫 -60% / 平原古道灵泉无苦');
 })();
 

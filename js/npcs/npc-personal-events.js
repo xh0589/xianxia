@@ -1262,7 +1262,8 @@ function canPlayerAccessPersonalEvent(eventDef, npc) {
     if (!(memory.firstMet === true || (memory.meetCount || 0) > 0)) return false;
 
     var sectId = getPersonalEventSectId(eventDef);
-    if (sectId) {
+    // v20.84 集体戏：灯市/擂台/坊市/大典都不在门派里发生——标了 anyLocation 的事件跳过地点闸
+    if (sectId && !eventDef.anyLocation) {
         if ((window.currentCharData.location || '') !== sectId) return false;
     }
 
@@ -1276,6 +1277,21 @@ function canPlayerAccessPersonalEvent(eventDef, npc) {
     if (eventDef.requireRivalRomance) {
         if (typeof window.detectRivalRomance !== 'function') return false;
         if (!window.detectRivalRomance(eventDef.npcId)) return false;
+    }
+    // v20.80 双人对局门禁：指定的来客也得把玩家放在心上——两头都有戏，对局才成立
+    if (eventDef.requireGuestFeelings) {
+        if (typeof window._jealHasFeelings !== 'function') return false;
+        if (!eventDef.guestId || !window._jealHasFeelings(eventDef.guestId)) return false;
+    }
+    // v20.80 第二条情缘线门禁：世上至少还有一人把玩家放在心上（集体交锋的前提）
+    if (eventDef.requireSecondRomance) {
+        if (typeof window._jealAllRivals !== 'function') return false;
+        if (window._jealAllRivals(eventDef.npcId).length < 1) return false;
+    }
+    // v20.80 同行嫌疑门禁：队伍里带着另一位江湖人（你带谁来见谁，嫌疑就在谁身上）
+    if (eventDef.requirePartyCompanion) {
+        if (typeof window._jealPartySuspects !== 'function') return false;
+        if (!window._jealPartySuspects(eventDef.npcId)) return false;
     }
     // v20.2 和好事件：需指定的前置事件（如吃醋对峙）已发生过
     if (eventDef.requireEventDone) {
@@ -1377,7 +1393,10 @@ function showPersonalEventScene(npc, eventDef) {
     
     // 事件状态
     window._currentPersonalEvent = { npc: npc, eventDef: eventDef, msgArea: msgArea, finished: false };
-    
+
+    // v20.80 见面即结识：双人事件开帘前先补关系——动态情敌当场换真名，主客初见当场种社交关系并补一拍旁白
+    try { if (window._jealOnSceneShow) window._jealOnSceneShow(npc, eventDef); } catch (e) {}
+
     renderPersonalEventScene(0);
 }
 
@@ -1426,7 +1445,13 @@ function renderPersonalEventScene(index) {
         ev._nextIndex = index + 1;
         setTimeout(function() { renderPersonalEventScene(ev._nextIndex); }, 350);
     } else if (scene.speaker === 'npc') {
-        appendPEMessage('npc', scene.text.replace(/{playerName}/g, playerName).replace(/{npc_name}/g, npcName).replace(/{playerTa}/g, playerTa).replace(/{playerTaPoss}/g, playerTaPoss), npcIcon, npcName, scene.emotion);
+        // v20.80 双人同框：场景标了 asNpc（第二位人物 id）就以 Ta 的名号头像开口气泡（琥珀色，与主人家的粉色区分）
+        var _spIcon = npcIcon, _spName = npcName, _spType = 'npc';
+        if (scene.asNpc && typeof window._jealGuestInfo === 'function') {
+            var _gInfo = window._jealGuestInfo(scene.asNpc);
+            if (_gInfo) { _spIcon = _gInfo.icon; _spName = _gInfo.name; _spType = 'npc2'; }
+        }
+        appendPEMessage(_spType, scene.text.replace(/{playerName}/g, playerName).replace(/{npc_name}/g, npcName).replace(/{as_name}/g, _spName).replace(/{playerTa}/g, playerTa).replace(/{playerTaPoss}/g, playerTaPoss), _spIcon, _spName, scene.emotion);
         ev._nextIndex = index + 1;
         setTimeout(function() { renderPersonalEventScene(ev._nextIndex); }, 450);
     } else if (scene.speaker === 'player_select') {
@@ -1449,14 +1474,17 @@ function appendPEMessage(type, content, npcIcon, npcName, emotion) {
     if (type === 'narrator') {
         div.className = 'bg-gray-800/60 p-3 rounded-lg border-l-4 border-gray-500';
         div.innerHTML = '<p class="text-gray-400 text-sm italic">' + content + '</p>';
-    } else if (type === 'npc') {
-        div.className = 'bg-gray-700/50 p-3 rounded-lg border-l-4 border-pink-500';
+    } else if (type === 'npc' || type === 'npc2') {
+        // v20.80 npc2 = 双人同框里第二位的说话气泡（琥珀色左边框），主人家仍是粉色
+        var _bdColor = (type === 'npc2') ? 'border-amber-500' : 'border-pink-500';
+        var _nmColor = (type === 'npc2') ? 'text-amber-300' : 'text-pink-400';
+        div.className = 'bg-gray-700/50 p-3 rounded-lg border-l-4 ' + _bdColor;
         var emotionHtml = '';
         if (emotion) {
             var emotionMap = { 'hesitant': '😅 犹豫', 'neutral': '😐 平静', 'friendly': '😊 友好', 'warm': '😌 温和', 'happy': '😄 开心', 'grateful': '🥺 感激', 'serious': '😑 严肃', 'deep': '😔 深邃', 'determined': '😤 坚定', 'generous': '😊 慷慨', 'solemn': '😐 庄重' };
             emotionHtml = '<span class="text-xs text-gray-400">' + (emotionMap[emotion] || emotion) + '</span>';
         }
-        div.innerHTML = '<div class="flex items-center gap-2 mb-1"><span class="text-xl">' + (npcIcon || '👤') + '</span><span class="text-sm font-bold text-pink-400">' + (npcName || '') + '</span><span class="ml-auto">' + emotionHtml + '</span></div><p class="text-gray-200 text-sm">' + content + '</p>';
+        div.innerHTML = '<div class="flex items-center gap-2 mb-1"><span class="text-xl">' + (npcIcon || '👤') + '</span><span class="text-sm font-bold ' + _nmColor + '">' + (npcName || '') + '</span><span class="ml-auto">' + emotionHtml + '</span></div><p class="text-gray-200 text-sm">' + content + '</p>';
     } else if (type === 'choice') {
         div.className = 'my-1';
         div.innerHTML = content;
@@ -1547,6 +1575,42 @@ window.handlePersonalEventChoice = function(sceneIndex, choiceIndex) {
         npcDiv.innerHTML = '<div class="flex items-center gap-2 mb-1"><span class="text-xl">' + npcIcon + '</span><span class="text-sm font-bold text-pink-400">' + npcName + '</span></div><p class="text-gray-200 text-sm">' + result.msg + '</p>';
         ev.msgArea.appendChild(npcDiv);
         ev.msgArea.scrollTop = ev.msgArea.scrollHeight;
+    }
+
+    // ===== v20.80 双人同框结算：others = 在场第三方的好感账，pair = 主客社交关系写回（npcRelationships 真源） =====
+    if (result.others && Array.isArray(result.others)) {
+        for (var _oi = 0; _oi < result.others.length; _oi++) {
+            var _oth = result.others[_oi];
+            if (!_oth || !_oth.id) continue;
+            var _onpc = window.npcManager?.getNPC(_oth.id);
+            if (!_onpc || !_onpc.relationship) continue;
+            if (typeof _oth.affection === 'number' && _oth.affection !== 0) {
+                _onpc.relationship.affection = Math.max(-100, Math.min(100, (_onpc.relationship.affection || 0) + _oth.affection));
+                var _oDiv = document.createElement('div');
+                _oDiv.className = 'text-center py-0.5';
+                _oDiv.innerHTML = '<p class="text-gray-500 text-xs">' + (_oth.affection > 0 ? '💗 ' : '💔 ') + (_onpc.name || _oth.id) + ' 好感度 ' + (_oth.affection > 0 ? '+' : '') + _oth.affection + '</p>';
+                ev.msgArea.appendChild(_oDiv);
+                ev.msgArea.scrollTop = ev.msgArea.scrollHeight;
+            }
+            if (typeof _oth.trust === 'number' && _oth.trust !== 0) {
+                _onpc.relationship.trust = Math.max(-100, Math.min(100, (Number(_onpc.relationship.trust) || 0) + _oth.trust));
+            }
+        }
+    }
+    if (result.pair && typeof window._jealWriteback === 'function') {
+        try {
+            var _pairWith = result.pair.with || ev.eventDef.guestId || null;
+            if (_pairWith && _pairWith !== ev.eventDef.npcId) {
+                var _pRes = window._jealWriteback(ev.eventDef.npcId, _pairWith, Number(result.pair.delta) || 0, result.pair.opts || {});
+                if (_pRes && _pRes.text && result.pair.show !== false) {
+                    var _pDiv = document.createElement('div');
+                    _pDiv.className = 'text-center py-0.5';
+                    _pDiv.innerHTML = '<p class="text-gray-500 text-xs">🕸️ ' + _pRes.text + '</p>';
+                    ev.msgArea.appendChild(_pDiv);
+                    ev.msgArea.scrollTop = ev.msgArea.scrollHeight;
+                }
+            }
+        } catch (e) {}
     }
     
     // 检查是否解锁秘密（v12.3：effects 返回的 secretId 优先 → 事件声明的 unlockSecret → 旧硬编码兜底）
@@ -1751,8 +1815,14 @@ function _ambientRearmOk(npc, ev) {
 function getPersonalEventButtons(npc, npcId) {
     if (!npc || !npcId) return '';
 
-    // 每次调用时尝试注入秘密（幂等，确保NPC实例已获得secrets数据）
+    // 每次调用时尝试注入秘密（幂等，确保NPC实例已获得secrets数据）——
+    // 懒注册的门派掌门（registerSectNPCs 到访才建）全靠这趟面板级补注入，必须先于沉浸闸执行。
     injectSectSecrets();
+
+    // v22.0 沉浸模式（默认）：设置未开启「社交面板显示个人事件」时不罗列清单——
+    // 事件改由交谈自然引出（personalEventGreetGate：拦面板开场 / 「她叫住了你」概率弹出）。
+    // 各故事线（batch1/2/3 等）对 window.getPersonalEventButtons 的包装链最终都落到这里，一处闸全局生效。
+    if (!(window._settings && window._settings.socialEventPanel === true)) return '';
 
     // 查找属于该NPC的所有个人事件
     var eventList = [];
@@ -1852,6 +1922,19 @@ function getPersonalEventButtons(npc, npcId) {
                 canTrigger = false;
                 reasons.push('需先与另一位缔结情缘');
             }
+            // v20.80 双人同框门禁的逐条原因
+            if (ev.requireGuestFeelings && (typeof window._jealHasFeelings !== 'function' || !ev.guestId || !window._jealHasFeelings(ev.guestId))) {
+                canTrigger = false;
+                reasons.push('需那位来客也把你放在心上');
+            }
+            if (ev.requireSecondRomance && (typeof window._jealAllRivals !== 'function' || window._jealAllRivals(ev.npcId).length < 1)) {
+                canTrigger = false;
+                reasons.push('需世上另有一人把你放在心上');
+            }
+            if (ev.requirePartyCompanion && (typeof window._jealPartySuspects !== 'function' || !window._jealPartySuspects(ev.npcId))) {
+                canTrigger = false;
+                reasons.push('需队伍里另有一位故人同行');
+            }
             if (ev.requireEventDone && (typeof hasEventTriggered !== 'function' || !hasEventTriggered(ev.requireEventDone))) {
                 canTrigger = false;
                 reasons.push('需先经历前情');
@@ -1918,6 +2001,9 @@ function getPersonalEventButtons(npc, npcId) {
             if (affection < (ev.minAffection || 0)) areasons.push('好感≥' + ev.minAffection + '（当前' + affection + '）');
             if (ev.requireDaoCompanion && !(npc.hasFlag && npc.hasFlag('dao_companion'))) areasons.push('需先结为道侣');
             if (ev.requireRivalRomance && (typeof window.detectRivalRomance !== 'function' || !window.detectRivalRomance(ev.npcId))) areasons.push('需先与另一位缔结情缘');
+            if (ev.requireGuestFeelings && (typeof window._jealHasFeelings !== 'function' || !ev.guestId || !window._jealHasFeelings(ev.guestId))) areasons.push('需那位来客也把你放在心上');
+            if (ev.requireSecondRomance && (typeof window._jealAllRivals !== 'function' || window._jealAllRivals(ev.npcId).length < 1)) areasons.push('需世上另有一人把你放在心上');
+            if (ev.requirePartyCompanion && (typeof window._jealPartySuspects !== 'function' || !window._jealPartySuspects(ev.npcId))) areasons.push('需队伍里另有一位故人同行');
             if (ev.requireEventDone && (typeof hasEventTriggered !== 'function' || !hasEventTriggered(ev.requireEventDone))) areasons.push('需先经历前情');
             if (ev.requireFestivalWound) {
                 // 账本驱动桩：由每日钩子按账实弹，手动触发会弹到占位景——只给"自然来"的展示
@@ -1944,6 +2030,95 @@ function getPersonalEventButtons(npc, npcId) {
     return html;
 }
 
+// ============ v22.0 交谈即入戏：通用事件接线 ============
+// 「社交面板显示个人事件」默认关闭后，清单不再罗列——该发生的事必须在交谈时自然发生，
+// 否则整条私人线在沉浸模式下不可达。接线分两路：
+//   ① 拦面板（确定性）：事件已就绪（链头/好感/资格门禁/条件全过、夜戏守夜时辰）且
+//      「门槛低」（好感≤20）或本就没有自动弹出标记的——玩家一开口，事件直接开场，社交面板不再显示。
+//      ambient 日常小事隔够重演周期（默认14日）也会在交谈里自然撞见，主线大事优先。
+//   ② 概率弹出：带 autoTrigger 标记的高门槛事件走原有 maybeAutoTriggerPersonalEvent('greet')
+//      ——「她叫住了你」，弹不弹看概率与时辰，不拦面板；各线原有的 daily/sect 钩子照旧。
+// 面板开关开启时不拦截（玩家自己点清单），只保留②。
+
+// 事件此刻是否就绪（与自动触发同一套门禁，另守 autoTrigger.timeRange 时辰窗——夜戏夜演）
+function isEventReadyNow(npc, ev, affection) {
+    if (!ev || !npc || !window.currentCharData) return false;
+    if (typeof _ensureAmbientTag === 'function') _ensureAmbientTag(ev);
+    if (hasEventTriggered(ev.id)) {
+        // 一次性事件演过即毕；日常小事隔够重演周期可再撞见
+        if (!(ev.ambient && typeof _ambientRearmOk === 'function' && _ambientRearmOk(npc, ev))) return false;
+    }
+    if (!isChainHead(ev)) return false;
+    if ((affection || 0) < (ev.minAffection || 0)) return false;
+    if (!canPlayerAccessPersonalEvent(ev, npc)) return false;
+    if (!checkEventTrigger(ev, window.currentCharData)) return false;
+    if (ev.autoTrigger && ev.autoTrigger.timeRange && typeof inHourRange === 'function') {
+        var rawHour = window.timeSystem && window.timeSystem.gameTime ? window.timeSystem.gameTime.currentHour : null;
+        var hour = (rawHour === null || rawHour === undefined) ? 12 : Number(rawHour);
+        if (!inHourRange(hour, ev.autoTrigger.timeRange)) return false;
+    }
+    return true;
+}
+
+// 这条私人线是否已演到终章（泛化自各线硬编码的 finalEvents：主链序号最大的一桩已完成即终章）
+// 终章之后不再自动弹出/拦截——余韵留白，与各线原有「finalEvents 之后停弹」的口径一致。
+function isPersonalLineFinished(npcId) {
+    var maxOrder = 0, maxEv = null;
+    for (var key in NPC_PERSONAL_EVENTS) {
+        var ev = NPC_PERSONAL_EVENTS[key];
+        if (!ev || ev.npcId !== npcId || ev.ambient) continue;
+        if (getEventChain(ev) !== 'main') continue;
+        var o = getChainOrder(ev);
+        if (o > maxOrder) { maxOrder = o; maxEv = ev; }
+    }
+    return !!(maxEv && hasEventTriggered(maxEv.id));
+}
+
+// 拦面板：找一桩就绪的低门槛/无弹出标记事件直接开场；成功返回 true（调用方不再显示社交面板）
+function tryInterceptPersonalEvent(npc, npcId) {
+    if (!npc || !npcId || !window.currentCharData) return false;
+    if (typeof NPC_PERSONAL_EVENTS === 'undefined') return false;
+    if (typeof document !== 'undefined' && document.querySelector && document.querySelector('.personal-event-modal')) return false; // 已有事件在演，不叠台
+    var affection = (npc.relationship && npc.relationship.affection) || 0;
+    var best = null, bestRank = null;
+    for (var key in NPC_PERSONAL_EVENTS) {
+        var ev = NPC_PERSONAL_EVENTS[key];
+        if (!ev || ev.npcId !== npcId) continue;
+        // 拦截资格：门槛低（好感≤20）或本就没有自动弹出标记（有标记的高门槛事件走自己的概率路，不必拦）
+        if (!((ev.minAffection || 0) <= 20 || !ev.autoTrigger)) continue;
+        if (!isEventReadyNow(npc, ev, affection)) continue;
+        // 主线大事优先于日常小事；同组按链序取最靠前的一桩
+        var rank0 = ev.ambient ? 1 : 0, rank1 = getChainOrder(ev);
+        if (!best || rank0 < bestRank[0] || (rank0 === bestRank[0] && rank1 < bestRank[1])) {
+            best = ev; bestRank = [rank0, rank1];
+        }
+    }
+    if (!best) return false;
+    return triggerPersonalEvent(best.id) === true;
+}
+
+// 交谈总闸（showNPCDialog 亲至分支调用）：返回 true = 已拦面板开场，调用方直接 return
+function personalEventGreetGate(npc, npcId) {
+    if (!npc || !npcId) return false;
+    if (typeof NPC_PERSONAL_EVENTS === 'undefined') return false;
+    var hasAny = false;
+    for (var k in NPC_PERSONAL_EVENTS) {
+        if (NPC_PERSONAL_EVENTS[k] && NPC_PERSONAL_EVENTS[k].npcId === npcId) { hasAny = true; break; }
+    }
+    if (!hasAny) return false;
+    if (isPersonalLineFinished(npcId)) return false; // 终章已演完，余韵留白
+    // 沉浸模式（默认）：先试确定性拦面板
+    if (!(window._settings && window._settings.socialEventPanel === true)) {
+        if (tryInterceptPersonalEvent(npc, npcId)) return true;
+    }
+    // 概率路：全线通用「她叫住了你」——此前只有逐线硬编码的几条线有 greet 源，
+    // 其余二十多条线只能等每日兜底；现在凡亲至交谈皆有机会自然弹出。
+    if (typeof maybeAutoTriggerPersonalEvent === 'function') {
+        try { maybeAutoTriggerPersonalEvent(npcId, 'greet'); } catch (e) {}
+    }
+    return false;
+}
+
 // ============ 导出 ============
 if (typeof window !== 'undefined') {
     window.NPC_PERSONAL_EVENTS = NPC_PERSONAL_EVENTS;
@@ -1957,6 +2132,11 @@ if (typeof window !== 'undefined') {
     window.getSecretDisplayHtml = getSecretDisplayHtml;
     window.getSecretHtml = getSecretDisplayHtml;
     window.injectSectSecrets = injectSectSecrets;
+    // v22.0 交谈即入戏
+    window.isEventReadyNow = isEventReadyNow;
+    window.isPersonalLineFinished = isPersonalLineFinished;
+    window.tryInterceptPersonalEvent = tryInterceptPersonalEvent;
+    window.personalEventGreetGate = personalEventGreetGate;
 }
 
 // ============ 秘密显示HTML（用于对话面板） ============
@@ -2006,8 +2186,32 @@ function getSecretDisplayHtml(npc) {
 //      未开启时本机制完全不参与，任何好感都不会因未联系而下降。
 function checkDailyAffectionDecay() {
     if (!(window._settings && window._settings.affectionDecay === true)) return; // 默认不开启
+    // 第二十四波：洞府「客房」不再是死账——卡面写着「好感衰减暂停 30 天」，此前全仓没人兑现。
+    // 客房落成起三十日内，人来人往有个落脚处，故人的情分不因少走动而磨蚀；期满衰减照旧。
+    try {
+        if (window.CaveFacilities && typeof window.CaveFacilities.getFacilities === 'function') {
+            var _facs = window.CaveFacilities.getFacilities('player') || [];
+            var _todayG = 0;
+            if (typeof window.getAbsoluteDay === 'function') _todayG = Math.floor(window.getAbsoluteDay() || 0);
+            else if (window.timeSystem && window.timeSystem.gameTime) _todayG = Math.floor(window.timeSystem.gameTime.currentDay || 0);
+            for (var _fi = 0; _fi < _facs.length; _fi++) {
+                var _f = _facs[_fi];
+                if (_f && _f.facilityId === 'fac_guest_room' && (_todayG - (Number(_f.installedDay) || 0)) <= 30) return;
+            }
+        }
+    } catch (eGuest) {}
     var coreIds = ['sect_leader_修罗宫', 'sect_leader_百花谷', 'sect_leader_天山派', 'sect_leader_五仙教',
-                   'sect_leader_铸剑山庄', 'sect_leader_药王谷', 'sect_leader_茅山派', 'sect_leader_金刚宗'];
+                   'sect_leader_铸剑山庄', 'sect_leader_药王谷', 'sect_leader_茅山派', 'sect_leader_金刚宗',
+                   'sect_leader_峨眉派', 'sect_leader_华山派', 'sect_leader_唐门', 'sect_leader_武当派',
+                   'sect_leader_蓬莱派', 'sect_leader_逍遥派',
+                   'sect_leader_恒山派', 'sect_leader_嵩山派', 'sect_leader_泰山派',
+                   'sect_leader_青城派', 'sect_leader_衡山派', 'sect_leader_丐帮',
+                   'sect_leader_阎罗殿', 'sect_leader_血手门', 'sect_leader_飞蝎坞',
+                   'sect_leader_烈日教', 'sect_leader_天龙教',
+                   'sect_leader_神机门', 'sect_leader_霹雳堂', 'sect_leader_天书阁',
+                   'sect_leader_大隐阁', 'sect_leader_侠隐阁', 'sect_leader_天涯海阁',
+                   'sect_leader_大旗门', 'sect_leader_铁掌帮', 'sect_leader_昆仑派',
+                   'sect_leader_全真教', 'sect_leader_少林寺', 'shaolin_wujiu']; // v20.75 蓬莱瀛晚照、逍遥闻人酌入册；v20.76 第二批六人入册；v20.77 第三批反派五人入册；v20.78 第四批奇门十人入册；v20.79 少林竺照禅+破戒僧无咎入册（三十六派全覆盖收官）
     for (var i = 0; i < coreIds.length; i++) {
         var npc = window.npcManager?.getNPC(coreIds[i]);
         if (!npc) continue;
@@ -2020,15 +2224,12 @@ function checkDailyAffectionDecay() {
         var currentDay = window.timeSystem?.gameTime?.currentDay || 0;
         var lastDay = window._lastInteractDay[npcId] || 0;
         // 见面当天（游戏历法）：1440 游戏分钟为一天，与 time-system.js 的 currentDay 换算一致
-        // 注意：lastMeetGameMinute 为 null 表示从未谋面，Number(null)===0 会误判成第1天见过，须显式排除
+        // NEW-39：改调公共读取函数 npcLastMeetGameMinute（null=从未谋面），不再就地绕行——两处口径统一
         var totalMin = Number(window.timeSystem?.gameTime?.totalMinutes) || 0;
-        var lastMeetRaw = npc.memory ? npc.memory.lastMeetGameMinute : null;
-        if (lastMeetRaw !== null && lastMeetRaw !== undefined) {
-            var lastMeetMin = Number(lastMeetRaw);
-            if (Number.isFinite(lastMeetMin) && lastMeetMin >= 0 && totalMin >= lastMeetMin) {
-                var meetDay = Math.floor(lastMeetMin / 1440) + 1;
-                if (meetDay > lastDay) lastDay = meetDay;
-            }
+        var lastMeetMin = (typeof window.npcLastMeetGameMinute === 'function') ? window.npcLastMeetGameMinute(npc) : null;
+        if (lastMeetMin != null && totalMin >= lastMeetMin) {
+            var meetDay = Math.floor(lastMeetMin / 1440) + 1;
+            if (meetDay > lastDay) lastDay = meetDay;
         }
         if (lastDay <= 0) lastDay = currentDay; // 无任何互动记录（新档首日）不起算
         var daysSince = currentDay - lastDay;

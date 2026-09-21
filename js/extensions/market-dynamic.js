@@ -150,11 +150,66 @@
         return { ok: true, newMul: newMul, supply: idx.supply, demand: idx.demand };
     }
 
+    // v23.2 玩家买卖真动行情：adjustFromTrade 此前全库零调用——供需模型写好了没接线，
+    // 玩家扫空一座城的丹药物价纹丝不动。现在买卖漏斗统一走这里：自动认城、认品类、记账。
+    // 注：本模型的「城」是行情大区（中州/南疆/东海/西荒/北冥/天空），玩家位置是具体城池——
+    // 先把城池折到大区再记账，两本账才对得上。
+    var MARKET_CITY_ALIAS = { '东荒': '东海', '西漠': '西荒', '东南海域': '东海', '蜀地': '中州', '灵界': '天空', '魔界': '天空' };
+    function _marketCityFor(loc) {
+        if (!loc) return null;
+        loc = String(loc);
+        if (CITIES.indexOf(loc) >= 0) return loc;
+        var region = null;
+        if (window.mapData) {
+            // 第六十九波：去空格比对——户口册里写「帝都 · 长安」，玩家身上写「帝都·长安」，
+            // 一个空格让首善之区折不进大区（v23.2 买卖动行情在长安一直是空转）——两本账的写法差要抹平
+            var bare = loc.replace(/\s/g, '');
+            var tail = bare.split('·').pop();
+            for (var r in window.mapData) {
+                var cs = (window.mapData[r] && window.mapData[r].cities) || [];
+                for (var i = 0; i < cs.length; i++) {
+                    var cb = String(cs[i]).replace(/\s/g, '');
+                    if (cb === bare || cb.split('·').pop() === tail) { region = r; break; }
+                }
+                if (region) break;
+            }
+        }
+        region = region || window.currentRegionForMap || null;
+        if (!region) return null;
+        if (CITIES.indexOf(region) >= 0) return region;
+        return MARKET_CITY_ALIAS[region] || null;
+    }
+    function notePlayerTrade(itemId, qty, isBuy) {
+        try {
+            var city = (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) ||
+                (window.locationSystem && window.locationSystem.getCurrentLocation && window.locationSystem.getCurrentLocation()) ||
+                (window.currentCharData && window.currentCharData.location) || '';
+            var mCity = _marketCityFor(city);
+            if (!mCity) return;
+            var cat = getItemCategory(itemId);
+            if (!cat) return;
+            adjustFromTrade(mCity, cat, Math.max(1, Number(qty) || 1), !!isBuy);
+        } catch (e) {}
+    }
+
     function tickDay() {
         var today = (window.WorldCalendar && window.WorldCalendar.day) || 0;
         // 移除过期事件
+        // 第一百一十一波：「持续 N 天」不再是装饰账——旧版到期只从名单里删掉，
+        // 生效日那一次供需冲击全靠每日 10% 自然回归慢慢磨（「影响 14 天」实际两三天就平了）。
+        // 现在到期日把当初的冲击原样回冲，事件天数与行情真对上账。
         for (var i = _state.activeEvents.length - 1; i >= 0; i--) {
-            if (_state.activeEvents[i].expireDay <= today) {
+            var _ev = _state.activeEvents[i];
+            if (_ev.expireDay <= today) {
+                try {
+                    var _cities = _ev.affectedCities || [];
+                    for (var ri = 0; ri < _cities.length; ri++) {
+                        for (var cat in (_ev.mods || {})) {
+                            var md = _ev.mods[cat] || {};
+                            applyMod(_cities[ri], cat, { supply: -(md.supply || 0), demand: -(md.demand || 0) });
+                        }
+                    }
+                } catch (eRoll) {}
                 _state.activeEvents.splice(i, 1);
             }
         }
@@ -213,10 +268,12 @@
         WORLD_EVENTS: WORLD_EVENTS,
         NPC_NEEDS: NPC_NEEDS,
         getItemCategory: getItemCategory,
+        regionFor: _marketCityFor,   // 第六十九波：城池→行情大区折算（跑单帮贩货认价用，v23.2 接线同款口径）
         getIndex: getIndex,
         priceMul: priceMul,
         applyWorldEvent: applyWorldEvent,
         adjustFromTrade: adjustFromTrade,
+        notePlayerTrade: notePlayerTrade,
         tickDay: tickDay,
         listActiveEvents: listActiveEvents,
         getState: function () { return _state; }

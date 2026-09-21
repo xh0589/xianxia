@@ -31,13 +31,13 @@ function _applyPillResult(mat) {
     if (tox >= 35) { // 传奇材料
         cd._customPillBuff = { allAttr: 10, days: 1 };
         effect = '全属性+10（1日）'; pillName = '混沌归元丹';
-    } else if (tox >= 20) { // 珍品材料
+    } else if (tox >= 20) { // 七品材料
         cd._customPillBuff = { attack: 5, days: 1 };
         effect = '攻击+5（1日）'; pillName = '锋锐凝元丹';
-    } else if (tox >= 10) { // 良品材料
+    } else if (tox >= 10) { // 八品材料
         cd.luck = Math.min(100, (cd.luck || 50) + 3);
         effect = '气运+3'; pillName = '机缘感应丹';
-    } else { // 凡品材料
+    } else { // 九品材料
         cd.essence = (cd.essence || 0) + 30;
         effect = '真元+30'; pillName = '聚气培元丹';
     }

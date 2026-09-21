@@ -12,7 +12,7 @@
             type: 'consumable',
             subtype: 'pill',            // 走消耗品白名单：服丹自动累丹毒（药性猛烈，名副其实）
             category: 'consumable',
-            quality: 'LEGENDARY',
+            quality: 'PIN3',
             level: 6,
             price: 1200,
             effect: { root_refine: 6 }, // 主根占比 +6（摊薄其余，配平回 100）

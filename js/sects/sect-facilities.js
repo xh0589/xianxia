@@ -20,6 +20,9 @@ const VALID_ACTION_TYPES = {
     advanceTime: true,     // 推进游戏时间
     openLibrary: true,     // v15.4 打开藏经阁分层阅览面板
     spendContribution: true, // v15.5 消耗门派贡献（诊金类制度成本）
+    openCrafting: true,    // 第十二波 · 门中炉火：就地打开全局炼丹/锻造界面（场地加成由 useFacility 挂时间窗）
+    openCourt: true,       // 第十三波 · 戒律堂：坐堂/早朝/批账在此办理（职位与时辰由坐堂模块自管）
+    sectFarm: true,        // 第十三波 · 灵田：督耕/帮工的实体入口（产出入公库，日限由灵田账自管）
     tempBuff: true         // v15.8 临时增益（effects=六维加成，durationHours 小时后经 GameScheduler 到期）
 };
 
@@ -77,6 +80,100 @@ const facilities = [
         rankReq: null
     },
     {
+        id: 'sect_alchemy_room',
+        name: '炼丹房',
+        type: FACILITY_TYPES.SPECIAL,
+        icon: '⚗️',
+        desc: '门中的丹炉，内门以上方可借火——开炉之后炉火顺手，一个时辰内炼丹成功率见长',
+        actions: [
+            { type: 'spendQi', value: 10 },
+            { type: 'advanceTime', value: 60 },
+            { type: 'openCrafting', craft: 'pilfer' }
+        ],
+        rankReq: 4,
+        dailyUses: 2
+    },
+    {
+        id: 'sect_forge_room',
+        name: '锻造坊',
+        type: FACILITY_TYPES.SPECIAL,
+        icon: '🔨',
+        desc: '炉火不熄，铁砧常温——门中弟子借炉锻器，开炉之后锤感顺手，一个时辰内锻造成功率见长',
+        actions: [
+            { type: 'spendQi', value: 10 },
+            { type: 'advanceTime', value: 60 },
+            { type: 'openCrafting', craft: 'forging' }
+        ],
+        rankReq: 4,
+        dailyUses: 2
+    },
+    {
+        id: 'sect_precept_hall',
+        name: '戒律堂',
+        type: FACILITY_TYPES.SPECIAL,
+        icon: '⚖️',
+        desc: '门规所在——长老以上在此坐堂断案、批阅账目，掌门在此早朝（堂规与时辰由堂上自定）',
+        actions: [
+            { type: 'openCourt' },
+            { type: 'advanceTime', value: 30 }
+        ],
+        rankReq: 2
+    },
+    {
+        id: 'sect_spirit_field',
+        name: '灵田',
+        type: FACILITY_TYPES.STORAGE,
+        icon: '🌾',
+        desc: '门中灵粮都出自这几亩地——帮工半日或长老督耕，谷入公库',
+        actions: [
+            { type: 'sectFarm' }
+        ],
+        rankReq: null,
+        dailyUses: 1
+    },
+    {
+        id: 'sect_bathhouse',
+        name: '浴池',
+        type: FACILITY_TYPES.SOCIAL,
+        icon: '♨️',
+        desc: '练完功泡一场热水——乏气散了，旧伤松了，池边还能跟同门闲话两句',
+        actions: [
+            { type: 'restoreQi', value: 30 },
+            { type: 'restoreHealth', value: 15 },
+            { type: 'addRelation', value: 1, target: 'sectMembers' },
+            { type: 'advanceTime', value: 60 }
+        ],
+        rankReq: null,
+        dailyUses: 1
+    },
+    {
+        id: 'sect_guest_house',
+        name: '客房',
+        type: FACILITY_TYPES.SOCIAL,
+        icon: '🏮',
+        desc: '盟家使者与行脚商人歇脚的地方——陪客坐坐，江湖上的消息能拣着听',
+        actions: [
+            { type: 'addInfo', chance: 0.5 },
+            { type: 'advanceTime', value: 30 }
+        ],
+        rankReq: null,
+        dailyUses: 2
+    },
+    {
+        id: 'sect_beast_pen',
+        name: '兽栏',
+        type: FACILITY_TYPES.STORAGE,
+        icon: '🐾',
+        desc: '护山灵兽圈养在此——搭手添食扫栏，管事的分你一份灵材',
+        actions: [
+            { type: 'spendQi', value: 5 },
+            { type: 'rewardMaterials' },
+            { type: 'advanceTime', value: 60 }
+        ],
+        rankReq: null,
+        dailyUses: 1
+    },
+    {
         id: 'sect_library',
         name: '藏经阁',
         type: FACILITY_TYPES.CULTIVATION,
@@ -116,6 +213,20 @@ const facilities = [
             { type: 'advanceTime', value: 30 }
         ],
         rankReq: null
+    },
+    {
+        id: 'sect_canteen',
+        name: '膳堂',
+        type: FACILITY_TYPES.SOCIAL,
+        icon: '🍚',
+        desc: '一日两膳，灶火不通宵——和同门围桌吃饭，也是修行',
+        actions: [
+            { type: 'restoreQi', value: 15 },
+            { type: 'addRelation', value: 1, target: 'sectMembers' },
+            { type: 'advanceTime', value: 30 }
+        ],
+        rankReq: null,
+        dailyUses: 2 // 制度性限次：早膳晚膳各一顿（灶火封了就没有第三顿）
     },
     {
         id: 'sect_leader',
@@ -293,7 +404,7 @@ const SECT_FACILITY_EXTRAS = {
 
 const CRAFT_WORKSHOPS = { fx_zj_dulu: 1, fx_ms_fuzhi: 1, fx_tm_cuidu: 1 }; // v18.6 工坊研习设施
 
-// 当前弟子可见的设施全集 = 基础7座 ∪ 本派专属
+// 当前弟子可见的设施全集 = 基础8座 ∪ 本派专属
 function visibleFacilities() {
     const ds = window.discipleState || {};
     const extra = (ds.isInSect && ds.sectId && SECT_FACILITY_EXTRAS[ds.sectId]) || [];
@@ -302,27 +413,39 @@ function visibleFacilities() {
 
 // ==================== v16.1 F3 设施升级线：门派修葺（贡献→规制提升） ====================
 // 制度：修葺乃大事，由长老（rank≤2）在掌门大殿定夺；效果=真实动作值增强，非配额放水。
-// 兵器库份例/掌门晨课为制度规制，不参与扩建。
+// 批三扩至八座基础建筑，修葺费出自公中：贡献 + 灵石双料（大工程不是喊一嗓子就能动的）。
 const FACILITY_UPGRADES = {
     sect_training_ground: {
-        lv2: { cost: 300, label: '添置石锁木桩', mod: { skillBoost: 1 } },
-        lv3: { cost: 800, label: '聘请武师驻场', mod: { skillBoost: 1 } }
+        lv2: { cost: 300, stones: 150, label: '添置石锁木桩', mod: { skillBoost: 1 } },
+        lv3: { cost: 800, stones: 400, label: '聘请武师驻场', mod: { skillBoost: 1 } }
     },
     sect_cave: {
-        lv2: { cost: 300, label: '引聚灵阵入洞', mod: { restoreQi: 20 } },
-        lv3: { cost: 800, label: '深凿洞窟直通灵脉', mod: { restoreQi: 30 } }
+        lv2: { cost: 300, stones: 150, label: '引聚灵阵入洞', mod: { restoreQi: 20 } },
+        lv3: { cost: 800, stones: 400, label: '深凿洞窟直通灵脉', mod: { restoreQi: 30 } }
     },
     sect_medical: {
-        lv2: { cost: 300, label: '后山自辟药圃（诊金-3）', mod: { spendContribution: -3 } },
-        lv3: { cost: 800, label: '延请名医坐堂（诊金再-3、疗伤+50）', mod: { spendContribution: -3, restoreHealth: 50 } }
+        lv2: { cost: 300, stones: 150, label: '后山自辟药圃（诊金-3）', mod: { spendContribution: -3 } },
+        lv3: { cost: 800, stones: 400, label: '延请名医坐堂（诊金再-3、疗伤+50）', mod: { spendContribution: -3, restoreHealth: 50 } }
     },
     sect_library: {
-        lv2: { cost: 300, label: '增抄副册流通', mod: { addPoints: 4 } },
-        lv3: { cost: 800, label: '广收孤本秘抄', mod: { addPoints: 6 } }
+        lv2: { cost: 300, stones: 150, label: '增抄副册流通', mod: { addPoints: 4 } },
+        lv3: { cost: 800, stones: 400, label: '广收孤本秘抄', mod: { addPoints: 6 } }
     },
     sect_chat: {
-        lv2: { cost: 300, label: '常备茶点果盘', mod: { addInfoChance: 0.1 } },
-        lv3: { cost: 800, label: '座上常有行商游侠', mod: { addInfoChance: 0.1 } }
+        lv2: { cost: 300, stones: 150, label: '常备茶点果盘', mod: { addInfoChance: 0.1 } },
+        lv3: { cost: 800, stones: 400, label: '座上常有行商游侠', mod: { addInfoChance: 0.1 } }
+    },
+    sect_canteen: {
+        lv2: { cost: 200, stones: 100, label: '再添一名火工，膳单见荤（饭气+8）', mod: { restoreQi: 8 } },
+        lv3: { cost: 600, stones: 300, label: '开小灶日夜煨汤（饭气再+12）', mod: { restoreQi: 12 } }
+    },
+    sect_armory: {
+        lv2: { cost: 250, stones: 150, label: '聘库官专司养护（淬火养护费 15→10 贡献）', mod: {} },
+        lv3: { cost: 700, stones: 400, label: '重砌炉膛扩械架（淬火养护费 →5 贡献）', mod: {} }
+    },
+    sect_leader: {
+        lv2: { cost: 400, stones: 200, label: '大殿修葺，晨课延长（指点+8）', mod: { addPoints: 8 } },
+        lv3: { cost: 1000, stones: 500, label: '掌门于殿中亲传心法（指点再+12）', mod: { addPoints: 12 } }
     }
 };
 
@@ -366,6 +489,27 @@ function effectiveActions(facility) {
             return c2;
         });
     }
+    // 批三 · 地标熟识：fx_ 地标常去则熟——tempBuff 效果与物产随熟识加成增厚（生0/熟+15%/密+30%/知交+45%）
+    if (facility.id.indexOf('fx_') === 0 && typeof window.landmarkBondBonus === 'function') {
+        var _bBonus = Number(window.landmarkBondBonus(facility.id)) || 0;
+        if (_bBonus > 0) {
+            list = list.map(function (a) {
+                if (a.type === 'tempBuff' && a.effects) {
+                    var c3 = Object.assign({}, a);
+                    var eff3 = {};
+                    Object.keys(a.effects).forEach(function (k) { eff3[k] = typeof a.effects[k] === 'number' ? Math.round(a.effects[k] * (1 + _bBonus) * 10) / 10 : a.effects[k]; });
+                    c3.effects = eff3;
+                    return c3;
+                }
+                if (a.type === 'rewardMaterials' && Array.isArray(a.items)) {
+                    var c4 = Object.assign({}, a);
+                    c4.items = a.items.map(function (m) { return { itemId: m.itemId, count: Math.max(1, Math.round((m.count || 1) * (1 + _bBonus))) }; });
+                    return c4;
+                }
+                return a;
+            });
+        }
+    }
     return list;
 }
 
@@ -373,7 +517,7 @@ window.openSectUpgradePanel = function () {
     var ds = window.discipleState || {};
     if (!ds.isInSect) { if (window.showMessage) window.showMessage('需先加入门派', 'warning'); return; }
     if ((ds.rank == null ? 7 : ds.rank) > 2) { if (window.showMessage) window.showMessage('门派修葺乃大事——须长老（含）以上在掌门大殿定夺。', 'warning'); return; }
-    var html = '<p class="text-xs text-gray-400 mb-2">门派修葺由长老层定夺，费用出自门派贡献。规制一旦提升，阖门弟子同沾其利。</p>';
+    var html = '<p class="text-xs text-gray-400 mb-2">门派修葺由长老层定夺，费用出自公中：贡献 + 灵石双料。规制一旦提升，阖门弟子同沾其利。</p>';
     Object.keys(FACILITY_UPGRADES).forEach(function (fid) {
         var base = facilities.find(function (f) { return f.id === fid; });
         if (!base) return;
@@ -384,14 +528,27 @@ window.openSectUpgradePanel = function () {
             + '<span class="text-xs text-sky-300">' + (lv >= 3 ? '已是最高规制' : ('当前 Lv' + lv)) + '</span></div>';
         if (lv < 3) {
             var nxt = lv === 1 ? cfg.lv2 : cfg.lv3;
+            var stoneTxt = nxt.stones ? ('+灵石' + nxt.stones) : '';
             html += '<div class="flex justify-between items-center mt-1"><span class="text-xs text-gray-500">下一步：' + nxt.label + '</span>'
-                + '<button onclick="doUpgradeFacility(\'' + fid + '\')" class="text-xs bg-amber-700 hover:bg-amber-600 text-white px-2 py-1 rounded">修葺（贡献' + nxt.cost + '）</button></div>';
+                + '<button onclick="doUpgradeFacility(\'' + fid + '\')" class="text-xs bg-amber-700 hover:bg-amber-600 text-white px-2 py-1 rounded">修葺（贡献' + nxt.cost + stoneTxt + '）</button></div>';
         }
         html += '</div>';
     });
-    html += '<p class="text-[11px] text-gray-500 mt-2">兵器库份例与掌门晨课为门规旧制，不在扩建之列。</p>';
+    html += '<p class="text-[11px] text-gray-500 mt-2">演武场切磋、兵器库淬火、膳堂用膳、医馆旧伤、议事厅账本各有深作，不在此表。</p>';
     if (typeof window.showModal === 'function') window.showModal('🏗️ 门派修葺', html);
 };
+
+// 批三：灵石读取/扣减（与特色身份层同一口径——优先 DataManager，回落 inventory.currency）
+function _facStones() {
+    try { if (window.XianXia && window.XianXia.DataManager && window.XianXia.DataManager.getSpiritStones) return Number(window.XianXia.DataManager.getSpiritStones()) || 0; } catch (e) {}
+    return (window.inventory && window.inventory.currency && Number(window.inventory.currency.spiritStones)) || 0;
+}
+function _facPayStones(n) {
+    if (_facStones() < n) return false;
+    try { if (window.XianXia && window.XianXia.DataManager && window.XianXia.DataManager.deductSpiritStones) { window.XianXia.DataManager.deductSpiritStones(n); return true; } } catch (e) {}
+    if (window.inventory && window.inventory.currency) { window.inventory.currency.spiritStones -= n; return true; }
+    return false;
+}
 
 window.doUpgradeFacility = function (fid) {
     var ds = window.discipleState || {};
@@ -401,7 +558,11 @@ window.doUpgradeFacility = function (fid) {
     if (!cfg || lv >= 3) return;
     var nxt = lv === 1 ? cfg.lv2 : cfg.lv3;
     if ((ds.contribution || 0) < nxt.cost) { if (window.showMessage) window.showMessage('门派贡献不足（需' + nxt.cost + '，当前' + (ds.contribution || 0) + '）', 'error'); return; }
+    var stoneNeed = Number(nxt.stones || 0);
+    if (stoneNeed > 0 && _facStones() < stoneNeed) { if (window.showMessage) window.showMessage('公中灵石不足（需' + stoneNeed + '，当前' + _facStones() + '）', 'error'); return; }
     ds.contribution -= nxt.cost;
+    try { if (window.sectLedgerNote) window.sectLedgerNote(-nxt.cost, '门派修葺·' + ((facilities.find(f => f.id === fid) || {}).name || fid)); } catch (e) {}
+    if (stoneNeed > 0) _facPayStones(stoneNeed);
     facilityState.levels[fid] = lv + 1;
     if (window.showMessage) window.showMessage('🏗️ ' + (facilities.find(f => f.id === fid) || {}).name + '修葺完工：' + nxt.label + '（升至 Lv' + (lv + 1) + '）', 'success');
     updateFacilityUI();
@@ -538,6 +699,13 @@ function checkFacilityAccess(facilityId) {
         if (used >= facility.dailyUses) {
             const NARRATIVE = {
                 sect_armory: '库吏摆手："你的份例今日已经领过了，明日请早。"',
+                sect_canteen: '膳堂灶上封了火，笼屉洗得干干净净——一日两膳是门规，夜里值房自有干粮。',
+                sect_alchemy_room: '丹炉今日的火已经封了——养炉如养气，明日再开。',
+                sect_forge_room: '炉膛今日烧透了，铁砧也要歇——明日再开炉。',
+                sect_spirit_field: '灵田今日的活计干完了——田把头扛着锄头回屋了，明日请早。',
+                sect_bathhouse: '浴池的水放凉了——再烧一锅得些时辰，明日再来泡。',
+                sect_guest_house: '客人们都歇下了——客房的灯灭了，不好再打扰。',
+                sect_beast_pen: '灵兽今日喂过扫过了——畜生也要歇晌，明日再来。',
                 fx_xsm_xuechi: '你的气血还未回养过来——血池一日一浸，贪多伤身。',
                 fx_yw_baicao: '草木一日一熟，今日的药草已经采过了。',
                 fx_wxj_gutian: '蛊虫今日已经喂过了，再喂要撑坏它们。',
@@ -551,7 +719,8 @@ function checkFacilityAccess(facilityId) {
             };
             return {
                 accessible: false,
-                reason: NARRATIVE[facilityId] || `今日使用次数已用完！（${facility.dailyUses}次/日）`
+                // v23.3 兜底也讲人话：份例制度有名有据，不报「次数已用完」（设计宪法）
+                reason: NARRATIVE[facilityId] || '管事执事收了牌子，拱手道："此处份例今日已尽——门规如此，明日请早。"'
             };
         }
     }
@@ -574,11 +743,35 @@ function checkFacilityAccess(facilityId) {
 }
 
 // ============ 执行单条动作 ============
-function executeAction(action, resultMsgs) {
+function executeAction(action, resultMsgs, facilityId) {
     const cd = window.currentCharData;
     if (!cd) return;
 
     switch (action.type) {
+        case 'openCourt': {
+            // 第十三波 · 戒律堂：坐堂/早朝/批账都在此办理（职位与时辰由坐堂模块自管）
+            try {
+                if (typeof window.openCourtPanel === 'function') window.openCourtPanel();
+                else resultMsgs.push('・戒律堂门开着，堂上却空着——升堂的人还不到位。');
+            } catch (e) {}
+            break;
+        }
+        case 'sectFarm': {
+            // 第十三波 · 灵田：督耕/帮工的实体入口（产出入公库走既有账，日限由灵田账自管）
+            try {
+                if (typeof window.doSectFarmWork === 'function') window.doSectFarmWork();
+                else resultMsgs.push('・田里没人应声。');
+            } catch (e2) {}
+            break;
+        }
+        case 'openCrafting': {
+            // 第十二波 · 门中炉火：就地开全局炼制界面（场地加成的时间窗由 useFacility 挂）
+            try {
+                var _ck = action.craft === 'forging' ? 'forging' : 'pilfer';
+                if (typeof window.openCraftingUI === 'function') window.openCraftingUI(_ck);
+            } catch (e) {}
+            break;
+        }
         case 'spendContribution': {
             const dsFee = window.discipleState || {};
             dsFee.contribution = Math.max(0, (dsFee.contribution || 0) - (action.value || 0));
@@ -668,6 +861,14 @@ function executeAction(action, resultMsgs) {
                 }
             });
             resultMsgs.push(`・获得物资: ` + gotTxt.join(', '));
+            // 改造批 · 守恒来路做实：本派地标工坊干出来的活，产出半数入公库（编年偶尔记一笔「弟子捐工」）
+            try {
+                if (facilityId && String(facilityId).indexOf('fx_') === 0 && window.SectGov && window.SectGov.titheWorkshop) {
+                    var _tTotal = materials.reduce(function (sum, m) { return sum + (Number(m.count) || 0); }, 0);
+                    var _tithe = window.SectGov.titheWorkshop(_tTotal);
+                    if (_tithe > 0) resultMsgs.push('・半数入公库（材料+' + _tithe + '）——门里记你一功');
+                }
+            } catch (eTithe) {}
             break;
         }
         case 'addRelation': {
@@ -679,7 +880,10 @@ function executeAction(action, resultMsgs) {
         }
         case 'addInfo': {
             // 按概率触发情报
-            const chance = action.chance != null ? action.chance : 1.0;
+            // 第十二波 · 开山秘艺情报域：千耳百目功——耳目练出来了，听人说话自会拣要紧的
+            var _intelB = 0;
+            try { if (typeof window.sectSignatureIntelBonus === 'function') _intelB = window.sectSignatureIntelBonus() || 0; } catch (eIntel) {}
+            const chance = Math.min(0.95, (action.chance != null ? action.chance : 1.0) + _intelB);
             if (Math.random() < chance) {
                 const infos = [
                     '听说附近出现了强大的妖兽…',
@@ -713,22 +917,43 @@ function executeAction(action, resultMsgs) {
 }
 
 // ============ 使用设施 ============
-function useFacility(facilityId) {
-    const accessCheck = checkFacilityAccess(facilityId);
-    if (!accessCheck.accessible) {
+// v20.86 沉浸层：注册过情境剧本的设施，点「使用/进入」先入戏（scenarioEngine 面板），
+// 戏里的「例行走一遍」等选项再经 eff.facility 钩子回到本函数结算——经济口径一份账。
+// opts.fromScenario=true 时跳过剧本入口直落结算；opts.quiet=true 时不弹 toast，
+// 返回 {ok, text|reason} 供剧本层把结算原文记进戏文。
+function useFacility(facilityId, opts) {
+    opts = opts || {};
+    const quiet = !!opts.quiet;
+    function fail(reason, kind) {
+        if (quiet) return { ok: false, reason: reason };
         if (window.showMessage) {
-            window.showMessage(accessCheck.reason, 'error');
+            window.showMessage(reason, kind || 'error');
         } else {
-            alert(accessCheck.reason);
+            alert(reason);
         }
         return false;
     }
 
+    // 剧本入口（掌门大殿除外：它的守卫反应链本身就是戏，不再套一层面板）
+    if (!opts.fromScenario && facilityId !== 'sect_leader'
+        && window.scenarioEngine && window.scenarioEngine.facilities
+        && window.scenarioEngine.facilities[facilityId]
+        && (window.scenarioEngine.facilities[facilityId].scenarios || []).length
+        && typeof window.openFacilityScenario === 'function') {
+        window.openFacilityScenario(facilityId);
+        return true;
+    }
+
+    const accessCheck = checkFacilityAccess(facilityId);
+    if (!accessCheck.accessible) {
+        return fail(accessCheck.reason);
+    }
+
     const facility = visibleFacilities().find(f => f.id === facilityId);
-    if (!facility) return false;
+    if (!facility) return fail('无效的设施！');
 
     const cd = window.currentCharData;
-    if (!cd) return false;
+    if (!cd) return fail('角色状态未初始化');
 
     // 检查真气（从 currentCharData 读取，不再依赖 DOM）
     const totalQiCost = facility.actions
@@ -737,12 +962,7 @@ function useFacility(facilityId) {
     if (totalQiCost > 0) {
         const currentQi = cd.qi || 0;
         if (currentQi < totalQiCost) {
-            if (window.showMessage) {
-                window.showMessage('真气不足！需要 ' + totalQiCost + ' 真气', 'error');
-            } else {
-                alert('真气不足！');
-            }
-            return false;
+            return fail('真气不足！需要 ' + totalQiCost + ' 真气');
         }
     }
 
@@ -754,28 +974,27 @@ function useFacility(facilityId) {
     if (contribCost > 0) {
         const dsFee = window.discipleState || {};
         if ((dsFee.contribution || 0) < contribCost) {
-            if (window.showMessage) {
-                window.showMessage('门派贡献不足！需要 ' + contribCost + ' 点（当前' + (dsFee.contribution || 0) + '）', 'error');
-            } else {
-                alert('门派贡献不足！');
-            }
-            return false;
+            return fail('门派贡献不足！需要 ' + contribCost + ' 点（当前' + (dsFee.contribution || 0) + '）');
         }
     }
 
     // v15.5 世界反应链：掌门大殿擅闯（替代人为每日计数——惩罚来自世界，非计数器）
     initFacilityState();
     if (facilityId === 'sect_leader') {
+        // v22.1 掌门下山游历：大殿虚位，只留字条——人在山下城里，不在殿中
+        var _awaySect = (window.discipleState || {}).sectId;
+        if (_awaySect && typeof window.isLeaderAway === 'function' && window.isLeaderAway(_awaySect)) {
+            var _awayCity = (typeof window.leaderAwayCity === 'function' && window.leaderAwayCity(_awaySect)) || '';
+            try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(10, '在大殿外驻足'); } catch (e) {}
+            return fail('大殿虚位，案上压着执事留的字条：「掌门下山游历，不日即回。」' + (_awayCity ? '（听说此刻人在' + _awayCity + '）' : ''), 'info');
+        }
         const visitsToday = facilityState.dailyUsage['sect_leader'] || 0;
         if (visitsToday === 1) {
             // 第二次：守卫拦下劝返（劝返同样记入滋扰——再犯即论处）
             try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(10, '在殿外徘徊'); } catch (e) {}
             facilityState.dailyUsage['sect_leader'] = visitsToday + 1;
-            if (window.showMessage) {
-                window.showMessage('守卫拦住你："晨课受贺已毕，掌门正在处理教务——无事请回。"', 'warning');
-            }
             updateFacilityUI();
-            return false;
+            return fail('守卫拦住你："晨课受贺已毕，掌门正在处理教务——无事请回。"', 'warning');
         }
         if (visitsToday >= 2) {
             // 第三次起：以冒犯尊长论处，逐次加重
@@ -798,7 +1017,7 @@ function useFacility(facilityId) {
     resultMsgs.push(`使用了 ${facility.name}，获得以下效果：\n`);
 
     effActions.forEach(action => {
-        executeAction(action, resultMsgs);
+        executeAction(action, resultMsgs, facilityId);
     });
     // 更新使用次数（基于游戏天数）——仅制度性限次/冷却设施需要记录（v15.5：无配额设施不写计数）
     initFacilityState();
@@ -818,11 +1037,28 @@ function useFacility(facilityId) {
         }
     }
 
+    // 批三 · 地标熟识：常去则熟——每用一次本派地标，熟识长一分（生→熟→密→知交，增益逐档加厚）
+    if (facilityId.indexOf('fx_') === 0 && typeof window.touchLandmark === 'function') {
+        try { window.touchLandmark(facilityId); } catch (eLm) {}
+    }
+
     // v18.6 门派工坊研习：领料/制作用途附带工匠指点——8小时窗内制作灵石费×0.6
     if (CRAFT_WORKSHOPS[facilityId]) {
         var wsNow = getGameMinute();
         window._craftDiscountUntil = wsNow + 480;
-        if (window.showMessage) window.showMessage('🛠️ 师傅看你勤快，多教了两手省钱门路——8小时内制作灵石费用六折。', 'info');
+        resultMsgs.push('・🛠️ 师傅看你勤快，多教了两手省钱门路——8小时内制作灵石费用六折。');
+        if (!quiet && window.showMessage) window.showMessage('🛠️ 师傅看你勤快，多教了两手省钱门路——8小时内制作灵石费用六折。', 'info');
+    }
+
+    // 第十二波 · 门中炉火：炼丹房/锻造坊开炉——8小时窗内对应制作成功率+8%（crafting.js 消费）
+    if (facilityId === 'sect_alchemy_room' || facilityId === 'sect_forge_room') {
+        var isForge = facilityId === 'sect_forge_room';
+        window._sectCraftBuff = { kind: isForge ? 'forging' : 'pilfer', until: getGameMinute() + 480 };
+        var fireText = isForge
+            ? '・🔥 炉温上来了，锤感正顺——8个时辰内锻造成功率见长。'
+            : '・⚗️ 丹炉养好了火——8个时辰内炼丹成功率见长。';
+        resultMsgs.push(fireText);
+        if (!quiet && window.showMessage) window.showMessage(fireText, 'info');
     }
 
     // 更新 UI（真气显示）
@@ -835,8 +1071,9 @@ function useFacility(facilityId) {
     // 更新设施 UI
     updateFacilityUI();
 
-    // 显示结果
+    // 显示结果（quiet=剧本层结算：原文交回，不另弹 toast）
     const resultText = resultMsgs.join('\n');
+    if (quiet) return { ok: true, text: resultText };
     if (window.showMessage) {
         window.showMessage(resultText, 'success');
     } else {
@@ -896,6 +1133,9 @@ function updateFacilityUI() {
                     case 'rewardMaterials': return `领取物资`;
                     case 'addRelation': return `好感+${a.value}`;
                     case 'addInfo': return a.chance ? `情报(${Math.round(a.chance*100)}%)` : '情报';
+                    case 'openCrafting': return a.craft === 'forging' ? '开炉锻器' : '开炉炼丹';
+                    case 'openCourt': return '升堂办事';
+                    case 'sectFarm': return '下田耕作';
                     default: return '';
                 }
             })
@@ -920,7 +1160,7 @@ function updateFacilityUI() {
                         <button onclick="useFacility('${facility.id}')"
                             class="${buttonClass} text-white px-3 py-1 rounded text-sm font-bold transition"
                             ${canUse ? '' : 'disabled'}>
-                            使用
+                            ${window.sectFacilityActionLabel ? window.sectFacilityActionLabel(facility.id) : '前往'}
                         </button>
                     </div>
                 </div>
@@ -989,9 +1229,20 @@ function resetFacilityState() {
 // ============ 导出 ============
 window.FACILITY_TYPES = FACILITY_TYPES;
 window.facilities = facilities;
+window.SECT_FACILITY_EXTRAS = SECT_FACILITY_EXTRAS; // v20.86：剧本层按门派专属清单挨个入戏
 window.facilityState = facilityState;
 window.VALID_ACTION_TYPES = VALID_ACTION_TYPES;
+// v20.86：注册过情境剧本的设施，按钮文案「进入」（先入戏再结算）；其余仍「使用」
+window.sectFacilityActionLabel = function (fid) {
+    try {
+        if (fid !== 'sect_leader' && window.scenarioEngine && window.scenarioEngine.facilities
+            && window.scenarioEngine.facilities[fid]
+            && (window.scenarioEngine.facilities[fid].scenarios || []).length) return '进入';
+    } catch (e) {}
+    return '前往';
+};
 window.initFacilityState = initFacilityState;
+window.getFacilityLevel = facLevel; // 批三：兵器库淬火养护费随修葺等级递减，需读等级
 window.checkFacilityAccess = checkFacilityAccess;
 window.useFacility = useFacility;
 window.updateFacilityUI = updateFacilityUI;
@@ -1014,7 +1265,7 @@ var LIB_TIERS = [
     { tier: 4, floor: '四层·镇派阁', maxRank: 2, insightBase: 10, studyMinutes: 210 }
 ];
 var LIB_TIER_COPYPRICE = { 1: 300, 2: 800, 3: 1500, 4: 3000 };
-var LIB_RANK_NAMES = { 7: '杂役弟子', 6: '记名弟子', 5: '外门弟子', 4: '内门弟子', 3: '亲传弟子', 2: '长老' };
+var LIB_RANK_NAMES = { 7: '杂役弟子', 6: '记名弟子', 5: '外门弟子', 4: '内门弟子', 3: '亲传弟子', 2: '长老', 1: '副掌门', 0: '掌门' };
 // 唯一准入判定：真源 canAccessScriptureTier 在则用它（与 getReadableSectArts 同门），
 // 缺载（独立加载/测试桩）才退回 maxRank 数值——两者数值已对齐，口径不再分叉。
 function libTierUnlocked(tier) {
@@ -1024,6 +1275,26 @@ function libTierUnlocked(tier) {
     if (rank === -1 || rank === -2) return false; // 侍妾/同参弟子无职位，与真源同口径（对齐 canAccessScriptureTier）
     return rank <= libTierCfg(tier).maxRank;
 }
+
+// ============ v20.93 镇派亲传 ============
+// 四层镇派阁的地位门照旧（长老可入、可见书目），但镇派神功大多不落纸册——
+//   transmit:'leader' 历代掌门亲传独承（如丐帮打狗棒法，帮主之位传谁棒法传谁）；
+//   transmit:'direct' 掌门/副掌门天然在传，长老须先请掌门亲传（好感与贡献双门）；
+//   无标记（少林/天书阁/大隐阁/侠隐阁/全真五家的藏书门派）照旧阁中可读。
+// 受传账记在 ds.artTransmits，随弟子状态存档持久。
+function libRankNow() {
+    var ds = window.discipleState;
+    return (ds && ds.rank != null) ? ds.rank : 7;
+}
+function libTransmitOK(art) {
+    if (!art || !art.transmit) return true;
+    var rank = libRankNow();
+    if (art.transmit === 'leader') return rank === 0;
+    if (rank <= 1) return true;   // 掌门/副掌门自己就是传人
+    var ds = window.discipleState;
+    return !!(ds && ds.artTransmits && ds.artTransmits[art.id]);
+}
+window.sectArtTransmitOK = libTransmitOK;
 
 function libArtsOf(sectName) {
     return (window.SECT_SPECIFIC_ARTS && window.SECT_SPECIFIC_ARTS[sectName]) || [];
@@ -1080,6 +1351,20 @@ window.openSectLibraryPanel = function () {
         books.forEach(function (a) {
             var rec = (ins && ins[a.id]) || {};
             var m = Math.min(100, rec.m || 0);
+            // v20.93 镇派亲传：阁中可见书名，神功不落纸册——掌门亲传方能翻阅参悟
+            if (!libTransmitOK(a)) {
+                html += '<div class="bg-gray-900/70 rounded p-2 mb-1 border border-amber-900/40">'
+                    + '<div class="flex justify-between items-center gap-2"><span class="text-sm text-gray-400 font-bold">📕 ' + a.name + '</span>'
+                    + '<span class="text-[11px] text-amber-600">' + (a.transmit === 'leader' ? '🔒 历代掌门亲传独承——阁中无册' : '🔒 镇派神功不落纸册——须掌门亲传') + '</span></div>'
+                    + '<p class="text-xs text-gray-600 mt-0.5">' + (a.type || '') + ' · ' + (a.grade || '') + ' · ' + (a.desc || '') + '</p>';
+                if (a.transmit === 'direct' && rank === 2) {
+                    html += '<div class="flex gap-1 mt-1"><button onclick="sectLibRequestTransmit(\'' + a.id + '\')" class="text-xs bg-rose-800 hover:bg-rose-700 px-2 py-1 rounded">请掌门亲传（好感60·贡献' + (a.copyPrice || LIB_TIER_COPYPRICE[t.tier]) + '）</button></div>';
+                } else if (a.transmit === 'direct') {
+                    html += '<p class="text-[11px] text-gray-600 mt-1">位至长老，方可入镇派阁请掌门亲传。</p>';
+                }
+                html += '</div>';
+                return;
+            }
             var stateTxt = m >= 100 ? '<span class="text-green-400">已大成</span>'
                 : rec.heard ? ('<span class="text-yellow-400">掌握 ' + m + '%</span>（威力' + m + '%）')
                 : '<span class="text-gray-500">未翻阅</span>';
@@ -1091,7 +1376,11 @@ window.openSectLibraryPanel = function () {
                 html += '<button onclick="sectLibBrowse(\'' + a.id + '\')" class="text-xs bg-cyan-700 hover:bg-cyan-600 px-2 py-1 rounded">翻阅（30分钟）</button>';
             } else {
                 html += '<button onclick="sectLibStudy(\'' + a.id + '\')" class="text-xs bg-indigo-700 hover:bg-indigo-600 px-2 py-1 rounded"' + (m >= 100 ? ' disabled' : '') + '>参悟（' + t.studyMinutes + '分钟·真气20）</button>';
-                html += '<button onclick="sectLibCopy(\'' + a.id + '\')" class="text-xs bg-amber-700 hover:bg-amber-600 px-2 py-1 rounded">请抄本（贡献' + (a.copyPrice || LIB_TIER_COPYPRICE[t.tier]) + '）</button>';
+                if (!a.transmit) {
+                    html += '<button onclick="sectLibCopy(\'' + a.id + '\')" class="text-xs bg-amber-700 hover:bg-amber-600 px-2 py-1 rounded">请抄本（贡献' + (a.copyPrice || LIB_TIER_COPYPRICE[t.tier]) + '）</button>';
+                } else {
+                    html += '<span class="text-[11px] text-gray-600 self-center">亲传口授心传，不落抄本</span>';
+                }
                 if (m > 0) {
                     var parts = [];
                     for (var k in (a.bonus || {})) parts.push(k + '+' + (Math.round(a.bonus[k] * m) / 100));
@@ -1102,7 +1391,7 @@ window.openSectLibraryPanel = function () {
         });
         html += '</div>';
     });
-    html += '<p class="text-[11px] text-gray-500 mt-3">参悟速率随掌握度递减（0%时最快，60%时仅四成）；镇派层需神识深厚方能全速参悟。</p>';
+    html += '<p class="text-[11px] text-gray-500 mt-3">参悟速率随掌握度递减（0%时最快，60%时仅四成）；镇派层需神识深厚方能全速参悟。镇派神功多为掌门亲传，阁中只见书名不见册。</p>';
     if (typeof window.showModal === 'function') window.showModal('📚 藏经阁 · ' + sectName, html);
     else if (window.showMessage) window.showMessage('藏经阁面板不可用', 'error');
 };
@@ -1113,11 +1402,18 @@ window.sectLibBrowse = function (artId) {
     if (!art) return;
     var t = libTierCfg(art.tier || 1);
     if (!libTierUnlocked(art.tier || 1)) { if (window.showMessage) window.showMessage('你尚未获准进入' + t.floor, 'warning'); return; }
+    if (!libTransmitOK(art)) {
+        if (window.showMessage) window.showMessage(art.transmit === 'leader'
+            ? '《' + art.name + '》历代掌门亲传独承——阁中无册，你连书名都是听来的。'
+            : '《' + art.name + '》是镇派神功，不落纸册——须掌门亲传方可修习。', 'warning');
+        return;
+    }
     var ins = libInsights();
     if (!ins[artId]) ins[artId] = { heard: true, m: 0, lastDay: 0 }; // v15.7 修复：翻阅不占参悟日——lastDay 置 0 使当日即可首参
     else { ins[artId].heard = true; }
     try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '藏经阁翻阅'); } catch (e) {}
     if (window.showMessage) window.showMessage('你翻阅了《' + art.name + '》——' + (art.desc || '') + '（可在阁中参悟以提升掌握度）', 'info');
+    if (typeof window.growLifeSkill === 'function') window.growLifeSkill('学识', 1, { reason: '阁中读书' }); // v20.94 熟能生巧
     window.openSectLibraryPanel();
 };
 
@@ -1129,6 +1425,12 @@ window.sectLibStudy = function (artId) {
     if (!art) return;
     var t = libTierCfg(art.tier || 1);
     if (!libTierUnlocked(art.tier || 1)) { if (window.showMessage) window.showMessage('你尚未获准进入' + t.floor, 'warning'); return; }
+    if (!libTransmitOK(art)) {
+        if (window.showMessage) window.showMessage(art.transmit === 'leader'
+            ? '《' + art.name + '》非掌门之身不可参悟——棒在人在，位在人传。'
+            : '《' + art.name + '》须掌门亲传方可参悟——口授心传，阁中无册。', 'warning');
+        return;
+    }
     var ins = libInsights();
     var rec = ins[artId];
     if (!rec || !rec.heard) { if (window.showMessage) window.showMessage('先翻阅此书方可参悟', 'warning'); return; }
@@ -1142,6 +1444,11 @@ window.sectLibStudy = function (artId) {
     var pa = cd.attrs || cd.mainAttributes || {};
     var intAttr = pa.intelligence || pa['神识'] || 10;
     var gain = t.insightBase * rate * (0.75 + intAttr / 200);
+    // 第十二波 · 开山秘艺典籍域：会读书的人参悟更深（天书读神术，掌握度折成参悟效率）
+    try {
+        var _tomeMul = (typeof window.sectSignatureStudyMul === 'function') ? (window.sectSignatureStudyMul() || 1) : 1;
+        if (_tomeMul > 1) gain *= _tomeMul;
+    } catch (eTome) {}
     // v16.0 师徒咬合：师父指点（请益）使当次参悟翻倍，用后即耗
     var blessed = false;
     if (ds._masterId && ds._masterBlessDay === today) {
@@ -1157,6 +1464,7 @@ window.sectLibStudy = function (artId) {
     rec.lastDay = today;
     try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(t.studyMinutes, '藏经阁参悟'); } catch (e) {}
     var msg = '参悟《' + art.name + '》：掌握度 ' + before + '% → ' + rec.m + '%（本次+' + gain + (blessed ? '，师父指点翻倍' : '') + (halved ? '，神识不足进度减半' : '') + '）';
+    if (typeof window.growLifeSkill === 'function') window.growLifeSkill('学识', 1, { reason: '阁中参悟' }); // v20.94 熟能生巧
     if (before < 100 && rec.m >= 100) msg += ' 🎉 功法大成！威力全额发挥';
     if (window.showMessage) window.showMessage(msg, rec.m >= 100 ? 'success' : 'info');
     window.openSectLibraryPanel();
@@ -1169,6 +1477,7 @@ window.sectLibCopy = function (artId) {
     if (!art) return;
     var t = libTierCfg(art.tier || 1);
     if (!libTierUnlocked(art.tier || 1)) { if (window.showMessage) window.showMessage('你尚未获准进入' + t.floor, 'warning'); return; }
+    if (art.transmit) { if (window.showMessage) window.showMessage('《' + art.name + '》口授心传，不落纸册——没有抄本可请。', 'warning'); return; }
     var price = art.copyPrice || LIB_TIER_COPYPRICE[t.tier];
     if ((ds.contribution || 0) < price) { if (window.showMessage) window.showMessage('门派贡献不足（需' + price + '，当前' + (ds.contribution || 0) + '）', 'error'); return; }
     if (typeof window.addItem !== 'function') { if (window.showMessage) window.showMessage('背包系统未就绪', 'error'); return; }
@@ -1176,5 +1485,39 @@ window.sectLibCopy = function (artId) {
     ds.contribution -= price;
     if (typeof window.saveSectData === 'function') window.saveSectData();
     if (window.showMessage) window.showMessage('花' + price + '贡献请出《' + art.name + '》抄本一册（研读可助参悟，威能仍看掌握度）', 'success');
+    window.openSectLibraryPanel();
+};
+
+// v20.93 请掌门亲传：长老入得了镇派阁、见得到书名，神功却要掌门点头口授。
+// 三道门：职位（长老）· 掌门好感（60，看得上你才传）· 贡献（抄本同价，公中的礼数）。
+window.sectLibRequestTransmit = function (artId) {
+    var ds = window.discipleState;
+    if (!ds || !ds.isInSect || !ds.sectId) return;
+    var art = libArtsOf(ds.sectId).find(function (a) { return a.id === artId; });
+    if (!art || art.transmit !== 'direct') { if (window.showMessage) window.showMessage('此功非掌门亲传之例。', 'warning'); return; }
+    if (libTransmitOK(art)) { if (window.showMessage) window.showMessage('你已得《' + art.name + '》亲传。', 'info'); return; }
+    var rank = libRankNow();
+    if (rank > 2) { if (window.showMessage) window.showMessage('位至长老，方有资格请掌门亲传。', 'warning'); return; }
+    var price = art.copyPrice || LIB_TIER_COPYPRICE[4];
+    if ((ds.contribution || 0) < price) { if (window.showMessage) window.showMessage('门派贡献不足（需' + price + '，当前' + (ds.contribution || 0) + '）——亲传是大礼，公中的礼数不能缺。', 'error'); return; }
+    var leader = null;
+    try {
+        if (window.npcManager && window.npcManager.getNPC) leader = window.npcManager.getNPC('sect_leader_' + ds.sectId);
+    } catch (e) {}
+    var aff = leader && leader.relationship ? (Number(leader.relationship.affection) || 0) : 0;
+    if (aff < 60) {
+        if (window.showMessage) window.showMessage((leader ? '掌门' : '掌门') + '看了你很久，摇了摇头：「此功干系重大，你我还不到那份上。」（掌门好感需60，当前' + aff + '）', 'warning');
+        return;
+    }
+    ds.contribution -= price;
+    if (!ds.artTransmits) ds.artTransmits = {};
+    ds.artTransmits[artId] = { day: libToday(), from: (leader && leader.name) || '掌门' };
+    var ins = libInsights();
+    if (ins && !ins[artId]) ins[artId] = { heard: true, m: 0, lastDay: 0 };   // 亲传即「已阅」——口授心传，回来即可参悟
+    if (leader && typeof leader.changeAffection === 'function') { try { leader.changeAffection(3); } catch (e) {} }
+    try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(240, '掌门亲传'); } catch (e) {}
+    if (typeof window.saveSectData === 'function') window.saveSectData();
+    if (window.showMessage) window.showMessage('📜 ' + ((leader && leader.name) || '掌门') + '屏退左右，于祖师堂前口授《' + art.name + '》要诀——四个时辰，一字不落。「阁中无册，册在你心里。传你，是信你。」（贡献-' + price + '，掌门好感+3）', 'success');
+    if (window.gameLog && window.gameLog.add) window.gameLog.add('掌门亲传《' + art.name + '》——镇派神功自此有你的份。', 'success');
     window.openSectLibraryPanel();
 };

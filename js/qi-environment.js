@@ -18,6 +18,9 @@ var QI_CONCENTRATION = {
     '极寒之地': { base: 1.4, type: 'water', desc: '极寒之地，灵气冰封', color: 'text-blue-300' },
     '万毒谷': { base: 1.2, type: 'wood', desc: '毒瘴弥漫，灵气浑浊', color: 'text-green-600' },
     '大漠孤城': { base: 0.8, type: 'fire', desc: '沙漠之地，灵气稀薄', color: 'text-yellow-600' },
+    '凤凰巢': { base: 1.6, type: 'fire', desc: '熔火之巢，火精凝羽', color: 'text-orange-400' },
+    '佛国遗址': { base: 1.1, type: 'earth', desc: '佛气沉沙，静而定慧', color: 'text-amber-300' },
+    '万剑宗': { base: 1.5, type: 'metal', desc: '万剑立林，剑气化灵', color: 'text-slate-300' },
     '洛水城': { base: 1.1, type: 'water', desc: '洛水之畔，灵气平和', color: 'text-blue-400' },
     '帝都·长安': { base: 1.0, type: 'mixed', desc: '繁华帝都，灵气混杂', color: 'text-yellow-400' },
     // v20.53 高位面：灵界灵气凝成实质，魔界是浊气（浓而不纯，久留蚀体）
@@ -25,6 +28,8 @@ var QI_CONCENTRATION = {
     '灵界·九天罡风带': { base: 5.5, type: 'metal', desc: '罡风裹灵气，浓烈却割人', color: 'text-slate-300' },
     '魔界·九幽深渊': { base: 3.6, type: 'fire', desc: '浊气上涌，炼之快，染之亦快', color: 'text-purple-400' },
     '魔界·血海荒原': { base: 4.0, type: 'fire', desc: '血气弥天，魔物逐血而行', color: 'text-red-500' },
+    // v44 天界野外：灵气如潮——打坐吐纳一口，抵得凡间三口（野外图按域名查这条）
+    '天界': { base: 2.5, type: 'mixed', desc: '九天灵气如潮，吐纳皆成膏泽', color: 'text-amber-300' },
     'default': { base: 0.8, type: 'mixed', desc: '普通区域，灵气一般', color: 'text-gray-400' }
 };
 
@@ -84,7 +89,7 @@ function openGuideQiMiniGame() {
         '<div class="absolute h-full bg-cyan-600/40" style="left:' + (target - 10) + '%;width:20%"></div>' +
         '<div id="qi-pointer" class="absolute top-0 h-full w-1 bg-yellow-400" style="left:0%"></div></div>' +
         '<button id="qi-guide-btn" class="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded font-bold">定息</button>' +
-        '<button onclick="this.closest(\'.fixed\').remove()" class="ml-2 text-gray-400 text-sm">取消</button></div>';
+        '<button id="qi-guide-cancel" class="ml-2 text-gray-400 text-sm">取消</button></div>';
     document.body.appendChild(modal);
     var pos = 0, dir = 1;
     var timer = setInterval(function() {
@@ -94,6 +99,12 @@ function openGuideQiMiniGame() {
         var ptr = document.getElementById('qi-pointer');
         if (ptr) ptr.style.left = pos + '%';
     }, 30);
+    // v20.87 取消钮此前只删弹窗不清定时器——每取消一次就泄漏一个 30ms 的空转 interval
+    var cancelBtn = document.getElementById('qi-guide-cancel');
+    if (cancelBtn) cancelBtn.onclick = function() {
+        clearInterval(timer);
+        modal.remove();
+    };
     var btn = document.getElementById('qi-guide-btn');
     if (btn) btn.onclick = function() {
         clearInterval(timer);

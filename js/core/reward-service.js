@@ -30,11 +30,13 @@
             spiritStones: signedInt(spec.spiritStones != null ? spec.spiritStones : spec.stones),
             copper: signedInt(spec.copper != null ? spec.copper : spec.gold),
             items: Array.isArray(spec.items) ? spec.items.map(function(it) {
-                return { itemId: it && (it.itemId || it.id), count: Math.max(1, Math.floor(num(it && it.count) || 1)) };
+                // 第八十三波·实例账：snap=完整实例快照（uid/耐久/强化），赎回/回购原物奉还不再造白板新货
+                return { itemId: it && (it.itemId || it.id), count: Math.max(1, Math.floor(num(it && it.count) || 1)), snap: (it && it.snap && typeof it.snap === 'object') ? it.snap : null };
             }).filter(function(it) { return !!it.itemId; }) : [],
             // v20.8：take = 真扣物品（当铺售断/抵押），与 items 同走经济事务，缺货整体回滚
+            // 第八十三波：take 可带 uid——按实例扣货（当的就是那一件，不祸及同模板的兄弟件）
             take: Array.isArray(spec.take) ? spec.take.map(function(it) {
-                return { itemId: it && (it.itemId || it.id), count: Math.max(1, Math.floor(num(it && it.count) || 1)) };
+                return { itemId: it && (it.itemId || it.id), count: Math.max(1, Math.floor(num(it && it.count) || 1)), uid: (it && it.uid) ? String(it.uid) : null };
             }).filter(function(it) { return !!it.itemId; }) : [],
             qi: signedInt(spec.qiRecovery != null ? spec.qiRecovery : spec.qi),
             energy: signedInt(spec.energy),
@@ -44,8 +46,27 @@
             contribution: signedInt(spec.contribution),
             affection: signedInt(spec.affection),
             fame: signedInt(spec.fame),
-            karma: signedInt(spec.karma)
+            karma: signedInt(spec.karma),
+            // 第六十四/六十五波：心境增量入账——茶馆棋墨、瓦舍看戏这类消遣的花销终于有统一通道
+            //（此前 mood 各处直写、无回执，花钱买开心买的是纯数字）
+            mood: signedInt(spec.mood),
+            // v20.90 lifeSkill = {name, exp}——生活技能长进（勾栏练音律、登台卖艺都走这条统一通道）
+            // v20.94 也收数组：一个动作可同时长两门（说书长口才也长音律）
+            lifeSkill: normalizeLifeSkill(spec.lifeSkill)
         };
+    }
+
+    function normalizeLifeSkill(raw) {
+        if (!raw) return null;
+        var arr = Array.isArray(raw) ? raw : [raw];
+        var out = [];
+        for (var i = 0; i < arr.length; i++) {
+            var one = arr[i];
+            if (one && typeof one === 'object' && one.name) {
+                out.push({ name: String(one.name), exp: signedInt(one.exp != null ? one.exp : 1) });
+            }
+        }
+        return out.length ? out : null;
     }
 
     function checkSignedResource(current, delta) {
@@ -74,13 +95,21 @@
                 if (r.spiritStones > 0 && !tx.credit('spiritStones', r.spiritStones)) return { success: false, reason: 'spiritStones' };
                 if (r.copper > 0 && !tx.credit('copper', r.copper)) return { success: false, reason: 'copper' };
                 for (var i = 0; i < r.items.length; i++) {
-                    if (!tx.addSnapshot({ templateId: r.items[i].itemId, count: r.items[i].count })) {
+                    // 第八十三波：带快照按实例还原（uid/耐久/强化原样），无快照照旧按模板补货
+                    var _snap = r.items[i].snap || { templateId: r.items[i].itemId, count: r.items[i].count };
+                    if (!tx.addSnapshot(_snap)) {
                         return { success: false, reason: 'inventory_full_or_invalid_item' };
                     }
                 }
                 // v20.8：take 与给物同一事务——扣不够就整体回滚，杜绝"白拿钱不交货"
                 for (var j = 0; j < r.take.length; j++) {
-                    if (!tx.removeByTemplate(r.take[j].itemId, r.take[j].count)) {
+                    if (r.take[j].uid) {
+                        // 第八十三波：按实例扣货——扣完验明正身（uid 对应的那件确实是这个模板），错号整体回滚
+                        var _rsnap = tx.removeByUid(r.take[j].uid, r.take[j].count);
+                        if (!_rsnap || _rsnap.templateId !== r.take[j].itemId) {
+                            return { success: false, reason: 'missing_item' };
+                        }
+                    } else if (!tx.removeByTemplate(r.take[j].itemId, r.take[j].count)) {
                         return { success: false, reason: 'missing_item' };
                     }
                 }
@@ -113,6 +142,11 @@
             messages.push('生命' + (r.health > 0 ? '+' : '') + r.health);
         }
 
+        if (r.mood) {
+            p.mood = Math.max(0, Math.min(100, num(p.mood != null ? p.mood : 80) + r.mood));
+            messages.push('心境' + (r.mood > 0 ? '+' : '') + r.mood);
+        }
+
         if (r.cityReputation) {
             var city = resolveCity(ctx);
             if (city && typeof global.addReputation === 'function') {
@@ -132,12 +166,21 @@
             }
         }
         if (r.fame) {
-            if (typeof global.addFame === 'function') global.addFame(r.fame);
-            else p.fame = Math.max(0, Math.min(100, num(p.fame) + r.fame));
-            messages.push('角色名气' + (r.fame > 0 ? '+' : '') + r.fame);
+            // 第一百零九波：年目标政策「声名远播」（reputation_20）——30 天内正名望进账再涨两成
+            //（此前 policyBuffs 全库只写不读，达成「外交结盟」发的 buff 是空头条子）
+            var _fameAmt = r.fame;
+            try {
+                if (_fameAmt > 0 && global.SectYearGoal && typeof global.SectYearGoal.hasPolicyBuff === 'function' && global.SectYearGoal.hasPolicyBuff('reputation_20')) {
+                    _fameAmt = Math.round(_fameAmt * 1.2);
+                }
+            } catch (ePB) {}
+            if (typeof global.addFame === 'function') global.addFame(_fameAmt);
+            else p.fame = Math.max(0, Math.min((window.FAME_CAP || 99999), num(p.fame) + _fameAmt)); // v21.9 名望尺度统一
+            messages.push('角色名气' + (_fameAmt > 0 ? '+' : '') + _fameAmt);
         }
         if (r.contribution && global.discipleState) {
             global.discipleState.contribution = Math.max(0, num(global.discipleState.contribution) + r.contribution);
+            try { global.sectLedgerNote && global.sectLedgerNote(r.contribution, '宗门奖励结算'); } catch (e) {}
             messages.push('门派贡献' + (r.contribution > 0 ? '+' : '') + r.contribution);
         }
         if (r.affection && ctx.npcId && global.npcManager && typeof global.npcManager.getNPC === 'function') {
@@ -145,6 +188,19 @@
             if (npc && typeof npc.changeAffection === 'function') {
                 npc.changeAffection(r.affection);
                 messages.push((npc.name || 'NPC') + '好感' + (r.affection > 0 ? '+' : '') + r.affection);
+            }
+        }
+        // v20.90：生活技能熟练长进——0~100 封边，与创角/转世同一把尺（v20.94 支持一次长多门）
+        if (r.lifeSkill && r.lifeSkill.length) {
+            p.lifeSkills = p.lifeSkills || {};
+            for (var lsi = 0; lsi < r.lifeSkill.length; lsi++) {
+                var lsOne = r.lifeSkill[lsi];
+                var lsBefore = num(p.lifeSkills[lsOne.name]);
+                var lsAfter = Math.max(0, Math.min(100, lsBefore + lsOne.exp));
+                p.lifeSkills[lsOne.name] = lsAfter;
+                if (lsAfter !== lsBefore) {
+                    messages.push(lsOne.name + (lsAfter > lsBefore ? '+' : '') + (lsAfter - lsBefore));
+                }
             }
         }
 

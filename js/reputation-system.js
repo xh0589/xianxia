@@ -27,6 +27,12 @@ const REPUTATION_FEATURE_LEVELS = Object.freeze({
 // 保持对象引用稳定，避免 window.cityReputation 指向旧对象。
 let cityReputation = {}; // { cityName: { value: 0, flags: [], unlockedFeatures: [] } }
 
+// 第九十五波·NEW-32：城名键归一化（去空格比对——与 market-dynamic.js「户口册里写『帝都 · 长安』，
+// 玩家身上写『帝都·长安』」同一口径锚点）。mapData/里程表/HTML 标题用带空格拼写，
+// charData.location 用无空格拼写——此前两种拼写各立一本互不相认的声望账。
+// 本文件所有读写声望账的入口一律先过 repKey() 再落键。
+function repKey(c) { return String(c || '').replace(/\s+/g, ''); }
+
 function normalizeReputationEntry(entry) {
     entry = entry && typeof entry === 'object' ? entry : {};
     entry.value = Math.max(0, Math.min(10000, Number(entry.value) || 0));
@@ -56,12 +62,39 @@ function initReputationSystem() {
             replaceReputationState({});
         }
     }
-    
-    // 确保所有城市都有声望数据
+
+    // 第九十五波·NEW-32：一次性合并迁移——旧档可能同时存着「帝都 · 长安」与「帝都·长安」两本账。
+    // 把带空格键的 value/flags/unlockedFeatures/specialQuests 并入去空格键后删除原键。
+    // value 取两者较大而非求和：两本账是同一城声望被不同入口重复记账，不是两份独立可叠加的声望，
+    // 求和会凭空放大（玩家可见的一直是无空格那本，取较大保证可见账不倒退、也不白得）。
+    var _repMigrated = false;
+    Object.keys(cityReputation).forEach(function (rawKey) {
+        var nk = repKey(rawKey);
+        if (!nk || nk === rawKey) return;   // 本就是归一键
+        var src = cityReputation[rawKey] || {};
+        var dst = cityReputation[nk] || (cityReputation[nk] = normalizeReputationEntry({}));
+        normalizeReputationEntry(dst);
+        dst.value = Math.max(0, Math.min(10000, Math.max(Number(dst.value) || 0, Number(src.value) || 0)));
+        (Array.isArray(src.flags) ? src.flags : []).forEach(function (f) { if (dst.flags.indexOf(f) < 0) dst.flags.push(f); });
+        (Array.isArray(src.unlockedFeatures) ? src.unlockedFeatures : []).forEach(function (f) { if (dst.unlockedFeatures.indexOf(f) < 0) dst.unlockedFeatures.push(f); });
+        if (Array.isArray(src.specialQuests) && src.specialQuests.length) {
+            if (!Array.isArray(dst.specialQuests)) dst.specialQuests = [];
+            var _qIds = {};
+            dst.specialQuests.forEach(function (q) { if (q && q.id) _qIds[q.id] = true; });
+            src.specialQuests.forEach(function (q) { if (q && q.id && !_qIds[q.id]) dst.specialQuests.push(q); });
+        }
+        delete cityReputation[rawKey];
+        _repMigrated = true;
+    });
+    if (_repMigrated) saveReputation();
+
+    // 确保所有城市都有声望数据（城市册里也有带空格的拼写，落键前先归一）
     const allCities = getAllCityNames();
     allCities.forEach(city => {
-        if (!cityReputation[city]) {
-            cityReputation[city] = normalizeReputationEntry({ value: 0, flags: [], unlockedFeatures: [] });
+        const ck = repKey(city);
+        if (!ck) return;
+        if (!cityReputation[ck]) {
+            cityReputation[ck] = normalizeReputationEntry({ value: 0, flags: [], unlockedFeatures: [] });
         }
     });
     
@@ -85,6 +118,9 @@ function getAllCityNames() {
 
 // 增加城市声望
 function addReputation(cityName, amount) {
+    // 第九十五波·NEW-32：落账前先归一城名（原始拼写留给事件桥的 cityName 字段）
+    var rawCityName = cityName;
+    cityName = repKey(cityName);
     if (!cityName) return 0;
     if (!cityReputation[cityName]) {
         cityReputation[cityName] = normalizeReputationEntry({ value: 0, flags: [], unlockedFeatures: [] });
@@ -105,14 +141,16 @@ function addReputation(cityName, amount) {
     syncUnlockedFeatures(cityName, { notify: newLevel > oldLevel });
     saveReputation();
     // F-1.2 重构：补全 reputation 事件 emit。quest-system.js 事件桥监听此事件推进 reputation objective
+    // 第九十五波·NEW-32：事件附带 normalized（归一城名）——cityName 保留原拼写，任务 objective 两种口径都对得上
     if (window.EventBus && typeof window.EventBus.emit === 'function') {
-        try { window.EventBus.emit('reputation:changed', { cityName: cityName, amount: Number(amount) || 0, total: cityReputation[cityName].value }); } catch (e) {}
+        try { window.EventBus.emit('reputation:changed', { cityName: rawCityName, normalized: cityName, amount: Number(amount) || 0, total: cityReputation[cityName].value }); } catch (e) {}
     }
     return cityReputation[cityName].value;
 }
 
 // 直接设置城市声望（调试、导入和脚本统一走这个入口）。
 function setReputation(cityName, value, options) {
+    cityName = repKey(cityName);   // 第九十五波·NEW-32：一本账
     if (!cityName) return 0;
     options = options || {};
     if (!cityReputation[cityName]) cityReputation[cityName] = normalizeReputationEntry({});
@@ -131,7 +169,7 @@ function reduceReputation(cityName, amount) {
 
 // 获取声望等级索引
 function getReputationLevelIndex(cityName) {
-    const rep = cityReputation[cityName]?.value || 0;
+    const rep = cityReputation[repKey(cityName)]?.value || 0;   // 第九十五波·NEW-32：归一取账
     let level = 0;
     for (let i = REPUTATION_LEVELS.length - 1; i >= 0; i--) {
         if (rep >= REPUTATION_LEVELS[i].min) {
@@ -150,7 +188,7 @@ function getReputationLevel(cityName) {
 
 // 获取声望值
 function getReputationValue(cityName) {
-    return cityReputation[cityName]?.value || 0;
+    return cityReputation[repKey(cityName)]?.value || 0;   // 第九十五波·NEW-32：归一取账
 }
 
 // 获取折扣
@@ -167,6 +205,7 @@ function getReputationTitle(cityName) {
 
 // 检查解锁内容
 function syncUnlockedFeatures(cityName, options) {
+    cityName = repKey(cityName);   // 第九十五波·NEW-32：归一取账
     options = options || {};
     const rep = cityReputation[cityName];
     if (!rep) return [];
@@ -203,6 +242,7 @@ function hasGlobalSpecialPermit() {
 
 // 获取已解锁内容。特殊许可一旦正式激活，视作角色级通行证。
 function getUnlockedFeatures(cityName) {
+    cityName = repKey(cityName);   // 第九十五波·NEW-32：归一取账
     if (!cityName || !cityReputation[cityName]) return hasGlobalSpecialPermit() ? ['special_permit'] : [];
     syncUnlockedFeatures(cityName, { notify: false });
     const features = cityReputation[cityName].unlockedFeatures.slice();
@@ -213,6 +253,7 @@ function getUnlockedFeatures(cityName) {
 // 检查特定功能是否解锁。对所有城市功能按当前数值动态推导，避免缓存标记过期。
 function hasUnlockedFeature(cityName, feature) {
     if (feature === 'special_permit' && hasGlobalSpecialPermit()) return true;
+    cityName = repKey(cityName);   // 第九十五波·NEW-32：归一取账
     if (!cityName || !cityReputation[cityName]) return false;
     const requiredLevel = REPUTATION_FEATURE_LEVELS[feature];
     if (requiredLevel != null && getReputationLevelIndex(cityName) >= requiredLevel) {
@@ -227,6 +268,7 @@ function hasUnlockedFeature(cityName, feature) {
 
 function getRoyalAuctionAccess(cityName) {
     cityName = cityName || (typeof getCurrentCityName === 'function' ? getCurrentCityName() : '');
+    cityName = repKey(cityName);   // 第九十五波·NEW-32：归一取账（permit_ 旗与 useSpecialPermit 同一拼写口径）
     const value = getReputationValue(cityName);
     const levelIndex = getReputationLevelIndex(cityName);
     const localPermitFlag = !!(window.currentCharData && window.currentCharData.flags && window.currentCharData.flags['permit_' + cityName]);
@@ -299,6 +341,7 @@ function loadReputation() {
 
 // ============ 导出 ============
 window.cityReputation = cityReputation;
+window.repKey = repKey;   // 第九十五波·NEW-32：城名归一口径公开可查（其它模块比对城名同用此法）
 window.REPUTATION_LEVELS = REPUTATION_LEVELS;
 window.initReputationSystem = initReputationSystem;
 window.addReputation = addReputation;
@@ -405,6 +448,7 @@ function _buyHiddenShopItem(itemId, price, cityName) {
 
 function getOrCreateSpecialQuests(cityName) {
     cityName = cityName || getCurrentCityName();
+    cityName = repKey(cityName);   // 第九十五波·NEW-32：任务 id 与账本按归一城名落键
     if (!hasUnlockedFeature(cityName, 'special_quests')) return [];
     if (!cityReputation[cityName]) return [];
     cityReputation[cityName].specialQuests = cityReputation[cityName].specialQuests || [];
@@ -549,6 +593,7 @@ function _buySecretArt(artId, cost, cityName) {
 
 function useSpecialPermit(cityName) {
     cityName = cityName || getCurrentCityName();
+    cityName = repKey(cityName);   // 第九十五波·NEW-32：permit_ 旗按归一城名落键（与 getRoyalAuctionAccess 同口径）
     if (!cityName) {
         if (window.showMessage) window.showMessage('请先进入城市再申请/出示特殊许可', 'warning');
         return false;
@@ -606,7 +651,7 @@ function getReputationPanelHtml(cityName) {
         '<p class="font-bold text-white">' + cityName + '</p>' +
         '<p class="text-sm ' + (level.color || 'text-gray-300') + '">' + level.name + ' · ' + level.title + '（' + val + '）</p>' +
         '<p class="text-xs text-gray-400">商店折扣：' + Math.floor((level.discount || 0) * 100) + '%</p>' +
-        '<p class="text-xs text-gray-500 mt-1">城市声望范围 0-10000；角色“名气”是另一项属性</p>' +
+        '<p class="text-xs text-gray-500 mt-1">城市声望范围 0 ~ 10,000；角色“名气”是另一项属性</p>' +
         '<p class="text-xs text-gray-500 mt-1">已解锁：' + (feats.length ? feats.join(', ') : '无') + '</p></div>';
     html += '<div class="flex flex-wrap gap-2">' +
         '<button onclick="openHiddenShop()" class="text-xs bg-purple-700 text-white px-2 py-1 rounded">隐藏商店</button>' +

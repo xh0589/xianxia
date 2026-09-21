@@ -11,9 +11,9 @@
     var POSITION_SLOTS = { '掌门': 1, '长老': 3, '堂主': 5, '弟子': 50 };
     var POLICIES = ['expand', 'internal', 'militarize'];
     var POLICY_DESC = {
-        expand: '扩张：四处张榜招人，门面开销也大（消耗 ×1.5）',
-        internal: '内政：专心打理田产库房，产出 +30%',
-        militarize: '备战：兵器库日夜赶工（武器 ×2），苦练伤人，一年里总有人吃不了苦走'
+        expand: '扩张：四处张榜招人，门面用度也贵上五成',
+        internal: '内政：专心打理田产库房，出息多三成',
+        militarize: '备战：兵器库日夜赶工，出产翻倍——练兵苦，一年里总有人吃不了苦走'
     };
     // 立派候选地（v20.52）：地形沿用门派命门档案的词表（山/城/水/漠/岛），
     // 安家费各有名目——山门要开石阶，城里要买坊基，渡口要赁码头，驼路要打井，海岛要修泊港。
@@ -36,7 +36,21 @@
         sects: {}  // {sectId: instance}
     };
 
-    function _today() { return (window.WorldCalendar && window.WorldCalendar.day) || 0; }
+    // 第九波·总账根治：WorldCalendar.day 在生产里根本不存在，旧钟恒 0（立宗日/入门日/宗门史日戳全是死数据）。
+    // 统一优先真钟 getAbsoluteDay；旧字段只作测试沙箱的退路。
+    function _today() {
+        try {
+            if (typeof window.getAbsoluteDay === 'function') { var g = window.getAbsoluteDay(); if (g) return Math.floor(g); }
+            var t = window.timeSystem;
+            if (t) {
+                if (typeof t.getAbsoluteDay === 'function') { var g2 = t.getAbsoluteDay(); if (g2) return Math.floor(g2); }
+                if (t.gameTime && t.gameTime.currentDay) return Math.floor(t.gameTime.currentDay);
+                if (t.totalDays) return Math.floor(t.totalDays);
+            }
+            if (window.WorldCalendar && window.WorldCalendar.day) return Math.floor(window.WorldCalendar.day);
+        } catch (e) {}
+        return 0;
+    }
     function _emit(name, payload) {
         var bus = null;
         if (typeof window !== 'undefined' && window.EventBus) bus = window.EventBus;
@@ -353,6 +367,38 @@
             window.StateRegistry.register('playerSect', { version: 1, export: _exportState, import: _importState, reset: _resetState });
         } catch (e) {}
     }
+
+    // ============== v21.9 衣钵线：掌门离去，宗门有继 ==============
+    // 此前 npc-lineage 的 inheritOnDeath 只管 NPC 之间的师门传承——玩家自己的宗门
+    // 在掌门转世/回入尘世后群龙无首。现在转世事件一响，衣钵自动传给资历最深的长老（无长老则传大弟子）。
+    function _inheritAllSects() {
+        try {
+            Object.keys(_state.sects).forEach(function (sid) {
+                var s = _state.sects[sid];
+                if (!s || s._inherited) return;
+                var ds = s.disciples || [];
+                if (!ds.length) {
+                    addHistory(sid, '掌门散躯入轮回，宗门无人接钵——山门封了，香火散了。');
+                    s._inherited = true;
+                    return;
+                }
+                var elders = ds.filter(function (d) { return d.position === '长老'; });
+                var pool = elders.length ? elders : ds;
+                var heir = pool.slice().sort(function (a, b) { return (a.joinedDay || 0) - (b.joinedDay || 0); })[0];
+                heir.position = '掌门';
+                s._inherited = true;
+                var nm = _npcBrief(heir.npcId);
+                addHistory(sid, '掌门散躯入轮回，衣钵相传：' + nm + '接任掌门——山门香火不绝，道统不断。');
+                if (window.WorldJournal && typeof window.WorldJournal.record === 'function') {
+                    window.WorldJournal.record({ type: 'sect', title: '衣钵相传', text: '「' + s.name + '」老掌门转世而去，' + nm + '接钵掌山。宗门不散，道统不断。' });
+                }
+            });
+        } catch (e) {}
+    }
+    if (window.EventBus && typeof window.EventBus.on === 'function') {
+        window.EventBus.on('reincarnation:start', _inheritAllSects);
+    }
+    window.inheritPlayerSects = _inheritAllSects;
 
     // ============== 9. 导出 ==============
     window.PlayerSect = {

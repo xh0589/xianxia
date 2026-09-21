@@ -2,19 +2,28 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"><!-- v20.87 允许双指缩放，小字看得清 -->
     <title>仙路长青</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗡️</text></svg>">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            disabled: true
-        }
-    </script>
+    <script defer src="js/vendor/tailwind.js"></script>
+    <!-- 第八十二波·FIX-02：此处原有内联配置块，在 defer 的 CDN 就绪前就读取 tailwind 全局，
+         冷启动必抛 ReferenceError（实机控制台两次复现）；且该配置在 defer 时序下从来没有生效过，
+         页面样式实际一直走默认 CDN + styles.css，故整块删除，行为不变、报错消失 -->
     <link rel="stylesheet" href="styles.css">
+    <!-- v21.x 界面整改 P0：Tailwind 已本地化（js/vendor/tailwind.js），断网不再塌版；
+         ui-tokens.css 收口全站视觉常量与可读性基线，必须排在 styles.css 之后 -->
+    <link rel="stylesheet" href="styles/ui-tokens.css">
+    <link rel="stylesheet" href="styles/panel-map.css">
+    <link rel="stylesheet" href="styles/panel-inventory.css">
+    <link rel="stylesheet" href="styles/panel-quests.css">
+    <link rel="stylesheet" href="styles/panel-equipment.css">
+    <link rel="stylesheet" href="styles/panel-house.css">
+    <link rel="stylesheet" href="styles/panel-mail.css">
+    <link rel="stylesheet" href="styles/ui-craft.css">
     <style>
     /* v20.1 移动端适配：触屏友好 + 窄屏弹窗适配 */
     button, .nav-item, [onclick] { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+    .slider-handle { touch-action: none; } /* v20.87 灵根滑块拖动时不触发页面滚动 */
     @media (max-width: 768px) {
         body { font-size: 14px; }
         .fixed.inset-0 > div { max-width: 95vw !important; }
@@ -29,9 +38,15 @@
             <!-- 头部 -->
             <div class="bg-gray-900 px-6 py-4 border-b border-gray-700 flex justify-between items-center">
                 <h1 class="text-2xl font-bold text-yellow-500 tracking-widest">【登仙大典】修仙者资质录入</h1>
-                <button onclick="startGame()" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 font-bold py-2 px-8 rounded transition duration-200 text-lg tracking-wider">
-                    踏入仙途
-                </button>
+                <div class="flex items-center gap-3">
+                    <!-- 第九十五波·NEW-48：有存档就给回头路——不必先新建角色（新建会顺手清空世界）再钻进设置找载入 -->
+                    <button id="continue-game-btn" onclick="continueLastGame()" class="hidden bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 px-6 rounded transition duration-200 text-lg tracking-wider">
+                        ↩ 继续仙途
+                    </button>
+                    <button onclick="startGame()" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 font-bold py-2 px-8 rounded transition duration-200 text-lg tracking-wider">
+                        踏入仙途
+                    </button>
+                </div>
             </div>
 
             <div class="p-6">
@@ -285,6 +300,7 @@
                         <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 text-center">
                             <p class="text-xs text-gray-400 mb-1">🏆 境界</p>
                             <p class="text-yellow-500 font-bold text-lg" id="realm-text">炼气一层</p>
+                            <p class="text-xs text-amber-300" id="char-travel-title"></p><!-- v42 见闻称号：游历账纯派生 -->
                             <p class="text-xs text-gray-500" id="realm-essence-display">真元: 0/30</p>
                             <p class="text-xs text-gray-500" id="realm-tempering-display">历练: 0/5</p>
                             <p class="text-xs text-purple-400 mt-1" id="char-abilities-display">绝技: 无</p><!-- v13.1 绝技行 -->
@@ -497,6 +513,7 @@
                                 <h3 class="text-yellow-500 font-bold">👥 人脉关系</h3>
                                 <div class="flex items-center gap-2">
                                     <span class="text-xs text-gray-500" id="relations-count">共 0 人</span>
+                                    <button onclick="openTokenShelf()" class="text-xs bg-pink-900/50 hover:bg-pink-800 border border-pink-700 rounded px-2 py-1 text-pink-200">🎁 信物架</button>
                                     <select id="relations-filter" onchange="renderRelationsPanel()" class="text-xs bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-300">
                                         <option value="all">全部</option>
                                         <option value="high">好感优先</option>
@@ -518,7 +535,7 @@
                                 <button class="relations-filter-btn text-xs px-2 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 transition"
                                     data-filter-key="canInteract" onclick="toggleRelationsFilter('canInteract')">💬可互动</button>
                                 <button class="relations-filter-btn text-xs px-2 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 transition"
-                                    data-filter-key="hasNewEvents" onclick="toggleRelationsFilter('hasNewEvents')">📜有新事件</button>
+                                    data-filter-key="hasNewEvents" onclick="toggleRelationsFilter('hasNewEvents')">📜似有心事</button>
                                 <button class="relations-filter-btn text-xs px-2 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 transition"
                                     data-filter-key="hasRequests" onclick="toggleRelationsFilter('hasRequests')">🙏有请求</button>
                                 <button class="relations-filter-btn text-xs px-2 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600 transition"
@@ -670,165 +687,363 @@
                     <!-- 右侧：SVG 地图 -->
                     <div class="flex-1">
                     <div class="bg-gray-700/20 rounded-lg border border-gray-600 p-4 relative" style="min-height: 500px;">
+                    <!-- v20.66 地图标记开关：关隘路线/里数标注默认收起，图面清爽；开关键在设置里也有一份 -->
+                    <!-- 两个同类开关（路线标记 / 门派名）同住这一组，由 styles/panel-map.css 定位；
+                         以前门派名开关在下方图例里，图例正文不得不写「本图例上方的那个开关」来自指位置 -->
+                    <div class="x-map-tools" id="map-tools">
+                        <button id="btn-map-overlay" onclick="toggleMapOverlay()" title="显示/隐藏关隘路线与里数标注"
+                            class="text-xs px-2 py-1 rounded border transition bg-gray-800/80 border-gray-600 text-gray-400 hover:text-yellow-400 hover:border-yellow-600">🧭 路线标记：关</button>
+                    </div>
                     <svg viewBox="0 0 800 600" class="w-full" id="world-map">
-                        <!-- 背景 -->
-                        <rect width="800" height="600" fill="#1a1f2e" rx="8"/>
-                        
-                        <!-- 中州 (中部) -->
-                        <polygon class="map-province" id="prov-zhongzhou" points="320,200 480,200 520,280 480,360 320,360 280,280"
-                            fill="#3b4a3b" data-province="中州" onclick="selectProvince('中州')"/>
-                        <text x="400" y="285" fill="#d1d5db" font-size="16" text-anchor="middle" pointer-events="none" font-weight="bold">中州</text>
+
+                        <defs>
+                            <radialGradient id="wmOcean" cx="48%" cy="40%" r="82%">
+                                <stop offset="0%" stop-color="#243349"/>
+                                <stop offset="60%" stop-color="#1a2436"/>
+                                <stop offset="100%" stop-color="#0e1420"/>
+                            </radialGradient>
+                            <radialGradient id="wmVignette" cx="50%" cy="45%" r="72%">
+                                <stop offset="55%" stop-color="#000000" stop-opacity="0"/>
+                                <stop offset="100%" stop-color="#000000" stop-opacity="0.42"/>
+                            </radialGradient>
+                            <linearGradient id="wmGradZZ" x1="0.2" y1="0" x2="0.8" y2="1">
+                                <stop offset="0%" stop-color="#4d6349"/><stop offset="100%" stop-color="#313d2f"/>
+                            </linearGradient>
+                            <linearGradient id="wmGradDH" x1="0.2" y1="0" x2="0.8" y2="1">
+                                <stop offset="0%" stop-color="#3d6140"/><stop offset="100%" stop-color="#21361e"/>
+                            </linearGradient>
+                            <linearGradient id="wmGradNJ" x1="0.2" y1="0" x2="0.8" y2="1">
+                                <stop offset="0%" stop-color="#5e3a37"/><stop offset="100%" stop-color="#37201e"/>
+                            </linearGradient>
+                            <linearGradient id="wmGradXM" x1="0.2" y1="0" x2="0.8" y2="1">
+                                <stop offset="0%" stop-color="#61543a"/><stop offset="100%" stop-color="#3a3222"/>
+                            </linearGradient>
+                            <linearGradient id="wmGradBM" x1="0.2" y1="0" x2="0.8" y2="1">
+                                <stop offset="0%" stop-color="#3c5263"/><stop offset="100%" stop-color="#1f2c38"/>
+                            </linearGradient>
+                            <linearGradient id="wmGradSD" x1="0.2" y1="0" x2="0.8" y2="1">
+                                <stop offset="0%" stop-color="#4d3b4d"/><stop offset="100%" stop-color="#2b202b"/>
+                            </linearGradient>
+                            <linearGradient id="wmGradDN" x1="0.2" y1="0" x2="0.8" y2="1">
+                                <stop offset="0%" stop-color="#2a5165"/><stop offset="100%" stop-color="#132935"/>
+                            </linearGradient>
+                            <!-- 地形符号：雪山 / 青峦 / 松林 / 沙丘 / 水波 / 瘴泽 / 祥云 -->
+                            <g id="wmMtnSnow">
+                                <path d="M-16 9 L-5 -9 L1 -1 L7 -11 L20 9 Z" fill="#26313f" opacity="0.75"/>
+                                <path d="M-5 -9 L-1.5 -3.5 L-8.5 -3.5 Z" fill="#e8eef5" opacity="0.85"/>
+                                <path d="M7 -11 L10.5 -5 L3.5 -5 Z" fill="#e8eef5" opacity="0.85"/>
+                                <path d="M-16 9 L20 9" stroke="#0e141d" stroke-width="1" opacity="0.4"/>
+                            </g>
+                            <g id="wmMtnGreen">
+                                <path d="M-15 8 L-4 -7 L3 1 L9 -8 L19 8 Z" fill="#1c2b1c" opacity="0.7"/>
+                                <path d="M-15 8 L19 8" stroke="#0d130d" stroke-width="1" opacity="0.35"/>
+                            </g>
+                            <g id="wmPine">
+                                <path d="M0 -11 L5.5 -3 L2.5 -3 L6.5 4 L-6.5 4 L-2.5 -3 L-5.5 -3 Z" fill="#152912" opacity="0.8"/>
+                                <rect x="-1" y="4" width="2" height="3.5" fill="#2c1d10" opacity="0.8"/>
+                            </g>
+                            <g id="wmDune">
+                                <path d="M-17 6 Q-9 -7 -1 3 Q7 -9 17 6 Z" fill="#b29457" opacity="0.22"/>
+                                <path d="M-11 7 Q-3 -3 5 7" stroke="#d8bd82" stroke-width="1" fill="none" opacity="0.35"/>
+                            </g>
+                            <g id="wmWave">
+                                <path d="M-10 0 Q-5 -5 0 0 Q5 5 10 0" stroke="#8fe3dc" stroke-width="1.2" fill="none" opacity="0.45"/>
+                                <path d="M-6 5.5 Q-1 0.5 4 5.5" stroke="#8fe3dc" stroke-width="1" fill="none" opacity="0.3"/>
+                            </g>
+                            <g id="wmMarsh">
+                                <path d="M-9 2 Q-4.5 -2 0 2 Q4.5 6 9 2" stroke="#7ea06e" stroke-width="1" fill="none" opacity="0.4"/>
+                                <circle cx="-4" cy="-3" r="1" fill="#8fae7e" opacity="0.4"/>
+                                <circle cx="5" cy="-4" r="1.2" fill="#8fae7e" opacity="0.3"/>
+                            </g>
+                            <g id="wmCloud">
+                                <ellipse cx="-6" cy="0" rx="7" ry="3.2" fill="#dfe7f0" opacity="0.10"/>
+                                <ellipse cx="2" cy="-2" rx="8" ry="3.8" fill="#dfe7f0" opacity="0.12"/>
+                                <ellipse cx="9" cy="1" rx="6" ry="2.8" fill="#dfe7f0" opacity="0.09"/>
+                            </g>
+                        </defs>
+
+                        <!-- 背景：海 -->
+                        <rect width="800" height="600" fill="url(#wmOcean)" rx="8"/>
+                        <g stroke="#9db4d0" stroke-opacity="0.05" stroke-width="1" pointer-events="none">
+                            <line x1="80" y1="8" x2="80" y2="592"/>
+                            <line x1="160" y1="8" x2="160" y2="592"/>
+                            <line x1="240" y1="8" x2="240" y2="592"/>
+                            <line x1="320" y1="8" x2="320" y2="592"/>
+                            <line x1="400" y1="8" x2="400" y2="592"/>
+                            <line x1="480" y1="8" x2="480" y2="592"/>
+                            <line x1="560" y1="8" x2="560" y2="592"/>
+                            <line x1="640" y1="8" x2="640" y2="592"/>
+                            <line x1="720" y1="8" x2="720" y2="592"/>
+                            <line x1="8" y1="75" x2="792" y2="75"/>
+                            <line x1="8" y1="150" x2="792" y2="150"/>
+                            <line x1="8" y1="225" x2="792" y2="225"/>
+                            <line x1="8" y1="300" x2="792" y2="300"/>
+                            <line x1="8" y1="375" x2="792" y2="375"/>
+                            <line x1="8" y1="450" x2="792" y2="450"/>
+                            <line x1="8" y1="525" x2="792" y2="525"/>
+                        </g>
+
+                        <!-- 九州 -->
+                        <path class="map-province" id="prov-zhongzhou" d="M365 190 C410 196 462 192 505 190 C514 250 516 310 522 372 C485 368 440 352 398 352 C360 352 340 368 298 370 C288 320 312 260 300 215 C322 208 344 198 365 190 Z"
+                            fill="url(#wmGradZZ)" data-province="中州" onclick="selectProvince('中州')"/>
+                        <path class="map-province" id="prov-donghuang" d="M505 190 C545 178 600 160 655 152 C695 147 730 158 752 185 C766 203 770 225 764 252 C752 290 720 345 678 382 C620 388 560 382 522 372 C516 310 514 250 505 190 Z"
+                            fill="url(#wmGradDH)" data-province="东荒" onclick="selectProvince('东荒')"/>
+                        <path class="map-province" id="prov-nanjiang" d="M298 370 C340 368 360 352 398 352 C440 352 485 368 522 372 C534 412 548 452 556 486 C530 516 490 536 445 542 C390 548 330 540 280 528 C255 522 235 528 218 532 C232 490 248 445 258 402 C272 393 285 382 298 370 Z"
+                            fill="url(#wmGradNJ)" data-province="南疆" onclick="selectProvince('南疆')"/>
+                        <path class="map-province" id="prov-ximo" d="M40 186 C80 199 130 212 175 218 C225 224 268 224 300 215 C312 260 288 320 298 370 C285 382 272 393 258 402 C248 388 235 372 212 372 C170 372 130 400 92 432 C72 424 54 410 40 392 L40 186 Z"
+                            fill="url(#wmGradXM)" data-province="西漠" onclick="selectProvince('西漠')"/>
+                        <path class="map-province" id="prov-beiming" d="M40 178 C52 125 72 88 122 62 C145 50 160 46 182 46 C240 50 285 76 318 108 C326 116 330 124 332 134 C340 152 350 172 365 190 C344 198 322 208 300 215 C268 224 225 224 175 218 C130 212 80 199 40 186 L40 178 Z"
+                            fill="url(#wmGradBM)" data-province="北冥" onclick="selectProvince('北冥')"/>
+                        <path class="map-province" id="prov-shudi" d="M92 432 C130 400 170 372 212 372 C235 372 248 388 258 402 C248 445 232 490 218 532 C180 540 142 530 112 506 C92 488 84 462 92 432 Z"
+                            fill="url(#wmGradSD)" data-province="蜀地" onclick="selectProvince('蜀地')"/>
+                        <path class="map-province" id="prov-dongnan" d="M522 372 C560 382 620 388 678 382 C720 345 752 290 764 252 C780 262 792 274 800 290 L800 505 C740 516 668 524 612 524 C590 508 570 496 556 486 C548 452 534 412 522 372 Z"
+                            fill="url(#wmGradDN)" fill-opacity="0.55" stroke="#7fd6d0" stroke-opacity="0.35" stroke-dasharray="6 4" data-province="东南海域" onclick="selectProvince('东南海域')"/>
+                                                <g pointer-events="none" fill="none" stroke="#cfe8f5" stroke-opacity="0.2" stroke-width="2.6" stroke-dasharray="1 6" stroke-linecap="round">
+                            <path d="M40 178 C52 125 72 88 122 62 C145 50 160 46 182 46 C240 50 285 76 318 108 C326 116 330 124 332 134 C340 152 350 172 365 190"/>
+                            <path d="M365 190 C410 196 462 192 505 190"/>
+                            <path d="M505 190 C545 178 600 160 655 152 C695 147 730 158 752 185 C766 203 770 225 764 252 C752 290 720 345 678 382 C620 388 560 382 522 372"/>
+                            <path d="M522 372 C534 412 548 452 556 486 C530 516 490 536 445 542 C390 548 330 540 280 528 C255 522 235 528 218 532"/>
+                            <path d="M92 432 C72 424 54 410 40 392"/>
+                            <path d="M92 432 C84 462 92 488 112 506 C142 530 180 540 218 532"/>
+                        </g>
+                        <text x="400" y="285" fill="#f3e3c0" font-size="19" text-anchor="middle" pointer-events="none" font-weight="bold" letter-spacing="4" style="paint-order:stroke;stroke:rgba(8,12,20,.9);stroke-width:4px;stroke-linejoin:round">中州</text>
+                        <path d="M376 294 Q400 299 424 294" stroke="#caa96a" stroke-opacity="0.45" stroke-width="1.2" fill="none" pointer-events="none"/>
+                        <text x="610" y="275" fill="#f3e3c0" font-size="19" text-anchor="middle" pointer-events="none" font-weight="bold" letter-spacing="4" style="paint-order:stroke;stroke:rgba(8,12,20,.9);stroke-width:4px;stroke-linejoin:round">东荒</text>
+                        <path d="M586 284 Q610 289 634 284" stroke="#caa96a" stroke-opacity="0.45" stroke-width="1.2" fill="none" pointer-events="none"/>
+                        <text x="380" y="445" fill="#f3e3c0" font-size="19" text-anchor="middle" pointer-events="none" font-weight="bold" letter-spacing="4" style="paint-order:stroke;stroke:rgba(8,12,20,.9);stroke-width:4px;stroke-linejoin:round">南疆</text>
+                        <path d="M356 454 Q380 459 404 454" stroke="#caa96a" stroke-opacity="0.45" stroke-width="1.2" fill="none" pointer-events="none"/>
+                        <text x="170" y="285" fill="#f3e3c0" font-size="19" text-anchor="middle" pointer-events="none" font-weight="bold" letter-spacing="4" style="paint-order:stroke;stroke:rgba(8,12,20,.9);stroke-width:4px;stroke-linejoin:round">西漠</text>
+                        <path d="M146 294 Q170 299 194 294" stroke="#caa96a" stroke-opacity="0.45" stroke-width="1.2" fill="none" pointer-events="none"/>
+                        <text x="175" y="145" fill="#f3e3c0" font-size="19" text-anchor="middle" pointer-events="none" font-weight="bold" letter-spacing="4" style="paint-order:stroke;stroke:rgba(8,12,20,.9);stroke-width:4px;stroke-linejoin:round">北冥</text>
+                        <path d="M151 154 Q175 159 199 154" stroke="#caa96a" stroke-opacity="0.45" stroke-width="1.2" fill="none" pointer-events="none"/>
+                        <text x="175" y="440" fill="#f3e3c0" font-size="18" text-anchor="middle" pointer-events="none" font-weight="bold" letter-spacing="4" style="paint-order:stroke;stroke:rgba(8,12,20,.9);stroke-width:4px;stroke-linejoin:round">蜀地</text>
+                        <path d="M151 449 Q175 454 199 449" stroke="#caa96a" stroke-opacity="0.45" stroke-width="1.2" fill="none" pointer-events="none"/>
+                        <text x="598" y="432" fill="#f3e3c0" font-size="16" text-anchor="middle" pointer-events="none" font-weight="bold" letter-spacing="4" style="paint-order:stroke;stroke:rgba(8,12,20,.9);stroke-width:4px;stroke-linejoin:round">东南海域</text>
+                        <path d="M574 441 Q598 446 622 441" stroke="#caa96a" stroke-opacity="0.45" stroke-width="1.2" fill="none" pointer-events="none"/>
+
+                        <!-- 水系 -->
+                        <g pointer-events="none" fill="none" stroke-linecap="round">
+                            <path d="M78 96 C150 130 240 162 298 180 C326 190 344 190 366 188" stroke="#3f6f96" stroke-width="2.4" opacity="0.45"/>
+                            <path d="M78 96 C150 130 240 162 298 180 C326 190 344 190 366 188" stroke="#9fcbe0" stroke-width="1" opacity="0.5"/>
+                            <path d="M222 152 C260 178 288 196 318 214 C336 240 332 278 340 308 C350 338 372 352 396 372 C428 402 500 436 556 480" stroke="#3f6f96" stroke-width="3" opacity="0.5"/>
+                            <path d="M222 152 C260 178 288 196 318 214 C336 240 332 278 340 308 C350 338 372 352 396 372 C428 402 500 436 556 480" stroke="#7fb6d6" stroke-width="1.2" opacity="0.55"/>
+                            <path d="M302 376 C342 416 396 466 447 538" stroke="#8a4a3a" stroke-width="2.4" opacity="0.5"/>
+                            <path d="M302 376 C342 416 396 466 447 538" stroke="#c47a5e" stroke-width="1" opacity="0.4"/>
+                            <text x="150" y="138" font-size="8.5" fill="#9fcbe0" opacity="0.7" style="paint-order:stroke;stroke:rgba(8,12,20,.8);stroke-width:2px">寒江</text>
+                            <text x="358" y="332" font-size="8.5" fill="#7fb6d6" opacity="0.7" style="paint-order:stroke;stroke:rgba(8,12,20,.8);stroke-width:2px">洛水</text>
+                            <text x="352" y="442" font-size="8.5" fill="#c47a5e" opacity="0.7" style="paint-order:stroke;stroke:rgba(8,12,20,.8);stroke-width:2px">赤水</text>
+                        </g>
+
+                        <!-- 地形：山林沙漠浪 -->
+                        <g pointer-events="none">
+                            <!-- 北冥·雪山 -->
+                            <use href="#wmMtnSnow" transform="translate(78,168) scale(1.0)"/>
+                            <use href="#wmMtnSnow" transform="translate(138,178) scale(1.15)"/>
+                            <use href="#wmMtnSnow" transform="translate(170,160) scale(0.8)"/>
+                            <use href="#wmMtnSnow" transform="translate(218,172) scale(0.9)"/>
+                            <use href="#wmMtnSnow" transform="translate(272,182) scale(1.05)"/>
+                            <!-- 蜀地·剑山 -->
+                            <use href="#wmMtnSnow" transform="translate(112,452) scale(1.1)"/>
+                            <use href="#wmMtnSnow" transform="translate(152,488) scale(0.95)"/>
+                            <use href="#wmMtnSnow" transform="translate(232,466) scale(1.05)"/>
+                            <use href="#wmMtnSnow" transform="translate(240,438) scale(0.8)"/>
+                            <!-- 东荒·林海 -->
+                            <use href="#wmPine" transform="translate(548,330) scale(1.0)"/>
+                            <use href="#wmPine" transform="translate(556,318) scale(0.8)"/>
+                            <use href="#wmPine" transform="translate(600,336) scale(1.1)"/>
+                            <use href="#wmPine" transform="translate(628,306) scale(0.9)"/>
+                            <use href="#wmPine" transform="translate(642,322) scale(1.0)"/>
+                            <use href="#wmPine" transform="translate(676,352) scale(0.85)"/>
+                            <!-- 东荒·青峦 -->
+                            <use href="#wmMtnGreen" transform="translate(700,330) scale(0.9)"/>
+                            <!-- 西漠·沙丘 -->
+                            <use href="#wmDune" transform="translate(66,258) scale(1.0)"/>
+                            <use href="#wmDune" transform="translate(196,296) scale(1.15)"/>
+                            <use href="#wmDune" transform="translate(230,330) scale(0.9)"/>
+                            <use href="#wmDune" transform="translate(248,238) scale(1.0)"/>
+                            <use href="#wmDune" transform="translate(160,368) scale(0.95)"/>
+                            <use href="#wmDune" transform="translate(280,308) scale(0.85)"/>
+                            <!-- 南疆·瘴林 -->
+                            <use href="#wmPine" transform="translate(262,492) scale(1.0)"/>
+                            <use href="#wmPine" transform="translate(486,436) scale(0.9)"/>
+                            <use href="#wmPine" transform="translate(508,402) scale(0.8)"/>
+                            <!-- 南疆·沼泽 -->
+                            <use href="#wmMarsh" transform="translate(270,438) scale(1.0)"/>
+                            <use href="#wmMarsh" transform="translate(330,508) scale(1.1)"/>
+                            <use href="#wmMarsh" transform="translate(400,516) scale(0.9)"/>
+                            <use href="#wmMarsh" transform="translate(452,498) scale(1.0)"/>
+                            <!-- 中州·平野 -->
+                            <use href="#wmCloud" transform="translate(475,232) scale(1.0)"/>
+                            <use href="#wmCloud" transform="translate(303,338) scale(0.9)"/>
+                            <use href="#wmCloud" transform="translate(240,75) scale(0.8)"/>
+                            <!-- 中州·太虚山 -->
+                            <use href="#wmMtnGreen" transform="translate(462,340) scale(0.85)"/>
+                            <use href="#wmMtnGreen" transform="translate(488,305) scale(0.7)"/>
+                            <!-- 东南海域·浪 -->
+                            <use href="#wmWave" transform="translate(615,462) scale(1.0)"/>
+                            <use href="#wmWave" transform="translate(695,498) scale(0.9)"/>
+                            <use href="#wmWave" transform="translate(762,452) scale(1.0)"/>
+                            <use href="#wmWave" transform="translate(640,408) scale(0.8)"/>
+                            <use href="#wmWave" transform="translate(588,492) scale(0.9)"/>
+                            <use href="#wmWave" transform="translate(726,344) scale(0.85)"/>
+                            <use href="#wmWave" transform="translate(770,505) scale(0.8)"/>
+                            <!-- 东南海域·诸岛 -->
+                            <g stroke="#d6c49a" stroke-opacity="0.55" stroke-width="2" fill="#3a5440">
+                                <path d="M656 402 C658 390 672 384 686 388 C700 392 710 400 706 410 C702 420 682 424 668 418 C658 414 654 410 656 402 Z"/>
+                                <path d="M724 368 C742 362 758 380 752 402 C748 420 756 438 746 452 C736 462 722 456 724 440 C726 424 714 404 716 388 C717 376 716 371 724 368 Z"/>
+                                <path d="M646 458 C650 448 668 448 674 456 C680 464 670 474 658 472 C648 470 642 466 646 458 Z"/>
+                                <path d="M612 428 C618 422 628 426 626 434 C624 440 612 440 610 434 Z"/>
+                                <path d="M775 332 C782 326 792 332 788 340 C784 346 772 344 772 338 Z"/>
+                                <path d="M640 494 C646 489 654 492 652 498 C650 503 638 502 640 494 Z"/>
+                            </g>
+                        </g>
+
+                        <!-- 城市 -->
                         <g class="map-city" onclick="selectCity('帝都 · 长安', '中州')">
                             <circle cx="400" cy="250" r="5" fill="#fbbf24"/>
-                            <text x="400" y="238" fill="#fbbf24" font-size="10" text-anchor="middle">长安</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="400" y="238" fill="#fbbf24" font-size="10" text-anchor="middle">长安</text>
                         </g>
                         <g class="map-city" onclick="selectCity('洛水城', '中州')">
                             <circle cx="340" cy="310" r="4" fill="#d1d5db"/>
-                            <text x="340" y="298" fill="#d1d5db" font-size="9" text-anchor="middle">洛水城</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="340" y="298" fill="#d1d5db" font-size="9" text-anchor="middle">洛水城</text>
                         </g>
                         <g class="map-city" onclick="selectCity('太虚山', '中州')">
                             <circle cx="450" cy="320" r="4" fill="#d1d5db"/>
-                            <text x="450" y="308" fill="#d1d5db" font-size="9" text-anchor="middle">太虚山</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="450" y="308" fill="#d1d5db" font-size="9" text-anchor="middle">太虚山</text>
                         </g>
-
-                        <!-- 东荒 (东部) -->
-                        <polygon class="map-province" id="prov-donghuang" points="520,200 720,160 760,280 680,380 520,360"
-                            fill="#2d4a2d" data-province="东荒" onclick="selectProvince('东荒')"/>
-                        <text x="610" y="275" fill="#d1d5db" font-size="16" text-anchor="middle" pointer-events="none" font-weight="bold">东荒</text>
                         <g class="map-city" onclick="selectCity('青木城', '东荒')">
                             <circle cx="590" cy="230" r="5" fill="#4ade80"/>
-                            <text x="590" y="218" fill="#4ade80" font-size="10" text-anchor="middle">青木城</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="590" y="218" fill="#4ade80" font-size="10" text-anchor="middle">青木城</text>
                         </g>
                         <g class="map-city" onclick="selectCity('蓬莱仙岛', '东荒')">
                             <circle cx="700" cy="190" r="5" fill="#60a5fa"/>
-                            <text x="700" y="178" fill="#60a5fa" font-size="10" text-anchor="middle">蓬莱岛</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="700" y="178" fill="#60a5fa" font-size="10" text-anchor="middle">蓬莱岛</text>
                         </g>
                         <g class="map-city" onclick="selectCity('东海龙宫', '东荒')">
                             <circle cx="730" cy="250" r="4" fill="#d1d5db"/>
-                            <text x="730" y="238" fill="#d1d5db" font-size="9" text-anchor="middle">龙宫</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="730" y="238" fill="#d1d5db" font-size="9" text-anchor="middle">龙宫</text>
                         </g>
-
-                        <!-- 南疆 (南部) -->
-                        <polygon class="map-province" id="prov-nanjiang" points="280,360 520,360 560,480 440,540 240,520"
-                            fill="#4a2d2d" data-province="南疆" onclick="selectProvince('南疆')"/>
-                        <text x="380" y="445" fill="#d1d5db" font-size="16" text-anchor="middle" pointer-events="none" font-weight="bold">南疆</text>
                         <g class="map-city" onclick="selectCity('炎城', '南疆')">
                             <circle cx="370" cy="400" r="5" fill="#f87171"/>
-                            <text x="370" y="388" fill="#f87171" font-size="10" text-anchor="middle">炎城</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="370" y="388" fill="#f87171" font-size="10" text-anchor="middle">炎城</text>
                         </g>
                         <g class="map-city" onclick="selectCity('万毒谷', '南疆')">
                             <circle cx="290" cy="460" r="4" fill="#d1d5db"/>
-                            <text x="290" y="448" fill="#d1d5db" font-size="9" text-anchor="middle">万毒谷</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="290" y="448" fill="#d1d5db" font-size="9" text-anchor="middle">万毒谷</text>
                         </g>
                         <g class="map-city" onclick="selectCity('凤凰巢', '南疆')">
                             <circle cx="460" cy="470" r="4" fill="#d1d5db"/>
-                            <text x="460" y="458" fill="#d1d5db" font-size="9" text-anchor="middle">凤凰巢</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="460" y="458" fill="#d1d5db" font-size="9" text-anchor="middle">凤凰巢</text>
                         </g>
-
-                        <!-- 西漠 (西部) -->
-                        <polygon class="map-province" id="prov-ximo" points="40,200 280,200 320,360 280,360 120,440 40,380"
-                            fill="#4a402d" data-province="西漠" onclick="selectProvince('西漠')"/>
-                        <text x="170" y="285" fill="#d1d5db" font-size="16" text-anchor="middle" pointer-events="none" font-weight="bold">西漠</text>
                         <g class="map-city" onclick="selectCity('金城', '西漠')">
                             <circle cx="160" cy="240" r="5" fill="#fbbf24"/>
-                            <text x="160" y="228" fill="#fbbf24" font-size="10" text-anchor="middle">金城</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="160" y="228" fill="#fbbf24" font-size="10" text-anchor="middle">金城</text>
                         </g>
                         <g class="map-city" onclick="selectCity('大漠孤城', '西漠')">
                             <circle cx="100" cy="320" r="4" fill="#d1d5db"/>
-                            <text x="100" y="308" fill="#d1d5db" font-size="9" text-anchor="middle">大漠孤城</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="100" y="308" fill="#d1d5db" font-size="9" text-anchor="middle">大漠孤城</text>
                         </g>
                         <g class="map-city" onclick="selectCity('佛国遗址', '西漠')">
-                            <circle cx="220" cy="380" r="4" fill="#d1d5db"/>
-                            <text x="220" y="368" fill="#d1d5db" font-size="9" text-anchor="middle">佛国遗址</text>
+                            <circle cx="216" cy="362" r="4" fill="#d1d5db"/>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="220" y="368" fill="#d1d5db" font-size="9" text-anchor="middle">佛国遗址</text>
                         </g>
-
-                        <!-- 北冥 (北部) -->
-                        <polygon class="map-province" id="prov-beiming" points="40,200 320,200 280,80 160,40 60,80"
-                            fill="#2d3d4a" data-province="北冥" onclick="selectProvince('北冥')"/>
-                        <text x="175" y="145" fill="#d1d5db" font-size="16" text-anchor="middle" pointer-events="none" font-weight="bold">北冥</text>
                         <g class="map-city" onclick="selectCity('冰原城', '北冥')">
                             <circle cx="160" cy="120" r="5" fill="#93c5fd"/>
-                            <text x="160" y="108" fill="#93c5fd" font-size="10" text-anchor="middle">冰原城</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="160" y="108" fill="#93c5fd" font-size="10" text-anchor="middle">冰原城</text>
                         </g>
                         <g class="map-city" onclick="selectCity('极寒之地', '北冥')">
-                            <circle cx="100" cy="80" r="4" fill="#d1d5db"/>
-                            <text x="100" y="68" fill="#d1d5db" font-size="9" text-anchor="middle">极寒之地</text>
+                            <circle cx="102" cy="90" r="4" fill="#d1d5db"/>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="100" y="68" fill="#d1d5db" font-size="9" text-anchor="middle">极寒之地</text>
                         </g>
                         <g class="map-city" onclick="selectCity('万剑宗', '北冥')">
                             <circle cx="240" cy="90" r="4" fill="#d1d5db"/>
-                            <text x="240" y="78" fill="#d1d5db" font-size="9" text-anchor="middle">万剑宗</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="240" y="78" fill="#d1d5db" font-size="9" text-anchor="middle">万剑宗</text>
                         </g>
-
-                        <!-- 蜀地 (西南) -->
-                        <polygon class="map-province" id="prov-shudi" points="120,380 240,360 280,480 160,520 80,480"
-                            fill="#3a2d3a" data-province="蜀地" onclick="selectProvince('蜀地')"/>
-                        <text x="175" y="440" fill="#d1d5db" font-size="14" text-anchor="middle" pointer-events="none" font-weight="bold">蜀地</text>
                         <g class="map-city" onclick="selectCity('剑阁', '蜀地')">
                             <circle cx="160" cy="410" r="5" fill="#c084fc"/>
-                            <text x="160" y="398" fill="#c084fc" font-size="10" text-anchor="middle">剑阁</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="160" y="398" fill="#c084fc" font-size="10" text-anchor="middle">剑阁</text>
                         </g>
                         <g class="map-city" onclick="selectCity('青城山', '蜀地')">
                             <circle cx="210" cy="450" r="4" fill="#d1d5db"/>
-                            <text x="210" y="438" fill="#d1d5db" font-size="9" text-anchor="middle">青城山</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="210" y="438" fill="#d1d5db" font-size="9" text-anchor="middle">青城山</text>
                         </g>
-
-                        <!-- 东南海域 -->
-                        <polygon class="map-province" id="prov-dongnan" points="680,380 760,280 800,320 800,480 600,520 560,480"
-                            fill="#1e3a4a" data-province="东南海域" onclick="selectProvince('东南海域')"/>
-                        <text x="690" y="430" fill="#d1d5db" font-size="13" text-anchor="middle" pointer-events="none" font-weight="bold">东南海域</text>
                         <g class="map-city" onclick="selectCity('碧落仙宫', '东南海域')">
                             <circle cx="680" cy="400" r="5" fill="#34d399"/>
-                            <text x="680" y="388" fill="#34d399" font-size="10" text-anchor="middle">碧落仙宫</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="680" y="388" fill="#34d399" font-size="10" text-anchor="middle">碧落仙宫</text>
                         </g>
                         <g class="map-city" onclick="selectCity('鲛人镇', '东南海域')">
                             <circle cx="740" cy="440" r="4" fill="#d1d5db"/>
-                            <text x="740" y="428" fill="#d1d5db" font-size="9" text-anchor="middle">鲛人镇</text>
+                            <text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="740" y="428" fill="#d1d5db" font-size="9" text-anchor="middle">鲛人镇</text>
                         </g>
 
                         <!-- 门派标记点（v10.0 按地区分配）-->
-                        <!-- ===== 中州 ===== -->
-                        <g class="map-sect" onclick="selectSect('少林寺')" style="cursor:pointer"><circle cx="390" cy="230" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="390" y="215" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">少林寺</text></g>
-                        <g class="map-sect" onclick="selectSect('嵩山派')" style="cursor:pointer"><circle cx="400" cy="240" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text x="400" y="225" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">嵩山派</text></g>
-                        <g class="map-sect" onclick="selectSect('大旗门')" style="cursor:pointer"><circle cx="430" cy="250" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="430" y="235" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">大旗门</text></g>
-                        <g class="map-sect" onclick="selectSect('恒山派')" style="cursor:pointer"><circle cx="380" cy="210" r="6" fill="#fb7185" stroke="#fff" stroke-width="2"/><text x="380" y="195" fill="#fb7185" font-size="9" text-anchor="middle" font-weight="bold">恒山派</text></g>
-                        <g class="map-sect" onclick="selectSect('全真教')" style="cursor:pointer"><circle cx="350" cy="290" r="6" fill="#34d399" stroke="#fff" stroke-width="2"/><text x="350" y="275" fill="#34d399" font-size="9" text-anchor="middle" font-weight="bold">全真教</text></g>
-                        <g class="map-sect" onclick="selectSect('华山派')" style="cursor:pointer"><circle cx="460" cy="270" r="6" fill="#f472b6" stroke="#fff" stroke-width="2"/><text x="460" y="255" fill="#f472b6" font-size="9" text-anchor="middle" font-weight="bold">华山派</text></g>
-                        <g class="map-sect" onclick="selectSect('武当派')" style="cursor:pointer"><circle cx="420" cy="280" r="6" fill="#60a5fa" stroke="#fff" stroke-width="2"/><text x="420" y="265" fill="#60a5fa" font-size="9" text-anchor="middle" font-weight="bold">武当派</text></g>
-                        <g class="map-sect" onclick="selectSect('侠隐阁')" style="cursor:pointer"><circle cx="450" cy="290" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="450" y="275" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">侠隐阁</text></g>
-                        <g class="map-sect" onclick="selectSect('天涯海阁')" style="cursor:pointer"><circle cx="440" cy="310" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="440" y="295" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">天涯海阁</text></g>
-                        <!-- ===== 东荒 ===== -->
-                        <g class="map-sect" onclick="selectSect('泰山派')" style="cursor:pointer"><circle cx="520" cy="240" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="520" y="225" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">泰山派</text></g>
-                        <g class="map-sect" onclick="selectSect('药王谷')" style="cursor:pointer"><circle cx="530" cy="260" r="6" fill="#34d399" stroke="#fff" stroke-width="2"/><text x="530" y="245" fill="#34d399" font-size="9" text-anchor="middle" font-weight="bold">药王谷</text></g>
-                        <g class="map-sect" onclick="selectSect('神机门')" style="cursor:pointer"><circle cx="560" cy="240" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text x="560" y="225" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">神机门</text></g>
-                        <g class="map-sect" onclick="selectSect('霹雳堂')" style="cursor:pointer"><circle cx="590" cy="280" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="590" y="265" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">霹雳堂</text></g>
-                        <g class="map-sect" onclick="selectSect('茅山派')" style="cursor:pointer"><circle cx="620" cy="260" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text x="620" y="245" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">茅山派</text></g>
-                        <g class="map-sect" onclick="selectSect('大隐阁')" style="cursor:pointer"><circle cx="600" cy="220" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="600" y="205" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">大隐阁</text></g>
-                        <g class="map-sect" onclick="selectSect('天书阁')" style="cursor:pointer"><circle cx="580" cy="200" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text x="580" y="185" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">天书阁</text></g>
-                        <g class="map-sect" onclick="selectSect('蓬莱派')" style="cursor:pointer"><circle cx="700" cy="190" r="6" fill="#60a5fa" stroke="#fff" stroke-width="2"/><text x="700" y="175" fill="#60a5fa" font-size="9" text-anchor="middle" font-weight="bold">蓬莱派</text></g>
-                        <!-- ===== 南疆 ===== -->
-                        <g class="map-sect" onclick="selectSect('衡山派')" style="cursor:pointer"><circle cx="360" cy="380" r="6" fill="#22d3ee" stroke="#fff" stroke-width="2"/><text x="360" y="365" fill="#22d3ee" font-size="9" text-anchor="middle" font-weight="bold">衡山派</text></g>
-                        <g class="map-sect" onclick="selectSect('丐帮')" style="cursor:pointer"><circle cx="380" cy="360" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="380" y="345" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">丐帮</text></g>
-                        <g class="map-sect" onclick="selectSect('铁掌帮')" style="cursor:pointer"><circle cx="370" cy="390" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="370" y="375" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">铁掌帮</text></g>
-                        <g class="map-sect" onclick="selectSect('百花谷')" style="cursor:pointer"><circle cx="340" cy="410" r="6" fill="#f472b6" stroke="#fff" stroke-width="2"/><text x="340" y="395" fill="#f472b6" font-size="9" text-anchor="middle" font-weight="bold">百花谷</text></g>
-                        <g class="map-sect" onclick="selectSect('五仙教')" style="cursor:pointer"><circle cx="300" cy="460" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text x="300" y="445" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">五仙教</text></g>
-                        <g class="map-sect" onclick="selectSect('修罗宫')" style="cursor:pointer"><circle cx="420" cy="440" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text x="420" y="425" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">修罗宫</text></g>
-                        <g class="map-sect" onclick="selectSect('阎罗殿')" style="cursor:pointer"><circle cx="400" cy="470" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text x="400" y="455" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">阎罗殿</text></g>
-                        <!-- ===== 西漠 ===== -->
-                        <g class="map-sect" onclick="selectSect('昆仑派')" style="cursor:pointer"><circle cx="120" cy="280" r="6" fill="#60a5fa" stroke="#fff" stroke-width="2"/><text x="120" y="265" fill="#60a5fa" font-size="9" text-anchor="middle" font-weight="bold">昆仑派</text></g>
-                        <g class="map-sect" onclick="selectSect('金刚宗')" style="cursor:pointer"><circle cx="90" cy="320" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="90" y="305" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">金刚宗</text></g>
-                        <g class="map-sect" onclick="selectSect('天龙教')" style="cursor:pointer"><circle cx="140" cy="220" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text x="140" y="205" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">天龙教</text></g>
-                        <g class="map-sect" onclick="selectSect('烈日教')" style="cursor:pointer"><circle cx="80" cy="200" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text x="80" y="185" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">烈日教</text></g>
-                        <!-- ===== 北冥 ===== -->
-                        <g class="map-sect" onclick="selectSect('天山派')" style="cursor:pointer"><circle cx="180" cy="120" r="6" fill="#60a5fa" stroke="#fff" stroke-width="2"/><text x="180" y="105" fill="#60a5fa" font-size="9" text-anchor="middle" font-weight="bold">天山派</text></g>
-                        <g class="map-sect" onclick="selectSect('逍遥派')" style="cursor:pointer"><circle cx="200" cy="100" r="6" fill="#22d3ee" stroke="#fff" stroke-width="2"/><text x="200" y="85" fill="#22d3ee" font-size="9" text-anchor="middle" font-weight="bold">逍遥派</text></g>
-                        <g class="map-sect" onclick="selectSect('血手门')" style="cursor:pointer"><circle cx="300" cy="140" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text x="300" y="125" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">血手门</text></g>
-                        <!-- ===== 蜀地 ===== -->
-                        <g class="map-sect" onclick="selectSect('青城派')" style="cursor:pointer"><circle cx="210" cy="400" r="6" fill="#34d399" stroke="#fff" stroke-width="2"/><text x="210" y="385" fill="#34d399" font-size="9" text-anchor="middle" font-weight="bold">青城派</text></g>
-                        <g class="map-sect" onclick="selectSect('峨眉派')" style="cursor:pointer"><circle cx="180" cy="370" r="6" fill="#f472b6" stroke="#fff" stroke-width="2"/><text x="180" y="355" fill="#f472b6" font-size="9" text-anchor="middle" font-weight="bold">峨眉派</text></g>
-                        <g class="map-sect" onclick="selectSect('唐门')" style="cursor:pointer"><circle cx="250" cy="390" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text x="250" y="375" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">唐门</text></g>
-                        <!-- ===== 东南海域 ===== -->
-                        <g class="map-sect" onclick="selectSect('铸剑山庄')" style="cursor:pointer"><circle cx="730" cy="380" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text x="730" y="365" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">铸剑山庄</text></g>
-                        <g class="map-sect" onclick="selectSect('飞蝎坞')" style="cursor:pointer"><circle cx="660" cy="460" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text x="660" y="445" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">飞蝎坞</text></g>
+                        <g class="map-sect" onclick="selectSect('少林寺')" style="cursor:pointer"><circle cx="390" cy="230" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="390" y="215" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">少林寺</text></g>
+                        <g class="map-sect" onclick="selectSect('嵩山派')" style="cursor:pointer"><circle cx="418" cy="238" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="418" y="223" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">嵩山派</text></g>
+                        <g class="map-sect" onclick="selectSect('大旗门')" style="cursor:pointer"><circle cx="430" cy="250" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="430" y="235" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">大旗门</text></g>
+                        <g class="map-sect" onclick="selectSect('恒山派')" style="cursor:pointer"><circle cx="380" cy="210" r="6" fill="#fb7185" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="380" y="195" fill="#fb7185" font-size="9" text-anchor="middle" font-weight="bold">恒山派</text></g>
+                        <g class="map-sect" onclick="selectSect('全真教')" style="cursor:pointer"><circle cx="350" cy="290" r="6" fill="#34d399" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="350" y="275" fill="#34d399" font-size="9" text-anchor="middle" font-weight="bold">全真教</text></g>
+                        <g class="map-sect" onclick="selectSect('华山派')" style="cursor:pointer"><circle cx="460" cy="270" r="6" fill="#f472b6" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="460" y="255" fill="#f472b6" font-size="9" text-anchor="middle" font-weight="bold">华山派</text></g>
+                        <g class="map-sect" onclick="selectSect('武当派')" style="cursor:pointer"><circle cx="420" cy="280" r="6" fill="#60a5fa" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="420" y="265" fill="#60a5fa" font-size="9" text-anchor="middle" font-weight="bold">武当派</text></g>
+                        <g class="map-sect" onclick="selectSect('侠隐阁')" style="cursor:pointer"><circle cx="450" cy="290" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="450" y="275" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">侠隐阁</text></g>
+                        <g class="map-sect" onclick="selectSect('天涯海阁')" style="cursor:pointer"><circle cx="440" cy="310" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="440" y="295" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">天涯海阁</text></g>
+                        <g class="map-sect" onclick="selectSect('泰山派')" style="cursor:pointer"><circle cx="520" cy="240" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="520" y="225" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">泰山派</text></g>
+                        <g class="map-sect" onclick="selectSect('药王谷')" style="cursor:pointer"><circle cx="530" cy="260" r="6" fill="#34d399" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="530" y="245" fill="#34d399" font-size="9" text-anchor="middle" font-weight="bold">药王谷</text></g>
+                        <g class="map-sect" onclick="selectSect('神机门')" style="cursor:pointer"><circle cx="560" cy="240" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="560" y="225" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">神机门</text></g>
+                        <g class="map-sect" onclick="selectSect('霹雳堂')" style="cursor:pointer"><circle cx="590" cy="280" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="590" y="265" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">霹雳堂</text></g>
+                        <g class="map-sect" onclick="selectSect('茅山派')" style="cursor:pointer"><circle cx="620" cy="260" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="620" y="245" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">茅山派</text></g>
+                        <g class="map-sect" onclick="selectSect('大隐阁')" style="cursor:pointer"><circle cx="600" cy="220" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="600" y="205" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">大隐阁</text></g>
+                        <g class="map-sect" onclick="selectSect('天书阁')" style="cursor:pointer"><circle cx="580" cy="200" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="580" y="185" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">天书阁</text></g>
+                        <g class="map-sect" onclick="selectSect('蓬莱派')" style="cursor:pointer"><circle cx="716" cy="204" r="6" fill="#60a5fa" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="700" y="175" fill="#60a5fa" font-size="9" text-anchor="middle" font-weight="bold">蓬莱派</text></g>
+                        <g class="map-sect" onclick="selectSect('衡山派')" style="cursor:pointer"><circle cx="360" cy="380" r="6" fill="#22d3ee" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="360" y="365" fill="#22d3ee" font-size="9" text-anchor="middle" font-weight="bold">衡山派</text></g>
+                        <g class="map-sect" onclick="selectSect('丐帮')" style="cursor:pointer"><circle cx="380" cy="360" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="380" y="345" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">丐帮</text></g>
+                        <g class="map-sect" onclick="selectSect('铁掌帮')" style="cursor:pointer"><circle cx="370" cy="390" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="370" y="375" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">铁掌帮</text></g>
+                        <g class="map-sect" onclick="selectSect('百花谷')" style="cursor:pointer"><circle cx="340" cy="410" r="6" fill="#f472b6" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="340" y="395" fill="#f472b6" font-size="9" text-anchor="middle" font-weight="bold">百花谷</text></g>
+                        <g class="map-sect" onclick="selectSect('五仙教')" style="cursor:pointer"><circle cx="300" cy="460" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="300" y="445" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">五仙教</text></g>
+                        <g class="map-sect" onclick="selectSect('修罗宫')" style="cursor:pointer"><circle cx="420" cy="440" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="420" y="425" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">修罗宫</text></g>
+                        <g class="map-sect" onclick="selectSect('阎罗殿')" style="cursor:pointer"><circle cx="400" cy="470" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="400" y="455" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">阎罗殿</text></g>
+                        <g class="map-sect" onclick="selectSect('昆仑派')" style="cursor:pointer"><circle cx="120" cy="280" r="6" fill="#60a5fa" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="120" y="265" fill="#60a5fa" font-size="9" text-anchor="middle" font-weight="bold">昆仑派</text></g>
+                        <g class="map-sect" onclick="selectSect('金刚宗')" style="cursor:pointer"><circle cx="90" cy="320" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="90" y="305" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">金刚宗</text></g>
+                        <g class="map-sect" onclick="selectSect('天龙教')" style="cursor:pointer"><circle cx="140" cy="220" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="140" y="205" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">天龙教</text></g>
+                        <g class="map-sect" onclick="selectSect('烈日教')" style="cursor:pointer"><circle cx="80" cy="208" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="80" y="185" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">烈日教</text></g>
+                        <g class="map-sect" onclick="selectSect('天山派')" style="cursor:pointer"><circle cx="180" cy="120" r="6" fill="#60a5fa" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="180" y="105" fill="#60a5fa" font-size="9" text-anchor="middle" font-weight="bold">天山派</text></g>
+                        <g class="map-sect" onclick="selectSect('逍遥派')" style="cursor:pointer"><circle cx="200" cy="100" r="6" fill="#22d3ee" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="200" y="85" fill="#22d3ee" font-size="9" text-anchor="middle" font-weight="bold">逍遥派</text></g>
+                        <g class="map-sect" onclick="selectSect('血手门')" style="cursor:pointer"><circle cx="300" cy="140" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="300" y="125" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">血手门</text></g>
+                        <g class="map-sect" onclick="selectSect('青城派')" style="cursor:pointer"><circle cx="210" cy="400" r="6" fill="#34d399" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="210" y="385" fill="#34d399" font-size="9" text-anchor="middle" font-weight="bold">青城派</text></g>
+                        <g class="map-sect" onclick="selectSect('峨眉派')" style="cursor:pointer"><circle cx="180" cy="380" r="6" fill="#f472b6" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="180" y="355" fill="#f472b6" font-size="9" text-anchor="middle" font-weight="bold">峨眉派</text></g>
+                        <g class="map-sect" onclick="selectSect('唐门')" style="cursor:pointer"><circle cx="248" cy="396" r="6" fill="#a78bfa" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="250" y="375" fill="#a78bfa" font-size="9" text-anchor="middle" font-weight="bold">唐门</text></g>
+                        <g class="map-sect" onclick="selectSect('铸剑山庄')" style="cursor:pointer"><circle cx="730" cy="380" r="6" fill="#fbbf24" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="730" y="365" fill="#fbbf24" font-size="9" text-anchor="middle" font-weight="bold">铸剑山庄</text></g>
+                        <g class="map-sect" onclick="selectSect('飞蝎坞')" style="cursor:pointer"><circle cx="660" cy="460" r="6" fill="#ef4444" stroke="#fff" stroke-width="2"/><text style="paint-order:stroke;stroke:rgba(10,14,22,.85);stroke-width:2.5px;stroke-linejoin:round" x="660" y="445" fill="#ef4444" font-size="9" text-anchor="middle" font-weight="bold">飞蝎坞</text></g>
+
+                        <!-- 海面浪花 -->
+                        <g pointer-events="none">
+                            <use href="#wmWave" transform="translate(775,55) scale(0.9)"/>
+                            <use href="#wmWave" transform="translate(62,48) scale(0.8)"/>
+                            <use href="#wmWave" transform="translate(36,305) scale(0.85)"/>
+                            <use href="#wmWave" transform="translate(432,572) scale(0.9)"/>
+                            <use href="#wmWave" transform="translate(252,566) scale(0.8)"/>
+                            <use href="#wmWave" transform="translate(92,552) scale(0.9)"/>
+                            <use href="#wmWave" transform="translate(788,248) scale(0.8)"/>
+                            <use href="#wmWave" transform="translate(560,548) scale(0.85)"/>
+                            <use href="#wmWave" transform="translate(170,572) scale(0.8)"/>
+                        </g>
+                        <!-- 罗盘 -->
+                        <g transform="translate(752,92)" pointer-events="none">
+                            <circle r="26" fill="#0d1420" opacity="0.55" stroke="#caa96a" stroke-opacity="0.55"/>
+                            <circle r="20" fill="none" stroke="#caa96a" stroke-opacity="0.3" stroke-dasharray="2 3"/>
+                            <path d="M0 -18 L4.5 -4.5 L18 0 L4.5 4.5 L0 18 L-4.5 4.5 L-18 0 L-4.5 -4.5 Z" fill="#caa96a" opacity="0.5"/>
+                            <path d="M0 -18 L4.5 -4.5 L0 0 Z M0 18 L-4.5 4.5 L0 0 Z" fill="#f3e3c0" opacity="0.9"/>
+                            <path d="M0 -18 L-4.5 -4.5 L0 0 Z M0 18 L4.5 4.5 L0 0 Z" fill="#8a6f3d" opacity="0.9"/>
+                            <text y="-30" text-anchor="middle" font-size="9" fill="#f3e3c0" opacity="0.9" style="paint-order:stroke;stroke:#0b0f18;stroke-width:2px">北</text>
+                        </g>
+                        <!-- 计里尺 -->
+                        <g transform="translate(640,565)" pointer-events="none">
+                            <path d="M0 0 H100" stroke="#caa96a" stroke-opacity="0.7" stroke-width="1.5"/>
+                            <path d="M0 -4 V4 M25 -3 V3 M50 -4 V4 M75 -3 V3 M100 -4 V4" stroke="#caa96a" stroke-opacity="0.7"/>
+                            <text x="0" y="-8" font-size="8" fill="#caa96a" opacity="0.85">0</text>
+                            <text x="100" y="-8" font-size="8" fill="#caa96a" opacity="0.85" text-anchor="end">百里</text>
+                        </g>
+                        <!-- 暗角 -->
+                        <rect width="800" height="600" rx="8" fill="url(#wmVignette)" pointer-events="none"/>
                     </svg>
 
                     <!-- 选中信息弹窗（城市/门派设施列表） -->
@@ -926,7 +1141,11 @@
                                 </div>
                                 <div class="bg-gray-700/30 rounded-lg border border-gray-600 p-3">
                                     <h3 class="text-sm font-bold text-yellow-500 mb-2 border-b border-gray-600 pb-2">🧭 已见地标</h3>
+                                    <div id="wild-quest-hint" class="space-y-1 mb-2"></div>
+                                    <div id="wild-escort-line" class="space-y-1 mb-2"></div>
                                     <div id="wild-poi-list" class="space-y-1"></div>
+                                    <button data-act="bestiary" class="w-full text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 py-1 rounded mt-2">🗺️ 地标探索图鉴</button>
+                                    <div id="wild-travel-journal" class="text-[10px] text-gray-400 mt-1.5 text-center"></div>
                                 </div>
                             </div>
                         </div>
@@ -959,7 +1178,7 @@
 
             <!-- ===== 装备面板 ===== -->
             <div id="panel-equipment" class="panel-content fade-in hidden">
-                <h2 class="text-xl font-bold text-yellow-500 mb-6">⚔️ 装备与功法</h2>
+                <h2 class="text-xl font-bold text-yellow-500 mb-6">⚔️ 装备与运功</h2>
                 
                 <div class="mb-4">
                     <button onclick="openEnhancementUI()" class="bg-orange-600 hover:bg-orange-500 text-white py-2 px-4 rounded text-sm">
@@ -983,12 +1202,14 @@
                     </div>
                     <div class="bg-gray-800/80 p-2 rounded border border-gray-600 text-center">
                         <div class="text-xs text-gray-400">负荷</div>
-                        <div class="flex items-center justify-center gap-1">
-                            <div id="equip-stat-load" class="text-sm font-bold text-yellow-400">—</div>
+                        <div class="flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5">
+                            <div id="equip-stat-load" class="text-sm font-bold text-yellow-400 whitespace-nowrap flex-shrink-0">—</div>
                             <div id="equip-stat-load-detail" class="text-xs text-gray-500"></div>
                         </div>
                     </div>
                 </div>
+                <!-- 第七十七波 · 套装回响行：毕业装凑成套才有字，没穿套货静默空着 -->
+                <div id="equip-set-line" class="text-xs text-amber-300/90 mt-2 text-center"></div>
 
                 <div class="flex gap-6 flex-col lg:flex-row">
                     <!-- 装备栏：槽内直接选择背包装备 -->
@@ -1060,12 +1281,16 @@
                             <div class="flex flex-wrap items-center gap-1 mb-3">
                                 <span class="text-xs text-gray-400">品质：</span>
                                 <button onclick="setQualityFilter('all')" data-quality="all" class="quality-filter-btn bg-yellow-600 text-gray-900 font-bold py-1 px-2 rounded text-xs">全部</button>
-                                <button onclick="setQualityFilter('COMMON')" data-quality="COMMON" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">凡品</button>
-                                <button onclick="setQualityFilter('UNCOMMON')" data-quality="UNCOMMON" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">良品</button>
-                                <button onclick="setQualityFilter('RARE')" data-quality="RARE" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">珍品</button>
-                                <button onclick="setQualityFilter('EPIC')" data-quality="EPIC" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">极品</button>
-                                <button onclick="setQualityFilter('LEGENDARY')" data-quality="LEGENDARY" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">仙品</button>
-                                <button onclick="setQualityFilter('MYTHIC')" data-quality="MYTHIC" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">神品</button>
+                                <button onclick="setQualityFilter('PIN9')" data-quality="PIN9" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">九品</button>
+                                <button onclick="setQualityFilter('PIN8')" data-quality="PIN8" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">八品</button>
+                                <button onclick="setQualityFilter('PIN7')" data-quality="PIN7" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">七品</button>
+                                <button onclick="setQualityFilter('PIN6')" data-quality="PIN6" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">六品</button>
+                                <button onclick="setQualityFilter('PIN5')" data-quality="PIN5" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">五品</button>
+                                <button onclick="setQualityFilter('PIN4')" data-quality="PIN4" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">四品</button>
+                                <button onclick="setQualityFilter('PIN3')" data-quality="PIN3" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">三品</button>
+                                <button onclick="setQualityFilter('PIN2')" data-quality="PIN2" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">二品</button>
+                                <button onclick="setQualityFilter('PIN1')" data-quality="PIN1" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">一品</button>
+                                <button onclick="setQualityFilter('UNIQUE')" data-quality="UNIQUE" class="quality-filter-btn bg-gray-600 text-white py-1 px-2 rounded text-xs">特殊</button>
                                 <span class="text-xs text-gray-400 ml-2">排序：</span>
                                 <button id="sort-toggle-btn" onclick="cycleSortOrder()" class="bg-gray-600 hover:bg-gray-500 text-white py-1 px-2 rounded text-xs">📊 排序</button>
                             </div>
@@ -1108,12 +1333,8 @@
                     </button>
                 </div>
                 
-                <!-- 功法列表 -->
-                <div class="bg-gray-700/30 p-6 rounded-lg border border-gray-600 text-center mb-6">
-                    <p class="text-5xl mb-4">📜</p>
-                    <p class="text-gray-400">尚未习得任何功法。</p>
-                    <p class="text-sm text-gray-600 mt-2">拜入宗门或奇遇可得无上功法。</p>
-                </div>
+                <!-- 功法列表（第九十五波·NEW-24：此前是写死的空态——读完功法这页永远「尚未习得」，改为动态渲染容器） -->
+                <div id="art-list-container" class="mb-6"></div>
 
             </div>
             
@@ -1135,16 +1356,59 @@
                     </div>
                     <div class="border-t border-gray-600 pt-4 mt-4">
                         <h4 class="text-sm font-bold text-green-400 mb-2">⚡ 自动存档（每7天 / 突破成功 / 飞升 / 转世）</h4>
-                        <p class="text-xs text-gray-600 mb-2" id="last-auto-save-time">上次自动保存: --</p>
+                        <p class="text-xs text-gray-600 mb-2" id="last-auto-save-time">上次自动保存: 尚无存档</p>
                         <div id="auto-save-slots" class="space-y-2"></div>
                     </div>
                 </div>
 
                 <div class="bg-gray-700/30 p-6 rounded-lg border border-gray-600">
                     <h3 class="text-lg font-bold text-yellow-500 mb-4 border-b border-gray-600 pb-2">🎮 游戏设置</h3>
-                    <div class="border-b border-gray-600 pb-3 mb-3">
-                        <p class="text-sm text-gray-300 font-bold mb-1">⌨️ 键盘快捷键</p>
-                        <p class="text-xs text-gray-500">C角色 B背包 M地图 K功法 Q任务 E装备 H洞府 G灵兽 D日程 · Esc 关闭弹窗/战斗 · 空格 战斗继续</p>
+                    <div class="border-b border-gray-600 pb-3 mb-3 space-y-3">
+                        <!-- v20.66 快捷键开关键：字母键容易误触，默认关闭 -->
+                        <div>
+                            <label class="flex items-center justify-between text-sm text-gray-300 cursor-pointer">
+                                <span>⌨️ 键盘快捷键</span>
+                                <input type="checkbox" id="setting-shortcuts" onchange="toggleShortcuts()" class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-600">
+                            </label>
+                            <p class="text-xs text-gray-500 mt-1">C角色 B背包 M地图 K功法 Q任务 E装备 H洞府 G灵兽 D日程 · 空格 战斗继续。默认关闭防误触；Esc 关闭弹窗/战斗不受此开关影响。</p>
+                        </div>
+                        <!-- v20.66 地图路线标记开关键：与舆图左上角那组开关同一份偏好 -->
+                        <div>
+                            <label class="flex items-center justify-between text-sm text-gray-300 cursor-pointer">
+                                <span>🧭 地图路线标记</span>
+                                <input type="checkbox" id="setting-map-overlay" onchange="toggleMapOverlayFromSettings()" class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-600">
+                            </label>
+                            <p class="text-xs text-gray-600 mt-1">开启后九州舆图上画出关隘路线、里数与位面注记；默认关闭，图面更清爽。</p>
+                        </div>
+                        <!-- v21.8 字号调节：根字号放缩，面板/弹窗/战报一起伸缩；偏好随删档保留 -->
+                        <div>
+                            <p class="text-sm text-gray-300 mb-2">🔠 界面字号</p>
+                            <div class="flex gap-2">
+                                <button id="font-scale-normal" onclick="setFontScale('normal')" class="text-xs px-3 py-1 rounded border bg-yellow-600 border-yellow-500 text-gray-900 font-bold">标准</button>
+                                <button id="font-scale-large" onclick="setFontScale('large')" class="text-xs px-3 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600">大</button>
+                                <button id="font-scale-huge" onclick="setFontScale('huge')" class="text-xs px-3 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600">特大</button>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-1">整个界面的文字一起放大缩小，选完立刻生效并记住。</p>
+                        </div>
+                        <!-- v21.9 战斗节奏：敌人出手间隔可缩短；自动战斗开关在战斗面板内 -->
+                        <div>
+                            <p class="text-sm text-gray-300 mb-2">⚔️ 战斗节奏</p>
+                            <div class="flex gap-2">
+                                <button id="battle-speed-normal" onclick="setBattleSpeed('normal')" class="text-xs px-3 py-1 rounded border bg-yellow-600 border-yellow-500 text-gray-900 font-bold">标准</button>
+                                <button id="battle-speed-fast" onclick="setBattleSpeed('fast')" class="text-xs px-3 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600">快</button>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-1">「快」把敌人出手间隔压到一瞬——刷级与多波决战不再干等。战斗中另有「⚡自动」开关：轮到你时自动出手。</p>
+                        </div>
+                        <!-- v21.9 图鉴/大事记/选择记忆入口：这三套系统此前有数据无 UI 头，玩家从未见过 -->
+                        <div>
+                            <p class="text-sm text-gray-300 mb-2">📖 图鉴与大事记</p>
+                            <div class="flex gap-2 flex-wrap">
+                                <button onclick="openCodexPanel()" class="text-xs px-3 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600">📚 图鉴与新手引导</button>
+                                <button onclick="openWorldJournalPanel()" class="text-xs px-3 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600">🗞️ 世界大事记</button>
+                                <button onclick="showChoiceHistory()" class="text-xs px-3 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600">📜 回望此生 · 选择记忆</button>
+                            </div>
+                            <p class="text-xs text-gray-600 mt-1">图鉴收录灵兽、秘境与世界大事，还有气运、名望等机制速览；回望此生能看到你的每一笔抉择如何被记录。</p>
+                        </div>
                     </div>
                     <label class="flex items-center justify-between text-sm text-gray-300 cursor-pointer">
                         <span>🔊 音效提示（突破/战斗/收火/炼丹/任务）</span>
@@ -1158,10 +1422,11 @@
                         <p class="text-xs text-gray-600">关闭后进入城市不再弹出黑屏介绍</p>
                         <div class="border-t border-gray-600 pt-4 mt-4">
                             <label class="flex items-center justify-between text-sm text-gray-300 cursor-pointer">
-                                <span>自动保存（每5分钟）</span>
-                                <input type="checkbox" id="auto-save" checked class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-600">
+                                <span>定期自动存档（每 7 游戏日）</span>
+                                <input type="checkbox" id="auto-save" checked onchange="toggleAutoSave(this.checked)" class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-600">
                             </label>
-                            <p class="text-xs text-gray-600 mt-1" id="last-save-time">上次保存: --</p>
+                            <p class="text-xs text-gray-600 mt-1">突破、飞升、转世时另有保底存档，不受此开关影响</p>
+                            <p class="text-xs text-gray-600 mt-1" id="last-save-time">上次保存: 尚无存档</p>
                         </div>
                         <!-- v20.3 难度设置（战斗难度 + 感情维系衰减） -->
                         <div class="border-t border-gray-600 pt-4 mt-4">
@@ -1188,6 +1453,14 @@
                                 </label>
                                 <p class="text-xs text-gray-600 mt-1">开启后，与有感情线的对象久不联系（≥3 天）好感会逐渐下降；道侣不受影响。默认关闭。</p>
                             </div>
+                            <!-- 第一百零八波 · 解除队伍人数上限（默认关闭，实验性开关） -->
+                            <div class="pl-3 border-l-2 border-gray-700 mt-3">
+                                <label class="flex items-center justify-between text-sm text-gray-300 cursor-pointer">
+                                    <span>👥 解除队伍人数上限</span>
+                                    <input type="checkbox" id="setting-party-unlimited" onchange="togglePartyUnlimited()" class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-600">
+                                </label>
+                                <p class="text-xs text-amber-600/80 mt-1">⚠️ 实验性开关，可能破坏体验：开启后招募不再受 4 人限（硬顶 99 人）。敌方一场至多 4 个进场，人海会把平衡压死；战斗回合、状态栏与战后结算都随人数线性变长，仗会明显打得更久，低端设备可能卡顿。默认关闭，随时可关回。</p>
+                            </div>
                             <!-- 传闻性格失真（默认开启） -->
                             <div class="pl-3 border-l-2 border-gray-700 mt-3">
                                 <label class="flex items-center justify-between text-sm text-gray-300 cursor-pointer">
@@ -1195,6 +1468,14 @@
                                     <input type="checkbox" id="setting-rumor-distortion" checked onchange="toggleRumorDistortion()" class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-600">
                                 </label>
                                 <p class="text-xs text-gray-600 mt-1">开启后，江湖传闻经不同性格的人转述会添油加醋、各走各的形；关闭则闲话只扩散、不改口。默认开启。</p>
+                            </div>
+                            <!-- v22.0 社交面板显示个人事件（默认关闭：事件应在交谈中自然发生，不罗列成清单） -->
+                            <div class="pl-3 border-l-2 border-gray-700 mt-3">
+                                <label class="flex items-center justify-between text-sm text-gray-300 cursor-pointer">
+                                    <span>📜 社交面板显示个人事件</span>
+                                    <input type="checkbox" id="setting-social-event-panel" onchange="toggleSocialEventPanel()" class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-600">
+                                </label>
+                                <p class="text-xs text-gray-600 mt-1">默认关闭：故人该说的事，会在你开口交谈时自然发生，面板不再罗列事件清单与条件。开启后恢复旧版：面板直接列出每桩事件。</p>
                             </div>
                         </div>
                     </div>
@@ -1450,6 +1731,12 @@
                     <!-- 动态生成 -->
                 </div>
             </div>
+            <!-- 第九十四波 · 见招拆招：对面摆出姿态时的应对面板（时间轴停着等你挑，由 JS 动态填充） -->
+            <div id="battle-prompt-panel">
+            </div>
+            <!-- 第九十二波 · 行动条面板：全员一条时间轴，攒满 100 出手（由 JS 动态填充） -->
+            <div id="battle-timeline-bars" class="mb-2">
+            </div>
             <div id="battle-log" class="bg-gray-700/50 p-3 rounded h-32 overflow-y-auto text-sm text-gray-300 mb-2">
                 <!-- 战斗日志 -->
             </div>
@@ -1615,279 +1902,407 @@
     <!-- ================================ -->
 
     <!-- 第0层：全局工具函数（必须先于所有其他文件加载，解决跨文件依赖） -->
-    <script src="js/global-utils.js"></script>
-    <script src="js/core/balance-config.js"></script>
-    <script src="js/core/state-registry.js"></script>
-    <script src="js/core/panel-lifecycle.js"></script>
+    <script defer src="js/core/error-guard.js"></script><!-- v20.87 全局异常兜底：最先加载，任何脚本报错都有提示不再静默 -->
+    <script defer src="js/global-utils.js"></script>
+    <script defer src="js/core/balance-config.js"></script>
+    <script defer src="js/core/state-registry.js"></script>
+    <script defer src="js/core/panel-lifecycle.js"></script>
     <!-- 第0.5层：统一 GameState（存档/新游戏/角色键清理） -->
-    <script src="js/core/game-state.js"></script>
+    <script defer src="js/core/game-state.js"></script>
 
     <!-- v12.4 战斗难度条件栏（依赖 StateRegistry，须在 game-state.js 之后、battle.js 之前） -->
-    <script src="js/core/difficulty-config.js"></script>
+    <script defer src="js/core/difficulty-config.js"></script>
 
     <!-- 第1层：核心数据（无依赖，最优先） -->
-    <script src="js/data.js"></script>
-    <script src="js/regions.js"></script>
-    <script src="js/sects/sects.js"></script>
-    <script src="js/items.js"></script>
+    <script defer src="js/data.js"></script>
+    <script defer src="js/regions.js"></script>
+    <script defer src="js/sects/sects.js"></script>
+    <script defer src="js/sects/sect-economy.js"></script>
+    <script defer src="js/items.js"></script>
 
     <!-- 第2层：命名系统（必须在randomMap、battle之前） -->
-    <script src="js/npcs/name-generator.js"></script>
+    <script defer src="js/npcs/name-generator.js"></script>
 
     <!-- 第3层：生理系统配置（在battle.js之前加载） -->
-    <script src="js/physiology-config.js"></script>
+    <script defer src="js/physiology-config.js"></script>
 
     <!-- 第4层：地图与战斗 -->
-    <script src="js/qi-environment.js"></script>
-    <script src="js/map/wild-terrain.js"></script>
-    <script src="js/map/world-map.js"></script>
-    <script src="js/map/randomMap.js"></script>
-    <script src="js/battle.js"></script>
-    <script src="js/combat-stats.js"></script>
-    <script src="js/battle-injuries.js"></script>
+    <script defer src="js/qi-environment.js"></script>
+    <script defer src="js/map/wild-terrain.js"></script>
+    <script defer src="js/map/world-map.js"></script>
+    <script defer src="js/map/travel-journal.js"></script>
+    <script defer src="js/map/randomMap.js"></script>
+    <script defer src="js/map/lore-shelf.js"></script><!-- 第七十五波 游历残页册：拾得的旧事收成一册随时重读（开匣账纯读端，零新存档） -->
+    <script defer src="js/battle.js"></script>
+    <script defer src="js/combat-stats.js"></script>
+    <script defer src="js/battle-injuries.js"></script>
 
     <!-- 第3.5层：战利品系统（在battle.js之后，依赖battle的敌人生成逻辑） -->
-    <script src="js/loot-system.js"></script>
+    <script defer src="js/loot-system.js"></script>
 
     <!-- 第4层：扩展物品（依赖items.js） -->
-    <script src="js/items-extended/01-pills.js"></script>
-    <script src="js/items-extended/02-weapons.js"></script>
-    <script src="js/items-extended/03-armor.js"></script>
-    <script src="js/items-extended/04-materials.js"></script>
-    <script src="js/items-extended/05-talismans.js"></script>
-    <script src="js/items-extended/06-arts.js"></script>
-    <script src="js/items-extended/07-food.js"></script>
-    <script src="js/items-extended/08-special.js"></script>
-    <script src="js/items-extended.js"></script>
+    <script defer src="js/items-extended/01-pills.js"></script>
+    <script defer src="js/items-extended/02-weapons.js"></script>
+    <script defer src="js/items-extended/03-armor.js"></script>
+    <script defer src="js/items-extended/04-materials.js"></script>
+    <script defer src="js/items-extended/05-talismans.js"></script>
+    <script defer src="js/items-extended/06-arts.js"></script>
+    <script defer src="js/items-extended/07-food.js"></script>
+    <script defer src="js/items-extended/08-special.js"></script>
+    <script defer src="js/items-extended.js"></script>
     <!-- B2：审查报告缺失物品 ID 补齐（在 itemById 合并之后） -->
-    <script src="js/items-extended/13-missing-ids.js"></script>
+    <script defer src="js/items-extended/13-missing-ids.js"></script>
     <!-- v13.1：绝技秘籍（玩家可学 COMBAT_ABILITIES 绝技的研读渠道，自注册进物品库） -->
-    <script src="js/items-extended/14-ability-manuals.js"></script>
+    <script defer src="js/items-extended/14-ability-manuals.js"></script>
     <!-- v20.16：重塑灵根丹（后天改命线物品，自注册进物品库） -->
-    <script src="js/items-extended/15-root-refine.js"></script>
+    <script defer src="js/items-extended/15-root-refine.js"></script>
+    <!-- v20.85：悬空道具补洞（掉落/地标/挖矿/主线奖励/传书/送货/资源点 25 种，自注册进物品库） -->
+    <script defer src="js/items-extended/16-dangling-ids.js"></script>
+    <!-- v20.91：主角信物（特殊品级 36 枚，结契时由名册认领，自注册进物品库） -->
+    <script defer src="js/items-extended/17-lead-tokens.js"></script>
+    <!-- v20.91：品级补阶与毕业装（六品/四品/二品补档 + 一品毕业线，自注册进物品库） -->
+    <script defer src="js/items-extended/18-grade-expansion.js"></script>
+    <!-- v20.94：奇遇（十段独一份机缘 + 奇物自注册，qiyuOnly 不上货架） -->
+    <script defer src="js/extensions/qiyu-encounters.js"></script>
 
     <!-- 第5层：知识系统 + 背包与装备（knowledge 须在 equipment 前） -->
-    <script src="js/core/knowledge-system.js"></script>
-    <script src="js/inventory.js"></script>
-    <script src="js/economy/economy-transaction.js"></script>
-    <script src="js/core/reward-service.js"></script>
-    <script src="js/equipment.js"></script>
+    <script defer src="js/core/knowledge-system.js"></script>
+    <script defer src="js/inventory.js"></script>
+    <script defer src="js/economy/economy-transaction.js"></script>
+    <script defer src="js/core/reward-service.js"></script>
+    <script defer src="js/economy/peddler-service.js"></script><!-- 第六十九波 跑单帮贩货：本城行价进货、异地行价出手，价差是脚力的钱 -->
+    <script defer src="js/equipment.js"></script>
+    <script defer src="js/qin-arts.js"></script><!-- v20.90 音律琴心：琴类兵器战斗加成 + 卖艺打赏账 -->
 
     <!-- 第6层：核心游戏系统 -->
-    <script src="js/status-effects.js"></script>
-    <script src="js/poison-system.js"></script>
-    <script src="js/time-system.js"></script>
-    <script src="js/event-system.js"></script>
+    <script defer src="js/status-effects.js"></script>
+    <script defer src="js/poison-system.js"></script>
+    <script defer src="js/time-system.js"></script>
+    <!-- v23.0 平衡急救：景点/动作共用闸门（冷却/代价/波动），全景点改造依赖它 -->
+    <script defer src="js/core/action-gates.js"></script>
+    <!-- v23.1 饱食度：吃饭从此存在（吃撑拒食/饿肚子掉心情/辟谷丹真辟谷） -->
+    <script defer src="js/core/satiety.js"></script>
+    <script defer src="js/core/mood-system.js"></script><!-- 第六十七波 心境账：消遣买的开心折进打坐收成，每日向常人底色回落 -->
+    <script defer src="js/event-system.js"></script>
     <!-- P1：统一事件总线（在 quest-system 之前，供任务系统订阅事件） -->
-    <script src="js/core/event-bus.js"></script>
+    <script defer src="js/core/event-bus.js"></script>
     <!-- v18.9 世界日历（WorldCalendar）：依赖 EventBus；镜像确定性事件/支持"闭关至事件" -->
-    <script src="js/core/world-calendar.js"></script>
+    <script defer src="js/core/world-calendar.js"></script>
     <!-- v18.9 世界日历 UI 渲染：依赖 world-calendar.js -->
-    <script src="js/core/world-calendar-ui.js"></script>
-    <script src="js/core/dao-bridge.js"></script><!-- v20.24 道侣名册的桥：结契落笔/旧档补票/道侣相约（依赖 world-calendar.js） -->
-    <script src="js/core/festival-bridge.js"></script><!-- v20.28 节日的帖：四节定点、每位道侣各一帖、一夜只陪一人（依赖 world-calendar/dao-bridge） -->
+    <script defer src="js/core/world-calendar-ui.js"></script>
+    <script defer src="js/core/dao-bridge.js"></script><!-- v20.24 道侣名册的桥：结契落笔/旧档补票/道侣相约（依赖 world-calendar.js） -->
+    <script defer src="js/core/festival-bridge.js"></script><!-- v20.28 节日的帖：四节定点、每位道侣各一帖、一夜只陪一人（依赖 world-calendar/dao-bridge） -->
     <!-- v19.0 P0-3 批次 C：年度宗门目标 5 选 1（依赖 sects-system / sect-internal） -->
-    <script src="js/sects/sect-year-goal.js"></script>
+    <script defer src="js/sects/sect-year-goal.js"></script>
     <!-- v19.1 P0-4：宗门大比与同门竞争（依赖 sect-year-goal 的 addTournamentWin 钩） -->
-    <script src="js/sects/sect-tournament.js"></script>
+    <script defer src="js/sects/sect-tournament.js"></script>
     <!-- v19.2 P0-5：NPC 自主人生（每日 5~20 NPC 抽样行动；依赖 npc-life-system 寿元 hooks） -->
-    <script src="js/npcs/npc-life-actor.js"></script>
+    <script defer src="js/npcs/npc-life-actor.js"></script>
     <!-- v19.3 P0-6：NPC 婚姻/后代/衣钵（依赖 npc-life-actor 的 newDay 钩子） -->
-    <script src="js/npcs/npc-lineage.js"></script>
-    <script src="js/core/game-scheduler.js"></script>
-    <script src="js/quest/quest-system.js"></script>
-    <script src="js/crafting.js"></script>
-    <script src="js/crafting/alchemy-compound.js"></script>
-    <script src="js/crafting/forging-compound.js"></script>
-    <script src="js/enhancement.js"></script>
-    <script src="js/cultivation/cultivation.js"></script>
-    <script src="js/cultivation/art-effects.js"></script><!-- v20.48 功法掌握通电：秘籍effect/功法字符串 → 战斗/恢复/上限/面板单一真源 -->
-    <script src="js/cultivation/breakthrough-system.js"></script>
-    <script src="js/cultivation/long-retreat.js"></script>
-    <script src="js/party-system.js"></script>
-    <script src="js/location-system.js"></script>
-    <script src="js/travel-system.js"></script>
-    <script src="js/building-effects.js"></script>
-    <script src="js/achievement-system.js"></script>
-    <script src="js/map/map-markers.js"></script>
-    <script src="js/enhanced-shop.js"></script>
-    <script src="js/economy/auction-service.js"></script>
+    <script defer src="js/npcs/npc-lineage.js"></script>
+    <script defer src="js/core/game-scheduler.js"></script>
+    <script defer src="js/quest/quest-system.js"></script>
+    <script defer src="js/crafting.js"></script>
+    <script defer src="js/crafting/alchemy-compound.js"></script>
+    <script defer src="js/crafting/forging-compound.js"></script>
+    <script defer src="js/enhancement.js"></script>
+    <script defer src="js/cultivation/cultivation.js"></script>
+    <script defer src="js/cultivation/art-effects.js"></script><!-- v20.48 功法掌握通电：秘籍effect/功法字符串 → 战斗/恢复/上限/面板单一真源 -->
+    <script defer src="js/cultivation/breakthrough-system.js"></script>
+    <script defer src="js/cultivation/long-retreat.js"></script>
+    <script defer src="js/party-system.js"></script>
+    <script defer src="js/location-system.js"></script>
+    <script defer src="js/travel-system.js"></script>
+    <script defer src="js/building-effects.js"></script>
+    <script defer src="js/achievement-system.js"></script>
+    <script defer src="js/map/map-markers.js"></script>
+    <script defer src="js/enhanced-shop.js"></script>
+    <script defer src="js/economy/auction-service.js"></script>
 
     <!-- 第6.5层：门派深度数据（必须在NPC系统之前，确保秘密数据就绪） -->
-    <script src="js/sects/sects-deep-data.js"></script>
+    <script defer src="js/sects/sects-deep-data.js"></script>
 
     <!-- 第7层：NPC系统 -->
-    <script src="js/npcs/special-npcs.js"></script>
-    <script src="js/npcs/item-tags.js"></script>
-    <script src="js/npcs/npc-system.js"></script>
-    <script src="js/npcs/npc-borrow-service.js"></script>
+    <script defer src="js/npcs/special-npcs.js"></script>
+    <script defer src="js/npcs/item-tags.js"></script>
+    <script defer src="js/npcs/npc-system.js"></script>
+    <script defer src="js/npcs/skill-transmission.js"></script><!-- v20.88 功法传承担系：请教/传授 + 50门功法持有网 -->
+    <script defer src="js/npcs/npc-borrow-service.js"></script>
     <!-- P2：NPC故事线系统（v12.6：旧 npc-storylines.js 已废弃移除，重写为 storylines-v2） -->
-    <script src="js/npcs/data.js"></script>
+    <script defer src="js/npcs/data.js"></script>
 
     <!-- 第8层：NPC扩展（依赖NPC系统） -->
-    <script src="js/npcs/npc-emotions.js"></script>
-    <script src="js/npcs/npc-daily-life.js"></script>
-    <script src="js/npcs/npc-life-system.js"></script>
-    <script src="js/npcs/npc-personal-events.js"></script>
+    <script defer src="js/npcs/npc-emotions.js"></script>
+    <script defer src="js/npcs/npc-daily-life.js"></script>
+    <script defer src="js/npcs/npc-life-system.js"></script>
+    <script defer src="js/npcs/npc-personal-events.js"></script>
     <!-- v12.6 故事线v2·第一批：清虚道人/灵素/铁山（NPC_PERSONAL_EVENTS 格式五段线，须在 npc-personal-events.js 之后） -->
-    <script src="js/npcs/storylines-v2/batch1.js"></script>
-    <script src="js/npcs/storylines-v2/batch2.js"></script>
-    <script src="js/npcs/storylines-v2/batch3.js"></script>
+    <script defer src="js/npcs/storylines-v2/batch1.js"></script>
+    <script defer src="js/npcs/storylines-v2/batch2.js"></script>
+    <script defer src="js/npcs/storylines-v2/batch3.js"></script>
     <!-- v13.6 秘密系统2.0·筹码骨架（须在 DEEP_TALK_CATEGORIES/DEEP_TALK_REAL_HANDLERS 与 StateRegistry 之后） -->
-    <script src="js/npcs/secret-leverage.js"></script>
+    <script defer src="js/npcs/secret-leverage.js"></script>
     <!-- v13.9 物品与NPC联动·行囊系统（须在 StateRegistry 之后；包装 app.js 的赠礼函数，延迟到 DOMContentLoaded） -->
-    <script src="js/npcs/npc-inventory.js"></script>
+    <script defer src="js/npcs/npc-inventory.js"></script>
     <!-- v14.0 社交页扩展：话题/情报真实数据驱动 + 动态问候（包装最外层getGreeting） -->
-    <script src="js/npcs/social-content.js"></script>
+    <script defer src="js/npcs/social-content.js"></script>
     <!-- v14.2 16Personalities 五维性格（连续倾向条 + 16型池 + Big5双向桥接；包装 npcManager.getNPC） -->
-    <script src="js/npcs/personality16.js"></script>
+    <script defer src="js/npcs/personality16.js"></script>
     <!-- v20.5 P16 性格驱动层：行动权重/社交倾向/相性/传闻失真（纯函数，运行时读 personality16） -->
-    <script src="js/npcs/personality-driver.js"></script>
+    <script defer src="js/npcs/personality-driver.js"></script>
     <!-- v20.5 玩家介入恩怨：居中调停/添油加醋/澄清辟谣（复用关系真源，注入 NPC 对话面板） -->
-    <script src="js/npcs/social-intervene.js"></script>
+    <script defer src="js/npcs/social-intervene.js"></script>
     <!-- v20.6 闭环② 关系边产事件：仇家寻衅/好友回访（概率制，挂世界日历） -->
-    <script src="js/npcs/npc-rel-events.js"></script>
+    <script defer src="js/npcs/npc-rel-events.js"></script>
     <!-- v20.6 闭环①③ 玩家进传闻网 + 传闻改行为（包装 recruitNPCFromDialog，需在其定义之后） -->
-    <script src="js/npcs/player-rumor.js"></script>
+    <script defer src="js/npcs/player-rumor.js"></script>
     <!-- v20.7 建筑补齐包：试炼塔层数/剑冢剑意/僵尸字段接真消费/黄金宫珍珠货架（毒发订阅世界日历，需在 time-system 之后） -->
-    <script src="js/city-depth.js"></script>
+    <script defer src="js/city-depth.js"></script>
     <!-- v12.3 温蘅（百花谷主）感情线：主线事件 / 日常接近事件 / 结局与自动触发系统 -->
-    <script src="js/npcs/baihua-events-main.js"></script>
-    <script src="js/npcs/baihua-events-extra.js"></script>
-    <script src="js/npcs/baihua-personal-events.js"></script>
-    <script src="js/npcs/tianshan-events.js"></script>
-    <script src="js/npcs/wuxian-events.js"></script>
-    <script src="js/npcs/heroine-rivalry.js"></script>
-    <script src="js/npcs/heroine-rivalry-bridge.js"></script>
-    <script src="js/npcs/heroine-female-context.js"></script>
-    <script src="js/npcs/heroine-male-context.js"></script>
-    <script src="js/npcs/zhujian-events.js"></script>
-    <script src="js/npcs/yaowang-events.js"></script>
-    <script src="js/npcs/maoshan-events.js"></script>
-    <script src="js/npcs/jingang-events.js"></script>
-    <script src="js/npcs/male-lead-rivalry.js"></script>
-    <script src="js/npcs/male-lead-reconcile.js"></script>
-    <!-- v20.30 吃醋事件扩容包：八人×四类（试探/敲打/节日余波/小心眼）——余波全读 festival-bridge 既有账本，零新增存档键；需在其八人全局 detectRivalRomance 就位后加载 -->
-    <script src="js/npcs/jealousy-deep.js"></script>
-    <script src="js/npcs/male-lead-bridge.js"></script>
-    <script src="js/npcs/male-lead-aftermath.js"></script>
-    <script src="js/npcs/heroine-aftermath.js"></script>
-    <script src="js/relations-panel.js"></script>
+    <script defer src="js/npcs/baihua-events-main.js"></script>
+    <script defer src="js/npcs/baihua-events-extra.js"></script>
+    <script defer src="js/npcs/baihua-personal-events.js"></script>
+    <script defer src="js/npcs/tianshan-events.js"></script>
+    <script defer src="js/npcs/wuxian-events.js"></script>
+    <script defer src="js/npcs/heroine-rivalry.js"></script>
+    <script defer src="js/npcs/heroine-rivalry-bridge.js"></script>
+    <script defer src="js/npcs/heroine-female-context.js"></script>
+    <script defer src="js/npcs/heroine-male-context.js"></script>
+    <script defer src="js/npcs/zhujian-events.js"></script>
+    <script defer src="js/npcs/yaowang-events.js"></script>
+    <script defer src="js/npcs/maoshan-events.js"></script>
+    <script defer src="js/npcs/jingang-events.js"></script>
+    <!-- v20.72 第三批扩线：峨眉·夙孤鸿（女主）/ 华山·竺听雨（男主）——独立完整感情线；v20.73 已入吃醋名册 -->
+    <script defer src="js/npcs/emei-events.js"></script>
+    <script defer src="js/npcs/huashan-events.js"></script>
+    <!-- v20.74 第一批扩线：唐门·晏万解（女主）/ 武当·阙守拙（男主）——独立完整感情线，同步入吃醋名册 -->
+    <script defer src="js/npcs/tangmen-events.js"></script>
+    <script defer src="js/npcs/wudang-events.js"></script>
+    <!-- v20.75 第一批扩线（续）：蓬莱·瀛晚照（女主）/ 逍遥·闻人酌（男主）——独立完整感情线，同步入吃醋名册 -->
+    <script defer src="js/npcs/penglai-events.js"></script>
+    <script defer src="js/npcs/xiaoyao-events.js"></script>
+    <!-- v20.76 第二批扩线：恒山·祁清禅 / 泰山·岳清晓 / 青城·幽翠微 / 衡山·奚湘筠（女主）+ 嵩山·逵佩南 / 丐帮·桑拾玖（男主）——独立完整感情线，同步入吃醋名册 -->
+    <script defer src="js/npcs/hengshan-beiyue-events.js"></script>
+    <script defer src="js/npcs/songshan-events.js"></script>
+    <script defer src="js/npcs/taishan-events.js"></script>
+    <script defer src="js/npcs/qingcheng-events.js"></script>
+    <script defer src="js/npcs/hengshan-nanyue-events.js"></script>
+    <script defer src="js/npcs/gaibang-events.js"></script>
+    <!-- v20.77 第三批反派阵营扩线：阎罗殿·聂明泽（男主）+ 血手门·耿雪衣 / 飞蝎坞·拓银沙 / 烈日教·伏璃茵 / 天龙教·檀望舒（女主）——组织是暗的角色不是，同步入吃醋名册；聂明泽线在男主人册创建（zhujian-events.js）之后加载 -->
+    <script defer src="js/npcs/yanluo-events.js"></script>
+    <script defer src="js/npcs/xueshou-events.js"></script>
+    <script defer src="js/npcs/feixie-events.js"></script>
+    <script defer src="js/npcs/lieri-events.js"></script>
+    <script defer src="js/npcs/tianlong-events.js"></script>
+    <!-- v20.78 第四批奇门扩线：神机门·戚巧机 / 铁掌帮·裘霜莺 / 昆仑派·姬云锦 / 全真教·翀玉衡（女主）+ 霹雳堂·雷惊蛰 / 天书阁·宓书言 / 大隐阁·隗九爻 / 侠隐阁·简知忆 / 天涯海阁·狄长亭 / 大旗门·樊惊筹（男主，守卫式 push 男主人册）——同步入吃醋名册；全部在男主人册创建（zhujian-events.js）之后加载 -->
+    <script defer src="js/npcs/shenji-events.js"></script>
+    <script defer src="js/npcs/pili-events.js"></script>
+    <script defer src="js/npcs/tianshu-events.js"></script>
+    <script defer src="js/npcs/dayin-events.js"></script>
+    <script defer src="js/npcs/xiayin-events.js"></script>
+    <script defer src="js/npcs/tianya-events.js"></script>
+    <script defer src="js/npcs/daqi-events.js"></script>
+    <script defer src="js/npcs/tiezhang-events.js"></script>
+    <script defer src="js/npcs/kunlun-events.js"></script>
+    <script defer src="js/npcs/quanzhen-events.js"></script>
+    <!-- v20.79 第五批少林收官：竺照禅（比丘尼戒师，佛相毒舌+双温差，常规 12/6 线）+ 破戒僧·无咎（火头僧，特殊紧凑线 8 事件 3 结局，独立 NPC shaolin_wujiu 不入名册）——三十六派情缘线全覆盖；竺照禅同步入女主人册与吃醋扩容包（三十六人144桩） -->
+    <script defer src="js/npcs/shaolin-events.js"></script>
+    <script defer src="js/npcs/shaolin-pojie-events.js"></script>
+    <script defer src="js/npcs/male-lead-rivalry.js"></script>
+    <script defer src="js/npcs/male-lead-reconcile.js"></script>
+    <!-- v20.30 吃醋事件扩容包：二十五人×四类（试探/敲打/节日余波/小心眼）——余波全读 festival-bridge 既有账本，零新增存档键；需在全局 detectRivalRomance 就位后加载 -->
+    <script defer src="js/npcs/jealousy-deep.js"></script>
+    <script defer src="js/npcs/male-lead-bridge.js"></script>
+    <script defer src="js/npcs/male-lead-aftermath.js"></script>
+    <script defer src="js/npcs/heroine-aftermath.js"></script>
+    <!-- v20.80 吃醋关系网 + 双人交锋一期：见面即结识（npcRelationships 社交真源当场种/写回）、同行即嫌疑（队伍读取）、无咎灶台吃醋九桩、双人高光对局八桩（卷一卷二）——需在全局 detectRivalRomance 与扩容包之后加载 -->
+    <script defer src="js/npcs/jealousy-social.js"></script>
+    <script defer src="js/npcs/wujiu-jealousy.js"></script>
+    <script defer src="js/npcs/duel-showcases-1.js"></script>
+    <script defer src="js/npcs/duel-showcases-2.js"></script>
+    <script defer src="js/npcs/duel-showcases-3.js"></script>
+    <script defer src="js/npcs/duel-showcases-4.js"></script>
+    <!-- v21.5 空城补人：17 城 34 位具名人物实体 + 进城遇人戏 + 每日轮询接线（须在 npc-personal-events.js 之后） -->
+    <script defer src="js/npcs/city-residents-data.js"></script>
+    <script defer src="js/npcs/city-residents-data2.js"></script>
+    <script defer src="js/npcs/city-residents-events.js"></script>
+    <script defer src="js/npcs/city-residents-events2.js"></script>
+    <script defer src="js/npcs/city-residents.js"></script>
+    <!-- v22.1 江湖行：恋爱线掌门按日程下山游历（城中可偶遇结识）+ 外院「求见掌门」三条通传路（须在 npc-personal-events.js 之后） -->
+    <script defer src="js/npcs/leader-excursion.js"></script>
+    <script defer src="js/npcs/jealousy-assembly.js"></script>
+    <script defer src="js/npcs/jealousy-collective.js"></script>
+    <script defer src="js/relations-panel.js"></script>
     <!-- 飞鸽传书系统 v12.0 -->
-    <script src="js/mail-system.js"></script>
-    <script src="js/mail-system-ui.js"></script>
-    <script src="js/mail-system-styles.js"></script>
+    <script defer src="js/mail-system.js"></script>
+    <script defer src="js/mail-system-ui.js"></script>
+    <script defer src="js/mail-system-styles.js"></script>
 
     <!-- 第9层：门派系统 -->
-    <script src="js/sects/sects-system.js"></script>
-    <script src="js/sects/sect-facilities.js"></script>
-    <script src="js/sects/sect-internal.js"></script>
-    <script src="js/sects/sect-join-flow.js"></script>
-    <script src="js/sects/sect-visit.js"></script>
-    <script src="js/sects/sect-profiles.js"></script>
-    <script src="js/sects/sect-crisis-events.js"></script>
-    <script src="js/sects/sect-crisis-engine.js"></script>
-    <script src="js/sects/sect-specialties.js"></script>
-    <script src="js/sects/sect-events.js"></script>
-    <script src="js/sects/sect-exclusive-events.js"></script>
-    <script src="js/sects/sect-story-arc.js"></script>
-    <script src="js/sects/dao-companion-deep.js"></script>
-    <script src="js/sects/sects-deep-ui.js"></script>
-    <script src="js/sects/sect-resource-actions.js"></script>
-    <script src="js/sects/sect-wudang-deep.js"></script>
+    <script defer src="js/sects/sects-system.js"></script>
+    <script defer src="js/sects/sect-facilities.js"></script>
+    <script defer src="js/sects/sect-internal.js"></script>
+    <script defer src="js/sects/sect-join-flow.js"></script>
+    <script defer src="js/sects/sect-visit.js"></script>
+    <script defer src="js/sects/sect-profiles.js"></script>
+    <script defer src="js/sects/sect-crisis-events.js"></script>
+    <script defer src="js/sects/sect-crisis-engine.js"></script>
+    <script defer src="js/sects/sect-specialties.js"></script>
+    <script defer src="js/sects/sect-identity.js"></script>
+    <script defer src="js/sects/sect-signature-arts.js"></script>
+    <script defer src="js/sects/sect-art-channeling.js"></script>
+    <script defer src="js/sects/sect-facility-life.js"></script>
+    <script defer src="js/sects/sect-events.js"></script>
+    <script defer src="js/sects/sect-exclusive-events.js"></script>
+    <script defer src="js/sects/sect-story-arc.js"></script>
+    <script defer src="js/sects/dao-companion-deep.js"></script>
+    <script defer src="js/sects/sect-kin.js"></script>
+    <script defer src="js/sects/sects-deep-ui.js"></script>
+    <script defer src="js/sects/sect-resource-actions.js"></script>
 
     <!-- 第10层：v6.0+ 新增系统 -->
-    <script src="js/reputation-system.js"></script>
-    <script src="js/factions/factions.js"></script>
-    <script src="js/factions/faction-stance.js"></script>
-    <script src="js/gameplay/protection-system.js"></script>
-    <script src="js/factions/faction-invasion.js"></script>
-    <script src="js/beast-taming.js"></script>
-    <script src="js/house-system.js"></script>
-    <script src="js/weather-effects.js"></script>
-    <script src="js/world-events.js"></script>
-    <script src="js/map/landmark-explore.js"></script>
+    <script defer src="js/reputation-system.js"></script>
+    <script defer src="js/factions/factions.js"></script>
+    <script defer src="js/factions/faction-stance.js"></script>
+    <script defer src="js/gameplay/protection-system.js"></script>
+    <script defer src="js/factions/faction-invasion.js"></script>
+    <script defer src="js/beast-taming.js"></script>
+    <script defer src="js/house-system.js"></script>
+    <script defer src="js/weather-effects.js"></script>
+    <script defer src="js/world-events.js"></script>
+    <script defer src="js/map/landmark-explore.js"></script>
 
     <!-- 第11层：v7.0 深度扩展系统 -->
-    <script src="js/quest/scene-performance.js"></script>
-    <script src="js/quest/choice-memory.js"></script>
-    <script src="js/cultivation/cultivation-bottleneck.js"></script>
-    <script src="js/ui-immersive.js"></script>
+    <script defer src="js/quest/scene-performance.js"></script>
+    <script defer src="js/quest/choice-memory.js"></script>
+    <script defer src="js/cultivation/cultivation-bottleneck.js"></script>
+    <script defer src="js/ui-immersive.js"></script>
 
     <!-- 第12层：扩展物品补丁（依赖各自的系统，使用setTimeout延迟合并） -->
     <!-- 09-loot-sources.js 已废弃：战利品系统移至 js/loot-system.js -->
-    <!-- <script src="js/items-extended/09-loot-sources.js"></script> -->
-    <script src="js/items-extended/10-crafting-extensions.js"></script>
-    <script src="js/items-extended/11-event-extensions.js"></script>
-    <script src="js/items-extended/12-quest-extensions.js"></script>
-    <script src="js/core/content-validator.js"></script>
+    <!-- <script defer src="js/items-extended/09-loot-sources.js"></script> -->
+    <script defer src="js/items-extended/10-crafting-extensions.js"></script>
+    <script defer src="js/items-extended/11-event-extensions.js"></script>
+    <script defer src="js/items-extended/12-quest-extensions.js"></script>
+    <script defer src="js/core/content-validator.js"></script>
 
     <!-- 第13层：主逻辑与后置系统 -->
-    <script src="js/gameplay/arena-system.js"></script>
-    <script src="js/gameplay/talisman-system.js"></script>
-    <script src="js/extensions/talisman-advanced.js"></script>
-    <script src="js/extensions/formation-system.js"></script>
-    <script src="js/extensions/puppet-system.js"></script>
-    <script src="js/extensions/dungeon-dynamic.js"></script>
-    <script src="js/extensions/resource-points.js"></script>
-    <script src="js/extensions/market-dynamic.js"></script>
-    <script src="js/extensions/beast-ecosystem.js"></script>
-    <script src="js/extensions/reincarnation.js"></script>
-    <script src="js/extensions/reincarnation-integration.js"></script>
-    <script src="js/extensions/narrative-consequence.js"></script>
-    <script src="js/extensions/cave-facilities.js"></script>
-    <script src="js/extensions/codex-tutorial.js"></script>
-    <script src="js/extensions/player-sect.js"></script>
-    <script src="js/extensions/player-sect-ui.js"></script>
-    <script src="js/extensions/beast-evolution.js"></script>
-    <script src="js/extensions/beast-tide.js"></script>
+    <script defer src="js/gameplay/arena-system.js"></script>
+    <script defer src="js/gameplay/talisman-system.js"></script>
+    <script defer src="js/extensions/talisman-advanced.js"></script>
+    <script defer src="js/extensions/formation-system.js"></script>
+    <script defer src="js/extensions/puppet-system.js"></script>
+    <script defer src="js/extensions/dungeon-dynamic.js"></script>
+    <script defer src="js/extensions/resource-points.js"></script>
+    <script defer src="js/extensions/market-dynamic.js"></script>
+    <script defer src="js/extensions/beast-ecosystem.js"></script>
+    <script defer src="js/extensions/reincarnation.js"></script>
+    <script defer src="js/extensions/reincarnation-integration.js"></script>
+    <script defer src="js/extensions/narrative-consequence.js"></script>
+    <script defer src="js/extensions/cave-facilities.js"></script>
+    <script defer src="js/extensions/codex-tutorial.js"></script>
+    <script defer src="js/extensions/cave-life.js"></script>
+    <script defer src="js/extensions/player-sect.js"></script>
+    <script defer src="js/extensions/player-sect-ui.js"></script>
+    <script defer src="js/extensions/player-sect-bootstrap.js"></script>
+    <script defer src="js/extensions/player-sect-world.js"></script>
+    <script defer src="js/extensions/player-sect-venture.js"></script>
+    <script defer src="js/extensions/player-sect-life.js"></script>
+    <script defer src="js/extensions/beast-evolution.js"></script>
+    <script defer src="js/extensions/beast-tide.js"></script>
+    <!-- 第八十七波 · 兽径手记：灵兽栖息地靠打听/亲遇得来，图鉴只写手记里有的 -->
+    <script defer src="js/extensions/beast-lore.js"></script>
     <!-- v20.16 后天改命线：重塑灵根丹服用逻辑（挪饼重归一，依赖 NpcLineage 同一把尺子） -->
-    <script src="js/extensions/root-refine.js"></script>
+    <script defer src="js/extensions/root-refine.js"></script>
     <!-- v20.0 主循环真集成：newDay → 各模块 tickDay -->
-    <script src="js/core/world-loop.js"></script>
+    <script defer src="js/core/world-loop.js"></script>
     <!-- P0-5 死亡仙侠化：神魂/残魂系统（依赖运行时对象，须在 app.js 之前） -->
-    <script src="js/core/soul-state.js"></script>
-    <script src="js/app.js"></script>
-    <script src="js/cultivation/breakthrough-ritual.js"></script>
-    <script src="js/cultivation/heavenly-tribulation.js"></script>
-    <script src="js/lifespan-system.js"></script>
-    <script src="js/endgame/ascension-epilogue.js"></script>
-    <script src="js/core/reincarnation-system.js"></script>
-    <script src="js/equipment/bonded-artifact.js"></script>
-    <script src="js/crafting/pill-poison.js"></script>
-    <script src="js/map/high-planes.js"></script>
-    <script src="js/cultivation/qi-deviation.js"></script>
-    <script src="js/cultivation/enlightenment-tree.js"></script>
-    <script src="js/combat/build-school.js"></script>
-    <script src="js/core/collection-system.js"></script>
-    <script src="js/economy/spirit-vein.js"></script>
-    <script src="js/npcs/rivalry-chain.js"></script>
-    <script src="js/npcs/marriage-offspring.js"></script>
-    <script src="js/crafting/craft-custom-pill.js"></script>
-    <script src="js/cultivation/divination.js"></script>
-    <script src="js/core/karma-retribution.js"></script>
-    <script src="js/sects/master-teach.js"></script>
-    <script src="js/world/solar-terms.js"></script>
-    <script src="js/core/auto-save.js"></script>
-    <script src="js/quest/main-storyline-arc.js"></script>
+    <script defer src="js/core/soul-state.js"></script>
+    <script defer src="js/app.js"></script>
+    <script defer src="js/cultivation/breakthrough-ritual.js"></script>
+    <script defer src="js/cultivation/heavenly-tribulation.js"></script>
+    <script defer src="js/lifespan-system.js"></script>
+    <script defer src="js/endgame/ascension-epilogue.js"></script>
+    <script defer src="js/core/reincarnation-system.js"></script>
+    <script defer src="js/equipment/bonded-artifact.js"></script>
+    <script defer src="js/equipment/equipment-sets.js"></script><!-- 第七十七波 套装有名有魂：问天/合道/开天三套毕业装——凑齐一身才算个样子 -->
+    <script defer src="js/crafting/pill-poison.js"></script>
+    <script defer src="js/map/high-planes.js"></script>
+    <script defer src="js/cultivation/qi-deviation.js"></script>
+    <script defer src="js/cultivation/enlightenment-tree.js"></script>
+    <script defer src="js/combat/build-school.js"></script>
+    <script defer src="js/core/collection-system.js"></script>
+    <script defer src="js/economy/spirit-vein.js"></script>
+    <script defer src="js/npcs/rivalry-chain.js"></script>
+    <script defer src="js/npcs/marriage-offspring.js"></script>
+    <script defer src="js/crafting/craft-custom-pill.js"></script>
+    <script defer src="js/cultivation/divination.js"></script>
+    <script defer src="js/core/karma-retribution.js"></script>
+    <script defer src="js/sects/master-teach.js"></script>
+    <script defer src="js/sects/sect-war.js"></script>
+    <script defer src="js/sects/sect-governance.js"></script>
+    <script defer src="js/sects/sect-passives.js"></script>
+    <script defer src="js/sects/sect-rooms.js"></script>
+    <script defer src="js/sects/sect-trade.js"></script>
+    <script defer src="js/sects/sect-trials.js"></script>
+    <script defer src="js/sects/sect-shield-errands.js"></script>
+    <script defer src="js/sects/sect-festival-succession.js"></script>
+    <script defer src="js/sects/sect-throne.js"></script>
+    <script defer src="js/sects/sect-court.js"></script>
+    <script defer src="js/sects/sect-disciple-life.js"></script>
+    <script defer src="js/sects/sect-standing.js"></script>
+    <script defer src="js/sects/sect-roster.js"></script>
+    <script defer src="js/sects/sect-cities.js"></script>
+    <script defer src="js/sects/sect-gala.js"></script>
+    <script defer src="js/sects/sect-diplomacy-world.js"></script>
+    <script defer src="js/sects/sect-doom.js"></script>
+    <script defer src="js/world/solar-terms.js"></script>
+    <script defer src="js/core/auto-save.js"></script>
+    <script defer src="js/quest/main-storyline-arc.js"></script>
+    <!-- v25.0：终局主线《灵气之尽》（推倒重写 · 旧 endgame-* 五模块已删；设计见 主线大纲·灵气之尽.md，文本见 详稿·第一批） -->
+    <script defer src="js/quest/qi-world.js"></script>
+    <script defer src="js/quest/qi-arc1.js"></script>
+    <script defer src="js/quest/qi-arc2.js"></script>
+    <script defer src="js/quest/qi-arc3.js"></script>
+    <script defer src="js/quest/qi-arc4.js"></script>
+    <script defer src="js/quest/qi-finale.js"></script>
+    <script defer src="js/quest/qi-street.js"></script>
+    <script defer src="js/quest/qi-life.js"></script>
     <!-- 出身/天赋系统已按需求移除（见 禁止设计.md） -->
-    <script src="js/core/keyboard-shortcuts.js"></script>
-    <script src="js/crafting/fire-qte.js"></script>
-    <script src="js/core/audio-synth.js"></script>
-    <script src="js/quest/bounty-board.js"></script>
+    <script defer src="js/core/keyboard-shortcuts.js"></script>
+    <script defer src="js/crafting/fire-qte.js"></script>
+    <!-- v23.0 深水区接线：开放炼丹/词缀炼器/洞府设施/阵法/傀儡的 UI 门户 + 材料实扣账（须在 alchemy/forging-compound 与 formation/puppet/cave 之后） -->
+    <script defer src="js/crafting/compound-ui.js"></script>
+    <!-- 第一百零一波·洞府翻新：布局图+屋子页签的新洞府面板（接管 #house-status 渲染；须在 house-system 与 compound-ui 之后） -->
+    <script defer src="js/house-panel.js"></script>
+    <script defer src="js/core/audio-synth.js"></script>
+    <script defer src="js/quest/bounty-board.js"></script>
     
     <!-- 第14层：v9.0 情境引擎 + 第二批设施 -->
-    <script src="js/core/world-teeth.js"></script><!-- v20.21 世界的牙齿：黑市信用簿/巡夜罚则/本城买价行情 -->
-    <script src="js/core/scenario-engine.js"></script>
-    <script src="js/city-facilities/bank-service.js"></script><!-- v20.18 钱庄账房：存款起息/欠条到期/逾期催收 -->
-    <script src="js/city-facilities/pawn-service.js"></script><!-- v20.20 当铺账房：真当票/凭票赎回/过期死当 -->
-    <script src="js/city-facilities/facility-batch2.js"></script>
-    <script src="js/city-facilities/facility-batch3.js"></script><!-- v20.19 单剧本设施各添第二出戏：报价随行情现算 -->
+    <script defer src="js/core/world-teeth.js"></script><!-- v20.21 世界的牙齿：黑市信用簿/巡夜罚则/本城买价行情 -->
+    <script defer src="js/core/scenario-engine.js"></script>
+    <script defer src="js/city-facilities/bank-service.js"></script><!-- v20.18 钱庄账房：存款起息/欠条到期/逾期催收 -->
+    <script defer src="js/city-facilities/pawn-service.js"></script><!-- v20.20 当铺账房：真当票/凭票赎回/过期死当 -->
+    <script defer src="js/city-facilities/facility-batch2.js"></script>
+    <script defer src="js/city-facilities/facility-batch3.js"></script><!-- v20.19 单剧本设施各添第二出戏：报价随行情现算 -->
+    <script defer src="js/city-facilities/facility-arena-book.js"></script><!-- 第六十六波 斗法台台下赌盘：牌面上的赔率终于真开了 -->
+    <script defer src="js/city-facilities/facility-peddler-contract.js"></script><!-- 第六十九波 商行贩货契：契约所柜台上的跑单帮 -->
+    <script defer src="js/city-facilities/facility-qin-venue.js"></script><!-- v20.90 勾栏瓦舍：登台卖艺赚打赏、幕后练音律 -->
+<script defer src="js/city-facilities/special-features.js"></script><!-- v21.4 24处城市特色景致真剧本：免费白嫖印钞机收口 -->
+<script defer src="js/city-facilities/facility-offices.js"></script><!-- v21.4 三司公务剧本：税课司/司法堂/户籍司一点就完的空壳做厚 -->
+<script defer src="js/city-facilities/city-voices.js"></script><!-- v21.5 共享建筑分城口吻：酒楼/客栈/茶馆 19 城各说各的话 -->
+<script defer src="js/city-facilities/teahouse-leisure.js"></script><!-- 第六十四波 茶馆消遣：粗茶/雅座/棋局/题诗/写生——琴棋书画的「棋书画」有了着落 -->
+<script defer src="js/city-facilities/festival-fair.js"></script><!-- 第六十八波 庙会民俗：四时节日城里真开庙会——猜灯谜/放河灯/节令小吃/看花灯 -->
+<script defer src="js/city-facilities/street-stall.js"></script><!-- 第七十波 街边摆摊：行囊里的货卖给出行的过客——比铺子回购公道，耗时辰看天吃饭 -->
+<script defer src="js/city-facilities/city-lodging.js"></script><!-- 第七十一波 赁屋落脚：客栈是过路的地方，不是过日子的地方——按月缴租，心有所寄 -->
+<script defer src="js/city-facilities/city-jobs.js"></script><!-- 第七十二波 城里营生：铺子伙计/蒙馆代课/医馆帮手/更夫巡夜——按日领钱，做久了涨工钱 -->
+<script defer src="js/city-facilities/city-faces.js"></script><!-- 第七十四波 市井花名册：摆摊的过客/当差的东家/赁屋的牙人/贩货的管事，按城定死有名有姓 -->
+    <script defer src="js/sects/sect-scenarios.js"></script><!-- v20.86 门派设施沉浸层：使用改走进戏，结算回原设施管道 -->
 
     <!-- 第15层：v9.9 日常事件系统（在 event-system 之后，依赖 showMessage/addItem 等） -->
-    <script src="js/core/daily-events.js"></script>
+    <script defer src="js/core/daily-events.js"></script>
 
     <!-- 第16层：调试面板（Admin 专属，依赖 app.js 中的 currentCharData） -->
-    <script src="js/debug-panel.js"></script>
+    <script defer src="js/debug-panel.js"></script>
 </body>
 </html>

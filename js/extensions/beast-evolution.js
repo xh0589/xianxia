@@ -93,7 +93,25 @@
         if (!line) return {};
         var stage = line.stages.find(function (s) { return s.id === b.stage; });
         if (!stage) return {};
-        return Object.assign({}, stage.buff, b.traits);
+        // 第八十四波：只并数值增益；变异兽增益 ×1.5 落进真账（旧版 tryMutate 把 ×1.5 算在
+        // 一次性副本上、又把 traits 数组按索引并成 {0:'金睛'} 垃圾键——变异从此没有真效果）
+        var out = {};
+        Object.keys(stage.buff).forEach(function (k) {
+            var v = stage.buff[k];
+            if (typeof v === 'number') out[k] = b.mutated ? v * 1.5 : v;
+            else out[k] = v;
+        });
+        if (b.traits && b.traits.length) out.traitNames = b.traits.slice();
+        return out;
+    }
+
+    function getStageName(beastId) {
+        var b = _state.beasts[beastId];
+        if (!b || !b.line) return null;
+        var line = EVOLUTION_LINES[b.line];
+        if (!line) return null;
+        var stage = line.stages.find(function (s) { return s.id === b.stage; });
+        return stage ? stage.name : null;
     }
 
     function canEvolve(beastId) {
@@ -265,6 +283,24 @@
 
     function getMutationRate() { return 0.10; }
 
+    // 第八十四波·繁育接线：breed() 旧版造出一个无人认领的孤儿子账（beast_child_…），
+    // 特性遗传落在孤儿身上、真兽分文未得。现在驯养侧把子代真身注册进来后，
+    // 用 grantTraits 把继承账过户到真身、forget 销掉孤儿账——遗传终于落到活的兽身上。
+    function grantTraits(beastId, traits) {
+        var b = _ensure(beastId);
+        b.traits = b.traits || [];
+        (traits || []).forEach(function (t) {
+            if (t === 'perfect_inherit') { b.mutated = true; return; }
+            if (b.traits.indexOf(t) < 0) b.traits.push(t);
+        });
+        return { ok: true, traits: b.traits.slice(), mutated: !!b.mutated };
+    }
+
+    function forget(beastId) {
+        if (_state.beasts[beastId]) { delete _state.beasts[beastId]; return { ok: true }; }
+        return { ok: false, reason: 'not-found' };
+    }
+
     function listLines() {
         return Object.keys(EVOLUTION_LINES).map(function (k) {
             return Object.assign({ id: k }, EVOLUTION_LINES[k]);
@@ -295,6 +331,7 @@
         getLevel: getLevel,
         getExp: getExp,
         getBuff: getBuff,
+        getStageName: getStageName,
         canEvolve: canEvolve,
         evolve: evolve,
         addExp: addExp,
@@ -310,6 +347,8 @@
         tickDayHealing: tickDayHealing,
         tryMutate: tryMutate,
         breed: breed,
+        grantTraits: grantTraits,
+        forget: forget,
         getMutationRate: getMutationRate,
         listLines: listLines,
         getState: function () { return _state; }

@@ -49,8 +49,11 @@
         var realm = p.realm || '炼气';
         var layer = Number(p.layer) || 1;
         var base = realmToRank(realm) * 10 + layer;
+        // 批三 · 演武场切磋预热：练出来的势头，大比开场替你压阵（每两点势头折一点战力）
+        var mom = 0;
+        try { if (typeof global.getSectSparMomentum === 'function') mom = Number(global.getSectSparMomentum()) || 0; } catch (e) {}
         // 玩家难度不应比 NPC 高：+1 隐式加成（路线图 §9 R1）
-        return base + 1;
+        return base + 1 + Math.floor(mom / 2);
     }
 
     // ============ 真源读写 ============
@@ -73,19 +76,16 @@
     }
 
     /**
-     * 开启大比（仅掌门）
+     * 开启大比（批五：节令自动开，不再限掌门；silent=自动调度不弹全局 toast）
      * @param {string} sectName
      * @param {string} tier 'season' | 'year'
      * @returns {Object|null} event
      */
-    function openTournament(sectName, tier) {
+    function openTournament(sectName, tier, silent) {
         if (!sectName) return null;
         if (tier !== 'season' && tier !== 'year') return null;
-        var role = global.getPlayerSectRole ? global.getPlayerSectRole() : null;
-        if (role !== 'leader') {
-            if (global.showMessage) global.showMessage('仅掌门可开启大比', 'warning');
-            return null;
-        }
+        // 批五 · 孤岛打通：大比不再等掌门点头——春秋冬夏自有节令，赛事照历法自动开。
+        // （旧版 role!=='leader' 即拒，36派玩家几乎永远碰不到这套系统；开比是门派的节令，不是玩家的权限。）
         var st = getOrCreate(sectName);
         if (st.currentEvent && st.currentEvent.status !== 'finished') {
             if (global.showMessage) global.showMessage('已有进行中的赛事', 'warning');
@@ -118,7 +118,8 @@
         // 记录 openedDay（用于周期检查）
         if (tier === 'season') st.lastSeason = today;
         if (tier === 'year') st.lastYear = today;
-        if (global.showMessage) {
+        // 批五：自动调度静默开比（36派每季全开会刷屏）——玩家本门由 notifyPlayer 单独通知
+        if (!silent && global.showMessage) {
             var label = tier === 'year' ? '大比' : '小比';
             global.showMessage('🏆 ' + sectName + ' 开启' + label + '（截止日 ' + ev.closesDay + '）', 'info');
         }
@@ -131,7 +132,7 @@
     /**
      * NPC 报名
      */
-    function joinTournament(tournamentId, npcId) {
+    function joinTournament(tournamentId, npcId, silent) {
         if (!tournamentId || !npcId) return false;
         // 找该 tournament 所属 sect
         var sectName = null;
@@ -158,7 +159,7 @@
             power: npcPower(npc),
             realm: (npc.combat && npc.combat.realm) || '炼气'
         });
-        if (global.showMessage) global.showMessage('👤 报名：' + (npc.name || npcId), 'info');
+        if (!silent && global.showMessage) global.showMessage('👤 报名：' + (npc.name || npcId), 'info');
         return true;
     }
 
@@ -207,10 +208,9 @@
         if (!a || !b) return null;
         var powerA = a.power + Math.random() * 0.3;
         var powerB = b.power + Math.random() * 0.3;
-        // 真实：玩家难度 +1 隐式加成
-        if (a.type === 'player') powerA += 1;
-        if (b.type === 'player') powerB += 1;
-        var winner = powerA >= powerB ? a : b;
+        // 第一百一十一波：拆掉第二重 +1——玩家难度补偿在 playerPower() 里已加过一次，
+        // 这里再加就是双标；平局也不再判先手胜，掷一枚硬币
+        var winner = powerA > powerB ? a : (powerB > powerA ? b : (Math.random() < 0.5 ? a : b));
         return { winner: winner, damageA: Math.floor(Math.random() * 50 + 50), damageB: Math.floor(Math.random() * 50 + 50) };
     }
 
@@ -238,6 +238,16 @@
         ev.status = 'running';
         ev.bracket = [];
         ev.results = [];
+        // 第一百一十一波：开打才称斤两——报名瞬间的战力快照作废（7 天报名期里的修炼/装备不再白练）
+        ev.contestants.forEach(function (c) {
+            try {
+                if (c.type === 'player') c.power = playerPower();
+                else {
+                    var npc = getNpc(c.id);
+                    if (npc) c.power = npcPower(npc);
+                }
+            } catch (ePow) {}
+        });
         // 单败淘汰
         var pool = ev.contestants.slice();
         var round = 1;
@@ -276,9 +286,9 @@
             finishedDay: ev.closesDay,
             contestants: ev.contestants.length
         });
-        // 真源 lastSeason / lastYear
-        if (ev.tier === 'season') st.lastSeason = ev.closesDay;
-        if (ev.tier === 'year') st.lastYear = ev.closesDay;
+        // 第一百一十一波：周期账不再覆写——openTournament 开比那天已记 openedDay，
+        // 旧版结算时把它改写成 closesDay（+7），tickDay 的间隔判定再拿它比 today-89，
+        // 小比实际 180 天一届、大比 720 天一届，节令账整整跳了一拍
         st.currentEvent = null;
         // 宗门影响
         applyTournamentOutcome(sectName, ev, champion);
@@ -303,12 +313,36 @@
         var internal = global.SECT_INTERNAL && global.SECT_INTERNAL[sectName];
         if (!internal) return;
         internal.morale = Math.min(100, (Number(internal.morale) || 50) + 5);
+        // 第一百零九波：魁首是你，彩头才落到你头上——此前结算只动门派公账，
+        // 注释承诺的「奖励 50 灵石」从没发给过任何人；「大比称雄」年目标还不管谁夺冠都记一次。
+        var playerWon = !!(champion && (champion.id === 'player' || champion.type === 'player'));
         if (champion) {
             internal.morale = Math.min(100, (Number(internal.morale) || 50) + 10);
             internal.resources = (Number(internal.resources) || 0) + 100;
-            // 大比胜利钩（v19.0 SectYearGoal）
-            if (global.SectYearGoal && typeof global.SectYearGoal.addTournamentWin === 'function') {
-                try { global.SectYearGoal.addTournamentWin(sectName); } catch (e) {}
+            if (playerWon) {
+                // 个人彩头：50 灵石 + 治理进言「大比加码」押上的 80（若加过码）+ 贡献 50
+                var stake = Number(ev && ev.stakeBonus) || 0;
+                var purse = 50 + stake;
+                try {
+                    if (global.inventory && global.inventory.currency) {
+                        global.inventory.currency.spiritStones = (Number(global.inventory.currency.spiritStones) || 0) + purse;
+                        if (global.currentCharData) global.currentCharData.spiritStones = global.inventory.currency.spiritStones;
+                        if (typeof global.updateCurrencyUI === 'function') global.updateCurrencyUI();
+                    }
+                } catch (ePurse) {}
+                try {
+                    if (global.discipleState) {
+                        global.discipleState.contribution = (Number(global.discipleState.contribution) || 0) + 50;
+                        if (typeof global.sectLedgerNote === 'function') global.sectLedgerNote(50, '大比夺冠');
+                    }
+                } catch (eContr) {}
+                if (global.showMessage) {
+                    global.showMessage('🏆 你夺了魁！彩头入账：灵石 ' + purse + (stake ? '（含掌门加码的 ' + stake + '）' : '') + '、贡献 +50。', 'success');
+                }
+                // 大比胜利钩（v19.0 SectYearGoal）——只有你替门派夺了魁才算「大比称雄」
+                if (global.SectYearGoal && typeof global.SectYearGoal.addTournamentWin === 'function') {
+                    try { global.SectYearGoal.addTournamentWin(sectName); } catch (e) {}
+                }
             }
         }
         // 弟子成长：每个参赛者 level +0~+1
@@ -399,25 +433,35 @@
                 st.currentEvent = null; // 取消
             }
         }
-        // 触发新赛事：仅当今天无 currentEvent
+        // 触发新赛事：仅当今天无 currentEvent（批五：不再看玩家脸色——节令到了，各派自己开比）
         if (!st.currentEvent) {
             // 大比（更稀有）优先触发
             if (today % 360 === 0 && (st.lastYear === 0 || st.lastYear < today - 359)) {
-                var role2 = global.getPlayerSectRole ? global.getPlayerSectRole() : null;
-                if (role2 === 'leader') {
-                    var ev2 = openTournament(sectName, 'year');
-                    if (ev2) autoEnrollNpcs(sectName, ev2.id);
-                }
+                var ev2 = openTournament(sectName, 'year', true);
+                if (ev2) { autoEnrollNpcs(sectName, ev2.id); notifyPlayer(sectName, ev2); }
             }
             // 小比（每季）次之
             if (!st.currentEvent && today % 90 === 0 && (st.lastSeason === 0 || st.lastSeason < today - 89)) {
-                var role = global.getPlayerSectRole ? global.getPlayerSectRole() : null;
-                if (role === 'leader') {
-                    var ev1 = openTournament(sectName, 'season');
-                    if (ev1) autoEnrollNpcs(sectName, ev1.id);
-                }
+                var ev1 = openTournament(sectName, 'season', true);
+                if (ev1) { autoEnrollNpcs(sectName, ev1.id); notifyPlayer(sectName, ev1); }
             }
         }
+    }
+
+    // 批五：自家门派的赛事开锣，得让玩家听见——否则大比开了七天，玩家毫不知情，截止即错过
+    function notifyPlayer(sectName, ev) {
+        try {
+            var ds = global.discipleState;
+            if (!ds || !ds.isInSect) return;
+            if ((ds.sectName || ds.sectId) !== sectName) return;
+            var label = ev.tier === 'year' ? '宗门大比' : '季中小比';
+            var rank = ds.rank == null ? 7 : ds.rank;
+            var canJoin = rank >= 0 && rank <= 7; // 弟子及以上皆可下场（侍妾/同参不入比武）
+            var text = '🏆 ' + sectName + label + '开锣了——报名七日，截止第 ' + ev.closesDay + ' 日。' +
+                (canJoin ? '榜下已围满同门，你的名字也可以写上去。（门派详情页 → 宗门大比 → 我要参赛）' : '');
+            if (global.gameLog && global.gameLog.add) global.gameLog.add(text, 'info');
+            if (global.showMessage) global.showMessage(text, 'success');
+        } catch (e) {}
     }
 
     function autoEnrollNpcs(sectName, tournamentId) {
@@ -428,7 +472,7 @@
         // 随机最多 8 人
         eligible.sort(function () { return Math.random() - 0.5; });
         for (var i = 0; i < Math.min(8, eligible.length); i++) {
-            try { joinTournament(tournamentId, eligible[i].id); } catch (e) {}
+            try { joinTournament(tournamentId, eligible[i].id, true); } catch (e) {}
         }
     }
 
@@ -464,8 +508,15 @@
             }
             html += '</div>';
         } else {
-            html += '<p class="text-gray-500 text-sm">当前无赛事。' + (role === 'leader' ? '（每 90 日自动开小比，每 360 日自动开大比）' : '') + '</p>';
+            html += '<p class="text-gray-500 text-sm">当前无赛事——每 90 日自动开小比，每 360 日自动开大比，节令一到，榜文自出。</p>';
         }
+        // 批五 · 切磋预热呈示：演武场攒的势头，进场就替你压阵（批三接的真值）
+        try {
+            if (typeof global.getSectSparMomentum === 'function') {
+                var _mom = Number(global.getSectSparMomentum()) || 0;
+                if (_mom > 0) html += '<p class="text-xs text-orange-300 mt-1">🔥 演武场势头 ' + _mom + ' 分——下场时折入你的战力（每两分势头折一分）。</p>';
+            }
+        } catch (e) {}
         // 历史
         if (st.history.length) {
             html += '<div class="mt-3"><h4 class="text-sm font-bold text-gray-300">📜 历史</h4>';
@@ -513,6 +564,11 @@
     global.Tournament = api;
     global.XianXia = global.XianXia || {};
     global.XianXia.Tournament = api;
+    // 第一百零九波：面板上「我要参赛」「掌门下令开始」两个按钮的 onclick 调的是裸全局名，
+    // 而这两个函数封在本 IIFE 里从未挂 window——点击必抛 ReferenceError，玩家侧大比整体坏死多年。
+    // 现在把口子真正开出去（与 handleSectEvent 在 sect-events.js 的挂法同一套路）。
+    global.playerParticipate = playerParticipate;
+    global.runTournament = runTournament;
 
     // ============ StateRegistry 持久化 ============
     if (global.StateRegistry && typeof global.StateRegistry.register === 'function') {

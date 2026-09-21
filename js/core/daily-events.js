@@ -50,10 +50,11 @@ function _deAddItem(id, count) {
     return false;
 }
 
-function _deAddContribution(n) {
+function _deAddContribution(n, reason) {
     var ds = window.discipleState;
     if (!ds || !ds.isInSect) return false;
     ds.contribution = (ds.contribution || 0) + n;
+    try { window.sectLedgerNote && window.sectLedgerNote(n, reason || '门中日常'); } catch (e) {}
     return true;
 }
 
@@ -88,7 +89,16 @@ function _deInBattle() {
 }
 
 function _deModalOpen() {
-    return !!(document.getElementById('event-modal') || document.getElementById('daily-event-modal'));
+    // 第九十五波·NEW-16：日常事件不再盖在设施多步情境/弹窗中途——
+    // 此前只挡 event-modal/daily-event-modal 自己，情境引擎（#scenario-modal）与通用弹窗
+    // （#xianxia-modal-overlay，当铺自选/寻差事等）开着时照样弹上来，把玩家正走的那一步吞掉。
+    if (document.getElementById('event-modal') || document.getElementById('daily-event-modal')) return true;
+    var ids = ['scenario-modal', 'xianxia-modal-overlay', 'pawn-picker-modal'];
+    for (var i = 0; i < ids.length; i++) {
+        var el = document.getElementById(ids[i]);
+        if (el && el.style && el.style.display !== 'none' && !el.classList.contains('hidden')) return true;
+    }
+    return false;
 }
 
 function _deGetPeriod() {
@@ -621,7 +631,7 @@ var DAILY_EVENT_LIST = [
                 text: '耐心指点',
                 effect: function() {
                     _deAdvance(15, '指点同门');
-                    _deAddContribution(8);
+                    _deAddContribution(8, '指点同门');
                     _deAddPoints(5);
                     _deMsg('对方连连道谢。你获得门派贡献与修炼感悟。', 'success');
                 }
@@ -680,7 +690,7 @@ var DAILY_EVENT_LIST = [
                 text: '接受切磋',
                 effect: function() {
                     _deAdvance(20, '同门切磋');
-                    _deAddContribution(6);
+                    _deAddContribution(6, '同门切磋');
                     var p = window.currentCharData;
                     if (p) p.essence = (p.essence || 0) + 4;
                     _deMsg('一番拆招后双方点到为止，你对自身招式更有体会。（贡献+6）', 'success');
@@ -713,7 +723,7 @@ var DAILY_EVENT_LIST = [
                 text: '接下差事',
                 effect: function() {
                     _deAdvance(60, '门派杂役');
-                    _deAddContribution(10);
+                    _deAddContribution(10, '门派杂役');
                     _deAddCopper(5);
                     _deMsg('忙活半日，腰酸背痛，却也换来贡献与几块铜钱。', 'success');
                 }
@@ -751,7 +761,7 @@ var DAILY_EVENT_LIST = [
                 id: 'report',
                 text: '交给执事举报',
                 effect: function() {
-                    _deAddContribution(15);
+                    _deAddContribution(15, '举报匿经');
                     _deMsg('执事嘉许你的规矩，记了一笔贡献。', 'success');
                 }
             },

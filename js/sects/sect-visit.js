@@ -27,7 +27,10 @@ function getSectBulletins(sectType) {
 function getGateGuardDialogue(sectName, sect) {
     if (!sect) return '守卫面无表情地看着你。';
     var type = sect.type || '中立';
+    // 方案一二：守卫嘴里的称呼跟着门派眼下的地位走
+    try { if (typeof window.sectAlignLabel === 'function') { var al = window.sectAlignLabel(sectName); if (al === '正道所认' || al === '活菩萨') type = '正道'; else if (al === '江湖目之为邪' || al === '正道公敌') type = '邪派'; } } catch (eAl) {}
     var power = sect.power || '未知';
+    try { if (typeof window.sectPowerNow === 'function') { var pn = window.sectPowerNow(sectName); if (pn) power = pn.tier; } } catch (ePw) {}
     
     // 大隐阁/天书阁无守卫
     if (sectName === '大隐阁' || sectName === '天书阁') {
@@ -109,7 +112,7 @@ function renderSectOuterFacilities(sectName, isMember, accessLevel) {
                         : '<span class="text-xs text-red-400 mt-1">🔒 入派后可领公共任务</span>')
                         : fid === 'sect_bulletin'
                             ? '<button onclick="showSectBulletinDialog(\'' + sectName + '\')" class="mt-1 bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded text-xs font-bold">查看公告</button>'
-                            : '<button onclick="useFacility(\'' + fid + '\')" class="mt-1 bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-2 py-0.5 rounded text-xs font-bold">使用</button>')) +
+                            : '<button onclick="(window.openSectRoom ? window.openSectRoom(\'' + fid + '\') : useFacility(\'' + fid + '\'))" class="mt-1 bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-2 py-0.5 rounded text-xs font-bold">' + (window.sectFacilityActionLabel ? window.sectFacilityActionLabel(fid) : '前往') + '</button>')) +
             '</div>';
     });
     
@@ -123,20 +126,66 @@ function renderSectOuterFacilities(sectName, isMember, accessLevel) {
 function showSectBulletinDialog(sectName) {
     var sect = window.sectsData?.[sectName];
     var bulletins = getSectBulletins(sect?.type);
-    
+
+    // v23.2 公告栏照进世界（旧版四行静态文本，从不反映任何真实状态）：
+    // 掌门行止、本门大事、你自己的职分贡献——都上墙
+    var liveLines = [];
+    try {
+        if (typeof window.isLeaderAway === 'function' && window.isLeaderAway(sectName)) {
+            var _awayCity = (typeof window.leaderAwayCity === 'function') ? window.leaderAwayCity(sectName) : '';
+            liveLines.push('👑 掌门下山游历' + (_awayCity ? '（闻说行止在' + _awayCity + '一带）' : '') + '，门中事务暂由值守长老代理。');
+        }
+        var _dsB = window.discipleState || {};
+        if (_dsB.isInSect && _dsB.sectId === sectName) {
+            liveLines.push('📌 你的职分：' + (_dsB.rankName || '外门弟子') + ' · 在册贡献 ' + (_dsB.contribution || 0) + ' 点。');
+        }
+        if (window.SectCrisisEngine && typeof window.SectCrisisEngine.listForSect === 'function') {
+            var _crises = window.SectCrisisEngine.listForSect(sectName) || [];
+            for (var _ci = 0; _ci < _crises.length && _ci < 2; _ci++) {
+                if (_crises[_ci] && _crises[_ci].title) liveLines.push('⚠️ 门中近日有异：「' + _crises[_ci].title + '」——内院有详请。');
+            }
+        }
+        // 改造批 · 公告栏一板看全：编年近事 / 外务榜 / 节令
+        try {
+            var _dsC = window.discipleState || {};
+            if (_dsC.isInSect && (_dsC.sectName || _dsC.sectId) === sectName) {
+                var _itC = (window.SectGov && window.SectGov.internalRef) ? window.SectGov.internalRef(sectName) : null;
+                if (_itC && _itC.chronicle && _itC.chronicle.length) {
+                    var _ch = _itC.chronicle.slice(-2).reverse();
+                    _ch.forEach(function (c) { liveLines.push('📜 门中近事：' + c.text); });
+                }
+                if (window.SectTrade && window.SectTrade.probe) {
+                    var _rt = (window.SectTrade.probe().routes || []).filter(function (r) { return r.state === 'open' && (r.from === sectName || r.to === sectName); })[0];
+                    if (_rt) liveLines.push('🐎 商路张榜：' + _rt.from + '→' + _rt.to + '（' + _rt.goods + '），议事厅可接押运。');
+                }
+                try {
+                    var _dayC = (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') ? window.timeSystem.getAbsoluteDay() : 0;
+                    if (_dayC) {
+                        var _nextS = (Math.floor(_dayC / 90) + 1) * 90, _nextY = (Math.floor(_dayC / 360) + 1) * 360;
+                        liveLines.push('🏆 节令：下回小比第' + _nextS + '日，年一大比第' + _nextY + '日；开山大典在每年正中之日。');
+                    }
+                } catch (eCal) {}
+            }
+        } catch (e) {}
+    } catch (e) {}
+    var liveHtml = liveLines.length
+        ? '<div class="bg-yellow-900/30 border border-yellow-700/50 rounded p-2 mb-2">' + liveLines.map(function (l) { return '<p class="text-xs text-yellow-200 mb-1">' + l + '</p>'; }).join('') + '</div>'
+        : '';
+
     var modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50';
     modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
-    
+
     modal.innerHTML = '' +
         '<div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-lg w-full mx-4">' +
         '<div class="flex justify-between items-center mb-4">' +
         '<h3 class="text-lg font-bold text-yellow-400">📋 ' + sectName + ' 公告栏</h3>' +
         '<button onclick="this.closest(\'.fixed\').remove()" class="text-gray-400 hover:text-white text-2xl">&times;</button>' +
         '</div>' +
+        liveHtml +
         '<div class="space-y-2">' + renderBulletinBoard(bulletins) + '</div>' +
         '</div>';
-    
+
     document.body.appendChild(modal);
 }
 
@@ -153,7 +202,11 @@ function openSectMarket(sectName, isMember) {
         { id: 'pill_small_recovery', name: '小还丹', price: 50, icon: '💊' },
         { id: 'mat_iron_ore', name: '精铁矿', price: 30, icon: '⛏️' },
         { id: 'mat_lingzhi', name: '灵芝', price: 80, icon: '🌿' },
-        { id: 'spec_spirit_stone', name: '灵石', price: 100, icon: '💎' }
+        { id: 'spec_spirit_stone', name: '灵石', price: 100, icon: '💎' },
+        // v23.0 阵材上架：布阵系统接通后，阵石阵旗得有真实货源（此前物品账上根本没有它们）
+        { id: 'fmt_stone_basic', name: '基础阵石', price: 60, icon: '🪨' },
+        { id: 'fmt_flag_iron', name: '铁阵旗', price: 60, icon: '🚩' },
+        { id: 'fmt_eye_spirit', name: '灵阵眼', price: 120, icon: '👁️' }
     ];
     
     var listHtml = items.map(function(item) {
@@ -213,7 +266,7 @@ function renderSectInnerGate(sectName, isMember, accessLevel) {
         return '<div class="bg-gray-800/40 p-3 rounded border border-yellow-600 text-center">' +
             '<p class="text-sm text-yellow-400 font-bold">🚪 内院入口</p>' +
             '<p class="text-xs text-gray-400 mt-1">弟子区域，修炼洞府、藏经阁等设施位于此处</p>' +
-            '<button onclick="openFacilityUI()" class="mt-2 bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-3 py-1 rounded text-xs font-bold">进入内院</button>' +
+            '<button onclick="openFacilityUI()" class="mt-2 bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-3 py-1 rounded text-xs font-bold">🧰 使用设施</button>' +
             '</div>';
     } else if (isMember && accessLevel < 2) {
         return '<div class="bg-gray-800/30 p-3 rounded border border-gray-700 text-center opacity-60">' +
@@ -232,6 +285,8 @@ function renderSectInnerGate(sectName, isMember, accessLevel) {
 
 // ============ 山门场景 ============
 function showSectGateScene(sectName) {
+    // 灭门之后，旧山门只剩废墟（sect-doom 接管场景；复兴后自动恢复）
+    try { if (typeof window.sectRuinView === 'function' && window.sectRuinView(sectName)) return; } catch (eRuin) {}
     var sect = window.sectsData?.[sectName];
     if (!sect) return;
     
@@ -240,11 +295,13 @@ function showSectGateScene(sectName) {
     var accessLevel = typeof window.getSectAccessLevel === 'function' ? window.getSectAccessLevel(sectName) : 0;
     
     // v12.3 温蘅线：进入百花谷时概率自动触发个人事件（世界驱动）
-    if (isMember && sectName === '百花谷' && typeof window.maybeAutoTriggerBaihuaEvent === 'function') {
+    // v22.1 放开到访客：旧代码写死 isMember 才触发——游客站在谷里什么都不发生。
+    // 事件资格门禁（结识/好感/前置/终章）在 maybeAutoTriggerPersonalEvent 内部自有校验，不必在门口再设一道派籍闸。
+    if (sectName === '百花谷' && typeof window.maybeAutoTriggerBaihuaEvent === 'function') {
         try { window.maybeAutoTriggerBaihuaEvent('sect'); } catch (e) {}
     }
-    // v12.3.1 绯泪线回灌：进入修罗宫时概率自动触发个人事件
-    if (isMember && sectName === '修罗宫' && typeof window.maybeAutoTriggerFeiLeiEvent === 'function') {
+    // v12.3.1 绯泪线回灌：进入修罗宫时概率自动触发个人事件（同上，放开到访客）
+    if (sectName === '修罗宫' && typeof window.maybeAutoTriggerFeiLeiEvent === 'function') {
         try { window.maybeAutoTriggerFeiLeiEvent('sect'); } catch (e) {}
     }
     
@@ -265,6 +322,14 @@ function showSectGateScene(sectName) {
     
     // 山门场景
     var guardDialogue = getGateGuardDialogue(sectName, sect);
+    // 方案一二：山门牌面上写的是门派「眼下」的立场与座次，不是开山时贴的标签
+    var dynAlign = sect.type || '中立';
+    var dynPower = sect.power || '未知';
+    try { if (typeof window.sectAlignLabel === 'function') { var _da = window.sectAlignLabel(sectName); if (_da) dynAlign = _da; } } catch (eDa) {}
+    try { if (typeof window.sectPowerLabel === 'function') { var _dp = window.sectPowerLabel(sectName); if (_dp) dynPower = _dp; } } catch (eDp) {}
+    var alignCls = (dynAlign === '正道所认' || dynAlign === '活菩萨') ? 'bg-green-900 text-green-400'
+        : (dynAlign === '江湖目之为邪' || dynAlign === '正道公敌') ? 'bg-red-900 text-red-400'
+        : 'bg-yellow-900 text-yellow-400';
     
     panel.innerHTML = '' +
         '<div class="bg-gray-900 rounded-xl border-2 border-yellow-600/50 p-6">' +
@@ -273,13 +338,9 @@ function showSectGateScene(sectName) {
         '<div>' +
         '<h2 class="text-2xl font-bold text-yellow-400">🏛️ ' + sectName + '</h2>' +
         '<div class="flex gap-2 mt-2 flex-wrap">' +
-        '<span class="px-2 py-0.5 rounded text-xs font-bold ' + (
-            sect.type === '正道' ? 'bg-green-900 text-green-400' :
-            sect.type === '邪派' ? 'bg-red-900 text-red-400' :
-            'bg-yellow-900 text-yellow-400'
-        ) + '">' + sect.type + '</span>' +
+        '<span class="px-2 py-0.5 rounded text-xs font-bold ' + alignCls + '">' + dynAlign + '</span>' +
         '<span class="text-xs text-gray-400">📍 ' + (sect.location || '未知') + '</span>' +
-        '<span class="text-xs text-gray-400">⚔️ ' + (sect.power || '未知') + '</span>' +
+        '<span class="text-xs text-gray-400">⚔️ ' + dynPower + '</span>' +
         '</div></div>' +
         '<button onclick="closeSectPanel()" class="text-gray-400 hover:text-white text-2xl">&times;</button>' +
         '</div>' +
@@ -305,8 +366,8 @@ function showSectGateScene(sectName) {
         '</div>' +
         // 门派概况
         '<div class="grid grid-cols-3 gap-2 text-center">' +
-        '<div class="bg-gray-800/50 p-2 rounded"><p class="text-xs text-gray-400">类型</p><p class="text-sm text-white font-bold">' + (sect.type || '?') + '</p></div>' +
-        '<div class="bg-gray-800/50 p-2 rounded"><p class="text-xs text-gray-400">实力</p><p class="text-sm text-white font-bold">' + (sect.power || '?') + '</p></div>' +
+        '<div class="bg-gray-800/50 p-2 rounded"><p class="text-xs text-gray-400">立场</p><p class="text-sm text-white font-bold">' + dynAlign + '</p></div>' +
+        '<div class="bg-gray-800/50 p-2 rounded"><p class="text-xs text-gray-400">地位</p><p class="text-sm text-white font-bold">' + dynPower + '</p></div>' +
         '<div class="bg-gray-800/50 p-2 rounded"><p class="text-xs text-gray-400">武学</p><p class="text-sm text-white font-bold">' + (sect.weapons || '?') + '</p></div>' +
         '</div></div>';
     
@@ -325,7 +386,7 @@ function showSectOuterView(sectName) {
     var isMember = ds.isInSect && ds.sectId === sectName;
     var accessLevel = typeof window.getSectAccessLevel === 'function' ? window.getSectAccessLevel(sectName) : 0;
     
-    var panel = document.getElementById('sect-panel');
+    var panel = (typeof window.ensureSectPanel === 'function') ? window.ensureSectPanel() : document.getElementById('sect-panel');   // 第九十五波·NEW-44：唯一建造者兜底，别裸取（本派捷径绕过它=空白页）
     if (!panel) return;
     panel.classList.remove('hidden');
     
@@ -345,6 +406,10 @@ function showSectOuterView(sectName) {
         // 外院设施列表
         '<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">' +
         renderSectOuterFacilities(sectName, isMember, accessLevel) +
+        // v22.1 游客「求见掌门」：应约/侠名/开放日三条通传路，掌门下山时给去向话头
+        (typeof window.renderSectLeaderAudience === 'function' ? window.renderSectLeaderAudience(sectName, isMember) : '') +
+        // 第三十六波 散修拜山待客：递帖结交情、演武切磋、藏经借抄（游客专属）
+        (typeof window.renderSectVisitHospitality === 'function' ? window.renderSectVisitHospitality(sectName, isMember) : '') +
         '</div>' +
         // 内院入口
         renderSectInnerGate(sectName, isMember, accessLevel) +
@@ -369,7 +434,7 @@ function showSectInnerView(sectName) {
         return;
     }
     
-    var panel = document.getElementById('sect-panel');
+    var panel = (typeof window.ensureSectPanel === 'function') ? window.ensureSectPanel() : document.getElementById('sect-panel');   // 第九十五波·NEW-44：唯一建造者兜底，别裸取（本派捷径绕过它=空白页）
     if (!panel) return;
     panel.classList.remove('hidden');
     
@@ -392,35 +457,53 @@ function showSectInnerView(sectName) {
             '<p class="text-xs text-gray-400">' + f.desc + '</p>' +
             '</div>' +
             (canUse
-                ? '<button onclick="useFacility(\'' + fid + '\')" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-2 py-1 rounded text-xs font-bold">使用</button>'
+                ? '<button onclick="(window.openSectRoom ? window.openSectRoom(\'' + fid + '\') : useFacility(\'' + fid + '\'))" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-2 py-1 rounded text-xs font-bold">' + (window.sectFacilityActionLabel ? window.sectFacilityActionLabel(fid) : '前往') + '</button>'
                 : '<span class="text-xs text-gray-500">权限不足</span>') +
             '</div></div>';
     }).join('');
-    
-    // 门派特色功能
-    var specialty = (typeof window.getSectSpecialty === 'function') ? window.getSectSpecialty(sectName) : null;
-    var specialtyHtml = '';
-    if (specialty) {
-        var cd = (typeof window.getSectSpecialtyCooldown === 'function') ? window.getSectSpecialtyCooldown(sectName) : { ready: true, remaining: 0 };
-        var canUse = ds.rank <= specialty.rankReq && cd.ready;
-        var cdText = cd.ready ? '准备就绪' : ('冷却中 ' + cd.remaining + 'h');
-        var cdClass = cd.ready ? 'text-green-400' : 'text-yellow-400';
-        
-        specialtyHtml = '' +
-            '<div class="bg-gray-800/40 p-3 rounded border ' + (canUse ? 'border-purple-600' : 'border-gray-700 opacity-60') + ' mb-4">' +
+
+    // v21.3 本派专属建筑进内院：此前寒潭（修罗宫）、血池（血刀门）这类专属设施
+    // 戏都写好了，却只藏在旧「使用设施」弹窗里，内院视图永远列不出来——玩家自然觉得"没深度"
+    var extraFacs = (window.SECT_FACILITY_EXTRAS && window.SECT_FACILITY_EXTRAS[sectName]) || [];
+    var extraHtml = extraFacs.map(function (f) {
+        var acc = (typeof window.checkFacilityAccess === 'function')
+            ? window.checkFacilityAccess(f.id) : { accessible: true, reason: '' };
+        var xCanUse = !!acc.accessible;
+        var xBorder = xCanUse ? 'border-purple-700' : 'border-gray-700 opacity-50';
+        return '<div class="bg-gray-800/50 p-3 rounded border ' + xBorder + '">' +
             '<div class="flex items-center gap-2">' +
-            '<span class="text-2xl">' + (specialty.icon || '✨') + '</span>' +
+            '<span class="text-xl">' + (f.icon || '🏛️') + '</span>' +
             '<div class="flex-1">' +
-            '<p class="font-bold text-sm text-white">✨ ' + specialty.name + '</p>' +
-            '<p class="text-xs text-gray-400">' + specialty.desc + '</p>' +
-            '<p class="text-xs text-purple-400 mt-1">效果：' + specialty.effect + '</p>' +
-            '<p class="text-xs ' + cdClass + '">⏱️ ' + cdText + '（冷却' + specialty.cooldown + 'h）</p>' +
+            '<p class="font-bold text-sm text-purple-300">' + f.name + ' <span class="text-[10px] text-purple-500">[本派专属]</span></p>' +
+            '<p class="text-xs text-gray-400">' + (f.desc || '') + '</p>' +
             '</div>' +
-            (canUse
-                ? '<button onclick="useSectSpecialty(\'' + sectName + '\')" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded text-sm font-bold">使用</button>'
-                : '<span class="text-xs text-gray-500">' + (cd.ready ? '权限不足' : '冷却中') + '</span>') +
+            (xCanUse
+                ? '<button onclick="(window.openSectRoom ? window.openSectRoom(\'' + f.id + '\') : useFacility(\'' + f.id + '\'))" class="bg-purple-600 hover:bg-purple-500 text-white px-2 py-1 rounded text-xs font-bold">' + (window.sectFacilityActionLabel ? window.sectFacilityActionLabel(f.id) : '进入') + '</button>'
+                : '<span class="text-xs text-gray-500">' + (acc.reason || '权限不足') + '</span>') +
             '</div></div>';
-    }
+    }).join('');
+
+    // 改造批 · 门中底子：特色按钮/冷却整套退役——底子永远在身上，靠真实行为练（sect-passives.js）
+    var specialtyHtml = (typeof window.sectPassiveCard === 'function') ? (window.sectPassiveCard(sectName) || '') : '';
+    // 第十二波 · 开山秘艺：各派看家本事升华为镇派之格的高级功法（藏经阁真线），卡片亮出来
+    var sigHtml = '';
+    try { if (typeof window.sectSignatureCard === 'function') sigHtml = window.sectSignatureCard(sectName) || ''; } catch (eSig) {}
+    // 第十三波 · 门派身份：八派看家本事（血引/识毒济生/街谈网/心火淬火/戒疤面壁/雪魄养心/万卷归一/袖箭淬毒）终于有了正门——
+    // 旧特色按钮引擎退役（特色正身已是开山秘艺），但身份技是有代价、有世界反应的活内容，不该跟着按钮一起埋掉
+    var identityHtml = '';
+    try {
+        var _sp = (window.SECT_SPECIALTIES || {})[sectName];
+        if (_sp && (typeof _sp.precheck === 'function' || _sp.costText)) {
+            var _stText = '';
+            try { _stText = (typeof _sp.stateText === 'function') ? (_sp.stateText() || '') : ''; } catch (eSt) {}
+            identityHtml = '<div class="bg-gray-800/60 border border-purple-700/50 rounded p-2 mb-3">' +
+                '<p class="text-sm text-purple-300 mb-1">' + (_sp.icon || '🎭') + ' ' + _sp.name + '</p>' +
+                '<p class="text-xs text-gray-400 mb-1">' + (_sp.desc || '') + '</p>' +
+                (_sp.costText ? '<p class="text-xs text-gray-500 mb-1">代价：' + _sp.costText + '</p>' : '') +
+                (_stText ? '<p class="text-xs text-cyan-300 mb-1">' + _stText + '</p>' : '') +
+                '<button onclick="window.useSectSpecialty(\'' + sectName + '\')" class="bg-purple-800 hover:bg-purple-700 text-white text-xs px-3 py-1 rounded">施展</button></div>';
+        }
+    } catch (eId) {}
     
     panel.innerHTML = '' +
         '<div class="bg-gray-900 rounded-xl border-2 border-yellow-600/50 p-6">' +
@@ -447,12 +530,19 @@ function showSectInnerView(sectName) {
             return eventDisplay ? eventDisplay.html : '';
         })() +
         // 门派特色功能
-        (specialtyHtml ? '<h3 class="text-lg font-bold text-purple-400 mb-2">✨ 门派特色</h3>' + specialtyHtml : '') +
+        (specialtyHtml ? '<h3 class="text-lg font-bold text-purple-400 mb-2">🌟 门中底子</h3>' + specialtyHtml : '') +
+        // 第十二波 · 开山秘艺（高级功法形态的门派特色）
+        (sigHtml ? '<h3 class="text-lg font-bold text-amber-400 mb-2">📜 开山秘艺</h3>' + sigHtml : '') +
+        // 第十三波 · 门派身份（八派本事有了正门）
+        (identityHtml ? '<h3 class="text-lg font-bold text-purple-400 mb-2">🎭 门派身份</h3>' + identityHtml : '') +
         // 内院设施列表
         '<h3 class="text-lg font-bold text-blue-400 mb-2">🏛️ 内院设施</h3>' +
         '<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">' +
         (innerHtml || '<p class="text-gray-500 text-sm col-span-full">暂无可用设施</p>') +
         '</div>' +
+        // v21.3 本派专属建筑（寒潭/血池/达摩洞这类，各自有整出戏）
+        (extraHtml ? '<h3 class="text-lg font-bold text-purple-400 mb-2">🌸 本派专属之地</h3>' +
+            '<div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">' + extraHtml + '</div>' : '') +
         // 弟子状态
         '<div class="grid grid-cols-4 gap-2 mb-4">' +
         '<div class="bg-gray-800 p-2 rounded text-center"><p class="text-xs text-gray-400">职位</p><p class="text-purple-400 font-bold text-sm">' + (ds.rankName || '外门弟子') + '</p></div>' +
@@ -483,6 +573,7 @@ function showSectInnerView(sectName) {
         '<div class="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-700">' +
         '<button onclick="openSectTaskUI()" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-xs">📋 任务面板</button>' +
         '<button onclick="collectSectResources()" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-3 py-1 rounded text-xs">💰 领取俸禄</button>' +
+        '<button onclick="window.openSectLifePanel && openSectLifePanel()" class="bg-amber-700 hover:bg-amber-600 text-white px-3 py-1 rounded text-xs">🏮 门里的日子</button>' +
         '<button onclick="showSectRanks(\'' + sectName + '\')" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded text-xs">⬆️ 晋升</button>' +
         (typeof window.hasSectDeepData === 'function' && window.hasSectDeepData(sectName)
             ? '<button onclick="showSectDeepOverview(\'' + sectName + '\')" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded text-xs">📖 门派详情</button>'
@@ -570,6 +661,10 @@ function showSectDiplomacy(sectName) {
     var sects = window.sectsData || {};
     var diplomacy = SECT_DIPLOMACY_STATE[sectName] || {};
     var myType = sects[sectName] ? sects[sectName].type : '未知';
+    // 第十九波：自家山门（自建宗门）——面板不再是只读的，结盟/送礼/兴兵都落掌门自己的真账
+    var _inSect = !!(window.discipleState && window.discipleState.isInSect);
+    var _isPsHome = false;
+    try { _isPsHome = !!(window.PSectWorld && window.PSectWorld.homeName && window.PSectWorld.homeName() === sectName); } catch (ePsH) {}
     
     // 按关系排序
     var entries = Object.keys(diplomacy).map(function(other) {
@@ -579,7 +674,8 @@ function showSectDiplomacy(sectName) {
         return {
             name: other, type: otherType, relation: d.relation,
             label: relInfo.label, color: relInfo.color, icon: relInfo.icon,
-            trade: d.trade || 0, conflicts: d.conflicts || 0
+            trade: d.trade || 0, conflicts: d.conflicts || 0,
+            allied: (d.treaties || []).indexOf('alliance') >= 0
         };
     }).sort(function(a, b) { return b.relation - a.relation; });
     
@@ -635,11 +731,25 @@ function showSectDiplomacy(sectName) {
             html += '<div class="flex justify-between text-xs text-gray-500 mt-1">';
             html += '<span>贸易：' + e.trade + '次</span>';
             html += '<span>冲突：' + e.conflicts + '次</span>';
-            if (e.relation < 0 && window.discipleState && window.discipleState.isInSect) {
+            if (e.relation < 0 && _inSect && !_isPsHome) {
                 html += '<button onclick="initiateSectConflict(\'' + sectName + '\', \'' + e.name + '\')" class="text-red-400 hover:text-red-300">⚔️ 征讨</button>';
             }
-            if (e.relation >= 20 && window.discipleState && window.discipleState.isInSect) {
+            if (e.relation >= 20 && _inSect && !_isPsHome) {
                 html += '<button onclick="proposeSectAlliance(\'' + sectName + '\', \'' + e.name + '\')" class="text-green-400 hover:text-green-300">🤝 结盟</button>';
+            }
+            // 第十九波：自家山门的外交——掌门亲手办（钱走宗库真账，战是真仗）
+            if (_isPsHome) {
+                if (e.allied) {
+                    html += '<span class="text-green-400" title="盟书有约：山门有难，来相援">🤝 已盟·来相援</span>';
+                } else if (e.relation >= 20) {
+                    html += '<button onclick="window.psDiploAlly(\'' + e.name + '\')" class="text-green-400 hover:text-green-300">🤝 结盟（盘缠八十·宗库）</button>';
+                }
+                if (e.relation <= -40) {
+                    html += '<button onclick="window.psDiploWar(\'' + e.name + '\')" class="text-red-400 hover:text-red-300">⚔️ 兴兵</button>';
+                }
+                if (e.relation < 80) {
+                    html += '<button onclick="window.psDiploGift(\'' + e.name + '\')" class="text-amber-300 hover:text-amber-200">🎁 送礼（三十·月一回）</button>';
+                }
             }
             html += '</div></div>';
         });
@@ -659,37 +769,91 @@ function showSectDiplomacy(sectName) {
     html += '<li>关系低于-40可能触发敌对行动</li>';
     html += '</ul>';
     html += '</div>';
-    
+    // 江湖风云册入口（AI 门派之间的恩怨战事，sect-diplomacy-world）
+    if (typeof window.openWorldDiplomacy === 'function') {
+        html += '<div class="mt-3"><button onclick="window.openWorldDiplomacy()" class="w-full bg-indigo-800 hover:bg-indigo-700 text-xs px-3 py-2 rounded">🌍 江湖风云——别家门派之间的死仇、盟约与近来战事</button></div>';
+    }
     window.showModal('门派外交', html);
 }
 
 // 发起征讨
 function initiateSectConflict(mySect, targetSect) {
-    if (!confirm('确定向 ' + targetSect + ' 发起征讨？这将消耗门派资源并可能引发全面战争！')) return;
+    // 第十九波：自家山门没有贡献账可花——掌门兴兵走宿怨门控与真仗（殿议同一口径）
+    try {
+        if (window.PSBoot && window.PSBoot.isPlayerSect && window.PSBoot.isPlayerSect(mySect)) {
+            var we = (window.PSectWorld && window.PSectWorld.warEligible) ? window.PSectWorld.warEligible(mySect, targetSect) : { ok: false, text: '兴兵无名。' };
+            if (!we.ok) { if (window.showMessage) window.showMessage(we.text, 'warning'); return; }
+            if (window.declareWarForHome) window.declareWarForHome(mySect, targetSect);
+            return;
+        }
+    } catch (ePsW) {}
+    // v23.2 征讨不是点一下掉20关系的按钮：兴师动众要贡献开拔，胜负掷出来——
+    // 打赢缴获战利（贡献回本有余），打输自己带伤、仇结得更深
+    if (!confirm('确定向 ' + targetSect + ' 发起征讨？兴师需 200 贡献开拔，刀兵一开，胜负难料，仇怨必结。')) return;
+    var ds = window.discipleState || {};
+    if ((ds.contribution || 0) < 200) {
+        if (window.showMessage) window.showMessage('兴师动众需 200 贡献开拔（当前 ' + (ds.contribution || 0) + '）——粮草未足，谈何征讨。', 'warning');
+        return;
+    }
+    ds.contribution -= 200;
+    if (window.timeSystem && window.timeSystem.advanceTime) { try { window.timeSystem.advanceTime(240, '征讨点兵'); } catch (e) {} }
+    var _cWin = Math.random() < 0.55;
     if (SECT_DIPLOMACY_STATE[mySect] && SECT_DIPLOMACY_STATE[mySect][targetSect]) {
-        SECT_DIPLOMACY_STATE[mySect][targetSect].relation -= 20;
+        SECT_DIPLOMACY_STATE[mySect][targetSect].relation -= _cWin ? 20 : 30;
         SECT_DIPLOMACY_STATE[mySect][targetSect].conflicts += 1;
     }
     if (SECT_DIPLOMACY_STATE[targetSect] && SECT_DIPLOMACY_STATE[targetSect][mySect]) {
-        SECT_DIPLOMACY_STATE[targetSect][mySect].relation -= 20;
+        SECT_DIPLOMACY_STATE[targetSect][mySect].relation -= _cWin ? 20 : 30;
     }
     saveSectDiplomacy();
-    if (window.showMessage) window.showMessage('⚔️ 向 ' + targetSect + ' 发起征讨！关系恶化', 'error');
+    if (_cWin) {
+        ds.contribution = (ds.contribution || 0) + 320;
+        try { window.sectLedgerNote && window.sectLedgerNote(320, '外交出战·旗开得胜'); } catch (e) {}
+        if (window.showMessage) window.showMessage('⚔️ 捷报！门下弟子旗开得胜，缴获颇丰——记功 320 贡献。但 ' + targetSect + ' 这个仇算是结死了（关系-20）。', 'success');
+    } else {
+        if (window.currentCharData) window.currentCharData.health = Math.max(1, (window.currentCharData.health || 100) - 20);
+        if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e2) {} }
+        if (window.showMessage) window.showMessage('💔 征讨失利，弟子们带伤而回，你也在乱战中挂了彩（健康-20）。' + targetSect + ' 气焰更盛，仇怨加深（关系-30）。', 'error');
+    }
     showSectDiplomacy(mySect);
 }
 
 // 提议结盟
 function proposeSectAlliance(mySect, targetSect) {
-    if (!confirm('确定向 ' + targetSect + ' 提议结盟？')) return;
-    if (SECT_DIPLOMACY_STATE[mySect] && SECT_DIPLOMACY_STATE[mySect][targetSect]) {
-        SECT_DIPLOMACY_STATE[mySect][targetSect].relation += 15;
-        SECT_DIPLOMACY_STATE[mySect][targetSect].treaties.push('alliance');
+    // 第十九波：自家山门的盟约——盘缠走宗库真账（掌门没有贡献账）
+    try {
+        if (window.PSBoot && window.PSBoot.isPlayerSect && window.PSBoot.isPlayerSect(mySect)) {
+            if (window.psDiploAlly) window.psDiploAlly(targetSect);
+            return;
+        }
+    } catch (ePsA) {}
+    // v23.2 结盟有成败：使者要盘缠，成否看平日交情——旧版提议必成、白加15关系，外交成了加点按钮
+    if (!confirm('确定向 ' + targetSect + ' 提议结盟？使者盘缠需 100 贡献，成与不成，看两家平日交情。')) return;
+    var dsA = window.discipleState || {};
+    if ((dsA.contribution || 0) < 100) {
+        if (window.showMessage) window.showMessage('使者盘缠需 100 贡献（当前 ' + (dsA.contribution || 0) + '）——无礼无以言盟。', 'warning');
+        return;
     }
-    if (SECT_DIPLOMACY_STATE[targetSect] && SECT_DIPLOMACY_STATE[targetSect][mySect]) {
-        SECT_DIPLOMACY_STATE[targetSect][mySect].relation += 15;
+    dsA.contribution -= 100;
+    if (window.timeSystem && window.timeSystem.advanceTime) { try { window.timeSystem.advanceTime(120, '遣使议盟'); } catch (e) {} }
+    var _rel = (SECT_DIPLOMACY_STATE[mySect] && SECT_DIPLOMACY_STATE[mySect][targetSect] && SECT_DIPLOMACY_STATE[mySect][targetSect].relation) || 0;
+    var _aChance = Math.min(0.9, Math.max(0.15, 0.5 + _rel / 200));
+    var _aOk = Math.random() < _aChance;
+    if (SECT_DIPLOMACY_STATE[mySect] && SECT_DIPLOMACY_STATE[mySect][targetSect]) {
+        if (_aOk) {
+            SECT_DIPLOMACY_STATE[mySect][targetSect].relation += 15;
+            SECT_DIPLOMACY_STATE[mySect][targetSect].treaties.push('alliance');
+            if (SECT_DIPLOMACY_STATE[targetSect] && SECT_DIPLOMACY_STATE[targetSect][mySect]) {
+                SECT_DIPLOMACY_STATE[targetSect][mySect].relation += 15;
+            }
+        } else {
+            SECT_DIPLOMACY_STATE[mySect][targetSect].relation -= 5;
+        }
     }
     saveSectDiplomacy();
-    if (window.showMessage) window.showMessage('🤝 与 ' + targetSect + ' 结盟成功！关系提升', 'success');
+    if (window.showMessage) window.showMessage(_aOk
+        ? '🤝 使者回禀：' + targetSect + ' 愿与本门结盟，两家互换信物！（关系+15）'
+        : '📜 使者空手而回——' + targetSect + ' 婉拒：「时机未到。」（关系-5；平日多走动，成功率更高）', _aOk ? 'success' : 'warning');
     showSectDiplomacy(mySect);
 }
 
@@ -718,3 +882,236 @@ if (window.StateRegistry) {
         }
     });
 }
+
+// ==================== 第三十六波 · 散修拜山三事（外院待客） ====================
+// 游客进得了外院，此前却只能看公告、逛坊市、求见掌门——名门当面，连句交情都结不下。
+// 三件待客事：递拜山帖（礼金结交情）/ 演武切磋（点到为止，赢彩头）/ 藏经借抄（在册抄费，
+// 落 artInsights 掌握度——进运功栏真能出招；六维折算只认本派，不双吃；镇派神功不外传）。
+// 交情账记在角色数据 _sectVisit[宗门名]（一人一本、随存档走）——
+// 与 SECT_DIPLOMACY_STATE 两不相干：那是宗门与宗门之间的脸面，这是你个人的交情。
+var SECT_VISIT_CFG = {
+    GIFT_COST: 20,          // 拜山帖礼金
+    SPAR_ENERGY: 10,        // 切磋耗精力（竞技场同口径）
+    SPAR_WIN_STONES: 30,    // 切磋彩头（小额，一日一回封顶）
+    SPAR_WIN_FAVOR: 2,      // 赢了交情 +2
+    FAVOR_TIER1: 5,         // 借抄入门流通卷的交情门槛
+    FAVOR_TIER2: 8,         // 借抄内门真传卷的交情门槛
+    BORROW_MASTERY: 30      // 抄本到手时的掌握度（三成——深修得下真功夫）
+};
+
+function sectVisitChar() {
+    var d = null;
+    try { d = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : null; } catch (e) {}
+    return d || window.currentCharData || null;
+}
+function sectVisitMsg(m, t) { if (window.showMessage) window.showMessage(m, t || 'info'); }
+function sectVisitDay() {
+    try {
+        if (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') return Number(window.timeSystem.getAbsoluteDay()) || 0;
+    } catch (e) {}
+    return 0;
+}
+function sectVisitPassTime(minutes, reason) {
+    try {
+        if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') window.timeSystem.advanceTime(minutes, reason);
+    } catch (e) {}
+}
+function sectVisitDeduct(n) {
+    try {
+        if (window.DataManager && typeof window.DataManager.deductSpiritStones === 'function') return !!window.DataManager.deductSpiritStones(n);
+    } catch (e) {}
+    return false;
+}
+function sectVisitCredit(n) {
+    try {
+        if (window.EconomyTransaction && typeof window.EconomyTransaction.credit === 'function') { window.EconomyTransaction.credit('spiritStones', n); return; }
+        if (window.DataManager && typeof window.DataManager.addSpiritStones === 'function') window.DataManager.addSpiritStones(n);
+    } catch (e) {}
+}
+function sectVisitRealmTier(r) {
+    try { if (typeof window.getRealmTier === 'function') return Math.max(1, Number(window.getRealmTier(r)) || 1); } catch (e) {}
+    return 1;
+}
+// 一人一本的交情账：{ favor, lastGiftDay, lastSparDay, borrowed:{artId:day} }
+function sectVisitLedger(sectName) {
+    var c = sectVisitChar();
+    if (!c || !sectName) return null;
+    if (!c._sectVisit || typeof c._sectVisit !== 'object') c._sectVisit = {};
+    var e = c._sectVisit[sectName];
+    if (!e || typeof e !== 'object') e = c._sectVisit[sectName] = {};
+    if (typeof e.favor !== 'number' || !isFinite(e.favor) || e.favor < 0) e.favor = 0;
+    if (!e.borrowed || typeof e.borrowed !== 'object') e.borrowed = {};
+    return e;
+}
+function sectVisitFavor(sectName) {
+    var c = sectVisitChar();
+    var e = c && c._sectVisit ? c._sectVisit[sectName] : null;
+    return (e && Number(e.favor)) || 0;
+}
+function sectVisitArts(sectName) {
+    try {
+        var t = window.SECT_SPECIFIC_ARTS && window.SECT_SPECIFIC_ARTS[sectName];
+        return Array.isArray(t) ? t : [];
+    } catch (e) { return []; }
+}
+function sectVisitInsights() {
+    var ds = window.discipleState || (window.discipleState = {});
+    if (!ds.artInsights || typeof ds.artInsights !== 'object') ds.artInsights = {};
+    return ds.artInsights;
+}
+// 借抄门槛：返回 null 可抄；否则返回门槛话术
+function sectVisitBorrowGate(art, favor) {
+    var t = Number(art.tier) || 1;
+    if (t >= 4 || art.transmit === 'direct') return '镇派神功，非亲传不外授';
+    if (t >= 2 && favor < SECT_VISIT_CFG.FAVOR_TIER2) return '交情不足（需 ' + SECT_VISIT_CFG.FAVOR_TIER2 + '，现有 ' + favor + '）';
+    if (t < 2 && favor < SECT_VISIT_CFG.FAVOR_TIER1) return '交情不足（需 ' + SECT_VISIT_CFG.FAVOR_TIER1 + '，现有 ' + favor + '）';
+    return null;
+}
+
+// ---------- 一 · 递拜山帖 ----------
+function sectVisitGift(sectName) {
+    var c = sectVisitChar();
+    if (!c) { sectVisitMsg('请先创建角色。', 'warning'); return false; }
+    var e = sectVisitLedger(sectName);
+    if (!e) return false;
+    if (e.lastGiftDay === sectVisitDay()) { sectVisitMsg('🎁 今日已递过拜山帖——知客弟子笑着拱手：「帖收下了，人天天见，礼就不必天天带了。」', 'info'); return false; }
+    if (!sectVisitDeduct(SECT_VISIT_CFG.GIFT_COST)) { sectVisitMsg('礼金不齐（需 ' + SECT_VISIT_CFG.GIFT_COST + ' 灵石）——空手上山，门房也不好替你通传。', 'warning'); return false; }
+    e.favor += 1;
+    e.lastGiftDay = sectVisitDay();
+    sectVisitPassTime(30, '拜山递帖');
+    sectVisitMsg('🎁 你递上拜山帖与礼金，知客弟子引你入偏厅奉茶——「' + sectName + '」记住了你的名号。（交情 +1）', 'success');
+    try { if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI(); } catch (eUi) {}
+    try { showSectOuterView(sectName); } catch (eRe) {}
+    return true;
+}
+
+// ---------- 二 · 演武切磋 ----------
+function sectVisitSpar(sectName) {
+    var c = sectVisitChar();
+    if (!c) { sectVisitMsg('请先创建角色。', 'warning'); return false; }
+    var e = sectVisitLedger(sectName);
+    if (!e) return false;
+    if (e.lastSparDay === sectVisitDay()) { sectVisitMsg('⚔️ 今日已切磋过——执役弟子揉着手腕苦笑：「明日再来，容我先养养筋骨。」', 'info'); return false; }
+    var energy = Number(c.energy != null ? c.energy : 100) || 0;
+    if (energy < SECT_VISIT_CFG.SPAR_ENERGY) { sectVisitMsg('精力不足，演武场上站不稳——歇够了再来。', 'warning'); return false; }
+    if (typeof window.startBattle !== 'function') { sectVisitMsg('演武场今日封场（战斗系统未就绪）。', 'warning'); return false; }
+
+    c.energy = energy - SECT_VISIT_CFG.SPAR_ENERGY;
+    e.lastSparDay = sectVisitDay();
+    sectVisitPassTime(60, '山门切磋');
+
+    // 对手强弱：你的境界定基准，该宗体量加偏置（巨擘门下的执役弟子也不好惹）
+    var tier = sectVisitRealmTier(c.realm);
+    var info = (window.sectsData && window.sectsData[sectName]) || {};
+    var bias = info.power === '巨擘' ? 2 : info.power === '大派' ? 1 : 0;
+    var scale = 1 + bias * 0.1;
+    var base = 30 + tier * 8;
+    var lv = Math.max(1, (typeof window.realmScaledEnemyLevel === 'function' ? window.realmScaledEnemyLevel(c) : tier * 3) + bias);
+    var enemyData = {
+        name: '「' + sectName + '」演武场执役弟子（切磋）', type: 'enemy', physiologyType: 'humanoid',
+        level: lv,
+        attack: Math.round((base + 6) * scale), defense: Math.round((base * 0.6 + 4) * scale), speed: Math.round((18 + tier * 2) * scale),
+        maxDurability: Math.round((90 + tier * 18) * scale), durabilities: { chest: Math.round((90 + tier * 18) * scale) },
+        combatAbilities: [], sect: sectName
+    };
+    var b = window.startBattle(enemyData);
+    if (b) {
+        b._isSpar = true;             // 点到为止：不搜刮、不结仇、败不昏迷（既有语义）
+        b.noSpoils = true;
+        b._isSectVisitSpar = true;    // 拜山切磋标记：结算走 settleSectVisitSpar
+        b._visitSect = sectName;
+    }
+    try { if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus(); } catch (eSt) {}
+    return !!b;
+}
+
+// 战后结算（app.js 切磋分支调用，与演武场切磋同挂法）
+function settleSectVisitSpar(win) {
+    var b = window.currentBattle || {};
+    var sectName = b._visitSect;
+    if (!sectName) return;
+    var e = sectVisitLedger(sectName);
+    if (!e) return;
+    if (win) {
+        e.favor += SECT_VISIT_CFG.SPAR_WIN_FAVOR;
+        sectVisitCredit(SECT_VISIT_CFG.SPAR_WIN_STONES);
+        sectVisitMsg('⚔️ 点到为止，你胜了半招——「' + sectName + '」的弟子们抱拳围观，管事的递来一袋彩头。（交情 +' + SECT_VISIT_CFG.SPAR_WIN_FAVOR + '，灵石 +' + SECT_VISIT_CFG.SPAR_WIN_STONES + '）', 'success');
+        try { if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI(); } catch (eCur) {}
+    } else {
+        sectVisitMsg('⚔️ 切磋落败——执役弟子收势还礼：「阁下手底下有东西，养好了再来。」败而不辱，山门记你的胆气。', 'info');
+    }
+}
+
+// ---------- 三 · 藏经借抄 ----------
+function sectVisitBorrow(sectName, artId) {
+    var c = sectVisitChar();
+    if (!c) { sectVisitMsg('请先创建角色。', 'warning'); return false; }
+    var e = sectVisitLedger(sectName);
+    if (!e) return false;
+    var arts = sectVisitArts(sectName);
+    var art = null;
+    for (var i = 0; i < arts.length; i++) { if (arts[i] && arts[i].id === artId) { art = arts[i]; break; } }
+    if (!art) { sectVisitMsg('藏经阁查无此卷。', 'warning'); return false; }
+    var ins = sectVisitInsights();
+    if (ins[artId] && Number(ins[artId].m) > 0) { sectVisitMsg('📜 《' + art.name + '》你早已抄在手——不必重复花这笔抄费。', 'info'); return false; }
+    var gate = sectVisitBorrowGate(art, e.favor);
+    if (gate) { sectVisitMsg('📜 藏经阁执事摇头：「' + gate + '。」', 'warning'); return false; }
+    var price = Number(art.copyPrice) || 300;
+    if (!sectVisitDeduct(price)) { sectVisitMsg('抄费不齐（《' + art.name + '》需 ' + price + ' 灵石的纸墨与功德钱）。', 'warning'); return false; }
+    ins[artId] = { heard: true, m: SECT_VISIT_CFG.BORROW_MASTERY, from: '借抄·' + sectName };
+    e.borrowed[artId] = sectVisitDay();
+    sectVisitPassTime(120, '藏经阁借抄');
+    sectVisitMsg('📜 你在「' + sectName + '」藏经阁抄完《' + art.name + '》——抄本入手三成火候，运功栏里已可运转此功；要练到深处，得下真功夫。（抄费 ' + price + ' 灵石）', 'success');
+    try { if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI(); } catch (eC) {}
+    try { showSectOuterView(sectName); } catch (eRe) {}
+    return true;
+}
+
+// ---------- 外院待客卡（游客专属；自家弟子走贡献账，不在此列） ----------
+function renderSectVisitHospitality(sectName, isMember) {
+    if (isMember) return '';
+    var c = sectVisitChar();
+    if (!c) return '';
+    var e = sectVisitLedger(sectName) || {};
+    var favor = sectVisitFavor(sectName);
+    var day = sectVisitDay();
+    var ins = (window.discipleState && window.discipleState.artInsights) || {};
+    var q = function (s) { return String(s).replace(/'/g, ''); };   // 名号进 onclick 前抹掉单引号，防串线
+    var name = q(sectName);
+
+    var h = '<div class="bg-gray-800/50 p-3 rounded border border-amber-700 col-span-full">';
+    h += '<div class="flex items-center gap-2 mb-1"><span class="text-lg">🤝</span>' +
+        '<div class="flex-1"><p class="font-bold text-sm text-white">拜山待客</p>' +
+        '<p class="text-xs text-gray-400">个人交情 <span class="text-amber-300 font-bold">' + favor + '</span> 分——递帖 +1 · 切磋胜 +' + SECT_VISIT_CFG.SPAR_WIN_FAVOR + '</p></div></div>';
+    h += '<div class="flex flex-wrap gap-2 mt-2">';
+    h += '<button onclick="sectVisitGift(\'' + name + '\')" class="bg-amber-700 hover:bg-amber-600 text-white px-2 py-0.5 rounded text-xs font-bold">🎁 递拜山帖（礼金 ' + SECT_VISIT_CFG.GIFT_COST + '）' + (e.lastGiftDay === day ? ' · 今日已递' : '') + '</button>';
+    h += '<button onclick="sectVisitSpar(\'' + name + '\')" class="bg-red-700 hover:bg-red-600 text-white px-2 py-0.5 rounded text-xs font-bold">⚔️ 演武切磋（耗精力 ' + SECT_VISIT_CFG.SPAR_ENERGY + '）' + (e.lastSparDay === day ? ' · 今日已切磋' : '') + '</button>';
+    h += '</div>';
+    // 藏经借抄（外院知客代借——内院藏经阁是弟子才能进的）
+    var arts = sectVisitArts(sectName);
+    if (arts.length) {
+        h += '<div class="border-t border-gray-700 mt-2 pt-2"><p class="text-xs text-yellow-400 font-bold mb-1">📜 藏经阁借抄 <span class="text-gray-500 font-normal">（交情 ' + SECT_VISIT_CFG.FAVOR_TIER1 + ' 分起抄流通卷，' + SECT_VISIT_CFG.FAVOR_TIER2 + ' 分起抄真传卷）</span></p>';
+        arts.forEach(function (a) {
+            var known = ins[a.id] && Number(ins[a.id].m) > 0;
+            var gate = sectVisitBorrowGate(a, favor);
+            var price = Number(a.copyPrice) || 300;
+            var btn;
+            if (known) btn = '<span class="text-[11px] text-green-400">已抄在手</span>';
+            else if (gate) btn = '<span class="text-[11px] text-gray-500">' + gate + '</span>';
+            else btn = '<button onclick="sectVisitBorrow(\'' + name + '\', \'' + q(a.id) + '\')" class="text-[11px] px-2 py-0.5 rounded bg-indigo-700 hover:bg-indigo-600 text-white">借抄 · ' + price + ' 灵石</button>';
+            h += '<div class="flex justify-between items-center gap-2 py-0.5">' +
+                '<span class="text-xs text-gray-200">《' + a.name + '》<span class="text-gray-500 text-[11px] ml-1">' + (a.grade || '') + (a.type ? ' · ' + a.type : '') + '</span></span>' + btn + '</div>';
+        });
+        h += '</div>';
+    }
+    h += '</div>';
+    return h;
+}
+
+window.SECT_VISIT_CFG = SECT_VISIT_CFG;
+window.sectVisitGift = sectVisitGift;
+window.sectVisitSpar = sectVisitSpar;
+window.sectVisitBorrow = sectVisitBorrow;
+window.settleSectVisitSpar = settleSectVisitSpar;
+window.sectVisitFavor = sectVisitFavor;
+window.renderSectVisitHospitality = renderSectVisitHospitality;

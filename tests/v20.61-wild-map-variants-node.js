@@ -409,7 +409,8 @@ console.log('\n[V8] 收获有名目：翻出来的是什么，说得出口');
         }
         if (spot && walkTo(global.currentMap, spot)) {
             msgs.length = 0;
-            api.poiAction('gather');
+            // v23.1 采集补了一成惊兽之险——验账目时拨开风险（0.99 桩：不中险、不撞上品产地）
+            restoreRandom(function () { api.poiAction('gather'); });
             var line2 = msgs.map(function (m) { return m.m; }).join(' | ');
             assert(/mat_|undefined/.test(line2) === false, '采集话术不该掉代号（' + line2.slice(0, 60) + '）');
             assert(/×\d/.test(line2), '采集该说清收成（' + line2.slice(0, 60) + '）');

@@ -130,6 +130,31 @@
         return { ok: true, output: out, newExhausted: p.exhausted };
     }
 
+    // ============== 第一百零九波 · 占领线通电 ==============
+    // 此前 claim/attack 全库零调用——「占领」是死账，无主产地永远无主，玩家只能永远暗采。
+    // 现在散修可以掏自己的灵石把无主产地占下来：占下之后光明正大全量采撷，不用再躲看守。
+    var PLAYER_CLAIM_COST = 300;
+    function claimByPlayer(pointId) {
+        var p = getPoint(pointId);
+        if (!p) return { ok: false, reason: 'point-not-found' };
+        if (p.ownerSect) return { ok: false, reason: 'already-owned', owner: p.ownerSect };
+        var wallet = (window.inventory && window.inventory.currency) ? window.inventory.currency : null;
+        var have = wallet ? (Number(wallet.spiritStones) || 0) : 0;
+        if (!wallet || have < PLAYER_CLAIM_COST) {
+            return { ok: false, reason: 'stones-low', need: PLAYER_CLAIM_COST, have: have };
+        }
+        wallet.spiritStones = have - PLAYER_CLAIM_COST;
+        p.ownerSect = 'player';
+        p.discovered = true;
+        recordHistory({ day: (window.WorldCalendar && window.WorldCalendar.day) || 0, type: 'player-claim', pointId: pointId });
+        if (window.EventBus) {
+            window.EventBus.emit('resourcePoint:claim', { pointId: pointId, sectId: 'player', point: p });
+            window.EventBus.emit('resourcePoint:ownerChange', { pointId: pointId, newOwner: 'player' });
+        }
+        try { if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI(); } catch (e) {}
+        return { ok: true, owner: 'player', cost: PLAYER_CLAIM_COST };
+    }
+
     function tickDay() {
         var recovered = [];
         for (var i = 0; i < _state.points.length; i++) {
@@ -177,6 +202,8 @@
         listByOwner: listByOwner,
         calcYield: calcYield,
         claim: claim,
+        claimByPlayer: claimByPlayer,
+        PLAYER_CLAIM_COST: PLAYER_CLAIM_COST,
         attack: attack,
         harvest: harvest,
         tickDay: tickDay,

@@ -22,6 +22,8 @@
         SNOW:     { name: '雪线',   base: '#d7e0e8', accent: '#eef3f7', moveCost: 3,   symbol: '',  passable: true,  qi: 1.1,  kind: 'snow' },
         FROZEN:   { name: '冻土',   base: '#8ba0ac', accent: '#a3b6c0', moveCost: 2,   symbol: '',  passable: true,  qi: 0.7,  kind: 'frozen' },
         WATER:    { name: '水域',   base: '#2f6f9e', accent: '#4a8ab5', moveCost: 99,  symbol: '',  passable: false, qi: 1.1,  kind: 'water' },
+        // 四十七波 · 四时改地：冬天河面封冻的「有效地形」——只活在季节覆层里，建图永不生成它
+        RIVER_ICE: { name: '河冰',  base: '#b9d4e4', accent: '#d6e8f2', moveCost: 2,   symbol: '',  passable: true,  qi: 1.1,  kind: 'riverice' },
         FORD:     { name: '浅滩',   base: '#5a8aa8', accent: '#7fa8c0', moveCost: 3,   symbol: '',  passable: true,  qi: 1.0,  kind: 'ford' },
         DESERT:   { name: '荒漠',   base: '#d3bb7a', accent: '#e2cd92', moveCost: 2,   symbol: '',  passable: true,  qi: 0.6,  kind: 'desert' },
         SWAMP:    { name: '沼泽',   base: '#4c5f34', accent: '#5d7240', moveCost: 3,   symbol: '',  passable: true,  qi: 0.8,  kind: 'swamp' },
@@ -59,6 +61,8 @@
         // 高位面也该有自己的地皮：灵界清透、魔界赤浊
         '灵界':   { sea: 0.08,  mount: -0.04, forest: 0.36, cold: 0.06, arid: 0.0, swamp: 0.2, volcano: 0,     spring: 5, rivers: 3, roads: 3, tint: '#7fd6d0' },
         '魔界':   { sea: -0.06, mount: -0.06, forest: 0.62, cold: 0.16, arid: -0.04, swamp: 0.8, volcano: 0.05, spring: 1, rivers: 2, roads: 3, tint: '#a2464a' },
+        // v44 天界：飞升者的地界——少水多山、灵泉处处、云原金霞，凡间市镇一概不生（仙人不设俗市）
+        '天界':   { sea: -0.10, mount: 0.10, forest: 0.30, cold: 0.04, arid: -0.10, swamp: -0.10, volcano: 0, spring: 6, rivers: 2, roads: 2, tint: '#e8d9a0' },
         'default': { sea: 0.0,  mount: 0.0,  forest: 0.52, cold: 0.0,  arid: 0.0,  swamp: 0.4, volcano: 0,     spring: 2, rivers: 2, roads: 4, tint: '#8fb35a' }
     };
 
@@ -75,7 +79,8 @@
             '南疆': ['炎堡', '毒瘴', '赤水'], '西漠': ['黄沙', '金城', '佛塔'],
             '北冥': ['冰原', '寒潭', '朔风'], '蜀地': ['剑门', '青城', '蜀冈'],
             '东南海域': ['海角', '鲛人', '渔火'], '灵界': ['仙境', '罡风', '云阶'],
-            '魔界': ['九幽', '血漠', '骨原']
+            '魔界': ['九幽', '血漠', '骨原'],
+            '天界': ['凌霄', '紫霄', '斗率']
         }
     };
 
@@ -291,7 +296,8 @@
         '东荒':   [{ t: 'PRIMFOREST', n: [1, 2], size: [5, 10], where: 'forest' }],
         '东南海域': [{ t: 'WRECK', n: [1, 2], size: [1, 2], where: 'water' }, { t: 'WHIRLPOOL', n: [1, 2], size: [1, 1], where: 'water' }],
         '灵界':   [{ t: 'QIPOOL', n: [1, 2], size: [2, 4], where: 'any' }],
-        '魔界':   [{ t: 'BONEFIELD', n: [1, 2], size: [4, 8], where: 'any' }]
+        '魔界':   [{ t: 'BONEFIELD', n: [1, 2], size: [4, 8], where: 'any' }],
+        '天界':   [{ t: 'QIPOOL', n: [2, 3], size: [2, 4], where: 'any' }]
     };
 
     // where 的安土：只在合适的地方扎根，瘴沼不长在雪线上
@@ -374,15 +380,24 @@
         var pre = (NAME_POOLS.prefix[region] || ['野'])[Math.floor(rng() * (NAME_POOLS.prefix[region] || ['野']).length)];
         var list = [];
 
-        // 村镇 1~2：落脚、打尖、补给
-        list.push({ type: 'town', name: pickName(rng, NAME_POOLS.town, used), icon: '🏘️', prefer: ['PLAIN', 'ROAD'], label: '村镇' });
-        if (rng() < 0.6) list.push({ type: 'town', name: pre + pickName(rng, NAME_POOLS.town, used), icon: '🏘️', prefer: ['PLAIN'], label: '村镇' });
+        // v44 天界无俗市：仙人不做买卖——村镇坊市一概不生，改立仙府（此分支只影响天界自己的种子，九域骰序零漂移）
+        var isTianjie = region === '天界';
+        if (!isTianjie) {
+            // 村镇 1~2：落脚、打尖、补给
+            list.push({ type: 'town', name: pickName(rng, NAME_POOLS.town, used), icon: '🏘️', prefer: ['PLAIN', 'ROAD'], label: '村镇' });
+            if (rng() < 0.6) list.push({ type: 'town', name: pre + pickName(rng, NAME_POOLS.town, used), icon: '🏘️', prefer: ['PLAIN'], label: '村镇' });
 
-        // 坊市 1：野市，交易
-        list.push({ type: 'market', name: pre + pickName(rng, NAME_POOLS.market, used), icon: '🏪', prefer: ['PLAIN', 'ROAD'], label: '坊市' });
+            // 坊市 1：野市，交易
+            list.push({ type: 'market', name: pre + pickName(rng, NAME_POOLS.market, used), icon: '🏪', prefer: ['PLAIN', 'ROAD'], label: '坊市' });
+        }
 
-        // 洞府 1：闭关修炼
-        list.push({ type: 'cave', name: pickName(rng, NAME_POOLS.cave, used), icon: '🕳️', prefer: ['MOUNTAIN', 'FOREST'], label: '洞府' });
+        // 洞府 1：闭关修炼（天界是仙府两座——修行的地界，落脚处就是道场）
+        if (isTianjie) {
+            list.push({ type: 'cave', name: pre + '仙府', icon: '⛩️', prefer: ['MOUNTAIN', 'FOREST'], label: '仙府' });
+            list.push({ type: 'cave', name: pre + '云宫', icon: '⛩️', prefer: ['MOUNTAIN'], label: '仙府' });
+        } else {
+            list.push({ type: 'cave', name: pickName(rng, NAME_POOLS.cave, used), icon: '🕳️', prefer: ['MOUNTAIN', 'FOREST'], label: '洞府' });
+        }
 
         // 遗迹 1~2：本地区有名地标优先（来自图鉴表），凑不满用无名遗迹
         var named = (injected.landmarks || []).slice(0, 2);
@@ -402,10 +417,17 @@
         };
 
         // 真实资源点（灵脉/矿脉/药园）
-        (injected.resources || []).slice(0, 3).forEach(function (rp) {
+        // 第一百零九波：不再定序取前三——天空五处产地里排第四第五的星辰矿（星辰铁唯一野外产地）
+        // 和蟠桃园被 slice 永远切掉，谁也走不到。改成按游戏日轮转：每 3 天换一批，处处轮得到。
+        var _resAll = injected.resources || [];
+        var _resDay = 0;
+        try { if (typeof window.getAbsoluteDay === 'function') _resDay = window.getAbsoluteDay() || 0; } catch (eDay) {}
+        var _resOff = _resAll.length > 3 ? (Math.floor(_resDay / 3) % _resAll.length) : 0;
+        for (var _ri = 0; _ri < Math.min(3, _resAll.length); _ri++) {
+            var rp = _resAll[(_resOff + _ri) % _resAll.length];
             var prefer = rp.type === 'mine' ? ['MOUNTAIN', 'DESERT'] : rp.type === 'herb_garden' ? ['FOREST', 'SWAMP'] : ['MOUNTAIN', 'SPRING'];
             list.push({ type: 'resource', name: rp.name, refId: rp.id, icon: rp.type === 'mine' ? '⛏️' : rp.type === 'herb_garden' ? '🌿' : '💎', prefer: prefer, label: '资源点' });
-        });
+        }
 
         // 秘境入口（每日生成的动态秘境）
         (injected.dungeons || []).slice(0, 1).forEach(function (dg) {

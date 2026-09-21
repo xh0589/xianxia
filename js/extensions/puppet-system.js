@@ -49,7 +49,7 @@
         if (!window.itemById) window.itemById = {};
         Object.keys(PARTS).forEach(function (cat) {
             PARTS[cat].forEach(function (p) {
-                var quality = p.tier >= 3 ? 'EPIC' : (p.tier === 2 ? 'RARE' : 'UNCOMMON');
+                var quality = p.tier >= 3 ? 'PIN5' : (p.tier === 2 ? 'PIN7' : 'PIN8');
                 window.itemById[p.id] = {
                     id: p.id, name: p.name, type: 'consumable', subtype: 'puppet_part',
                     category: 'consumable', quality: quality, level: p.tier * 5, price: p.price,

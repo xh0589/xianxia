@@ -130,17 +130,19 @@ function freshDs(rank, sect) {
 
 // ============ 批次 A：openTournament + joinTournament + runTournament ============
 
-// 1) 弟子开不了
+// 1) 批五 · 掌门锁拆除：开比是门派的节令，不是玩家的权限——外门弟子照样开得
 mockWindow.discipleState = freshDs(5, '少林寺');
 setDay(1);
 var r1 = mockWindow.openTournament('少林寺', 'season');
-assert(r1 === null, '弟子开不了大比');
-
-mockWindow.discipleState = freshDs(0, '少林寺'); // 掌门
-var ev1 = mockWindow.openTournament('少林寺', 'season');
-assert(ev1 && ev1.tier === 'season', '掌门开小比 OK');
-assert(ev1.status === 'open', '初始状态 open');
+assert(r1 && r1.tier === 'season', '外门弟子可开小比（批五·孤岛打通）');
+var ev1 = r1;
+assert(ev1 && ev1.status === 'open', '初始状态 open');
 assert(ev1.contestants.length === 0, '初始 0 参赛');
+
+// 已有赛事在身，掌门也不另开一场
+mockWindow.discipleState = freshDs(0, '少林寺'); // 掌门
+var ev1_leader = mockWindow.openTournament('少林寺', 'season');
+assert(ev1_leader === null, '已有进行中的赛事：谁都不再开新场');
 
 // 2) 重复开
 var ev1_dup = mockWindow.openTournament('少林寺', 'year');
@@ -238,8 +240,12 @@ var h6 = mockWindow.Tournament._store()['少林寺'].history[st6.contestants.len
 assert(mockWindow.SECT_INTERNAL['少林寺'].morale >= 60, 'morale 提升（50+5+10=65）');
 assert(mockWindow.SECT_INTERNAL['少林寺'].resources === 1100, '资源+100');
 
-// 11) addTournamentWin 钩被调
-assert(addTournamentWinCount >= 1, 'addTournamentWin 钩被调（≥1）');
+// 11) addTournamentWin 钩（第一百零九波新口径：替你夺了魁才算「大比称雄」——NPC 夺冠不再自动记账）
+if (st6.winnerId === 'player') {
+    assert(addTournamentWinCount >= 1, '玩家夺冠：addTournamentWin 钩被调（≥1）');
+} else {
+    assert(addTournamentWinCount === 0, 'NPC 夺冠：addTournamentWin 不记（年目标不再零参与自动完成）');
+}
 
 // 12) 侍妾不可参赛
 hardReset();
@@ -274,7 +280,8 @@ assert(st90.lastSeason === 90, 'lastSeason=90 (实际 ' + st90.lastSeason + ')')
 // 应自动报名 NPC
 assert(st90.currentEvent.contestants.length > 0, 'autoEnrollNpcs 报名 NPC (实际 ' + st90.currentEvent.contestants.length + ')');
 
-// 14) day=180 lastSeason 不变（90 周期只触发一次）
+// 14) day=180 正常开下一届（第一百一十波新口径：90 天一届的节奏不跳拍——
+// 旧版结算把 lastSeason 覆写成 closesDay(+7)，day=180 那届被拒，小比实际 180 天一届）
 hardReset();
 mockWindow.discipleState = freshDs(0, '少林寺');
 // 先开过一次（手动）
@@ -283,7 +290,7 @@ mockWindow.Tournament_tickDay('少林寺', 90);
 setDay(180);
 mockWindow.Tournament_tickDay('少林寺', 180);
 var st180 = mockWindow.Tournament._store()['少林寺'];
-assert(!st180.currentEvent || st180.currentEvent.tier !== 'season', 'day=180 不开小比（已开过）');
+assert(st180.currentEvent && st180.currentEvent.tier === 'season', 'day=180 下一届小比照开（节奏不跳拍）');
 
 // 15) day=360 自动开大比
 hardReset();
@@ -293,13 +300,13 @@ mockWindow.Tournament_tickDay('少林寺', 360);
 var st360 = mockWindow.Tournament._store()['少林寺'];
 assert(st360.currentEvent && st360.currentEvent.tier === 'year', 'day=360 自动开大比');
 
-// 16) 弟子在场不开赛事
+// 16) 批五 · 弟子在场照样开赛事（开比是节令不是权限），且自家弟子收到开锣通知
 hardReset();
 mockWindow.discipleState = freshDs(5, '少林寺'); // 弟子
 setDay(90);
 mockWindow.Tournament_tickDay('少林寺', 90);
 var stDis = mockWindow.Tournament._store()['少林寺'];
-assert(!stDis.currentEvent, '弟子在场不开赛事');
+assert(stDis.currentEvent && stDis.currentEvent.tier === 'season', '弟子在场也自动开小比（批五·孤岛打通）');
 
 // 17) 过期赛事自动关闭
 hardReset();

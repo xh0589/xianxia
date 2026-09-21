@@ -207,7 +207,10 @@ ok(mh.indexOf('loan_mortgage') < 0, 'C6 抵押死链节点清除');
 ok(mh.indexOf('"karma":-3') >= 0, 'C7 借贷有业障代价');
 var pw = EN.facilities.pawn_shop;
 // v20.20 起当铺一票两轨：典当（真账本，可赎）与卖断（行情现算）。断言迁移到新结构。
+// 第八十二波·当铺-01：固定三格之后添了「自选典当」清单口（choices[3]），老位次不挪。
 var pwStart = pw.scenarios[0].nodes.pw_start;
+var pwPick = pwStart.choices[3];
+ok(pwPick.effects.pawn.op === 'pick', 'C7b 自选典当清单口在册（服务通用，场景不再封闭）');
 var pwSell = pwStart.choices[2];
 var sellVal = typeof pwSell.effects.stones === 'function' ? pwSell.effects.stones() : pwSell.effects.stones;
 eq(sellVal, 250, 'C8 当铺卖断=行情现算（无行情桩按平价 250）');

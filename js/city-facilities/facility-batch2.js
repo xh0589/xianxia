@@ -267,20 +267,26 @@ scenarioEngine.register('oddity_museum', {
             od_war: {
                 desc: '卷宗记载：百年前正邪大战，战场就在城北百里外的荒原。\n\n据说那里至今仍有残存的阵法和未散尽的怨气，偶尔有人在那里捡到遗落的法器。',
                 choices: [
-                    { text: '🗺️ 记下位置，改日去探索', next: null, effects: { exp: 15, msg: '你获得了一条探索线索。', time: 5 } },
+                    // v23.0 空头支票兑现：旧版「记下位置改日去探索」只给一句空话——
+                    // 现在抄图馆主真赠残片，亲赴战场则有成败两可的真收获
+                    { text: '🗺️ 抄下战场舆图', next: null, effects: { exp: 15, time: 25, items: [{ itemId: 'spec_map_fragment', count: 1 }], msg: '你细细抄下战场方位。馆主见你有心，从匣底摸出一枚旧残片相赠：「当年有人从荒原捡回来的，放在我这儿是死物，给你吧。」' } },
+                    { text: '⚔️ 即刻动身，去荒原战场走一趟', next: null, effects: { time: 180, roll: { prob: 0.55, win: { exp: 30, items: [{ itemId: 'mat_meteorite', count: 1 }], msg: '残阵的怨气比你预想的淡——你在焦土深处掘得一块陨铁，正是当年大战遗落之物。' }, lose: { exp: 10, msg: '怨气浓得化不开，残阵余威逼得你步步后退，最终空手而回。（舆图仍在，练硬了再去）' } } } },
                     { text: '📋 继续查阅其他卷宗', next: 'od_start' }
                 ]
             },
             od_realm: {
                 desc: '卷宗记载：城东三十里有座无名山谷，每甲子会出现一次秘境入口。\n\n距离下一次开启还有三年。',
                 choices: [
-                    { text: '🗺️ 记下位置', next: null, effects: { exp: 10, msg: '你获得了一条秘境线索。', time: 5 } }
+                    // v23.0 「记下位置日后验证」是张永远兑不出的期票——改成当场把故事听完，见闻落袋
+                    { text: '🍵 请馆主讲完那段秘境旧事', next: null, effects: { exp: 25, time: 40, msg: '馆主呷了口茶，把六十年前秘境开启那夜的见闻讲了个透：谷口五色雾、进去的人少了三成、出来的人口袋里多了什么。你听得意犹未尽——见闻即修行。' } },
+                    { text: '📋 继续查阅其他卷宗', next: 'od_start' }
                 ]
             },
             od_tale: {
                 desc: '卷宗记载：城中最近有传闻，说深夜在城西老槐树下能听到女子的哭声。\n\n已经有好几个人去查看后失踪了。',
                 choices: [
-                    { text: '🔍 接下这个调查任务', next: null, effects: { exp: 15, msg: '你决定改日去查探此事。', time: 5 } },
+                    // v23.0 「接下调查任务」旧版只弹一句「改日去查」便没了下文——现在当夜就去查，成败两可
+                    { text: '🔍 今夜就去老槐树下查探', next: null, effects: { time: 240, roll: { prob: 0.6, win: { exp: 30, spiritStones: 30, msg: '哭声之下是个被邪修拘来作饵的游魂。你出手驱散邪修、超度亡魂——翌日，失踪者的家人把谢礼塞进你手里。' }, lose: { exp: 15, msg: '你在老槐树下守了半夜，只有风声。回客栈的路上总觉得身后有人——那哭声，多半是引人深夜赴约的饵。你加快脚步，没有回头。' } } } },
                     { text: '📋 继续查阅其他卷宗', next: 'od_start' }
                 ]
             }
@@ -294,14 +300,14 @@ scenarioEngine.register('pawn_shop', {
     desc: '紧急变现：典当可赎，卖断给足行价，票面写多少就是多少',
     scenarios: [{
         id: 'pawn', name: '典当物品', icon: '💎',
-        desc: '龙鳞甲可当可卖——当有赎期，卖无回头',
+        desc: '行囊里的货可当可卖——当有赎期，卖无回头',
         startNode: 'pw_start',
         nodes: {
             pw_start: {
                 desc: function () {
                     return (window.PawnService && typeof window.PawnService.describe === 'function')
                         ? window.PawnService.describe()
-                        : '当铺掌柜拨着算盘："本店只收大件——龙鳞甲这类硬货。当有赎期，卖无回头。"';
+                        : '当铺掌柜拨着算盘："货摊开看——当有赎期，卖无回头。"';
                 },
                 choices: [
                     { text: '📜 把龙鳞甲当上（按行情折当金，当期一月可赎）', next: null, require: { items: { itemId: 'mat_dragon_scale', count: 1 } }, effects: { pawn: { op: 'pawn', itemId: 'mat_dragon_scale', count: 1, base: 250 }, time: 5 } },
@@ -310,6 +316,9 @@ scenarioEngine.register('pawn_shop', {
                         stones: function () { return Math.round(250 * facilitySellMod()); },
                         take: [{ itemId: 'mat_dragon_scale', count: 1 }],
                         msg: '掌柜把鳞甲翻来覆去验了两遍，按本城行市点足了现钱："死当成交，票根收好——只是个纪念了。"', time: 10 } },
+                    // 第八十二波·当铺-01：自选典当清单（服务侧 pawnItem 本就收任何货，场景不再只写死龙鳞甲一格；
+                    // 排在固定三格之后——老选项的位次是既成契约，不挪）
+                    { text: '🎒 翻开行囊，自选一件当上（散货按行情折当金）', next: null, effects: { pawn: { op: 'pick' }, time: 5 } },
                     { text: '👋 只是看看', next: null }
                 ]
             }
@@ -318,6 +327,17 @@ scenarioEngine.register('pawn_shop', {
 });
 
 // 10. 拍卖行
+// 第九十五波·NEW-29：落槌价一次摇点定死——旧版 win 分支的 stones 与 msg 各摇一次随机数，
+// 「喊出来的价」和「扣下去的钱」是两个独立摇点（最多能差 240 灵石）。
+// 现在先到者取价时摇点并缓存，后到者复用；au_bid 每回开渲染清一次缓存（一场竞价一个价，不跨场串价）。
+var _auctionHammer = null;
+function auctionHammerPrice() {
+    if (_auctionHammer == null) {
+        var _r = (window.__scenarioRng ? window.__scenarioRng() : Math.random());
+        _auctionHammer = Math.round(500 * (window.facilityBuyMod ? window.facilityBuyMod() : 1) * (1.1 + _r * 0.4));
+    }
+    return _auctionHammer;
+}
 scenarioEngine.register('auction_house', {
     id: 'auction_house', name: '拍卖行', icon: '🔨',
     desc: '竞拍稀有物品，也可能遇到恶意抬价',
@@ -329,35 +349,52 @@ scenarioEngine.register('auction_house', {
             au_start: {
                 desc: function () {
                     var P = Math.round(500 * (window.facilityBuyMod ? window.facilityBuyMod() : 1));
-                    return '拍卖行中座无虚席，台上正在拍卖一件珍品。\n\n"下一件拍品——筑基丹一枚，起拍价' + P + '灵石！"（拍行随本城行情定价，贵地起拍就贵）';
+                    return '拍卖行中座无虚席，台上正在拍卖一件稀罕物件。\n\n"下一件拍品——筑基丹一枚，起拍价' + P + '灵石！"（拍行随本城行情定价，贵地起拍就贵）';
                 },
                 choices: [
                     { text: '💰 参与竞拍筑基丹', next: 'au_bid', effects: { time: 10 } },
-                    { text: '👀 只是看看热闹', next: null, effects: { exp: 5, msg: '你见识了各种珍品，开阔了眼界。', time: 15 } },
+                    { text: '👀 只是看看热闹', next: null, effects: { exp: 5, msg: '你见识了各种稀罕物件，开阔了眼界。', time: 15 } },
                     { text: '📦 把自己的物品上架拍卖', next: null, effects: { msg: '寄售要押信物排队，档期排到下月了——急出手的话，去商会代售台更实在。', time: 10 } }
                 ]
             },
             au_bid: {
+                // v23.2 竞价来真的：旧版是三段写死的剧本（举牌→必被加到1.1倍→你1.2倍必成交），
+                // 描述里承诺的「恶意抬价」「流拍」从未存在。现在对手肯不肯放手是掷出来的，
+                // 落槌价随场子热度浮动，还有被人截胡的空手而归。
                 desc: function () {
+                    _auctionHammer = null;   // NEW-29：新一场竞价，落槌价重新摇
                     var P = Math.round(500 * (window.facilityBuyMod ? window.facilityBuyMod() : 1));
-                    return '你举牌出价' + P + '灵石！\n\n立刻有人加价到' + Math.round(P * 1.1) + '。\n\n拍卖师看向你："这位客官还要加价吗？"';
+                    return '你举牌喊出' + P + '灵石——场内顿时此起彼伏：前排的锦袍客眼皮都不抬地加了一档，角落里还有人跃跃欲试。\n\n拍卖师拖长了调子："还有加价的吗——？"';
                 },
                 choices: [
-                    { text: '💰 咬牙一口加到落槌', next: 'au_bid2', effects: { time: 5 } },
-                    { text: '❌ 放弃，价格太高了', next: null, effects: { msg: '你放弃了竞拍。', time: 5 } }
-                ]
-            },
-            au_bid2: {
-                desc: function () {
-                    var H = Math.round(500 * (window.facilityBuyMod ? window.facilityBuyMod() : 1) * 1.2);
-                    return '对方犹豫了一下，没有再加价。\n\n"' + H + '灵石第一次！第二次！第三次！成交！"\n\n你成功拍下了一枚筑基丹！';
-                },
-                choices: [
-                    { text: '✅ 付款取货', next: null, effects: {
-                        stones: function () { return -Math.round(500 * (window.facilityBuyMod ? window.facilityBuyMod() : 1) * 1.2); },
-                        items: [{ itemId: 'pill_foundation', count: 1 }],
-                        msg: function () { var H = Math.round(500 * (window.facilityBuyMod ? window.facilityBuyMod() : 1) * 1.2); return '你付了 ' + H + ' 灵石，获得筑基丹×1！'; },
-                        msgType: 'success', time: 10 } }
+                    { text: '💰 奋力跟价，志在必得', next: null, effects: { time: 15, roll: {
+                        prob: 0.55,
+                        win: {
+                            stones: function () { return -auctionHammerPrice(); },
+                            items: [{ itemId: 'pill_foundation', count: 1 }],
+                            msg: function () {
+                                return '几轮拉锯，对手终于放下了牌——"' + auctionHammerPrice() + '灵石，成交！"锤音落定，筑基丹送入你手中。';
+                            },
+                            msgType: 'success'
+                        },
+                        lose: {
+                            exp: 10,
+                            msg: '一位神秘客连举三牌，寸步不让——筑基丹被别人截走了。你只闻了个药香，权当见识了大场子。（历练+10）'
+                        }
+                    } } },
+                    { text: '🤏 按兵不动，等个冷场捡漏', next: null, effects: { time: 20, roll: {
+                        prob: 0.3,
+                        win: {
+                            stones: function () { return -Math.round(500 * (window.facilityBuyMod ? window.facilityBuyMod() : 1) * 0.9); },
+                            items: [{ itemId: 'pill_foundation', count: 1 }],
+                            msg: '场子竟真冷了下来——你慢悠悠报出底价，无人再跟。"成交！"拍卖师的槌子敲得有些不甘心。（捡漏价拿下）',
+                            msgType: 'success'
+                        },
+                        lose: {
+                            msg: '你等来了冷场，也等来了别人的抄底——捡漏的原来不止你一个。'
+                        }
+                    } } },
+                    { text: '❌ 退出竞拍', next: null, effects: { msg: '你放下号牌，在叫价声里退出了拍卖行。', time: 5 } }
                 ]
             }
         }
@@ -457,6 +494,12 @@ scenarioEngine.register('garden_villa', {
 
 // ========== 官府设施（基础功能，2个） ==========
 
+// 第九十五波·NEW-35：承揽/领引/卖引成交即流程终点——软收 showModal 开的柜台面板，
+// 别把「已成交的窗」留在屏上（失败分支不收，玩家还要接着试）
+function _closeFacilitySoft() {
+    try { if (typeof window.closeModalSoft === 'function') window.closeModalSoft(); } catch (e) {}
+}
+
 // 14. 工曹署（v20.22：查图纸照旧，另开真承揽——勘河修渠有工钱，贵地工钱随行情，也有栽下来的一天）
 function worksJobPay() { return Math.round(80 * (window.facilityBuyMod ? window.facilityBuyMod() : 1)); }
 function takeWorksJob() {
@@ -475,6 +518,7 @@ function takeWorksJob() {
     log.add(eff.msg, eff.msgType);
     if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(40, '工曹署承揽');
     if (window.updateStatusPanel) window.updateStatusPanel();
+    _closeFacilitySoft();   // NEW-35：这一工干完了，柜台面板随流程收
     return true;
 }
 function openWorksBureau() {
@@ -508,6 +552,7 @@ function saltBuyCharter() {
         return false;
     }
     if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(15, '盐铁局领引');
+    _closeFacilitySoft();   // NEW-35：引到手，柜台面板随流程收
     return true;
 }
 // v20.23 私盐道：行商多给一成二收引，代价是过手留名——盐铁局的缉私册子上会多一行字
@@ -540,6 +585,7 @@ function saltSellSmuggler() {
         log.add('盐引脱手，恶名+3——官盐引走私市，缉私的册子记你一笔。', 'warning');
     }
     if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '渡口卖引');
+    _closeFacilitySoft();   // NEW-35：引脱了手，柜台面板随流程收
     return true;
 }
 function openSaltIronOffice() {

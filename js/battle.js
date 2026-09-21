@@ -67,13 +67,17 @@ const WEAPON_SKILL_MAP = {
     'chain': '奇门',
     'hidden': '奇门',
     'fan': '奇门',
+    // v20.90 琴归奇门：以音攻敌、摄魂动魄，不入刀剑正路
+    'qin': '奇门',
 };
 
 function getWeaponSkillName(weaponId) {
     if (!weaponId) return null;
     const template = window.itemById ? window.itemById[weaponId] : null;
     if (!template) return null;
-    const weaponType = template.weaponType || template.type || 'sword';
+    // v20.90：扩展武器库里刀剑琴杖全用 subtype 记器型（type 一律是 equipment），
+    // 此前只认 weaponType||type，导致这批家伙的兵器武艺全被当成拳掌——补上 subtype 这一路
+    const weaponType = template.weaponType || template.subtype || template.type || 'sword';
     return WEAPON_SKILL_MAP[weaponType] || null;
 }
 
@@ -105,7 +109,8 @@ function resolveWeaponDamageType() {
             staff: 'blunt', spear: 'pierce', lance: 'pierce', polearm: 'pierce', halberd: 'slash',
             bow: 'pierce', crossbow: 'pierce',
             fist: 'blunt', glove: 'blunt', gauntlet: 'blunt', gauntlets: 'blunt',
-            claw: 'slash', whip: 'blunt', chain: 'blunt', hidden: 'pierce', fan: 'blunt'
+            claw: 'slash', whip: 'blunt', chain: 'blunt', hidden: 'pierce', fan: 'blunt',
+            qin: 'blunt'   // v20.90 琴：木胎丝弦，砸是钝击，伤在音里
         };
         dt = map[wt] || 'slash';
     }
@@ -492,10 +497,16 @@ class Entity {
         // 额外数据
         this.loot = data.loot || { exp: 10, copper: 5 };
         this.aiBehavior = data.aiBehavior || 'balanced';
+        // v20.89：携带物/亚型/词缀随实体进场——此前战败搜刮读 battle.enemy.carriedInventory 永远是空
+        this.carriedInventory = data.carriedInventory || null;
+        this.subtype = data.subtype || null;
+        this._affix = data._affix || null;
+        this._enemyType = data.type || null;   // 第九十七波：原始档位（enemy/elite/boss/beast）留档——重手档位按它读，元素伤的兜底判定也终于活了
 
         // ===== 机体扩展 v3.0：生理系统 =====
         // 生理类型（从data读取或默认humanoid）
         const physType = data.physiologyType || (type === 'beast' ? 'beast' : 'humanoid');
+        this.physiologyType = physType;   // v20.89：尸体结算等处按此判妖兽/人形，此前只有 physiology 对象没有类型标
         this.physiology = data.physiology || initPhysiology(physType);
         // 武器damageType（默认钝器）
         this.damageType = data.damageType || 'blunt';
@@ -503,9 +514,11 @@ class Entity {
         this.combatAbilities = Array.isArray(data.combatAbilities) ? data.combatAbilities.slice() : [];
         // ===== v12.8 一次性战斗标记（仅运行时状态透传，参照 _pounceUsed 先例；机制开关见上）=====
         this._hardenedCharges = data._hardenedCharges || 0; // 硬化充能（生成器仅对持 hardened 技的实体赋值）
+        this._armorDR = Math.min(0.25, Math.max(0, Number(data.armorDR) || 0)); // v21.9 重甲减伤（敌人侧伤害结算）
         this._pounceUsed = data._pounceUsed === true;       // 猛扑是否已用（仅持 pounce 技者有意义）
         this._elementType = data._elementType || null;      // 冰/火元素展示标（效果判定改查 chill/burn 技）
         this._evilFaction = data._evilFaction === true;     // v20.48：邪道标（山贼/邪修/魔修等），功法「魔伤」按此出力
+        this._personality = data._personality || data.personality16 || null;   // 第九十四波：具名对手的五维性格档随实体进场（见招拆招按性格反应）
         // ===== v13.0 运行时状态（原 v12.9 八个机制布尔透传已删除：_bloodDrain/_reflectPct/_soundShock/
         // _illusionist/_escapeArtist/_essenceDrain/_guMaster/_critBonus —— 判定一律改走 hasAbility）=====
         this._illusionHits = data._illusionHits || 0;             // 迷扰层数（被迷魂术命中方，攻击时消耗）
@@ -525,6 +538,11 @@ class Entity {
         // 精力上限：基础100 + 体质*0.5
         this.maxStamina = data.maxStamina != null ? data.maxStamina : (100 + constitution * 0.5);
         this.stamina = data.stamina != null ? data.stamina : this.maxStamina;
+        // 第九十七波·对面也是活人：武人有真气——敌人的招牌重手烧的是自己的真气账（不是无限预算），
+        // 平砍回气与玩家普攻回气同式（越亏回得越快）；妖兽没有真气账——它们的招牌重手烧精力（stamina，
+        // 第九十八波），精力本就是活账：玩家采补功吸得走它，吸干了妖王就只能干挠爪子
+        this.maxQi = data.maxQi != null ? Number(data.maxQi) : (this.species === 'human' ? 40 + this.level * 6 : 0);
+        this.qi = data.qi != null ? Number(data.qi) : this.maxQi;
         // 速度→回避属性加成（构造时用基础灵巧估算，运行时以 getSpeed 为准）
         const baseSpeed = Math.floor(((data.attrs && data.attrs.dexterity) || 10) * 0.7);
         this.dodgeBonus = 10 + baseSpeed * 0.15;
@@ -534,6 +552,10 @@ class Entity {
 
     // ===== v13.0 能力查询：战斗机制统一判定入口（ES5 Array.indexOf）=====
     hasAbility(id) {
+        // v21.9 沉默符：沉默期间敌人绝技全部封印（Entity 判定唯一入口，一处挂钩全线生效）
+        if (this.type !== 'player' && window.TalismanSystem && typeof window.TalismanSystem.isEnemySilenced === 'function') {
+            try { if (window.TalismanSystem.isEnemySilenced()) return false; } catch (e) {}
+        }
         return Array.isArray(this.combatAbilities) && this.combatAbilities.indexOf(id) >= 0;
     }
 
@@ -620,9 +642,20 @@ class Entity {
                 if (um !== 1) attack = Math.floor(attack * um);
             } catch (e) {}
         }
+        // 批三 · 医馆旧伤：身上的陈年旧伤拖累出手（每处折损攻击6%，封顶18%）——治好即消
+        if (this.type === 'player' && typeof window.getOldWoundPenalty === 'function') {
+            try {
+                const wp = window.getOldWoundPenalty();
+                if (wp > 0) attack = Math.floor(attack * (1 - wp));
+            } catch (eWound) {}
+        }
         // 0.2.1 境界质变：化神 attack×1.2 / 合体×1.3 / 渡劫×1.5（buildPlayerBattleEntity 设 _realmCombatMul）
         if (this.type === 'player' && this._realmCombatMul && this._realmCombatMul.attack && this._realmCombatMul.attack !== 1) {
             attack = Math.floor(attack * this._realmCombatMul.attack);
+        }
+        // v23.0 随身战阵：布下的阵不是摆设——攻随阵涨（buildPlayerBattleEntity 设 _formationMul）
+        if (this.type === 'player' && this._formationMul && this._formationMul.attack && this._formationMul.attack !== 1) {
+            attack = Math.floor(attack * this._formationMul.attack);
         }
         // 0.2.2 #3 组合技：万剑归宗 attack+50%（百分比作乘数）
         if (this.type === 'player' && this._skillComboBonus && this._skillComboBonus.attack) {
@@ -650,6 +683,11 @@ class Entity {
                 const sm = window.getSwordIntentAttackMul();
                 if (sm && sm !== 1) attack = Math.floor(attack * sm);
             } catch (e) {}
+        }
+        // 第一百零七波：队员的阵型与兵刃——队伍页面立的账，战斗里真结算
+        if (this._memberMods) {
+            if (this._memberMods.atkFlat) attack += this._memberMods.atkFlat;
+            if (this._memberMods.atkMul && this._memberMods.atkMul !== 1) attack = Math.floor(attack * this._memberMods.atkMul);
         }
         return attack;
     }
@@ -689,6 +727,10 @@ class Entity {
         if (this.type === 'player' && this._realmCombatMul && this._realmCombatMul.defense && this._realmCombatMul.defense !== 1) {
             defense = Math.floor(defense * this._realmCombatMul.defense);
         }
+        // v23.0 随身战阵：防随阵固
+        if (this.type === 'player' && this._formationMul && this._formationMul.defense && this._formationMul.defense !== 1) {
+            defense = Math.floor(defense * this._formationMul.defense);
+        }
         // 0.2.2 #3 组合技：不动如山 defense+40%（百分比作乘数）
         if (this.type === 'player' && this._skillComboBonus && this._skillComboBonus.defense) {
             defense = Math.floor(defense * (1 + this._skillComboBonus.defense / 100));
@@ -704,6 +746,20 @@ class Entity {
         // 2.5 体修：反震硬抗 defense+15%
         if (this.type === 'player' && this._schoolDefMul && this._schoolDefMul !== 1) {
             defense = Math.floor(defense * this._schoolDefMul);
+        }
+        // P0-5：「境界不稳」虚弱（重塑肉身后3天，战斗属性×0.9）
+        // v21.9 修复：此块此前被误放进 _consumeFormationBuff（defense 不在作用域，
+        // ReferenceError 被 try/catch 吞掉），防御九折从不生效——现归位 getDefense。
+        if (this.type === 'player' && typeof window.getRealmUnstableMultiplier === 'function') {
+            try {
+                const um = window.getRealmUnstableMultiplier();
+                if (um !== 1) defense = Math.floor(defense * um);
+            } catch (e) {}
+        }
+        // 第一百零七波：队员的阵型与甲胄——防随阵固，甲是真甲
+        if (this._memberMods) {
+            if (this._memberMods.defFlat) defense += this._memberMods.defFlat;
+            if (this._memberMods.defMul && this._memberMods.defMul !== 1) defense = Math.floor(defense * this._memberMods.defMul);
         }
         return defense;
     }
@@ -724,13 +780,6 @@ class Entity {
                 }
             }
         } catch (e) {}
-        // P0-5：「境界不稳」虚弱（重塑肉身后3天，战斗属性×0.9）
-        if (this.type === 'player' && typeof window.getRealmUnstableMultiplier === 'function') {
-            try {
-                const um = window.getRealmUnstableMultiplier();
-                if (um !== 1) defense = Math.floor(defense * um);
-            } catch (e) {}
-        }
     }
 
     // 速度（v4.3：非人形生物不使用轻功）
@@ -769,12 +818,24 @@ class Entity {
         if (this.type === 'player' && this._realmCombatMul && this._realmCombatMul.speed && this._realmCombatMul.speed !== 1) {
             speed = Math.floor(speed * this._realmCombatMul.speed);
         }
+        // v23.0 随身战阵：身法随阵疾
+        if (this.type === 'player' && this._formationMul && this._formationMul.speed && this._formationMul.speed !== 1) {
+            speed = Math.floor(speed * this._formationMul.speed);
+        }
+        // 第一百零七波：速度阵的账真兑现——队员身法随阵疾/随阵滞
+        if (this._memberMods && this._memberMods.spdMul && this._memberMods.spdMul !== 1) {
+            speed = Math.floor(speed * this._memberMods.spdMul);
+        }
         return speed;
     }
 
     // ===== 机体扩展 v4.0：受伤系统（血量重命名 + 危急状态） =====
     // 受到伤害（指定部位+伤害类型）
     takeDamage(partId, damage, damageType) {
+        // v21.9 敌人护甲：重甲/构装减伤——此前玩家挨刀有覆盖率抗性结算，敌人永远全额成伤
+        if (this.type !== 'player' && this._armorDR > 0) {
+            damage = Math.max(1, Math.floor(damage * (1 - this._armorDR)));
+        }
         // v12.8 构装体硬化：有充能时伤害×0.75并消耗1层（按受击计，闪避不消耗）
         // v13.0 充能仅由生成器对持 hardened 技的实体赋值，机制本身仍以充能数为开关
         if (this._hardenedCharges > 0) {
@@ -1353,6 +1414,8 @@ function bandageWound(entity, woundId) {
     const stabilizationGain = Math.min(60, 40 + medicineBonus);
     wound.stabilization = Math.min(100, wound.stabilization + stabilizationGain);
     wound.stabilized = true;
+    // v20.94 熟能生巧：包扎稳不稳看医术，包一次长一次
+    if (entity.type === 'player' && typeof window.growLifeSkill === 'function') window.growLifeSkill('医术', 2, { reason: '阵前包扎' });
     // 包扎立即显著止血，避免「stabilized 但仍 bleeding」导致 AI 每回合都选治疗
     if (wound.externalBleedRate > 0) {
         wound.externalBleedRate = Math.floor(wound.externalBleedRate * 0.35);
@@ -1581,7 +1644,12 @@ function _memberDamageType(member) {
 const ENEMY_AFFIXES = {
     ruthless: { name: '狂徒', minLevel: 4, attrMul: { strength: 1.35, dexterity: 1.2 }, extraDraws: 1 },
     guardian: { name: '护法', minLevel: 6, attrMul: { constitution: 1.4, willpower: 1.25 }, extraDraws: 1 },
-    tangzhu:  { name: '堂主', minLevel: 8, attrMul: { allAttr: 1.25 }, extraDraws: 2 }
+    tangzhu:  { name: '堂主', minLevel: 8, attrMul: { allAttr: 1.25 }, extraDraws: 2 },
+    // ===== v21.8 高境界名号：此前词缀在 8 级封顶，金丹往后五十多级只有狂徒/护法/堂主三张脸 =====
+    zongshi:  { name: '宗师', minLevel: 15, attrMul: { allAttr: 1.3 }, extraDraws: 2 },
+    shenzuo:  { name: '神座', minLevel: 28, attrMul: { allAttr: 1.4 }, extraDraws: 3 },
+    tianjiang:{ name: '天将', minLevel: 42, attrMul: { allAttr: 1.5 }, extraDraws: 3 },
+    zhenshi:  { name: '镇世', minLevel: 56, attrMul: { allAttr: 1.6 }, extraDraws: 4 }
 };
 const NAMED_NEMESES = [
     { key: 'heihei',  name: '黑风寨主·独眼蛟', minLv: 8,  sig: 'sword_burst', abilities: ['venom', 'lifesteal'], attrAllMul: 1.7, fameReward: 15, respawnDays: 7, manualId: 'art_gb_tongbei' },
@@ -1725,6 +1793,13 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
                 { key: 'gu',       prefixes: ['蛊婆', '蛊师'],           behavior: 'poisoner',    damage: 'pierce', weight: 0.35, evil: true, sig: 'gu_parasite' },
                 { key: 'sword',    prefixes: ['剑修', '剑客'],           behavior: 'balanced',    damage: 'slash',  weight: 0.65, dexMul: 1.1, swordSkillMul: 1.4, sig: 'sword_burst' },
                 { key: 'renegade', prefixes: ['叛徒'],                   behavior: 'balanced',    damage: 'slash',  weight: 0.45, allAttrMul: 1.05, evil: true, renegade: true },
+                // ===== v21.8 高境界面孔：亚型池此前在 5 级封顶，金丹往后还是山贼剑修那批老面孔。
+                // 越往上走，敌人越贴近天道真相——执香吏来收香火，收稼人来收割，古神残躯比天道还老 =====
+                { key: 'yaksha',   prefixes: ['夜叉', '罗刹'],           behavior: 'aggressive',  damage: 'blunt',  weight: 0.55, minLevel: 12, evil: true, conMul: 1.1 },
+                { key: 'demon_general', prefixes: ['魔将', '妖帅'],      behavior: 'balanced',    damage: 'slash',  weight: 0.5,  minLevel: 18, evil: true, allAttrMul: 1.08, sig: 'sword_burst' },
+                { key: 'incense_official', prefixes: ['执香吏', '采风使'], behavior: 'defensive', damage: 'pierce', weight: 0.45, minLevel: 25, sig: 'drain_qi' },
+                { key: 'reaper',   prefixes: ['收稼人', '执镰使者'],     behavior: 'aggressive',  damage: 'slash',  weight: 0.4,  minLevel: 35, evil: true, allAttrMul: 1.1, sig: 'lifesteal' },
+                { key: 'ancient_god', prefixes: ['古神残躯', '荒古遗族'], behavior: 'defensive', damage: 'blunt',  weight: 0.35, minLevel: 45, conMul: 1.2, sig: 'reflect' },
             ];
             let totalWeight = 0;
             HUMANOID_SUBTYPES.forEach(function (s) { totalWeight += _humanoidSubWeight(s, level); });
@@ -1870,6 +1945,15 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
         else if (physiologyType === 'elemental') behaviorOverride = 'balanced';
     }
 
+    // ===== v21.9 敌人护甲机制：伤害结算此前不对称——玩家挨打有覆盖率/抗性/耐久，
+    // 重甲名号的敌人挨打却永远全额成伤。守御系/重甲名号/构装体现在带真实减伤（上限20%）。=====
+    var armorDR = 0;
+    var _armorAffixDR = { guardian: 0.04, tangzhu: 0.04, zongshi: 0.05, shenzuo: 0.06, tianjiang: 0.07, zhenshi: 0.08 };
+    if (behaviorOverride === 'defensive') armorDR += 0.06;
+    if (affixKey && _armorAffixDR[affixKey]) armorDR += _armorAffixDR[affixKey];
+    if (physiologyType === 'construct') armorDR += 0.05;
+    armorDR = Math.min(0.2, Math.round(armorDR * 100) / 100);
+
     // 只有人形生物有人类技能（内功/轻功/剑法/刀法等）
     // 野兽/亡灵/构装体/元素生物不使用人类技能体系
     let skills = {};
@@ -1936,7 +2020,8 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
                 species: type === 'beast' ? 'beast' : 'human',
                 physiologyType: physiologyType,
                 faction: faction,
-                combatAbilities: combatAbilities // v13.1 绝技透传：持有可学绝技的敌人按概率携带对应秘籍
+                combatAbilities: combatAbilities, // v13.1 绝技透传：持有可学绝技的敌人按概率携带对应秘籍
+                _leyElite: (spawnOpts && spawnOpts.leyTier) || 0 // v20.95 灵脉灵蕴透传：魔头才有毕业装
             });
         } catch (e) {
             console.warn('generateEnemyInventory error', e);
@@ -1965,6 +2050,7 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
         carriedInventory: carriedInventory, // 新增：敌人携带物（搜刮/解剖时获得）
         subtype: subtype || physiologyType, // v12.8 亚型key或生理类型名
         combatAbilities: combatAbilities,   // v13.0 战斗技能id数组（机制唯一判定来源，见 COMBAT_ABILITIES）
+        armorDR: armorDR,                   // v21.9 重甲减伤（0=无甲；守御系/重甲名号/构装体累加，上限0.2）
     };
     // ===== 运行时状态打标（v13.0：仅运行时计数/标记透传；原八个机制布尔打标已删除，开关由 combatAbilities 承载）=====
     if (hardenedCharges > 0) enemyData._hardenedCharges = hardenedCharges; // 仅 construct(天生硬化)/boss 赋充能
@@ -1996,22 +2082,37 @@ class Battle {
         // v20.64 被打倒的敌方（主敌倒下后枪口转向同伴，倒下的记在这里，战后一并标尸）
         this._fallenEnemies = [];
         // 出战灵兽作为盟友
+        // 第九十波·骑乘参战：骑着开战，坐骑驮你入阵——它就在你身下，没有旁观的道理。
+        // 场上兽位只有一个：坐骑优先（出战兽若是另一只，此战在场外盘旋，不进场）。
         this.allyBeast = null;
+        this._mounted = false;        // 本场是否骑乘作战（落马后翻 false，机动加成随之撤销）
+        this._mountDodge = 0;         // 骑乘机动给 riders 的闪避加成（落马时原样扣回）
         try {
-            if (typeof window.getActiveBeastCombatData === 'function') {
-                var bd = window.getActiveBeastCombatData();
-                if (bd && typeof Entity === 'function') {
-                    this.allyBeast = new Entity(bd, 'beast');
-                    this.log.push({ msg: '🐾 灵兽「' + this.allyBeast.name + '」加入战斗！' });
-                    // v17.1 羁绊反哺：亲密度满百的出战灵兽滋养主人体魄
-                    try {
-                        var abBond = window.getActiveBeast();
-                        if (abBond && (abBond.affection || 0) >= 100 && typeof window.applyBuff === 'function') {
-                            window.applyBuff('fxb_petbond', { constitution: 3 }, 12);
-                            this.log.push({ msg: '💞 羁绊反哺：灵兽的气息滋养你的体魄（体质+3，12小时）。' });
-                        }
-                    } catch (ePB) {}
-                }
+            var bd = null;
+            if (typeof window.getActiveMount === 'function' && window.getActiveMount() &&
+                typeof window.getMountCombatData === 'function') {
+                var _md = window.getMountCombatData();
+                if (_md) { bd = _md; this._mounted = true; }
+            }
+            if (!bd && typeof window.getActiveBeastCombatData === 'function') {
+                bd = window.getActiveBeastCombatData();
+            }
+            if (bd && typeof Entity === 'function') {
+                this.allyBeast = new Entity(bd, 'beast');
+                this.allyBeast._tamedIndex = bd._tamedIndex;   // 战后结账认这只（谁打的谁长阅历）
+                this.log.push({ msg: this._mounted
+                    ? '🐎 你骑着「' + this.allyBeast.name + '」开战——它驮着你入阵，蹄爪与你的刀一同招呼敌人！'
+                    : '🐾 灵兽「' + this.allyBeast.name + '」加入战斗！' });
+                // 第八十五波·逻辑收口：v17.1「羁绊反哺」（兽亲密度满百→主人先天体质+3）已移除——
+                // 体魄是主人自己的底子，不会因为兽亲人就凭空改写；羁绊的账在出战兽六维缩放里
+                //（getActiveBeastCombatData 心意相通×1.08 / 貌合神离×0.92），那才是合乎逻辑的去处。
+            }
+            // 骑乘机动：坐骑的脚力就是骑手的灵活——闪避 +（速度-1）×10，封顶 15
+            //（风狼1.5→+5，雷鹰2.5→+15；落马即扣回。加成来自真实骑乘状态，不是全局缩放）
+            if (this._mounted && this.allyBeast && bd && bd._mountSpeed > 1) {
+                this._mountDodge = Math.min(15, Math.round((bd._mountSpeed - 1) * 10));
+                this.player.dodgeBonus += this._mountDodge;
+                this.log.push({ msg: '🐎 骑乘机动：闪避 +' + this._mountDodge + '（坐骑脚力带着你的身形，敌人不容易咬住你）' });
             }
         } catch (e) {}
 
@@ -2035,6 +2136,19 @@ class Battle {
                         constitution: member.attributes.constitution || 10,
                         meridian: member.attributes.meridian || Math.floor(((member.attributes.intelligence || 10) + (member.attributes.willpower || 10)) / 2)
                     };
+                    // 第一百零七波：阵型与装备不再是摆设——队伍页面上的账，战斗里真结算。
+                    // 改算单从 partySystem.getMemberBattleMods 一个口子出（阵型乘区+兵刃防具加值+装备属性点）
+                    var _pmods = null;
+                    try {
+                        if (window.partySystem && typeof window.partySystem.getMemberBattleMods === 'function') {
+                            _pmods = window.partySystem.getMemberBattleMods(member);
+                        }
+                    } catch (eMods) {}
+                    if (_pmods && _pmods.attrAdd) {
+                        for (var _ak in _pmods.attrAdd) {
+                            memberAttrs[_ak] = (memberAttrs[_ak] || 10) + _pmods.attrAdd[_ak];
+                        }
+                    }
                     // 将PartyMember包装为Entity，使用'ally'类型
                     var memberEntity = new Entity({
                         name: member.name,
@@ -2050,6 +2164,7 @@ class Battle {
                     }, 'ally');
                     memberEntity._partyMemberId = member.id;
                     memberEntity._partyMemberRef = member; // 保留引用以便同步状态
+                    memberEntity._memberMods = _pmods;     // 第一百零七波：攻/防/速三处乘区在 getAttack/getDefense/getSpeed 消费
                     memberEntity.health = member.health;
                     memberEntity.maxHealth = member.maxHealth;
                     self.partyMembers.push(memberEntity);
@@ -2074,6 +2189,7 @@ class Battle {
                 var ad = raw && raw.data ? raw.data : raw;
                 if (!ad || ad.isCorpse || ad.isDead || ad.dead) continue;
                 var allyAttrs = ad.attrs || { strength: 10, dexterity: 10, intelligence: 10, willpower: 10, constitution: 10, meridian: 10 };
+                var _allyBeastly = (raw && raw.type === 'beast') || ad.type === 'beast' || ad.species === 'beast';
                 var allyEntity = new Entity({
                     name: ad.name || '同伙',
                     level: Math.max(ad.level || 1, headLvl),   // 同伙跟头兽一个量级，不然围上来只是来送死
@@ -2084,7 +2200,15 @@ class Battle {
                     durabilities: ad.durabilities || initBodyDurability(allyAttrs),
                     loot: { exp: 0, copper: 0 },
                     aiBehavior: ad.aiBehavior || 'aggressive',
-                }, (raw && raw.type === 'beast') || ad.type === 'beast' ? 'beast' : 'enemy');
+                    // 第九十七波·同伙不是二等公民：此前只挑九样字段，绝技/种系/生理/携带物全落在门外——
+                    // 妖兽同伙按人形生理挨打、带绝技的同伙绝技被没收
+                    species: ad.species || (_allyBeastly ? 'beast' : 'human'),
+                    physiologyType: ad.physiologyType || (_allyBeastly ? 'beast' : 'humanoid'),
+                    combatAbilities: ad.combatAbilities || [],
+                    subtype: ad.subtype || null,
+                    damageType: ad.damageType || null,
+                    carriedInventory: ad.carriedInventory || null,
+                }, _allyBeastly ? 'beast' : 'enemy');
                 if (raw && raw.uid) allyEntity._mapEntity = raw;   // 战后按引用标尸，不靠名字猜
                 this.enemyAllies.push(allyEntity);
             }
@@ -2107,6 +2231,228 @@ class Battle {
                 this.log.push({ msg: '👁️ ' + this.enemy.name + ' 气息驳杂，似怀绝技：' + abNames.join('、') });
             }
         } catch (eAnnounce) {}
+
+        // ===== 第九十二波 · 行动条时间轴 =====
+        // 每个角色一条行动条，按时间累计（速率=身法脚力），攒满 100 就能出手；
+        // 不同动作扣不同的条：轻活便宜回条快，重活昂贵还得再等。
+        // 开场谁的条先满谁先动——玩家不再白拿先手，快敌真的抢得到先手。
+        // 第九十四波·对面也会使坏：邪修/响马/游斗辈怀里揣着迷烟散（就一包，用完拉倒），
+        // 被逼到绝境（气血不足一半）的会装死诱敌——姿态摆出来，怎么接由你挑。
+        this._foeTricks = { smoke: 0, feignUsed: false };
+        try {
+            var _tb = this.enemy ? this.enemy.aiBehavior : '';
+            var _ts = this.enemy ? this.enemy.subtype : '';
+            if (_tb === 'opportunist' || _tb === 'poisoner' || (this.enemy && this.enemy._evilFaction) || _ts === 'bandit' || _ts === 'renegade') {
+                this._foeTricks.smoke = 1;
+            }
+        } catch (eTricks) {}
+        this._pendingPrompt = null;      // 待玩家应对的姿态（时间轴停在这，等选择）
+        this._foeLastAp = 0;             // 第九十七波：敌主这一动的条价（招牌重手更贵，其余 NPC 一律 100）
+        this._playerBlind = 0;           // 玩家吃石灰：瞎几手（命中 -30）
+        this._playerBlindHalf = 0;       // 袖子挡了大半：下一手失准（命中 -15）
+        this._foeLulled = 0;             // 敌人信了你的装死：下一刀留力（对你伤害减半，一次性）
+        this._foeInsight = 0;            // 敌人识破了你的装死：下一击格外狠（命中 +25，一次性）
+        this._foeBackstabPending = 0;    // 敌人暴起偷袭你：下一击 ×1.5（一次性）
+        this._nextPlayerHitMul = 0;      // 你的下一击倍率（暴起偷袭 1.5 / 怒火中烧 1.2，一次性）
+        // ===== 第九十九波·江湖耳目：仗是打给江湖看的——话、手段、收场都落真账（全是可选动作，想做才做）=====
+        this._deeds = { tricks: 0, demonic: 0, mercy: 0, execution: 0 };   // 行迹账：有人看见就传得出去
+        this._witnessSettled = false;    // 一场只结一次
+        this._foeRage = 0;               // 他被骂阵激怒：下一击更狠（×1.2）也露破绽（命中 -15，一次性）
+        this._foeRageDmg = 0;            // 怒火过了命中关，等伤害兑现
+        this._foeDisheartened = 0;       // 攻心话奏效：心气泄了（命中 -15、伤 ×0.85，随敌主动作递减两手）
+        this._foeStumble = 0;            // 踩了铁蒺藜：下一手命中 -10（一次性）
+        this._playerRage = 0;            // 你被骂得上头：两手命中 -10（随你的动作递减）
+        this._rallyUsed = false;         // （第一百波起改为递减账——见 _rallyCount）
+        this._rallyCount = 0;            // 第一百波·壮胆一场三嗓递减：头一嗓是气（+15），第二嗓半信半疑（+8），往后只剩一口气吊着（+4）
+        this._humanShield = null;        // 掳来的人盾（下作——江湖看着呢）
+        this._surrenderAsked = false;    // 敌人跪地求饶（一场一回）
+        this._playerSurrenderTried = false;  // 弃械求饶一场一回（喊过一回他就防着你了）
+        this._foeTauntPromptDone = false;    // 敌人的骂阵应对（一场一回，时间轴停住等你咽不咽这口气）
+        this._demonicShown = false;      // 魔道功法露相（一场只报一次）
+        this._foeRighteousWrath = false; // 正道人认出了你的魔道功法——百口难辨，这仗不留手
+        // 魔道相貌查真账：天生魔技（采补/吸血）、魔染值、功法名目——三样占一样就是练过魔功的
+        this._playerDemonicAbil = false;
+        this._playerDemonicOwner = false;
+        try {
+            var _pAb99 = (this.player && Array.isArray(this.player.combatAbilities)) ? this.player.combatAbilities : [];
+            this._playerDemonicAbil = _pAb99.indexOf('drain_qi') >= 0 || _pAb99.indexOf('lifesteal') >= 0;
+            var _pcd99 = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
+            if (_pcd99) {
+                if ((_pcd99._demonicCorruption || 0) > 0) this._playerDemonicOwner = true;
+                var _sk99 = _pcd99.currentSkills || _pcd99.skills || {};
+                for (var _skn99 in _sk99) {
+                    if (/魔功|血煞|噬魂|化血|血海|修罗|魔道/.test(String(_skn99))) { this._playerDemonicOwner = true; break; }
+                }
+            }
+        } catch (eDem99) {}
+        if (this._playerDemonicAbil) this._playerDemonicOwner = true;
+        // ===== 第九十九波·当面开场：对面是什么人，开场就说什么话 =====
+        try {
+            var _e99 = this.enemy;
+            var _isBeast99 = _e99 && (_e99.species === 'beast' || _e99.physiologyType === 'beast');
+            var _st99 = _e99 ? String(_e99.subtype || '') : '';
+            var _et99 = _e99 ? String(_e99._enemyType || '') : '';
+            var _upright99 = ['monk', 'sword', 'bladesman', 'body'];
+            var _open99 = null;
+            if (_e99 && !_isBeast99 && !_e99._evilFaction && _upright99.indexOf(_st99) >= 0 && this._playerDemonicOwner) {
+                // 正道人一见魔道功法，百口难辨——当场拔刀，这仗没有道理可讲
+                this._foeRighteousWrath = true;
+                _open99 = '⚡ ' + _e99.name + ' 一眼看出你身上缠绕的黑气——「魔头！今日替天行道！」他根本不给你开口的机会！';
+                _e99.aiBehavior = 'aggressive';
+            } else if (_isBeast99) {
+                _open99 = '🐾 ' + _e99.name + ' 压低身子，喉咙里滚出闷雷似的吼声，肌肉绷得像拉满的弓——它盯上你了。';
+            } else if (_st99 === 'bandit') {
+                _open99 = '🗡️ ' + _e99.name + ' 横刀拦路：「留下东西，饶你不死——这是道上的规矩！」';
+            } else if (_st99 === 'cultist' || _st99 === 'blood' || _st99 === 'essence') {
+                _open99 = '🩸 ' + _e99.name + ' 舔了舔嘴唇：「又一个送上门的血食，正好。」';
+            } else if (_st99 === 'monk') {
+                _open99 = '🙏 ' + _e99.name + ' 单掌当胸：「施主，苦海无边，回头是岸。」';
+            } else if (/boss/.test(_et99) || (_e99 && _e99._affix)) {
+                _open99 = '✨ ' + _e99.name + ' 居高临下地打量你：「无名小辈，也敢拦我？」';
+            } else if (_e99 && !_isBeast99) {
+                _open99 = '⚔️ ' + _e99.name + ' 略一抱拳，兵刃已出了半鞘：「朋友，亮家伙吧。」';
+            }
+            if (_open99) this.log.push({ msg: _open99 });
+        } catch (eOpen99) {}
+        this._tlTick = 0;
+        this._actors = [];
+        try {
+            this._initTimeline();
+            this._advanceTimeline();
+        } catch (eTL) {}
+    }
+
+    // ---------- 第九十二波 · 行动条引擎 ----------
+    // 速率：实体速度（身法+轻功那本账，getSpeed 现成）；骑乘机动延伸到行动条（坐骑脚力带着你抢时间）
+    _actorRate(e) {
+        var sp = 10;
+        try { if (e && typeof e.getSpeed === 'function') sp = e.getSpeed() || 10; } catch (err) {}
+        sp = Math.max(4, Math.round(sp));
+        return sp;
+    }
+    _initTimeline() {
+        this._actors = [];
+        var self = this;
+        var push = function (e, side, kind) {
+            if (!e) return;
+            var rate = self._actorRate(e);
+            if (kind === 'player' && self._mounted) {
+                try {
+                    var m = (typeof window.getActiveMount === 'function') ? window.getActiveMount() : null;
+                    if (m && m.mount && m.mount.speed > 1) rate += Math.round((m.mount.speed - 1) * 5);
+                } catch (eM) {}
+            }
+            self._actors.push({ e: e, side: side, kind: kind, bar: 0, rate: rate });
+        };
+        push(this.player, 'player', 'player');
+        push(this.enemy, 'enemy', 'enemyMain');
+        (this.enemyAllies || []).forEach(function (a) { push(a, 'enemy', 'enemyAlly'); });
+        if (this.allyBeast) push(this.allyBeast, 'player', 'beast');
+        (this.partyMembers || []).forEach(function (m) { push(m, 'player', 'member'); });
+        // 第九十三波·先手之利：身法悬殊（快过对面最快者三成）的人抢在对面反应过来之前动手——
+        // 开局条先攒一半。卑鄙小人练的就是这个：腿快，偷袭才叫偷袭。
+        try {
+            var _pA = self._findActor(self.player);
+            var _foeFast = 0;
+            self._actors.forEach(function (a) { if (a.side === 'enemy' && a.rate > _foeFast) _foeFast = a.rate; });
+            if (_pA && _foeFast > 0 && _pA.rate >= _foeFast * 1.3) {
+                _pA.bar += 50;
+                self.log.push({ msg: '⚡ 你身法快过对面太多——趁他没反应过来，抢了个先手（开局行动条+50）！' });
+            } else if (_pA && _pA.rate > 0 && _foeFast >= _pA.rate * 1.3) {
+                var _eA = self._findActor(self.enemy);
+                if (_eA) _eA.bar += 50;
+                self.log.push({ msg: '⚡ 对面身法快得离谱——他抢在你反应过来之前动了手（敌方开局行动条+50）！' });
+            }
+        } catch (eFirst) {}
+    }
+    _findActor(e) {
+        for (var i = 0; i < this._actors.length; i++) { if (this._actors[i].e === e) return this._actors[i]; }
+        return null;
+    }
+    /** 动作扣条：不同操作扣不同（普攻100清空、轻招便宜、重招昂贵可扣成负数——收势久） */
+    spendActionCost(e, cost) {
+        var a = this._findActor(e);
+        if (a) a.bar -= (cost == null ? 100 : cost);
+    }
+    getActionBars() {
+        return this._actors.map(function (a) {
+            return { name: a.e.name, side: a.side, kind: a.kind, bar: Math.max(-99, Math.min(150, a.bar)), rate: a.rate, alive: !!a.e.isAlive };
+        });
+    }
+    /** 时间轴驱动：推进到下一个可动者——NPC 自动出手，轮到玩家就停下等指令 */
+    _advanceTimeline() {
+        if (this.isFinished) return;
+        this.isPlayerTurn = false;
+        var guard = 0;
+        while (guard++ < 400 && !this.isFinished) {
+            var alive = [];
+            for (var i = 0; i < this._actors.length; i++) {
+                var a = this._actors[i];
+                if (a.e && a.e.isAlive) alive.push(a);
+            }
+            if (!alive.length) return;
+            var ready = alive.filter(function (a) { return a.bar >= 100; });
+            if (!ready.length) {
+                // 快进到下一位满条：全体按各自速率涨
+                var nextTicks = null;
+                for (var j = 0; j < alive.length; j++) {
+                    var t = Math.ceil((100 - alive[j].bar) / alive[j].rate);
+                    if (t < 1) t = 1;
+                    if (nextTicks === null || t < nextTicks) nextTicks = t;
+                }
+                for (var k = 0; k < alive.length; k++) alive[k].bar += nextTicks * alive[k].rate;
+                this._tlTick += nextTicks;
+                continue;
+            }
+            // 条最满的先动（同条比速率，再同玩家侧优先——先手是抢来的不是送的）
+            ready.sort(function (x, y) {
+                if (y.bar !== x.bar) return y.bar - x.bar;
+                if (y.rate !== x.rate) return y.rate - x.rate;
+                return (x.side === 'player' ? 0 : 1) - (y.side === 'player' ? 0 : 1);
+            });
+            var actor = ready[0];
+            if (actor.kind === 'player') {
+                this.isPlayerTurn = true;
+                this._tickMoveCD();   // 轮到你出手，招式冷却流逝一格（旧账：每次玩家行动递减）
+                if (this.onUpdate) this.onUpdate();
+                return;
+            }
+            this._resolveActor(actor);
+            if (this._pendingPrompt) {   // 第九十四波：时间轴停在姿态上——等你见招拆招再续走
+                if (this.onUpdate) this.onUpdate();
+                return;
+            }
+            if (this.onUpdate) this.onUpdate();
+        }
+    }
+    _resolveActor(actor) {
+        if (actor.kind === 'enemyMain') this._enemyMainAct();
+        else if (actor.kind === 'enemyAlly') this._enemyAllyAct(actor.e);
+        else if (actor.kind === 'beast') this._beastAct();
+        else if (actor.kind === 'member') this._memberAct(actor.e);
+        if (this._pendingPrompt) return;   // 第九十四波：敌人摆出了姿态——这一动的条等你选完才扣
+        // 第九十七波：敌主的招牌重手按动计价（与玩家招式条价同式，重招收势久）——
+        // 九十二波预留的「连击/重手从这扣」的口子在这里兑现；其余 NPC 仍是整条动作
+        var _npcAp = 100;
+        if (actor.kind === 'enemyMain' && this._foeLastAp > 0) { _npcAp = this._foeLastAp; this._foeLastAp = 0; }
+        actor.bar -= _npcAp;
+    }
+    /** 敌主行动完毕＝一个「回合」边界：毒/冷却/生理这些按回合记的账都在这里翻篇 */
+    _endEnemyMainAction() {
+        this.turn++;
+        this._physTicked = false;
+        // 第九十九波：攻心话泄的气随他的动作散；人盾倒了/跑了就没了
+        if (this._foeDisheartened > 0) this._foeDisheartened -= 1;
+        if (this._humanShield && (!this._humanShield.isAlive || this._humanShield._fled)) {
+            this.log.push({ msg: '🤚 你手里的人盾没了——' + this._humanShield.name + (this._humanShield._fled ? ' 趁乱挣脱跑了' : ' 倒在了血泊里') + '。' });
+            this._humanShield = null;
+        }
+        // 第九十三波·迷烟随敌主行动完毕消散一回（挂末尾不挂开头，N 回合就瞎 N 次）
+        try {
+            if (window.TalismanSystem && typeof window.TalismanSystem.tickEnemyBlind === 'function') window.TalismanSystem.tickEnemyBlind();
+        } catch (eBlindTick) {}
+        this._processRoundPhysiology();
+        this._checkEnd();
     }
 
     // 玩家攻击指定部位
@@ -2122,8 +2468,6 @@ class Battle {
     playerAttack(partId) {
         if (this.isFinished || !this.isPlayerTurn) return false;
         if (!this.enemy.isAlive) return false;
-        this._tickMoveCD();
-        this._physTicked = false;   // v20.64 玩家动手即开新一轮
         let damageType = 'blunt';
         try {
             if (typeof window.resolveWeaponDamageType === 'function') {
@@ -2137,6 +2481,7 @@ class Battle {
         } catch (e) {}
         const result = this._executeAttack(this.player, this.enemy, partId, damageType);
         this.log.push(result);
+        this._demonicOnHit(result);   // 第九十九波：魔道天生技应手露相
         // 1.2 普攻回气：招式耗真气，普攻回气，逼玩家穿插普攻做资源博弈
         try {
             var _pcd = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
@@ -2146,20 +2491,657 @@ class Battle {
             }
         } catch (e) {}
         if (window.TalismanSystem && typeof window.TalismanSystem.onPlayerAttackComplete === 'function') window.TalismanSystem.onPlayerAttackComplete();
-        this.turn++;
-        this._processRoundPhysiology();
+        // 第九十二波·行动条：普攻是 100 点的动作——一刀挥出，条清空，重新攒
+        this.spendActionCost(this.player, 100);
+        this._endPlayerAction();   // 第九十四波：石灰迷眼随你的手数消散
         if (this._checkEnd()) return true;
-        this.isPlayerTurn = false;
-        setTimeout(() => this.enemyTurn(), 300);
+        this._advanceTimeline();
         return true;
+    }
+
+    // 第九十一波·行囊动作也是动作：掷暗器、撒毒、烧攻击符，全都吃本回合——
+    // 与医疗动作同一本回合经济。此前这些经符箓管线直伤敌人，却既不挑时机也不耗回合，
+    // 敌人刀还在半空你慢悠悠翻行囊，有多少掷多少（审出来的白嫖账）。
+    canUseBattleItem() {
+        return !this.isFinished && this.isPlayerTurn && this.enemy && this.enemy.isAlive;
+    }
+    playerItemTurn(label, cost) {
+        if (this.isFinished || !this.isPlayerTurn) return false;
+        if (label) this.log.push({ msg: label });
+        // 第九十二波·行动条：家什按轻重扣条（暗器 60 快活 / 毒 80 / 控制符 100 / 乾坤 150）
+        this.spendActionCost(this.player, cost == null ? 100 : cost);
+        this._endPlayerAction();   // 第九十四波：石灰迷眼随你的手数消散
+        if (this._checkEnd()) return true;
+        this._advanceTimeline();
+        return true;
+    }
+
+    // 第九十三波·卑鄙流仪两个引擎口（物品消耗与按钮在 app.js，账在这里）
+    /** 淬毒入兵刃：接下来 n 次见血渗毒（毒账与撒毒粉同一本，温和些：2 回合×10） */
+    setVenomBlade(n) {
+        if (!this.player) return false;
+        this.player._venomBlade = Math.max(this.player._venomBlade || 0, n || 3);
+        this._noteDeed('tricks');   // 第九十九波：淬毒也是下作手段——有人看见就传得出去
+        return true;
+    }
+    /** 装死诱敌：扣满条躺下——他信不信，看他的性子（第九十四波·见招拆招） */
+    playerFeign() {
+        if (this.isFinished || !this.isPlayerTurn) return false;
+        if (this.player._feignPose) {
+            this.log.push({ msg: '你已经躺在地上装死了——别演两遍。' });
+            return false;
+        }
+        this.player._feignPose = true;
+        this._noteDeed('tricks');   // 第九十九波：装死是下作手段——有人看见就传得出去
+        this.log.push({ msg: '🖤 你兵刃脱手、踉跄两步栽倒在地，闭住呼吸装死——他信不信，看他的性子。' });
+        this._endPlayerAction();
+        this.spendActionCost(this.player, 100);
+        if (this._checkEnd()) return true;
+        this._advanceTimeline();
+        return true;
+    }
+
+    // ===== 第九十四波·见招拆招：姿态不是固定效果，是社交动作——不同性子不同反应 =====
+    // 具名对手带五维性格档（personality16），杂兵没有——就从打架的路数里读他的性子。
+    /** 敌方的「打架性子」三面：性急 / 老练 / 眼毒 */
+    _foePersona() {
+        var e = this.enemy || {};
+        var num = function (v) { v = Number(v); return isFinite(v) ? v : 0; };
+        var reckless = 0.30, cautious = 0.30, sharp = 0.20;
+        var p = e._personality || null;
+        if (p && typeof p === 'object') {
+            // 五维性格档：谋略高+自我高→鲁莽冒进；谋略低+自我低→老成持重；精力旺→眼疾手快
+            reckless += (num(p.tactics) + num(p.identity)) / 400;
+            cautious += (-num(p.tactics) - num(p.identity)) / 400;
+            sharp += num(p.energy) / 300;
+        } else {
+            var beh = e.aiBehavior || '';
+            if (beh === 'aggressive') reckless += 0.3;
+            else if (beh === 'defensive') cautious += 0.3;
+            else if (beh === 'opportunist') sharp += 0.3;
+            else if (beh === 'poisoner') sharp += 0.15;
+            var st = String(e.subtype || '');
+            if (st === 'bandit' || st === 'renegade') reckless += 0.15;
+            if (e._evilFaction === true) sharp += 0.1;
+            if (num(e.level) >= 15) { cautious += 0.1; sharp += 0.1; }
+        }
+        reckless = Math.max(0.05, reckless);
+        cautious = Math.max(0.05, cautious);
+        sharp = Math.max(0.05, sharp);
+        var sum = reckless + cautious + sharp;
+        return { reckless: reckless / sum, cautious: cautious / sum, sharp: sharp / sum };
+    }
+    _personaWord() {
+        var w = this._foePersona();
+        if (w.sharp >= w.reckless && w.sharp >= w.cautious) return '眼毒的家伙';
+        return w.reckless >= w.cautious ? '性急的家伙' : '老练的家伙';
+    }
+    _rollPersona() {
+        var w = this._foePersona();
+        var r = Math.random();
+        if (r < w.reckless) return 'reckless';
+        if (r < w.reckless + w.cautious) return 'cautious';
+        return 'sharp';
+    }
+    /** 迷烟扬进他眼里：吃不吃看性子——性急兜头糊实、老练侧脸闭气、眼毒袖子扫开（返回瞎几回） */
+    receiveSmoke() {
+        this._noteDeed('tricks');   // 第九十九波：撒石灰是下作手段——撒没撒中都有人看见
+        var turns = 2, word = this._personaWord();
+        var face = this._rollPersona();
+        if (face === 'sharp') {
+            turns = 0;
+            this.log.push({ msg: '💨 ' + this.enemy.name + ' 袖子横扫，把石灰尽数挡下——迷烟白撒了！（' + word + '）' });
+        } else if (face === 'cautious') {
+            turns = 1;
+            this.log.push({ msg: '💨 ' + this.enemy.name + ' 及时侧脸闭气，石灰只吃进去小半——只瞎一回（' + word + '）' });
+        } else {
+            this.log.push({ msg: '💨 石灰兜头糊了 ' + this.enemy.name + ' 一脸，他两眼流泪——瞎两回！（' + word + '）' });
+        }
+        return turns;
+    }
+    /** 对面也会使坏（怀里揣着石灰、也会装死）——姿态摆出来，时间轴停住，等你见招拆招 */
+    _tryEnemyTrick() {
+        var t = this._foeTricks;
+        if (!t) return false;
+        var enemy = this.enemy;
+        var phys = enemy.physiology;
+        var blood = phys ? (phys.bloodVolume !== undefined ? phys.bloodVolume : phys.health) : 100;
+        var bloodMax = phys && phys.maxBloodVolume ? phys.maxBloodVolume : 100;
+        var bloodPct = bloodMax > 0 ? (blood / bloodMax) * 100 : 100;
+        // 装死：狗急跳墙的最后一搏（气血不足一半、一场一回、三五成把握使出来）
+        // 会遁走的家伙不演这出——人家有更好的逃命路数（不抢遁术的戏）
+        var _canEscape = Array.isArray(enemy.combatAbilities) && enemy.combatAbilities.indexOf('escape') >= 0;
+        if (!t.feignUsed && !_canEscape && enemy.isAlive && bloodPct < 50 && Math.random() < 0.35) {
+            t.feignUsed = true;
+            this.log.push({ msg: '💀 ' + enemy.name + ' 兵刃脱手，捂着胸口踉跄两步栽倒在地，一动不动——是真倒了，还是装的？' });
+            this._pendingPrompt = {
+                kind: 'feign',
+                text: enemy.name + ' 栽倒在地，胸口微微起伏——是真倒了，还是装的？',
+                options: [
+                    { k: 'finish', label: '⚔️ 抢上前补上一刀（若是装的，他暴起有你好受）' },
+                    { k: 'watch', label: '👁 退开半步看一会儿（「尸体」躺不久）' },
+                    { k: 'probe', label: '🎯 弹一枚暗器试探（吃一枚暗器；装死的沉不住气）', needItem: 'special_hidden_weapon' },
+                    { k: 'call', label: '📣 出声叫阵（装死的人最怕被点破）' }
+                ]
+            };
+            return true;
+        }
+        // 石灰：怀里藏的一包（带家伙的才会使，三成把握掏出来）
+        if (t.smoke > 0 && Math.random() < 0.3) {
+            t.smoke -= 1;
+            this.log.push({ msg: '💨 ' + enemy.name + ' 忽然探手入怀，摸出一把白雾兜头撒来——是石灰粉！' });
+            this._pendingPrompt = {
+                kind: 'smoke',
+                text: '白雾已到眼前，来不及举兵刃格挡——这把石灰你打算怎么接？',
+                options: [
+                    { k: 'avert', label: '🏃 扭头纵跃避开（行动条 -60，多半躲得开）' },
+                    { k: 'sleeve', label: '🧥 抬袖遮面（石灰挡了大半，下一手命中 -15）' },
+                    { k: 'tank', label: '😤 闭眼硬吃冲进去（两手命中 -30，下一刀带着怒火 ×1.2）' },
+                    { k: 'leap', label: '🐦 闭眼后跃（躲个干净，他扑空慢半拍）' }
+                ]
+            };
+            return true;
+        }
+        return false;
+    }
+    /** 你挑好了怎么接：时间轴从这儿续走（敌人这一动的条到你选完才扣——思索不占账） */
+    resolvePrompt(idx) {
+        if (this.isFinished || !this._pendingPrompt) return false;
+        var prompt = this._pendingPrompt;
+        var opt = prompt.options[idx];
+        if (!opt) return false;
+        this._pendingPrompt = null;
+        var enemy = this.enemy;
+        var enemyActor = this._findActor(enemy);
+        if (prompt.kind === 'smoke') {
+            if (opt.k === 'avert') {
+                this.log.push({ msg: '🏃 你扭头纵身跃开，石灰贴着耳边飞过——只迷进眼里几粒。（你这一跃耗去行动条 60 点）' });
+                if (enemyActor) enemyActor.bar = Math.max(0, enemyActor.bar - 60);
+            } else if (opt.k === 'sleeve') {
+                this.log.push({ msg: '🧥 你抬袖遮面，石灰尽数打在袖子上——只是眼里被烟熏得发花，下一手要失准些。（命中 -15 一手）' });
+                this._playerBlindHalf = 1;
+            } else if (opt.k === 'tank') {
+                this.log.push({ msg: '😤 你咬牙顶着白雾冲进去——两眼刺痛流泪，全凭瞎摸抡刀！（两手命中 -30；下一刀带着石灰的仇 ×1.2）' });
+                this._playerBlind = 2;
+                this._nextPlayerHitMul = 1.2;
+            } else if (opt.k === 'leap') {
+                this.log.push({ msg: '🐦 你闭眼后跃，稳稳落地——他一把撒空，抢上来慢半拍。（他行动条 -50）' });
+                if (enemyActor) enemyActor.bar = Math.max(0, enemyActor.bar - 50);
+            }
+        } else if (prompt.kind === 'feign') {
+            if (opt.k === 'finish') {
+                if (Math.random() < 0.5) {
+                    this.log.push({ msg: '⚔️ 你抢上前举刀便剁——他猛地睁眼就地一滚，刀锋贴着他肋口削空！装的！' });
+                    this._foeBackstabPending = 1;
+                    try { var _fbR = this._executeAttack(enemy, this.player, 'chest', 'slash'); if (_fbR) this.log.push(_fbR); } catch (eFoe) {}
+                } else {
+                    this.log.push({ msg: '⚔️ 你抢上前一刀剁在他胸口——毫无反应，他是真倒了。' });
+                }
+            } else if (opt.k === 'watch') {
+                this.log.push({ msg: '👁 你退开半步盯着——「尸体」熬不住，一骨碌爬了起来拍拍胸口。（他白耗半口气，行动条 -50）' });
+                if (enemyActor) enemyActor.bar = Math.max(0, enemyActor.bar - 50);
+            } else if (opt.k === 'probe') {
+                if (Math.random() < 0.5) {
+                    this.log.push({ msg: '🎯 你弹出一枚暗器，寒光直奔他肩头——他哎哟一声就地滚开，暗器钉进土里！（装死的沉不住气，白耗半拍，行动条 -30）' });
+                    if (enemyActor) enemyActor.bar = Math.max(0, enemyActor.bar - 30);
+                } else {
+                    var prDmg = 0;
+                    try { if (typeof enemy.takeDamage === 'function') prDmg = enemy.takeDamage('chest', 45, 'pierce') || 0; } catch (ePr) {}
+                    this.log.push({ msg: '🎯 暗器破空，深深扎进他胸口（' + prDmg + ' 点伤）——毫无反应，他是真倒了。' });
+                }
+            } else if (opt.k === 'call') {
+                if (Math.random() < 0.5) {
+                    this.log.push({ msg: '📣 你朗声叫阵——「装死也要脸！」他骂骂咧咧一骨碌爬起来。装死的最怕被点破。（他行动条 -50）' });
+                    if (enemyActor) enemyActor.bar = Math.max(0, enemyActor.bar - 50);
+                } else {
+                    this.log.push({ msg: '📣 你朗声叫阵——地上没人应。你盯了半晌他仍旧不动，真假难辨。（你分了神，他先缓过一口气，行动条 +30）' });
+                    var playerActor = this._findActor(this.player);
+                    if (playerActor) playerActor.bar = Math.min(100, playerActor.bar + 30);
+                }
+            }
+        } else if (prompt.kind === 'surrender') {
+            // 第九十九波·杀与放：都记进行迹账——有人看见就传得出去（_settleWitness）
+            if (opt.k === 'kill') {
+                this._noteDeed('execution');
+                this.log.push({ msg: '⚔️ 你手起刀落——' + enemy.name + ' 的话没说完就栽倒在血泊里。杀降不祥，这一刀江湖看着呢。' });
+                try { enemy.takeDamage('chest', 9999, 'slash'); } catch (eKill) { enemy.isAlive = false; }
+            } else if (opt.k === 'spare') {
+                this._noteDeed('mercy');
+                enemy._fled = true;
+                this.log.push({ msg: '🙏 你收了刀：「滚吧。」' + enemy.name + ' 磕了三个响头，连兵刃都没敢捡，夺路而逃——这份不杀之恩他记下了。' });
+            }
+        } else if (prompt.kind === 'taunt') {
+            // 第九十九波·这口气咽不咽：稳住/上头/骂回去——骂回去吃不吃看他的性子
+            if (opt.k === 'steel') {
+                var _pl99 = this.player;
+                if ((_pl99.maxStamina || 0) > 0) _pl99.stamina = Math.min(_pl99.maxStamina, (_pl99.stamina || 0) + 5);
+                this.log.push({ msg: '😤 你深吸一口气，把这口恶气压了回去——狗咬不了石头。（精力 +5）' });
+            } else if (opt.k === 'rage') {
+                this._playerRage = 2;
+                if (!this._nextPlayerHitMul) this._nextPlayerHitMul = 1.15;
+                var _pa99 = this._findActor(this.player);
+                if (_pa99) _pa99.bar = Math.min(150, _pa99.bar + 40);
+                this.log.push({ msg: '🔥 你血往头上涌，提刀就抢！（行动条 +40、下一击 ×1.15，但两手气昏了头命中 -10）' });
+            } else if (opt.k === 'curse') {
+                var _cf99 = this._rollPersona();
+                if (_cf99 === 'reckless') {
+                    var _ca99 = this._findActor(enemy);
+                    if (_ca99) _ca99.bar -= 30;   // 被噎得招式都乱了（条可以欠账，不夹 0）
+                    this.log.push({ msg: '🗯️ 你骂得比他更毒三分——他被噎得脸红脖子粗，出招都乱了！（他行动条 -30）' });
+                } else if (_cf99 === 'cautious') {
+                    this.log.push({ msg: '🗯️ 你骂了回去，他只当耳旁风：「有骂人的力气，不如留着求饶。」（' + this._personaWord() + '）' });
+                } else {
+                    if ((this.player.maxStamina || 0) > 0) this.player.stamina = Math.max(0, (this.player.stamina || 0) - 8);
+                    this.log.push({ msg: '🗯️ 他等你骂完，慢悠悠回了一句——句句戳在你心口窝上，噎得你气血翻涌。（精力 -8，' + this._personaWord() + '）' });
+                }
+            }
+        }
+        if (enemyActor) enemyActor.bar -= 100;   // 敌人这一动到你选完才扣（思索不占账）
+        this._endEnemyMainAction();
+        if (!this.isFinished) this._advanceTimeline();
+        if (this.onUpdate) this.onUpdate();
+        return true;
+    }
+    /** 玩家落了一手行动：石灰迷眼随你的手数消散 */
+    _endPlayerAction() {
+        if (this._playerBlind > 0) this._playerBlind -= 1;
+        if (this._playerBlindHalf > 0) this._playerBlindHalf -= 1;
+        if (this._playerRage > 0) this._playerRage -= 1;   // 第九十九波：上头的手数随你的动作消散
+    }
+
+    // ===== 第九十九波·江湖耳目：话也是招、手段有人看、收场结账 =====
+    // 全是「想做才做」的可选动作——不塞任何必走的计数器；效果全部吃现有的真账
+    // （性子三面/精力/真气/行动条/声望/钱袋），约束来自世界本身。
+    /** 记一笔行迹：有人看见就传得出去（仗打完按目击者结账） */
+    _noteDeed(kind) {
+        if (this._deeds && kind) this._deeds[kind] = (this._deeds[kind] || 0) + 1;
+    }
+    /** 魔道天生技应了手——黑气缠上刀锋（一场只报一次，账记在行迹里） */
+    _demonicOnHit(result) {
+        if (result && !result.missed && this._playerDemonicAbil && !this._demonicShown) {
+            this._demonicShown = true;
+            this._noteDeed('demonic');
+            this.log.push({ msg: '🩸 魔道的天生技应了手——黑气缠上刀锋。（正道中人见了这个，百口难辨）' });
+        }
+    }
+    /** 阵前话：骂阵挑釁 / 攻心话 / 壮胆——喊一嗓子都是真动作（⚡60），吃不吃看他性子 */
+    playerTaunt(kind) {
+        if (this.isFinished || !this.isPlayerTurn) return false;
+        if (!this.enemy || !this.enemy.isAlive) return false;
+        var enemy = this.enemy;
+        var isBeast = (enemy.species === 'beast' || enemy.physiologyType === 'beast');
+        if (isBeast) {
+            this.log.push({ msg: '📣 你冲着它喊话——野兽听不懂人话，只当你要抢它的食，龇牙瞪了过来。' });
+            return false;
+        }
+        if (kind === 'provoke') {
+            var face = this._rollPersona();
+            var word = this._personaWord();
+            if (face === 'reckless') {
+                this._foeRage = 1;
+                var ea = this._findActor(enemy);
+                if (ea) ea.bar = Math.min(150, ea.bar + 30);
+                this.log.push({ msg: '📣 你一通骂阵——' + enemy.name + ' 涨红了脸：「找死！」他青筋暴起抢了上来！（他下一击更狠 ×1.2 也露破绽命中 -15，' + word + '）' });
+            } else if (face === 'cautious') {
+                this.log.push({ msg: '📣 你骂阵的话头飞过去，' + enemy.name + ' 只是冷笑：「激将法？」他不接这个茬。（' + word + '）' });
+            } else {
+                this._foeInsight = 1;
+                this.log.push({ msg: '📣 你张口骂阵，' + enemy.name + ' 反而上下打量你：「嗓门这么大，是心虚了吧？」你的底细被他看穿了。（' + word + '，他下一击命中 +25）' });
+            }
+            this.spendActionCost(this.player, 60);
+            this._endPlayerAction();
+            if (this._checkEnd()) return true;
+            this._advanceTimeline();
+            return true;
+        }
+        if (kind === 'heart') {
+            if (this._foeRighteousWrath) {
+                this.log.push({ msg: '📣 你张口想讲两句——他已认出你的魔道功法，话到嘴边成了冷笑：「魔头，省省吧！」（百口难辨，攻心无用）' });
+                return false;
+            }
+            if (/boss/.test(String(enemy._enemyType || ''))) {
+                this.log.push({ msg: '📣 你想以言语动他——' + enemy.name + ' 什么阵仗没见过，不为所动：「凭你这三寸舌，也想留命？」' });
+                this.spendActionCost(this.player, 60);
+                this._endPlayerAction();
+                this._advanceTimeline();
+                return true;
+            }
+            var wp = Number((enemy.attrs && enemy.attrs.willpower) || 10);
+            var p = 0.3 + (wp < 12 ? 0.15 : 0) - wp * 0.006;
+            var st = String(enemy.subtype || '');
+            if (['bandit', 'renegade', 'rogue', 'escapee'].indexOf(st) >= 0 || enemy._evilFaction) p += 0.25;   // 拿钱卖命的、拦道求财的，心最容易动
+            if (['monk', 'sword', 'body'].indexOf(st) >= 0) p -= 0.15;   // 心里有持守的，动摇不了
+            p = Math.max(0.08, Math.min(0.7, p));
+            if (Math.random() < p) {
+                this._foeDisheartened = 2;
+                this.log.push({ msg: '📣 「为了几两银子把命搭上，值吗？你家里人还等你回去！」——这话戳中了 ' + enemy.name + '，他的刀慢了三成。（士气受挫：命中 -15、力道 -15%，撑两手）' });
+            } else {
+                this.log.push({ msg: '📣 你想攻他的心，' + enemy.name + ' 啐了一口：「少来这套！」（他的心稳得很）' });
+            }
+            this.spendActionCost(this.player, 60);
+            this._endPlayerAction();
+            if (this._checkEnd()) return true;
+            this._advanceTimeline();
+            return true;
+        }
+        if (kind === 'rally') {
+            // 第一百波·壮胆改递减：不再一场一嗓一刀切——气是一嗓比一嗓弱，但永远续得上
+            this._rallyCount = (this._rallyCount || 0) + 1;
+            this._rallyUsed = true;
+            var _gain100 = this._rallyCount === 1 ? 15 : (this._rallyCount === 2 ? 8 : 4);
+            var pp99 = this.player;
+            if ((pp99.maxStamina || 0) > 0) pp99.stamina = Math.min(pp99.maxStamina, (pp99.stamina || 0) + _gain100);
+            if (this._playerRage > 0) {
+                this._playerRage = 0;
+                this.log.push({ msg: '📣 你深吸一口气，大喝一声把胸口的邪火压了下去。（上头散了，精力 +' + _gain100 + '）' });
+            } else if (this._rallyCount === 1) {
+                this.log.push({ msg: '📣 「站起来！还能打！」——你冲自己吼了一嗓子，胸口一热（精力 +15）。' });
+            } else if (this._rallyCount === 2) {
+                this.log.push({ msg: '📣 你又吼了一嗓子——声音已经劈了，连你自己都半信半疑。（精力 +8）' });
+            } else {
+                this.log.push({ msg: '📣 嗓子哑得只剩气音，全靠一口气吊着。（精力 +4）' });
+            }
+            this.spendActionCost(this.player, 60);
+            this._endPlayerAction();
+            this._advanceTimeline();
+            return true;
+        }
+        return false;
+    }
+    /** 卖绽：故意露出破绽——他咬不咬钩，看他的性子（性急的抢进露旧力，眼毒的反戳你真口子） */
+    playerBait() {
+        if (this.isFinished || !this.isPlayerTurn) return false;
+        if (this.player._feignPose) {
+            this.log.push({ msg: '你已经躺在地上装死了——别再卖绽了，两出戏穿帮。' });
+            return false;
+        }
+        if (this.player._baitPose) {
+            this.log.push({ msg: '绽已经卖出去了——再卖就是破绽百出了。' });
+            return false;
+        }
+        this.player._baitPose = true;
+        this.log.push({ msg: '🎣 你故意把架势放散，左肋露出一个大口子——他咬不咬钩，看他的性子。' });
+        this.spendActionCost(this.player, 60);
+        this._endPlayerAction();
+        this._advanceTimeline();
+        return true;
+    }
+    /** 撩拨：轻活儿（⚡40）——不求伤他，求累他：精力真气双耗（真账），耗干了招牌重手就出不来 */
+    playerHarass() {
+        if (this.isFinished || !this.isPlayerTurn) return false;
+        if (!this.enemy.isAlive) return false;
+        var damageType = 'blunt';
+        try { if (typeof window.resolveWeaponDamageType === 'function') damageType = window.resolveWeaponDamageType() || 'blunt'; } catch (e) {}
+        if (damageType === 'sharp') damageType = 'slash';
+        // 第一百波·连环手：踩着蒺藜站都站不稳的人，躲什么轻活儿——必中，耗力翻倍
+        var _stum100 = this._foeStumble > 0;
+        var result = this._executeAttack(this.player, this.enemy, 'abdomen', damageType, { type: 'move', damageMult: 0.3, hitBonus: _stum100 ? 100 : 10 });
+        if (result) result.msg = (_stum100 ? '🪶 撩拨（趁他脚下正乱）：' : '🪶 撩拨：') + result.msg;
+        this.log.push(result);
+        this._demonicOnHit(result);
+        var e = this.enemy;
+        var drained = [];
+        var _sD100 = _stum100 ? 16 : 8, _qD100 = _stum100 ? 10 : 5;
+        if ((e.maxStamina || 0) > 0 && e.stamina > 0) { var sD = Math.min(e.stamina, _sD100); e.stamina -= sD; drained.push('精力 -' + sD); }
+        if ((e.maxQi || 0) > 0 && e.qi > 0) { var qD = Math.min(e.qi, _qD100); e.qi -= qD; drained.push('真气 -' + qD); }
+        if (drained.length) this.log.push({ msg: '💨 他被你撩拨得团团转，白白出力喘着粗气（' + drained.join('、') + '）——气力越少，招牌重手越出不来。' });
+        this.spendActionCost(this.player, 40);
+        this._endPlayerAction();
+        if (this._checkEnd()) return true;
+        this._advanceTimeline();
+        return true;
+    }
+    /** 掳人当盾：拽一个活的同伙挡在身前——他三成不敢下手，四成刀落自己人身上（下作，江湖看着） */
+    playerGrabShield() {
+        if (this.isFinished || !this.isPlayerTurn) return false;
+        var shield = null;
+        var allies = this.enemyAllies || [];
+        for (var i = 0; i < allies.length; i++) if (allies[i] && allies[i].isAlive) { shield = allies[i]; break; }
+        if (!shield) {
+            this.log.push({ msg: '🤚 你伸手去掳人——他身边一个活的同伙都没有，掳无可掳。（掳盾要有对面同伙在场）' });
+            return false;
+        }
+        this._humanShield = shield;
+        this._noteDeed('tricks');
+        this.log.push({ msg: '🤚 你一个闪身掳住 ' + shield.name + '，兵刃横在他颈间——「别过来！」' + this.enemy.name + ' 的刀势一滞。（他三成不敢下手，四成刀落自己人身上）' });
+        this.spendActionCost(this.player, 80);
+        this._endPlayerAction();
+        this._advanceTimeline();
+        return true;
+    }
+    /** 弃械求饶：把兵刃扔了跪下去——响马求财不求命，野兽听不懂人话，正道不收魔头的降 */
+    playerSurrender() {
+        if (this.isFinished || !this.isPlayerTurn) return false;
+        var enemy = this.enemy;
+        if (enemy.species === 'beast' || enemy.physiologyType === 'beast') {
+            this.log.push({ msg: '🏳️ 你刚要弃械——野兽听不懂人话，獠牙已经逼到了眼前。' });
+            return false;
+        }
+        if (this._playerSurrenderTried) {
+            this.log.push({ msg: '🏳️ 你已经弃过一回械了——他防着你的花样，第二回喊破了喉咙也没用。' });
+            return false;
+        }
+        this._playerSurrenderTried = true;
+        var p = 0.5;
+        var st = String(enemy.subtype || '');
+        if (['bandit', 'renegade', 'rogue', 'escapee'].indexOf(st) >= 0 || enemy._evilFaction) p += 0.2;   // 求财不求命
+        if (st === 'monk') p += 0.15;   // 出家人不杀降
+        var ppS = this.player.physiology;
+        var pbS = ppS ? (ppS.bloodVolume !== undefined ? ppS.bloodVolume : 100) : 100;
+        if (pbS < 25) p += 0.1;         // 濒死求饶，更像真的
+        if (/boss/.test(String(enemy._enemyType || ''))) p -= 0.25;
+        if (this._foeRighteousWrath || (this._playerDemonicOwner && !enemy._evilFaction && ['monk', 'sword', 'bladesman', 'body'].indexOf(st) >= 0)) p -= 0.3;   // 正道不收魔头的降
+        p = Math.max(0.05, Math.min(0.9, p));
+        this.spendActionCost(this.player, 100);
+        if (Math.random() < p) {
+            // 破财免灾：铜钱三成、灵石两成——从钱袋真账里扣
+            var lostCopper = 0, lostStone = 0;
+            try {
+                var _w99 = (window.inventory && window.inventory.currency) ? window.inventory.currency : null;
+                var _cd99 = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
+                var _src99 = _w99 || _cd99;
+                if (_src99) {
+                    lostCopper = Math.floor((_src99.copper || 0) * 0.3);
+                    lostStone = Math.floor((_src99.spiritStones || 0) * 0.2);
+                    _src99.copper = Math.max(0, (_src99.copper || 0) - lostCopper);
+                    _src99.spiritStones = Math.max(0, (_src99.spiritStones || 0) - lostStone);
+                    if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI();
+                }
+            } catch (eW99) {}
+            this.surrendered = true;
+            this.isFinished = true;
+            this.winner = 'player';
+            this.noSpoils = true;
+            this.log.push({ msg: '🏳️ 你把兵刃一扔、单膝跪地——' + enemy.name + ' 绕着你走了一圈，收走了 ' + lostCopper + ' 枚铜钱' + (lostStone > 0 ? '和 ' + lostStone + ' 块灵石' : '') + '，大笑三声扬长而去。（命保住了）' });
+            try { this._settleWitness(); } catch (eWit99) {}
+            if (this.onEnd) this.onEnd('player');
+            return true;
+        }
+        this.log.push({ msg: '🏳️ 「我降！」——' + enemy.name + ' 啐了一口：「求饶？晚了！」他趁你兵刃脱手抢上就是一击！' });
+        try {
+            var _sr99 = this._executeAttack(enemy, this.player, 'chest', enemy.damageType === 'sharp' ? 'slash' : (enemy.damageType || 'slash'));
+            if (_sr99) this.log.push(_sr99);
+        } catch (eS99) {}
+        this._endPlayerAction();
+        if (this._checkEnd()) return true;
+        this._advanceTimeline();
+        return true;
+    }
+    /** 铁蒺藜撒一地：眼毒的看见绕开，性急的踩个正着（条 -40、下一手命中 -10），老练的步步小心也乱了脚 */
+    receiveCaltrop() {
+        this._noteDeed('tricks');
+        var face = this._rollPersona();
+        var word = this._personaWord();
+        var ea = this._findActor(this.enemy);
+        if (face === 'sharp') {
+            // 第一百波·看穿也有代价：纵身一跃躲开蒺藜，力气也花在了这一跃上
+            var eC100 = this.enemy, sdC100 = 0;
+            if ((eC100.maxStamina || 0) > 0 && eC100.stamina > 0) { sdC100 = Math.min(eC100.stamina, 5); eC100.stamina -= sdC100; }
+            this.log.push({ msg: '🪤 你撒出一把铁蒺藜——' + this.enemy.name + ' 眼尖，纵身一跃落在蒺藜场外。（白撒了' + (sdC100 > 0 ? '，不过这一跃也费了他一把力气：精力 -' + sdC100 : '') + '，' + word + '）' });
+            return false;
+        }
+        if (face === 'reckless') {
+            if (ea) ea.bar = Math.max(0, ea.bar - 40);
+            this._foeStumble = 1;
+            this.log.push({ msg: '🪤 ' + this.enemy.name + ' 抢步上前一脚踩中铁蒺藜，疼得单脚直跳、破口大骂！（行动条 -40，下一手命中 -10，' + word + '）' });
+            return true;
+        }
+        this._foeStumble = 1;
+        this.log.push({ msg: '🪤 ' + this.enemy.name + ' 看见蒺藜，小心翼翼地绕着走——脚下一乱，攻势也慢了。（下一手命中 -10，' + word + '）' });
+        return true;
+    }
+    /** 灶灰辣粉：穷人的石灰——便宜好使，但只糊得住性急的（瞎一回） */
+    receiveAsh() {
+        this._noteDeed('tricks');
+        var face = this._rollPersona();
+        var word = this._personaWord();
+        if (face === 'reckless') {
+            this.log.push({ msg: '🌶️ 灶灰辣粉兜头糊了 ' + this.enemy.name + ' 一脸——他呛得眼泪直流，兵刃乱抡！（瞎一回，' + word + '）' });
+            return 1;
+        }
+        // 第一百波·看穿也有代价：眼毒的袖子拂得再快，也是把力气花在了拂灰上
+        var eA100 = this.enemy, sdA100 = 0;
+        if (face === 'sharp' && (eA100.maxStamina || 0) > 0 && eA100.stamina > 0) { sdA100 = Math.min(eA100.stamina, 5); eA100.stamina -= sdA100; }
+        this.log.push({ msg: '🌶️ ' + this.enemy.name + ' ' + (face === 'cautious' ? '早有防备，侧脸闭气' : '袖子一拂') + '，灶灰散了大半。（白撒了' + (sdA100 > 0 ? '，不过这一拂也费了力气：精力 -' + sdA100 : '') + '，' + word + '）' });
+        return 0;
+    }
+    /** 敌人跪地求饶：气血见了底的武人（非 boss、一场一回、三五成把握）——杀与放，你来定 */
+    _tryEnemySurrender() {
+        var enemy = this.enemy;
+        if (!enemy || !enemy.isAlive || this._surrenderAsked) return false;
+        if (enemy.species === 'beast' || enemy.physiologyType === 'beast') return false;   // 兽不会跪
+        if (/boss/.test(String(enemy._enemyType || ''))) return false;                     // 头目宁死不受辱
+        // 会遁走的先想着跑，不想着跪（与装死同一口径——不抢遁术的戏）
+        if (Array.isArray(enemy.combatAbilities) && enemy.combatAbilities.indexOf('escape') >= 0) return false;
+        var phys = enemy.physiology;
+        var blood = phys ? (phys.bloodVolume !== undefined ? phys.bloodVolume : phys.health) : 100;
+        var bloodMax = (phys && phys.maxBloodVolume) ? phys.maxBloodVolume : 100;
+        var pct = bloodMax > 0 ? (blood / bloodMax) * 100 : 100;
+        // 第一百波·连环手：心气散了的人更容易跪——触发线抬到两成，肯跪的概率过半
+        var _dsh100 = this._foeDisheartened > 0;
+        if (pct >= (_dsh100 ? 20 : 12)) return false;
+        if (Math.random() >= (_dsh100 ? 0.55 : 0.35)) return false;
+        this._surrenderAsked = true;
+        this.log.push({ msg: '🧎 ' + enemy.name + (_dsh100 ? ' 的心气早被你打散了——' : ' ') + '兵刃当啷落地，双膝一软跪了下去：「我降！我降！好汉饶命——我家里还有老娘！」' });
+        this._pendingPrompt = {
+            kind: 'surrender',
+            text: enemy.name + ' 弃了兵刃跪地求饶——这条命，你收不收？',
+            options: [
+                { k: 'kill', label: '⚔️ 手起刀落（杀降不祥——有人看见就传得出去）' },
+                { k: 'spare', label: '🙏 收刀放他走（他会记着这份不杀之恩，江湖也会记着）' }
+            ]
+        };
+        return true;
+    }
+    /** 江湖耳目：有人看见，就等于发生了——仗打完按目击者的正邪结账（阵营声望真账） */
+    _settleWitness() {
+        if (this._witnessSettled) return;
+        this._witnessSettled = true;
+        var deeds = this._deeds || {};
+        if (!deeds.tricks && !deeds.demonic && !deeds.mercy && !deeds.execution) return;
+        var _EVIL_ST = ['bandit', 'renegade', 'cultist', 'poisoner', 'blood', 'essence', 'gu', 'yaksha', 'demon_general', 'reaper'];
+        var isHuman = function (e) { return !!e && (e.species === 'human' || e.physiologyType === 'humanoid'); };
+        var witnesses = [];
+        var self = this;
+        var pushW = function (e) {
+            if (!isHuman(e)) return;
+            var evil = (e._evilFaction === true) || _EVIL_ST.indexOf(String(e.subtype || '')) >= 0;
+            witnesses.push({ e: e, evil: evil });
+        };
+        // 谁能活着开口：遁走/被放走的主敌与同伙；你败了/弃械/逃跑时站着的那个敌人
+        if (this.enemy) {
+            if (this.enemy._fled) pushW(this.enemy);
+            else if (this.enemy.isAlive && (this.winner === 'enemy' || this.surrendered || this.playerFled)) pushW(this.enemy);
+        }
+        (this.enemyAllies || []).forEach(function (a) { if (a && a._fled) pushW(a); });
+        if (!witnesses.length) return;   // 没人看见，就等于没发生（死人不会说话）
+        var evilW = witnesses.some(function (w) { return w.evil; });
+        var decentW = witnesses.some(function (w) { return !w.evil; });
+        var chRep = function (fid, n) { try { if (typeof window.changeFactionReputation === 'function') window.changeFactionReputation(fid, n); } catch (e) {} };
+        var msg = function (m, t) { try { if (window.showMessage) window.showMessage(m, t || 'info'); } catch (e) {} };
+        if (deeds.demonic) {
+            if (decentW) { chRep('righteous_alliance', -12); msg('👁️ 你的魔道功法当众露了相——看见的人会把它传出去。正道人一见魔功，百口难辨。（正道联盟声望 -12）', 'warning'); }
+            if (evilW) { chRep('demon_cult', 6); msg('🩸 你露的魔功传进了魔道耳朵里——他们把你当自己人了。（魔道声望 +6）', 'info'); }
+        }
+        if (deeds.tricks) {
+            if (decentW) { chRep('righteous_alliance', -3); msg('👁️ 你的手段被人看了去——撒灰、掳人盾这类事，正经人瞧不起。（正道联盟声望 -3）', 'warning'); }
+            else if (evilW) { chRep('rogue_cultivators', 2); msg('🖤 你的手段传进了下九流的耳朵——走黑路的人都夸你专业。（散修声望 +2）', 'info'); }
+        }
+        if (deeds.mercy) { chRep('righteous_alliance', 6); chRep('rogue_cultivators', 3); msg('🙏 你放走了一个跪地求饶的人——江湖会记得这份不杀之恩。（正道 +6，散修 +3）', 'success'); }
+        if (deeds.execution) {
+            if (decentW) { chRep('righteous_alliance', -8); msg('⚰️ 你杀了跪地求饶的人——这事传出去不好听。（正道联盟声望 -8）', 'warning'); }
+            else if (evilW) { chRep('demon_cult', 3); msg('🩸 下九流只服狠——你杀降的做派让邪道中人高看一眼。（魔道声望 +3）', 'info'); }
+        }
+    }
+
+    // ===== 第九十七波·对面也是活人：敌人也有真气、也有行囊、也带同伙 =====
+    /** 敌人的招牌重手名号：一人定一招（名号+等级定死——具名强敌的招不会一场里换来换去） */
+    _foeMoveName(enemy) {
+        if (enemy._foeMoveName) return enemy._foeMoveName;
+        // 第九十八波：妖兽的招是爪/撞/角，不是人的刀掌枪——两本名号池按种系取
+        var _isB = (enemy.species === 'beast' || enemy.physiologyType === 'beast');
+        var POOL = _isB ? {
+            slash: ['撕裂爪', '噬咬', '裂风爪'],
+            blunt: ['蛮撞', '横扫千军', '塌山压'],
+            pierce: ['穿甲角', '贯骨刺', '一点角芒']
+        } : {
+            slash: ['断岳斩', '拖刀势', '力劈华山'],
+            blunt: ['开山掌', '碎骨拳', '崩字诀'],
+            pierce: ['穿心刺', '点喉枪', '一线穿']
+        };
+        var dt = (enemy.damageType === 'sharp') ? 'slash' : (enemy.damageType || 'slash');
+        var pool = POOL[dt] || POOL.slash;
+        var h = 0, nm = String(enemy.name || '');
+        for (var i = 0; i < nm.length; i++) h += nm.charCodeAt(i);
+        enemy._foeMoveName = pool[(h + (enemy.level || 1)) % pool.length];
+        return enemy._foeMoveName;
+    }
+    /** 敌人招牌重手：档位走身份（boss/精英/带词缀），资源各烧各的——
+     *  人形武人烧真气（第九十七波），妖兽烧精力（第九十八波：血肉爆发力）。
+     *  精力本就是世界账：玩家采补功吸得走它——妖王被吸干精力就只能干挠爪子。
+     *  重手条价 = round(100×倍率) 夹 60~150，与玩家招式同一本价；不做全局数值放大 */
+    _foeHeavyStrike(enemy, behavior, bloodVol, painLoad) {
+        if (!enemy) return null;
+        if ((enemy.level || 1) < 8) return null;                 // 真气没入门/幼兽气血未成，驱动不了重手
+        if (painLoad >= 60) return null;                         // 剧痛提不起劲
+        var _et = String(enemy._enemyType || '');
+        var tier = /boss/.test(_et) ? 'boss' : ((/elite|demon/.test(_et) || enemy._affix) ? 'elite' : 'foe');
+        if (tier === 'foe') return null;                         // 普通杂兵没这份身手——重手是身份的体现
+        var isBeast = (enemy.species === 'beast' || enemy.physiologyType === 'beast');
+        // 资源账：人形看真气，妖兽看精力
+        var cost = isBeast ? (tier === 'boss' ? 50 : 35) : (tier === 'boss' ? 40 : 30);
+        // 第一百波·对面也连环：上头的人下手不计本钱——怒气未消时重手的耗头减一成
+        if (this._foeRage > 0) cost = Math.ceil(cost * 0.9);
+        var has = isBeast ? (enemy.stamina || 0) : (enemy.qi || 0);
+        var maxRes = isBeast ? (enemy.maxStamina || 0) : (enemy.maxQi || 0);
+        if (maxRes <= 0 || has < cost) return null;              // 烧干了就只能平砍回气
+        var want = 0.5;
+        if (behavior === 'aggressive') want = 0.6;
+        else if (behavior === 'balanced') want = (bloodVol > 30) ? 0.4 : 0.15;
+        else if (behavior === 'defensive') want = (bloodVol > 50) ? 0.3 : 0.1;
+        else if (behavior === 'opportunist') {
+            var pp = this.player.physiology;
+            var pb = pp ? (pp.bloodVolume !== undefined ? pp.bloodVolume : 100) : 100;
+            want = (pb < 50) ? 0.55 : 0.25;   // 游斗的专挑你虚的时候下重手
+        } else if (behavior === 'poisoner') want = 0.25;         // 用毒的：毒在刃上，重手只是陪衬
+        if (Math.random() >= want) return null;
+        var mult = tier === 'boss' ? 1.8 : 1.5;
+        if (isBeast) enemy.stamina = Math.max(0, has - cost);
+        else enemy.qi = Math.max(0, has - cost);
+        return {
+            mult: mult,
+            apCost: Math.max(60, Math.min(150, Math.round(100 * mult))),
+            name: this._foeMoveName(enemy),
+            tier: tier,
+            beast: isBeast,
+            bonus: { type: 'move', damageMult: mult, hitBonus: tier === 'boss' ? 10 : 5 }
+        };
     }
 
     // v10.0：使用招式攻击指定部位
     playerAttackWithMove(partId, move) {
         if (this.isFinished || !this.isPlayerTurn) return false;
         if (!this.enemy.isAlive) return false;
-        this._tickMoveCD();
-        this._physTicked = false;   // v20.64 玩家动手即开新一轮
         // 1.2 CD制：强力招式用后有冷却，防刷
         var _cdKey = move.moveId || move.id;
         if (this._moveCD && this._moveCD[_cdKey] > 0) {
@@ -2183,6 +3165,12 @@ class Battle {
                 return false;
             }
             if (charData2) charData2.energy = Math.max(0, (charData2.energy || 0) - move.staminaCost);
+        }
+        // 第九十九波·运功出手，魔气自现：练过魔功的（魔染/魔功名目）一催招式就露相——一场只露一次
+        if (this._playerDemonicOwner && !this._demonicShown) {
+            this._demonicShown = true;
+            this._noteDeed('demonic');
+            this.log.push({ msg: '🩸 你运起功法，一缕黑气缠上刀锋——魔道的路数藏不住了。（正道中人见了这个，百口难辨）' });
         }
         // 获取武器伤害类型
         let damageType = move.damageType || 'blunt';
@@ -2210,25 +3198,105 @@ class Battle {
             result.msg = move.name + '：' + result.msg;
         }
         this.log.push(result);
+        this._demonicOnHit(result);   // 第九十九波：魔道天生技应手露相
         // 1.2 用后置 CD：damageMult>=1.5 强招 2 回合，>=1.8 超强 3 回合（普攻无 CD）
         if (!this._moveCD) this._moveCD = {};
         var _mult = move.damageMult || 1.0;
         if (_mult >= 1.8) this._moveCD[_cdKey] = 3;
         else if (_mult >= 1.5) this._moveCD[_cdKey] = 2;
-        this.turn++;
-        this._processRoundPhysiology();
+        // 第九十二波·行动条：招式的条价跟劲力走——damageMult 越重扣得越狠（60~150 封顶保底），
+        // 轻灵快招（0.6~0.8 倍伤）只扣 60~80，条剩得多，回手就快；重招一记清空还倒欠，收势久。
+        var apCost = (move.apCost != null) ? move.apCost : Math.max(60, Math.min(150, Math.round(100 * _mult)));
+        this.spendActionCost(this.player, apCost);
+        this._endPlayerAction();   // 第九十四波：石灰迷眼随你的手数消散
         if (this._checkEnd()) return true;
-        this.isPlayerTurn = false;
-        setTimeout(() => this.enemyTurn(), 300);
+        this._advanceTimeline();
         return true;
     }
 
     // 敌人AI行动（v4.2/v9.8.1：疼痛影响行为 + 有限自救，避免低血无限治疗）
     // 修复6：敌人可攻击队员，队员自动反击
+    // 第九十二波：本体改名 _enemyMainAct（只管敌主自己这一动）；enemyTurn 留作兼容壳=推进时间轴
     enemyTurn() {
+        if (this.isFinished) return;
+        this._advanceTimeline();
+    }
+    _enemyMainAct() {
         if (this.isFinished) return;
         const enemy = this.enemy;
         const phys = enemy.physiology;
+
+        // ===== 第九十四波·见招拆招：你的装死姿态在他这一动里见分晓——信不信、识不识破，看他的性子 =====
+        if (this.player._feignPose) {
+            this.player._feignPose = false;
+            var _fr = this._rollPersona();
+            var _word = this._personaWord();
+            if (_fr === 'reckless') {
+                this._foeLulled = 1;
+                this.player._backstabWindow = 1;
+                this.log.push({ msg: '🖤 ' + enemy.name + ' 当真了——他收着刀凑近翻看「尸体」……（他这一下留力，你可暴起偷袭 ×1.5，' + _word + '）' });
+            } else if (_fr === 'cautious') {
+                this.log.push({ msg: '🖤 ' + enemy.name + ' 没上当——他停在三步开外看了半晌，才照旧出招。（白装了，' + _word + '）' });
+            } else {
+                this._foeInsight = 1;
+                this.log.push({ msg: '🖤 ' + enemy.name + ' 一眼识破——「装死？我送你真死！」他提刀直奔你而来！（这一下命中 +25，' + _word + '）' });
+            }
+        }
+        // ===== 第九十九波·卖绽：他看见你露的口子——咬不咬钩、咬了会怎样，看他的性子 =====
+        if (this.player._baitPose) {
+            this.player._baitPose = false;
+            var _bfr = this._rollPersona();
+            var _bfw = this._personaWord();
+            // ===== 第一百波·连环手：怒气冲头的人不分真假——上头时这钩必咬，反手也更重 =====
+            if (this._foeRage > 0) {
+                this.player._backstabWindow = 1;
+                this._nextPlayerHitMul = Math.max(this._nextPlayerHitMul || 0, 1.8);
+                var _ba100 = this._findActor(enemy);
+                if (_ba100) _ba100.bar -= 30;   // 扑得太猛收势不住（条可以欠账，不夹 0）
+                this.log.push({ msg: '🎣 怒气冲头的人不分真假——' + enemy.name + ' 看见口子想都没想就扑了进来，刀势又猛又空！（他慢半拍行动条 -30，你反手这一下 ×1.8）' });
+            } else if (_bfr === 'reckless') {
+                this.player._backstabWindow = 1;
+                var _ba99 = this._findActor(enemy);
+                if (_ba99) _ba99.bar -= 30;   // 用力过猛，收势比谁都慢（条可以欠账，不夹 0）
+                this.log.push({ msg: '🎣 ' + enemy.name + ' 看见破绽抢身便进——用力过猛，刀势收不回来了！（他慢半拍行动条 -30，你可反手偷袭 ×1.5，' + _bfw + '）' });
+            } else if (_bfr === 'cautious') {
+                // 第一百波·看穿也有代价：收步换架势防你后手，也得花时间
+                var _bc100 = this._findActor(enemy);
+                if (_bc100) _bc100.bar -= 10;   // 条可以欠账，不夹 0
+                this.log.push({ msg: '🎣 ' + enemy.name + ' 盯着那个口子看了半晌，非但不进，反倒退了半步换了个架势。（「饵？」——不上当，但防你后手花了功夫，行动条 -10，' + _bfw + '）' });
+            } else {
+                this._foeInsight = 1;
+                this.log.push({ msg: '🎣 ' + enemy.name + ' 一眼看穿破绽是饵——反手一刀直取你真正的空门！（「假的是绽，真的是你这只手！」' + _bfw + '，这一下命中 +25）' });
+            }
+        }
+        // 对面也会使坏：姿态摆出来，时间轴停在这，等你见招拆招
+        if (this._tryEnemyTrick()) return;
+        // 第九十九波：打不动了的武人会跪——杀与放，你来定（时间轴停在这）
+        if (this._tryEnemySurrender()) return;
+
+        // ===== v21.9 符箓控制落地：定身/冰封/乾坤跳回合、毒药发作、沉默计时 =====
+        // 此前这些效果字段只存在于物品描述里，战斗引擎零挂钩
+        if (window.TalismanSystem) {
+            if (typeof window.TalismanSystem.tickEnemyPoison === 'function') {
+                var _poisonDmg = window.TalismanSystem.tickEnemyPoison(enemy);
+                if (_poisonDmg > 0) {
+                    this.log.push({ msg: '☠️ 刃毒发作——' + enemy.name + ' 面色发黑，受到 ' + _poisonDmg + ' 点毒伤！' });
+                    if (!enemy.isAlive) {
+                        this.turn++;
+                        if (this._checkEnd()) return;
+                    }
+                }
+            }
+            if (typeof window.TalismanSystem.consumeEnemySkip === 'function') {
+                var _skip = window.TalismanSystem.consumeEnemySkip();
+                if (_skip) {
+                    this.log.push({ msg: _skip.icon + enemy.name + _skip.text });
+                    if (typeof window.TalismanSystem.tickEnemyTurn === 'function') window.TalismanSystem.tickEnemyTurn();
+                    this._endEnemyMainAction(); return;
+                }
+            }
+            if (typeof window.TalismanSystem.tickEnemyTurn === 'function') window.TalismanSystem.tickEnemyTurn();
+        }
         
         // v4.2: 敌人疼痛反应—疼痛高时改为防御/撤退倾向
         let painLoad = phys ? (phys.painLoad || 0) : 0;
@@ -2247,6 +3315,8 @@ class Battle {
         var playerTargetBias = (behavior === 'aggressive') ? 0.5 : 0.33; // 多目标时选玩家概率
         var healBloodThreshold = (behavior === 'aggressive') ? 25 : 40;  // 狂战自救门槛收紧
         var guardChance = (behavior === 'defensive') ? 0.35 : 0;
+        // 第九十七波·守御不再是守御系的专利：任何武人重伤+剧痛都可能架起架势喘口气（是本能，不是门派秘传）
+        if (guardChance === 0 && bloodVol < 35 && painLoad >= 40) guardChance = 0.15;
         // v12.8 守御标记每回合行动前重置（仅守御当回合并置1）
         enemy._guardTurns = 0;
 
@@ -2256,9 +3326,50 @@ class Battle {
             this.log.push({ msg: enemy.name + " 冷笑：'师门？早就是笑话了。'" });
         }
 
+        // ===== 第九十九波·骂阵：他的嘴比刀还脏——这口气咽不咽，由你定 =====
+        // （一场一回；他自己得气血过半才骂得响；把你打到狼狈了才骂得欢——交手一轮之后）
+        var _pb99 = this.player.physiology ? (this.player.physiology.bloodVolume !== undefined ? this.player.physiology.bloodVolume : 100) : 100;
+        if (!this._foeTauntPromptDone && !(enemy.species === 'beast' || enemy.physiologyType === 'beast') &&
+            bloodVol >= 50 && this.turn >= 1 && _pb99 < 60 && Math.random() < 0.12) {
+            this._foeTauntPromptDone = true;
+            var _tt99 = ['你娘教你的功夫吧？这么软！', '小白脸，吃奶的劲儿使出来没有？', '呸！打死你我都嫌脏了刀！', '爷走南闯北三十年，没见过你这么不中用的！'];
+            var _tl99 = _tt99[Math.floor(Math.random() * _tt99.length)];
+            this.log.push({ msg: '🗯️ ' + enemy.name + ' 一边游斗一边满嘴喷粪：「' + _tl99 + '」' });
+            this._pendingPrompt = {
+                kind: 'taunt',
+                text: '「' + _tl99 + '」——他的骂比刀还狠，这口气你咽不咽？',
+                options: [
+                    { k: 'steel', label: '😤 稳着不理他（狗咬不了石头——精力 +5）' },
+                    { k: 'rage', label: '🔥 怒火上头抢攻（行动条 +40、下一击 ×1.15，但两手气昏了头命中 -10）' },
+                    { k: 'curse', label: '🗯️ 撸起袖子骂回去（能不能骂乱他，看他的性子）' }
+                ]
+            };
+            return true;
+        }
+
+        // ===== 第九十九波·阵上不是哑巴场：三成的手数会喊一嗓子（喊招、喊胆、喊狠话）=====
+        // （快倒下的人没力气喊——气血过半才喊得出口）
+        if (!(enemy.species === 'beast' || enemy.physiologyType === 'beast') && bloodVol >= 50 && Math.random() < 0.3) {
+            var _stc99 = String(enemy.subtype || '');
+            var _cries99 = {
+                bandit: ['「爷爷们在此——识相的留下买路财！」', '「砍了他！货平分！」'],
+                cultist: ['「血食休走！」', '「把精气献给我，是你的造化！」'],
+                monk: ['「施主——放下屠刀！」', '「阿弥陀佛，得罪了！」'],
+                sword: ['「看好了——这一剑叫离别！」', '「你的功夫不错，可惜我的剑更快！」'],
+                bladesman: ['「别走——吃我一刀！」'],
+                poisoner: ['「闻见味儿了吗？晚了！」'],
+                renegade: ['「师门的恩义？笑话！」']
+            };
+            var _pool99 = _cries99[_stc99] || ['「看招！」', '「接我这一下！」', '「你撑不过三合！」'];
+            this.log.push({ msg: '🗣️ ' + enemy.name + ' ' + _pool99[Math.floor(Math.random() * _pool99.length)] });
+        }
+
         // ===== v12.9 遁逃分支：重伤时概率尝试遁走；成功按玩家方结束但无战利品 =====
         // v13.0 门槛改查 escape 技（行为字符串/身份布尔不再是机制来源）
-        if (enemy.hasAbility('escape') && bloodVol > 0 && bloodVol < 30 && Math.random() < 0.45) {
+        // 第一百波·对面也连环：心气散了的人更早想着跑（气血线 30→40，念头 45%→60%）
+        var _escThr100 = (this._foeDisheartened > 0) ? 40 : 30;
+        var _escP100 = (this._foeDisheartened > 0) ? 0.6 : 0.45;
+        if (enemy.hasAbility('escape') && bloodVol > 0 && bloodVol < _escThr100 && Math.random() < _escP100) {
             var escapeRaw = 0.35 + ((enemy.getSpeed ? enemy.getSpeed() : 10) - (this.player.getSpeed ? this.player.getSpeed() : 10)) * 0.01;
             var escapeRate = Math.max(0.25, Math.min(0.7, escapeRaw));
             if (Math.random() < escapeRate) {
@@ -2275,12 +3386,40 @@ class Battle {
             }
             // 遁逃失败：本回合空过
             this.log.push({ msg: enemy.name + ' 试图施展遁术，被你截住了！' });
-            this.turn++;
-            this._processRoundPhysiology();
-            if (this._checkEnd()) return;
-            this.isPlayerTurn = true;
-            if (this.onUpdate) this.onUpdate();
-            return;
+            this._endEnemyMainAction(); return;
+        }
+
+        // ===== 第九十七波·行囊是真的：怀里有的就能用——濒死掏出丹药干咽 =====
+        // 吃一颗少一颗（打死他搜刮到的就是剩下的）——账在携带物里，不是凭空配额
+        if (bloodVol > 0 && bloodVol < 30) {
+            try {
+                var _pouchItems = (enemy.carriedInventory && Array.isArray(enemy.carriedInventory.items)) ? enemy.carriedInventory.items : null;
+                if (_pouchItems && _pouchItems.length && Math.random() < 0.7) {
+                    var _PILL_HEAL = { pill_small_recovery: 30, pill_big_recovery: 80, pill_spring_recovery: 200, pill_nine_revival: 500 };
+                    var _PILL_CN = { pill_small_recovery: '小还丹', pill_big_recovery: '大还丹', pill_spring_recovery: '回春丹', pill_nine_revival: '九转还魂丹' };
+                    var _pillIdx = -1, _pillHeal = 0, _pillName = '';
+                    for (var _pi = 0; _pi < _pouchItems.length; _pi++) {
+                        var _pid = _pouchItems[_pi];
+                        var _ptpl = (typeof window !== 'undefined' && window.itemById) ? window.itemById[_pid] : null;
+                        var _php = (_ptpl && _ptpl.effect && Number(_ptpl.effect.hp_recovery)) || _PILL_HEAL[_pid] || 0;
+                        if (_php > _pillHeal) {
+                            _pillHeal = _php; _pillIdx = _pi;
+                            _pillName = (_ptpl && _ptpl.name) || _PILL_CN[_pid] || '丹药';
+                        }
+                    }
+                    if (_pillIdx >= 0 && phys) {
+                        _pouchItems.splice(_pillIdx, 1);
+                        var _bloodCap = phys.maxBloodVolume || 100;
+                        // 丹药药力单次封顶六成——还魂丹也不能把濒死一口灌满
+                        var _healNow = Math.min(_pillHeal, Math.max(1, Math.round(_bloodCap * 0.6)));
+                        phys.bloodVolume = Math.min(_bloodCap, (phys.bloodVolume || 0) + _healNow);
+                        phys.health = phys.bloodVolume;
+                        bloodVol = phys.bloodVolume;
+                        this.log.push({ msg: '💊 ' + enemy.name + ' 从怀里摸出一颗「' + _pillName + '」干咽下去——气血回上来了！' });
+                        this._endEnemyMainAction(); return;
+                    }
+                }
+            } catch (ePouch) {}
         }
 
         // 自救条件：有未稳定流血，且本场治疗次数未超限
@@ -2299,12 +3438,7 @@ class Battle {
             if (bwResult) {
                 this._enemyHealCount++;
                 this.log.push({ msg: '🩹 ' + enemy.name + ' 匆忙包扎了伤口！' });
-                this.turn++;
-                this._processRoundPhysiology();
-                if (this._checkEnd()) return;
-                this.isPlayerTurn = true;
-                if (this.onUpdate) this.onUpdate();
-                return;
+                this._endEnemyMainAction(); return;
             }
             // 包扎失败则落入正常攻击
         }
@@ -2312,24 +3446,14 @@ class Battle {
         // 疼痛极高时有小概率动作失败（不再与治疗互斥成「永远挨打」）
         if (painLoad >= 80 && Math.random() < 0.2) {
             this.log.push({ msg: enemy.name + ' 因剧痛而行动迟缓' });
-            this.turn++;
-            this._processRoundPhysiology();
-            if (this._checkEnd()) return;
-            this.isPlayerTurn = true;
-            if (this.onUpdate) this.onUpdate();
-            return;
+            this._endEnemyMainAction(); return;
         }
         
         // ===== v12.8 defensive 守御姿态：血量偏低且无未稳定流血可治时，概率放弃进攻 =====
         if (guardChance > 0 && bloodVol < 55 && bleedingWounds === 0 && Math.random() < guardChance) {
             enemy._guardTurns = 1;
             this.log.push({ msg: '🛡️ ' + enemy.name + ' 摆出凝神防御的架势' });
-            this.turn++;
-            this._processRoundPhysiology();
-            if (this._checkEnd()) return;
-            this.isPlayerTurn = true;
-            if (this.onUpdate) this.onUpdate();
-            return;
+            this._endEnemyMainAction(); return;
         }
 
         // ===== 修复6：敌人可攻击队员 =====
@@ -2345,6 +3469,28 @@ class Battle {
                 var shield = cover[Math.floor(Math.random() * cover.length)];
                 this.log.push({ msg: '🛡️ ' + shield.name + ' 抢步挡在你身前！' });
                 attackTarget = shield;
+            }
+        }
+
+        // ===== 第九十九波·投鼠忌器：你掳了他的同伙当人盾——三成不敢下手，四成刀落自己人身上 =====
+        if (this._humanShield && this._humanShield.isAlive && attackTarget === this.player) {
+            // 第一百波·连环手：两眼糊着泪的人更不敢下刀——犹豫抬到五成，砍也多半砍着挡在跟前的
+            var _bl100 = 0;
+            try { if (window.TalismanSystem && typeof window.TalismanSystem.getEnemyBlindTurns === 'function') _bl100 = window.TalismanSystem.getEnemyBlindTurns() || 0; } catch (eB100) {}
+            var _hsRoll = Math.random();
+            var _hesT100 = _bl100 > 0 ? 0.5 : 0.3;
+            var _shdT100 = _bl100 > 0 ? 0.85 : 0.7;
+            if (_hsRoll < _hesT100) {
+                this.log.push({ msg: _bl100 > 0
+                    ? '🤚 ' + enemy.name + ' 两眼糊着泪，刀抬到一半——分不清哪个是你，终究没敢出手！'
+                    : '🤚 ' + enemy.name + ' 的刀抬到一半又放下——投鼠忌器，这一下终究没敢出手！' });
+                this._endEnemyMainAction();
+                return;
+            } else if (_hsRoll < _shdT100) {
+                attackTarget = this._humanShield;
+                this.log.push({ msg: _bl100 > 0
+                    ? '🩸 他冲着一片模糊的影子挥刀便砍——正砍在你拽到身前的 ' + this._humanShield.name + ' 身上！'
+                    : '🩸 他把心一横挥刀便砍——你拽过 ' + this._humanShield.name + ' 挡在身前！' });
             }
         }
 
@@ -2377,16 +3523,34 @@ class Battle {
                 return Math.max(1, Math.floor(base * painPenalty));
             };
         }
+        // ===== 第九十七波·敌人招牌重手：烧自己的真气，重手条价更贵（与玩家招式同一本行动条价） =====
+        // 档位走身份（boss/精英/带词缀的野外强敌）——普通杂兵仍是平砍，不做全局数值放大
+        var _foeStrike = null, _foeBonus = null;
+        try { _foeStrike = this._foeHeavyStrike(enemy, behavior, bloodVol, painLoad); } catch (eHS) {}
+        if (_foeStrike) {
+            _foeBonus = _foeStrike.bonus;
+            this._foeLastAp = _foeStrike.apCost;
+            this.log.push({ msg: '✨ ' + enemy.name + (_foeStrike.beast ? ' 一声低吼，气血暴起——' : ' 真气一运，') + '使出招牌重手「' + _foeStrike.name + '」！' });
+        }
         // v20.64 补丁必须保证还原：_executeAttack 一旦抛错，原来会把减伤补丁永久留在敌人身上
         let result;
         try {
-            result = this._executeAttack(enemy, attackTarget, selectedPart, enemyDamageType);
+            result = this._executeAttack(enemy, attackTarget, selectedPart, enemyDamageType, _foeBonus);
         } finally {
             if (painPenalty < 1) {
                 enemy.getAttack = origGetAttack;
             }
         }
         this.log.push(result);
+        // 敌人平砍也要回气（与玩家普攻回气同式：越亏回得越快）——有真气账的才回
+        if (!_foeStrike && enemy.maxQi > 0 && enemy.isAlive) {
+            enemy.qi = Math.min(enemy.maxQi, (enemy.qi || 0) + 6 + Math.floor((enemy.maxQi - (enemy.qi || 0)) / 20));
+        }
+        // 第九十八波·妖兽平砍回精力——血肉爆发力回得比真气慢（4+亏空/25，妖兽不是风箱）
+        if (!_foeStrike && enemy.maxQi <= 0 && enemy.isAlive &&
+            (enemy.species === 'beast' || enemy.physiologyType === 'beast') && (enemy.maxStamina || 0) > 0) {
+            enemy.stamina = Math.min(enemy.maxStamina, (enemy.stamina || 0) + 4 + Math.floor(((enemy.maxStamina || 0) - (enemy.stamina || 0)) / 25));
+        }
         if (attackTarget !== this.player && attackTarget.isAlive === false) {
             if (attackTarget === this.allyBeast) {
                 this.log.push({ msg: '🐾 灵兽不支倒地，退出本场战斗' });
@@ -2394,66 +3558,107 @@ class Battle {
                 this.log.push({ msg: '👥 队员「' + attackTarget.name + '」被击败！' });
             }
         }
-        this.turn++;
-        // v20.64 敌方同伴也动手（兽群是真的几只一起围上来）
-        this._enemyAlliesAct();
-        // 每回合末处理生理
-        this._processRoundPhysiology();
-        if (this._checkEnd()) return;
-        
-        // ===== 修复6：队员自动攻击 =====
-        // 队员按本场的队伍指令行动（v20.64：不再人人无脑普攻 slash）
-        if (this.enemy && this.enemy.isAlive) {
-            var aliveMembers = this.partyMembers.filter(function(m) { return m.isAlive; });
-            for (var mi = 0; mi < aliveMembers.length; mi++) {
-                var member = aliveMembers[mi];
-                var order = member._partyOrder || this.partyOrder || 'assault';
-                if (order === 'guard') {
-                    // 自保：先把自己身上最重的血止住，没血可止就摆守御架势
-                    var gmsg = this._memberSelfPreserve(member);
-                    if (gmsg) this.log.push(gmsg);
-                } else if (order === 'cover') {
-                    // 掩护：不抢人头，凝神戒备（敌侧选目标时已会优先咬他）
-                    this.log.push({ msg: '🛡️ ' + member.name + ' 戒备着，护在你侧翼' });
-                } else {
-                    var mPart = targetParts[Math.floor(Math.random() * targetParts.length)];
-                    var mResult = this._executeAttack(member, this.enemy, mPart, _memberDamageType(member));
-                    // 同步回PartyMember的health
-                    if (member._partyMemberRef) {
-                        member._partyMemberRef.health = member.health != null ? member.health : member._partyMemberRef.health;
+        // 第九十二波·行动条：敌主这一动到此为止——敌方同伴/队员/灵兽各有自己的行动条，
+        // 不再排成「敌主→同伴→队员→兽」的固定长队；回合账（毒/生理/冷却）在敌主行动边界翻篇。
+        this._endEnemyMainAction();
+    }
+
+    // 第九十二波·从旧 enemyTurn 长队里拆出来的单动口：一位角色攒满条就动这一下
+    _enemyAllyAct(ally) {
+        if (this.isFinished || !this.player.isAlive || !ally || !ally.isAlive) return;
+        if (!this.enemy || !this.enemy.isAlive) return;   // 主敌已了账，同伙没道理接着围
+        // ===== 第九十七波·同伙也是活人：该逃的命自己逃，该止的血自己止 =====
+        try {
+            var _aPhys = ally.physiology;
+            var _aBlood = _aPhys ? (_aPhys.bloodVolume !== undefined ? _aPhys.bloodVolume : 100) : 100;
+            // 带遁术的濒死自行脱身（只是这一位走了，主敌照打；沉默封遁术——hasAbility 一视同仁）
+            if (typeof ally.hasAbility === 'function' && ally.hasAbility('escape') && _aBlood > 0 && _aBlood < 25 && Math.random() < 0.4) {
+                ally._fled = true;
+                ally.isAlive = false;
+                this.log.push({ msg: '💨 ' + ally.name + ' 虚晃一招，夺路而逃——跑了的追不回来。' });
+                this._checkEnd();
+                return;
+            }
+            // 怀里那包绷带用一次（战地止血——手里有的才是账）
+            if (!ally._fieldBandageUsed && _aPhys && Array.isArray(_aPhys.wounds) && typeof bandageWound === 'function') {
+                var _aWounds = _aPhys.wounds.filter(function (w) { return w.bleeding && !w.stabilized; });
+                if (_aWounds.length && (_aBlood < 45 || (_aPhys.painLoad || 0) >= 50)) {
+                    _aWounds.sort(function (a, b) { return (b.externalBleedRate || 0) - (a.externalBleedRate || 0); });
+                    ally._fieldBandageUsed = true;
+                    if (bandageWound(ally, _aWounds[0].id)) {
+                        this.log.push({ msg: '🩹 ' + ally.name + ' 缩到阵后，胡乱缠住了伤口！' });
+                        this._checkEnd();
+                        return;
                     }
-                    this.log.push(mResult);
                 }
-                this.turn++;
-                this._processRoundPhysiology();
-                if (this._checkEnd()) return;
+            }
+        } catch (eAllyWit) {}
+        var target = this._pickPlayerSideTarget(0.22);
+        // 掩护指令同样拦得住同伴
+        if (target === this.player) {
+            var cover = (this.partyMembers || []).filter(function (m) { return m.isAlive && m._partyOrder === 'cover'; });
+            if (cover.length > 0 && Math.random() < cover.length / (cover.length + 1)) {
+                target = cover[Math.floor(Math.random() * cover.length)];
             }
         }
-        
-        // 灵兽协助攻击（已倒下则不攻击）
-        if (this.allyBeast && this.allyBeast.isAlive && this.enemy && this.enemy.isAlive) {
-            const beastPart = targetParts[Math.floor(Math.random() * targetParts.length)];
-            // B5：按灵兽技能名选择基础伤害类型
-            var btype = 'slash';
-            try {
-                var sk = (this.allyBeast.skills && (Array.isArray(this.allyBeast.skills) ? this.allyBeast.skills[0] : null))
-                    || (this.allyBeast.data && this.allyBeast.data.skills && this.allyBeast.data.skills[0]);
-                var sn = (typeof sk === 'string') ? sk : (sk && (sk.name || sk.id)) || '';
-                if (/冰|冻|寒|水/.test(sn)) btype = 'pierce';
-                else if (/火|焰|炎|雷|爆/.test(sn)) btype = 'blunt';
-                else if (/风|刃|刺|牙/.test(sn)) btype = 'slash';
-                else if (/撞|锤|尾|压/.test(sn)) btype = 'blunt';
-                if (Math.random() < 0.15 && sn) {
-                    this.log.push({ msg: '🐾 灵兽使出「' + sn + '」！' });
-                }
-            } catch (e) {}
-            const br = this._executeAttack(this.allyBeast, this.enemy, beastPart, btype);
-            this.log.push(br);
-            this.turn++;
-            if (this._checkEnd()) return;
+        var parts = PART_IDS;
+        var part = parts[Math.floor(Math.random() * parts.length)];
+        var dtype = ally.damageType === 'sharp' ? 'slash' : (ally.damageType || 'slash');
+        var r = this._executeAttack(ally, target, part, dtype);
+        this.log.push(r);
+        if (target !== this.player && target.isAlive === false) {
+            this.log.push({ msg: target === this.allyBeast
+                ? '🐾 灵兽不支倒地，退出本场战斗'
+                : '👥 队员「' + target.name + '」被击败！' });
         }
-        this.isPlayerTurn = true;
-        if (this.onUpdate) this.onUpdate();
+        this._checkEnd();
+    }
+
+    _memberAct(member) {
+        if (!member || !member.isAlive) return;
+        if (!this.enemy || !this.enemy.isAlive) return;
+        var order = member._partyOrder || this.partyOrder || 'assault';
+        if (order === 'guard') {
+            // 自保：先把自己身上最重的血止住，没血可止就摆守御架势
+            var gmsg = this._memberSelfPreserve(member);
+            if (gmsg) this.log.push(gmsg);
+        } else if (order === 'cover') {
+            // 掩护：不抢人头，凝神戒备（敌侧选目标时已会优先咬他）
+            this.log.push({ msg: '🛡️ ' + member.name + ' 戒备着，护在你侧翼' });
+        } else {
+            var targetParts = ['brain', 'chest', 'dantian', 'abdomen'];
+            var mPart = targetParts[Math.floor(Math.random() * targetParts.length)];
+            var mResult = this._executeAttack(member, this.enemy, mPart, _memberDamageType(member));
+            // 同步回PartyMember的health
+            if (member._partyMemberRef) {
+                member._partyMemberRef.health = member.health != null ? member.health : member._partyMemberRef.health;
+            }
+            this.log.push(mResult);
+        }
+        this._checkEnd();
+    }
+
+    _beastAct() {
+        if (!this.allyBeast || !this.allyBeast.isAlive || !this.enemy || !this.enemy.isAlive) return;
+        var targetParts = ['brain', 'chest', 'dantian', 'abdomen'];
+        const beastPart = targetParts[Math.floor(Math.random() * targetParts.length)];
+        // B5：按灵兽技能名选择基础伤害类型
+        var btype = 'slash';
+        try {
+            var sk = (this.allyBeast.skills && (Array.isArray(this.allyBeast.skills) ? this.allyBeast.skills[0] : null))
+                || (this.allyBeast.data && this.allyBeast.data.skills && this.allyBeast.data.skills[0]);
+            var sn = (typeof sk === 'string') ? sk : (sk && (sk.name || sk.id)) || '';
+            if (/冰|冻|寒|水/.test(sn)) btype = 'pierce';
+            else if (/火|焰|炎|雷|爆/.test(sn)) btype = 'blunt';
+            else if (/风|刃|刺|牙/.test(sn)) btype = 'slash';
+            else if (/撞|锤|尾|压/.test(sn)) btype = 'blunt';
+            if (Math.random() < 0.15 && sn) {
+                this.log.push({ msg: '🐾 灵兽使出「' + sn + '」！' });
+            }
+        } catch (e) {}
+        const br = this._executeAttack(this.allyBeast, this.enemy, beastPart, btype);
+        this.log.push(br);
+        this._checkEnd();
     }
 
     // 每回合末处理生理
@@ -2470,37 +3675,8 @@ class Battle {
     }
 
     // ===== v20.64 敌方同伴动手 =====
-    // 兽群是真的几只一起围上来：主敌行动后，每只存活的同伴也出手一次。
-    // 同伴不走主敌那套自救/遁逃/守御的高级行为——它们是兽群与杂兵，只管扑上来。
-    _enemyAlliesAct() {
-        if (this.isFinished || !this.player.isAlive) return;
-        var allies = (this.enemyAllies || []).filter(function (a) { return a && a.isAlive; });
-        if (!allies.length) return;
-        for (var i = 0; i < allies.length; i++) {
-            if (!this.enemy || !this.enemy.isAlive) break;   // 玩家这边已经了账
-            var ally = allies[i];
-            var target = this._pickPlayerSideTarget(0.22);
-            // 掩护指令同样拦得住同伴
-            if (target === this.player) {
-                var cover = (this.partyMembers || []).filter(function (m) { return m.isAlive && m._partyOrder === 'cover'; });
-                if (cover.length > 0 && Math.random() < cover.length / (cover.length + 1)) {
-                    target = cover[Math.floor(Math.random() * cover.length)];
-                }
-            }
-            var parts = PART_IDS;
-            var part = parts[Math.floor(Math.random() * parts.length)];
-            var dtype = ally.damageType === 'sharp' ? 'slash' : (ally.damageType || 'slash');
-            var r = this._executeAttack(ally, target, part, dtype);
-            this.log.push(r);
-            if (target !== this.player && target.isAlive === false) {
-                this.log.push({ msg: target === this.allyBeast
-                    ? '🐾 灵兽不支倒地，退出本场战斗'
-                    : '👥 队员「' + target.name + '」被击败！' });
-            }
-            this.turn++;
-            if (this._checkEnd()) return;
-        }
-    }
+    // 第九十二波·行动条改版：旧「主敌动完同伴排队轮一遍」的 _enemyAlliesAct 退役——
+    // 每只同伴各有自己的行动条（_enemyAllyAct 是单动口），快的兽先扑上来，慢的殿后。
 
     // ===== v20.64 队员自保 =====
     // 先把自己身上最重的血止住；没血可止就摆守御架势（下轮挨打少受些）
@@ -2732,6 +3908,14 @@ class Battle {
         var extra = '';
         try {
             if (!attacker || !defender || !(actual >= 1)) return extra;
+            // 第九十三波·淬毒入兵刃：刃上带毒，见血渗毒（毒账走符箓系统的敌毒同一本——2 回合×10）
+            if (attacker === this.player && attacker._venomBlade > 0 && this._isEnemySide(defender)) {
+                attacker._venomBlade -= 1;
+                if (window.TalismanSystem && typeof window.TalismanSystem.applyBladePoison === 'function') {
+                    window.TalismanSystem.applyBladePoison();
+                    extra += ' ☠️ 淬在刃上的毒渗进伤口！（剩 ' + attacker._venomBlade + ' 次毒）';
+                }
+            }
             // 吸血功：命中造成实际伤害后按30%回复气血（上限100），本场首次记日志
             if (attacker.hasAbility('lifesteal') && attacker.physiology
                 && (attacker.physiology.bloodVolume || 0) > 0) {
@@ -2836,6 +4020,16 @@ class Battle {
                 }
             } catch (e) {}
         }
+        // 第七十三波·境由心转：心烦意乱刀发钝、神思不倦刀更利
+        //（只有玩家的刀认心——敌人没有这本账；平平常常不动老伤害，一分不添）
+        if (attacker.type === 'player') {
+            try {
+                if (window.MoodSystem && typeof window.MoodSystem.combatMul === 'function') {
+                    var _mm = window.MoodSystem.combatMul();
+                    if (_mm !== 1) damage = Math.max(1, Math.floor(damage * _mm));
+                }
+            } catch (eMoodC) {}
+        }
         // v20.48 功法元素伤通电：习得秘籍的元素伤加成按敌型出力——
         // 火/冰/水/金/虚 对元素生物；虚 对亡灵；龙 对妖兽；魔 对邪道（山贼/邪修/魔修等 evil 标）。
         if (attacker.type === 'player' && attacker._artElem) {
@@ -2852,6 +4046,39 @@ class Battle {
                 if (_mul > 0) damage = Math.max(1, Math.floor(damage * (1 + Math.min(60, _mul) / 100)));
             } catch (eArtEl) {}
         }
+        // 第七十八波·太极领域兑现：玩家挨打按组合账减伤（组合账在实体上——一格守卫，封顶五成）
+        if (defender.type === 'player' && defender._skillComboBonus && defender._skillComboBonus.damage_reduce) {
+            try {
+                var _dr = Math.min(50, Number(defender._skillComboBonus.damage_reduce) || 0);
+                if (_dr > 0) damage = Math.max(1, Math.floor(damage * (1 - _dr / 100)));
+            } catch (eDR) {}
+        }
+        // 第九十四波·见招拆招：姿态全是一次性账本——谁上了当谁当场兑现，没有永久光环
+        if (defender === this.player && this._foeLulled > 0 && attacker !== this.player) {
+            this._foeLulled = 0;
+            damage = Math.max(1, Math.floor(damage * 0.5));
+            this.log.push({ msg: '🖤 他当你真了账——刀上留了三分力（这一下伤害减半）！' });
+        }
+        if (attacker === this.player && (this.player._backstabWindow || this._nextPlayerHitMul)) {
+            var _mul = this._nextPlayerHitMul || 1.5;
+            this._nextPlayerHitMul = 0;
+            this.player._backstabWindow = 0;
+            damage = Math.floor(damage * _mul);
+            this.log.push({ msg: _mul >= 1.5 ? '🖤 你从地上暴起——偷袭！（×' + _mul + '）' : '🔥 怒火中烧——这一下带着石灰的仇（×1.2）！' });
+        }
+        if (attacker === this.enemy && this._foeBackstabPending) {
+            this._foeBackstabPending = 0;
+            damage = Math.floor(damage * 1.5);
+        }
+        // 第九十九波·怒火出手更狠（一次性）；攻心话泄了他的气，刀软一成半（随敌主动作递减）
+        if (attacker === this.enemy && this._foeRageDmg > 0) {
+            this._foeRageDmg = 0;
+            damage = Math.floor(damage * 1.2);
+            this.log.push({ msg: '🔥 他带着怒火出手——这一下格外狠（×1.2）！' });
+        }
+        if (attacker === this.enemy && this._foeDisheartened > 0) {
+            damage = Math.max(1, Math.floor(damage * 0.85));
+        }
         return Math.max(1, damage);
     }
 
@@ -2867,6 +4094,10 @@ class Battle {
         if (rate <= 0 && defender._partyMemberRef) {
             var cdDex = (defender.getEffectiveAttrs ? defender.getEffectiveAttrs().dexterity : 10) || 10;
             rate = Math.max(0, Math.min(15, (cdDex - 10) * 0.8));
+        }
+        // 第七十八波·太极领域兑现：组合的反击率加在派生表之后、掷骰之前（封顶六十——以柔克刚不是必反）
+        if (defender.type === 'player' && defender._skillComboBonus && defender._skillComboBonus.counter) {
+            try { rate = Math.min(60, rate + (Number(defender._skillComboBonus.counter) || 0)); } catch (eCtr) {}
         }
         if (rate <= 0 || Math.random() * 100 >= rate) return null;
         var dmg = Math.max(1, Math.floor(this._calculateDamage(defender, attacker, 0) * 0.5));
@@ -2950,6 +4181,26 @@ class Battle {
         if (attacker._chilledNext === true) hitRate -= 10;
         // v13.0 迷魂术迷扰：命中率-15并消耗一层（可与寒冷叠加；施加在 _applyContactEffects）
         if (attacker._illusionHits > 0) { hitRate -= 15; attacker._illusionHits--; }
+        // 第九十三波·迷烟散：石灰糊了眼，敌主的招全凭瞎摸（命中 -30，随敌主行动回数消散）
+        if (attacker === this.enemy && window.TalismanSystem && typeof window.TalismanSystem.getEnemyBlindTurns === 'function') {
+            try { if (window.TalismanSystem.getEnemyBlindTurns() > 0) hitRate -= 30; } catch (eBlind) {}
+        }
+        // 第九十四波·石灰反着撒回来：你自己的眼被迷（随你的行动回数消散）；眼毒的家伙识破了你的姿态
+        if (attacker === this.player) {
+            if (this._playerBlind > 0) hitRate -= 30;
+            else if (this._playerBlindHalf > 0) hitRate -= 15;
+        }
+        if (attacker === this.enemy && this._foeInsight > 0) {
+            this._foeInsight = 0;
+            hitRate += 25;
+        }
+        // 第九十九波·嘴上的账：怒火露破绽（一次性转伤害账）、心气泄了、蒺藜乱了脚步
+        if (attacker === this.enemy) {
+            if (this._foeRage > 0) { this._foeRage = 0; this._foeRageDmg = 1; hitRate -= 15; }
+            else if (this._foeDisheartened > 0) hitRate -= 15;
+            if (this._foeStumble > 0) { this._foeStumble = 0; hitRate -= 10; }
+        }
+        if (attacker === this.player && this._playerRage > 0) hitRate -= 10;
         hitRate = Math.max(5, Math.min(95, hitRate));
 
         if (Math.random() * 100 > hitRate) {
@@ -2965,6 +4216,15 @@ class Battle {
             : { dodgePenalty: 0 };
         dodgeRate += defPain.dodgePenalty || 0;
         dodgeRate = Math.max(1, Math.min(35, dodgeRate));
+
+        // v21.9 隐身符：隐身期间敌人的攻击直接落空（每次受击消耗一层）
+        if (defender.type === 'player' && window.TalismanSystem && typeof window.TalismanSystem.consumeInvisDodge === 'function') {
+            try {
+                if (window.TalismanSystem.consumeInvisDodge()) {
+                    return { msg: `👤 你的身形淡在空气里——${attacker.name} 的攻击穿过残影，扑了个空！`, missed: true, dodged: true };
+                }
+            } catch (e) {}
+        }
 
         if (Math.random() * 100 < dodgeRate) {
             var dodgeMsg = `${defender.name} 闪避了攻击！`;
@@ -2996,6 +4256,10 @@ class Battle {
         blockRate = Math.max(0, Math.min(45, blockRate));
 
         var penetrate = aStats ? (aStats.penetrate || 0) : 0;
+        // v21.9 破甲符：限时限次的穿透加成（getPenetrateBonus 在攻击完成后按次消耗）
+        if (attacker.type === 'player' && window.TalismanSystem && typeof window.TalismanSystem.getPenetrateBonus === 'function') {
+            try { penetrate += window.TalismanSystem.getPenetrateBonus() || 0; } catch (e) {}
+        }
 
         if (canBlock && blockRate > 0 && Math.random() * 100 < blockRate) {
             let damage = this._calculateDamage(attacker, defender, penetrate);
@@ -3118,6 +4382,22 @@ class Battle {
                 window.showEffect(isCrit ? 'battle_crit' : 'battle_hit');
             }
         } catch (e) {}
+        // 第九十波·落马账：骑乘中挨了重击（暴击、或一击打穿胸口耐久四成），骑手可能被震下马背——
+        // 三成落马。落马不是惩罚弹窗，是世界后果：机动加成当场撤销、坐骑继续留在阵上替你打，
+        // 但本场战斗打得正急，再难翻身骑上去。
+        if (this._mounted && defender === this.player && actual > 0) {
+            var _chestMax = (defender.maxDurabilities && defender.maxDurabilities.chest) || 100;
+            if (isCrit || actual >= _chestMax * 0.4) {
+                if (Math.random() < 0.3) {
+                    this._mounted = false;
+                    if (this._mountDodge > 0) {
+                        this.player.dodgeBonus = Math.max(0, this.player.dodgeBonus - this._mountDodge);
+                        this._mountDodge = 0;
+                    }
+                    msg += ' 💥 你被震得栽下马背——落马了！（坐骑仍在阵上为你而战，机动加成没了，本场再难翻身上马）';
+                }
+            }
+        }
         return { msg, part: partId, damage: actual, crit: isCrit, damageType: damageType };
     }
 
@@ -3136,6 +4416,16 @@ class Battle {
     _checkEnd() {
         // 修复6：检查所有队员是否全部阵亡——但队员阵亡不影响战斗继续，仅玩家阵亡才算输
         if (!this.player.isAlive) {
+            // v21.9 复活符：致命伤被符力抵消一次（半血站起，战斗继续）
+            if (window.TalismanSystem && typeof window.TalismanSystem.tryRevive === 'function') {
+                try {
+                    if (window.TalismanSystem.tryRevive(this.player)) {
+                        this.log.push({ msg: '🕯️ 复活符应验——你受了致命一击，却又站了起来！' });
+                        if (this.onUpdate) this.onUpdate();
+                        return false;
+                    }
+                } catch (e) {}
+            }
             this.isFinished = true;
             this.winner = 'enemy';
             // v12.9 修复休眠缺陷：_consumeFormationBuff 定义在 Entity 上，此前误以 Battle 身份调用
@@ -3143,6 +4433,7 @@ class Battle {
             if (typeof window.onBeastBattleEnd === 'function') {
                 try { window.onBeastBattleEnd(false); } catch (e) {}
             }
+            try { this._settleWitness(); } catch (eW99) {}   // 第九十九波：败了也有目击者——你的手段他全看见了
             if (this.onEnd) this.onEnd('enemy');
             return true;
         }
@@ -3174,6 +4465,7 @@ class Battle {
             this.winner = 'player';
             this.noSpoils = true;
             if (this.player && typeof this.player._consumeFormationBuff === 'function') this.player._consumeFormationBuff();
+            try { this._settleWitness(); } catch (eW99) {}   // 第九十九波：跑掉的人会把看见的说出去
             if (this.onEnd) this.onEnd('player');
             return true;
         }
@@ -3181,6 +4473,28 @@ class Battle {
             this.isFinished = true;
             this.winner = 'player';
             if (this.player && typeof this.player._consumeFormationBuff === 'function') this.player._consumeFormationBuff();
+            // ===== 第九十九波·死前之言：武人的最后一口气，不该是一串空账 =====
+            try {
+                if (this.enemy.species === 'human' || (!this.enemy.species && this.enemy.physiologyType !== 'beast')) {
+                    var _dw99 = {
+                        bandit: ['「弟兄们……替我……报仇……」', '「早知道……就不接这票了……」'],
+                        cultist: ['「嘿嘿……教主会来……收我的……你不得好死……」', '「我的精气……便宜你了……」'],
+                        monk: ['「阿弥陀佛……一身修为……归于尘土……」', '「施主……回头……是岸……」'],
+                        sword: ['「我的剑……断了……」', '「好剑法……我服了……」'],
+                        renegade: ['「师门……是不会收我的……」', '「这条路……我自己选的……不悔……」']
+                    };
+                    var _dpool99 = _dw99[String(this.enemy.subtype || '')] ||
+                        ['「替我……照顾我娘……」', '「我这条命……就到这了……」', '「我怀里的玉佩……送给我妹子……」'];
+                    this.log.push({ msg: '🕯️ ' + this.enemy.name + ' 气若游丝：' + _dpool99[Math.floor(Math.random() * _dpool99.length)] });
+                    // 弥留之际往你手里塞了样东西——搜刮账里多几枚带血的铜钱（真账，不是凭空掉落）
+                    if (Math.random() < 0.25) {
+                        var _bonus99 = 8 + Math.floor(Math.random() * 12) + (this.enemy.level || 1);
+                        if (!this.enemy.carriedInventory) this.enemy.carriedInventory = { items: [], spiritStones: 0, copper: 0 };
+                        this.enemy.carriedInventory.copper = (this.enemy.carriedInventory.copper || 0) + _bonus99;
+                        this.log.push({ msg: '💰 他弥留之际往你手里塞了样东西——' + _bonus99 + ' 枚带血的铜钱。（进了搜刮账）' });
+                    }
+                }
+            } catch (eDw99) {}
             // P1：敌人被击败，发射标准事件供任务系统订阅
             if (typeof window.EventBus !== 'undefined') {
                 window.EventBus.emit('enemy:defeated', {
@@ -3198,6 +4512,7 @@ class Battle {
             if (typeof window.onBeastBattleEnd === 'function') {
                 try { window.onBeastBattleEnd(true); } catch (e) {}
             }
+            try { this._settleWitness(); } catch (eW99) {}   // 第九十九波：逃走的同伙会把看见的说出去
             if (this.onEnd) this.onEnd('player');
             return true;
         }

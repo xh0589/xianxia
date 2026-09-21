@@ -9,6 +9,59 @@
 // ===== 全局命名空间 =====
 window.XianXia = window.XianXia || {};
 
+// ===== v20.96 渲染刹车：一帧内多次同名整屏渲染合并成一次 =====
+// 背包/货币/角色/战斗四张面板都是整屏 innerHTML 重建，一次行动常被连着调五六回
+// （addItem 一回、RewardService 一回、growLifeSkill 一回……）。合并到动画帧结算：
+// 同帧只画最后一笔，中间的全省。无 requestAnimationFrame 的环境（node 测试桩）直调，行为不变。
+(function () {
+    var __dirty = null;
+    var __scheduled = false;
+    window.coalesceRender = function (key, fn) {
+        if (typeof window.requestAnimationFrame !== 'function') { fn(); return; }
+        if (!__dirty) __dirty = {};
+        __dirty[key] = fn;
+        if (__scheduled) return;
+        __scheduled = true;
+        window.requestAnimationFrame(function () {
+            __scheduled = false;
+            var d = __dirty; __dirty = null;
+            if (!d) return;
+            Object.keys(d).forEach(function (k) { try { d[k](); } catch (e) { console.warn('[render:' + k + '] 渲染异常被吞：', e); } });
+        });
+    };
+    /** 需要同步读屏的地方先冲账（把攒下的渲染立刻画掉） */
+    window.flushCoalescedRenders = function () {
+        var d = __dirty; __dirty = null;
+        if (!d) return;
+        Object.keys(d).forEach(function (k) { try { d[k](); } catch (e) { console.warn('[render:' + k + '] 渲染异常被吞：', e); } });
+    };
+})();
+
+// ===== 读数格式：同一屏里的数字必须长得一样 =====
+// 实测三种写法并存：任务酬劳「灵石 100000 · 小还丹 x5」、洞府「修炼 ×1.1 · 储物 +10 格 · 灵田2畦」、
+// 设置页空态「上次保存: --」。这里只统一数字的呈现，不改任何玩法文案。
+(function () {
+    var fmt = {};
+
+    /** 千分位。只给 >=1000 的整数加逗号——倍率 ×1.1 不能变成 ×1.10；非数字原样返回，不替调用方兜 NaN。 */
+    fmt.num = function (v) {
+        var n = typeof v === 'number' ? v : Number(v);
+        if (!isFinite(n) || n % 1 !== 0) return String(v);
+        return Math.abs(n) >= 1000 ? String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',') : String(n);
+    };
+
+    /** 数量后缀。历史上 ASCII 'x' 与 '×' 并存（任务用前者、洞府与突破用后者），统一成 ×。 */
+    fmt.qty = function (name, n) { return name + ' ×' + fmt.num(n); };
+
+    /** 整句静态文案里 >=4 位的裸整数就地补分位。成就描述是写死在数据里的（「持有 10000 铜钱」），
+     *  逐条改不划算，渲染时统一；已带逗号的和小数不动，免得二次加工。 */
+    fmt.text = function (s) {
+        return String(s).replace(/(?<![\d,.])\d{4,}(?![\d,.])/g, function (m) { return fmt.num(Number(m)); });
+    };
+
+    window.XianXia.fmt = fmt;
+})();
+
 // ===== 统一消息系统 =====
 // 解决 quest-system.js 和 app.js 的 showMessage 冲突
 (function() {
@@ -81,6 +134,64 @@ window.XianXia = window.XianXia || {};
             '</div>'
         ].join('');
         document.body.appendChild(overlay);
+    };
+
+    // ===== 第九十五波·外包修复批：弹窗收口两件套 =====
+    // NEW-35：收摊/上工/打盹这类「流程终点」要能软收 showModal 开的遮罩——
+    // 别照抄 event-system 的 closeModal（那个关的是奇遇窗，对 #xianxia-modal-overlay 无效）
+    if (typeof window.closeModalSoft !== 'function') {
+        window.closeModalSoft = function () {
+            var ov = document.getElementById('xianxia-modal-overlay');
+            if (ov && ov.remove) ov.remove();
+        };
+    }
+    // NEW-47：战斗/转世/地图实体交互三块是静态面板——全游戏唯一的画面，只能藏不能删。
+    // 此前八处「打扫屏幕」用 .fixed.inset-0 通配把它们当弹窗删了，删掉后本局再也打不了仗。
+    window.STATIC_PANEL_IDS = ['battle-modal', 'reincarnation-modal', 'entity-interaction'];
+    window.closeRuntimeModals = function (keepId) {
+        try {
+            var nodes = document.querySelectorAll('.fixed.inset-0');
+            for (var i = nodes.length - 1; i >= 0; i--) {
+                var el = nodes[i];
+                if (!el || !el.remove) continue;
+                if (el.id && window.STATIC_PANEL_IDS.indexOf(el.id) >= 0) continue;   // 静态面板永不删
+                // 飞鸽的遮罩与窗体是两个节点：单独摘它会留半死窗——交给它自己的关窗口一起收
+                if (el.classList && el.classList.contains('mail-modal-scrim')
+                    && window.MailSystemUI && typeof window.MailSystemUI.closeInbox === 'function') {
+                    try { window.MailSystemUI.closeInbox(); } catch (eMail) {}
+                    continue;
+                }
+                if (keepId && el.id === keepId) continue;
+                el.remove();
+            }
+        } catch (e) {}
+    };
+
+    // 第一百一十波 · NEW-101：通用「选择对话框」补真身——此前这颗名字全库无定义，
+    // 重要 NPC 垂危之类的生死抉择玩家从来看不到选项，兜底分支直接扣掉一半灵石把人救了。
+    // 签名与 npc-life-system 的调用口径一致：{title, text, options:[{text,value}], onChoose(value)}
+    window.showChoiceDialog = function (cfg) {
+        cfg = cfg || {};
+        var opts = Array.isArray(cfg.options) ? cfg.options : [];
+        var body = '<div class="text-sm text-gray-200 whitespace-pre-line mb-3">' + String(cfg.text || '') + '</div><div style="display:flex;flex-direction:column;gap:8px">';
+        opts.forEach(function (o, i) {
+            body += '<button onclick="window.__choiceDialogPick(' + i + ')" class="bg-indigo-800 hover:bg-indigo-700 text-xs px-3 py-2 rounded text-left">' + String((o && o.text) || '') + '</button>';
+        });
+        body += '</div>';
+        window.__choiceDialogCfg = cfg;
+        window.__choiceDialogPick = function (i) {
+            var c = window.__choiceDialogCfg;
+            window.__choiceDialogCfg = null;
+            try {
+                var ov = document.getElementById('xianxia-modal-overlay');
+                if (ov && ov.remove) ov.remove();
+            } catch (e) {}
+            if (c && typeof c.onChoose === 'function') {
+                try { c.onChoose(c.options && c.options[i] ? c.options[i].value : null); } catch (e2) {}
+            }
+        };
+        if (typeof window.showModal === 'function') window.showModal(String(cfg.title || '请选择'), body);
+        else if (typeof window.showMessage === 'function') window.showMessage(String(cfg.title || '请选择'), 'info');
     };
 
     // ===== v10.0 统一操作反馈增强 =====
@@ -441,6 +552,38 @@ window.XianXia = window.XianXia || {};
         return window.setMainAttribute(cn, (parseInt(cur, 10) || 10) + (parseInt(delta, 10) || 0), charData);
     };
 
+    // ===== 第九十五波·NEW-36/NEW-31/NEW-06：钱包只有一本账 =====
+    // 全仓库 48 处直写 inventory.currency.*（捐赠/强化/传送/宅邸/配对…），逐处补镜像必漏——
+    // 给角色数据的 spiritStones/copper 装转发访问器：读写都落到背包钱包（唯一权威账本），
+    // 镜像字段从此不会漂移，存档也不可能再把漂移账带上（序列化时 getter 读到的就是真账）
+    window.installWalletMirror = function (cd) {
+        if (!cd || typeof cd !== 'object' || cd._walletMirrored) return cd;
+        try {
+            ['spiritStones', 'copper'].forEach(function (k) {
+                var shadow = (typeof cd[k] === 'number') ? cd[k] : 0;
+                Object.defineProperty(cd, k, {
+                    configurable: true, enumerable: true,
+                    get: function () {
+                        var inv = window.inventory;
+                        if (inv && inv.currency && typeof inv.currency[k] === 'number') return inv.currency[k];
+                        return shadow;
+                    },
+                    set: function (v) {
+                        v = Number(v);
+                        if (!isFinite(v)) v = 0;
+                        shadow = v;
+                        var inv = window.inventory;
+                        if (inv && inv.currency) inv.currency[k] = v;
+                    }
+                });
+            });
+            Object.defineProperty(cd, '_walletMirrored', { value: true, configurable: true, enumerable: false });
+        } catch (eWallet) {
+            try { console.warn('[wallet] 钱包镜像访问器安装失败', eWallet); } catch (e2) {}
+        }
+        return cd;
+    };
+
     /**
      * 唯一角色数据写入入口：同步局部变量与 window.currentCharData
      * app.js 的 currentCharData 通过闭包赋值；此处同时写 window 供 battle/crafting/poison 读取
@@ -464,6 +607,8 @@ window.XianXia = window.XianXia || {};
         if (data.day == null) data.day = 1;
         if (typeof data._masterId === 'undefined') data._masterId = null;
         if (!data.currentMap) data.currentMap = 'main';
+        // 第九十五波·NEW-36：进唯一写入口就装上钱包访问器（背包钱包是唯一权威）
+        if (typeof window.installWalletMirror === 'function') window.installWalletMirror(data);
         window.currentCharData = data;
         // 若 app 暴露了赋值钩子则同步（见 app.js）
         if (typeof window._setAppCurrentCharData === 'function') {
@@ -496,6 +641,36 @@ window.XianXia = window.XianXia || {};
             return charData[skillName];
         }
         return 0;
+    };
+
+    /**
+     * v20.94 熟能生巧：生活技能长进的统一写点。
+     * 立规：凡是动作结果被某门生活技能影响，动作落地就反哺该技能——
+     * 打铁长锻造、炼丹长炼制、包扎长医术、砍价长口才，练了就会长。
+     * 收益随等级递减（越练越难长），100 封顶；失败也给一点（摔打也是长进）。
+     * @param {string} name 技能名（与创角名册同一套）
+     * @param {number} exp 基础长进（成功给足、失败给一半由调用方定）
+     * @param {object} [opts] { reason: 日志缘由, toast: 是否弹提示 }
+     * @returns {number} 实际长进（0=没长）
+     */
+    window.growLifeSkill = function(name, exp, opts) {
+        opts = opts || {};
+        var cd = (typeof window.getCurrentCharData === 'function' && window.getCurrentCharData()) || window.currentCharData;
+        if (!cd || !name) return 0;
+        cd.lifeSkills = cd.lifeSkills || {};
+        var lv = parseInt(cd.lifeSkills[name], 10) || 0;
+        if (lv >= 100) return 0;
+        var gain = Math.max(1, Math.round((Number(exp) || 1) * (1 - lv / 100)));
+        gain = Math.min(gain, 100 - lv);
+        cd.lifeSkills[name] = lv + gain;
+        var msg = '🌱 ' + name + ' +' + gain + (opts.reason ? '（' + opts.reason + '）' : '') + '，当前 ' + cd.lifeSkills[name];
+        if (window.gameLog && typeof window.gameLog.add === 'function') window.gameLog.add(msg, 'info');
+        if (opts.toast && typeof window.showMessage === 'function') window.showMessage(msg, 'success');
+        if (window.EventBus && typeof window.EventBus.emit === 'function') {
+            try { window.EventBus.emit('lifeSkill:grew', { name: name, gain: gain, level: cd.lifeSkills[name] }); } catch (e) {}
+        }
+        if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e) {} }
+        return gain;
     };
 })();
 

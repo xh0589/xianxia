@@ -1875,6 +1875,7 @@ function resolveSectStory(sectName, stageIdx, choiceIdx) {
     var eff = choice.effect || {};
     if (eff.contribution && window.discipleState) {
         window.discipleState.contribution = (Number(window.discipleState.contribution) || 0) + eff.contribution;
+        try { window.sectLedgerNote && window.sectLedgerNote(eff.contribution, '门派故事弧·抉择'); } catch (e) {}
     }
     if (eff.luck && window.currentCharData) {
         window.currentCharData.luck = Math.max(0, Math.min(100, (Number(window.currentCharData.luck) || 50) + eff.luck));

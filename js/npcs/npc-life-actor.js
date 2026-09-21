@@ -204,20 +204,26 @@
         var result = 'success';
         try {
             if (actionType === 'move') {
-                // 移动到另一城市（取所有 npc 的不同 location）
-                var destinations = collectDestinations();
-                if (destinations.length > 1) {
-                    var dest = pickOne(destinations.filter(function (d) { return d !== npc.location; }));
-                    if (dest) {
-                        npc.location = dest;
-                        summary = npc.name + ' 离开 ' + (npc.location || '原处') + ' 前往 ' + dest;
-                    } else {
-                        result = 'no-destination';
-                        summary = npc.name + ' 想出游但没有可去之处';
-                    }
+                // NEW-43②：有归宿的游走——夜里（游戏小时≥18 或 <6）或五成概率直接回家（homeLocation），
+                // 其余时候从「世界地点」池里挑一处串门；设施格不再进池（见 collectDestinations）
+                var fromLoc = npc.location || '原处';   // NEW-43③：先存旧值再改写，出发地不再被新值覆盖
+                var dest = null;
+                var gameHour = (global.timeSystem && global.timeSystem.gameTime && typeof global.timeSystem.gameTime.currentHour === 'number')
+                    ? global.timeSystem.gameTime.currentHour : 12;
+                var isNight = (gameHour >= 18 || gameHour < 6);
+                if (npc.homeLocation && npc.homeLocation !== npc.location && (isNight || Math.random() < 0.5)) {
+                    dest = npc.homeLocation;
+                }
+                if (!dest) {
+                    var destinations = collectDestinations().filter(function (d) { return d !== npc.location; });
+                    if (destinations.length > 0) dest = pickOne(destinations);
+                }
+                if (dest) {
+                    npc.location = dest;
+                    summary = npc.name + ' 离开 ' + fromLoc + ' 前往 ' + dest;
                 } else {
                     result = 'no-destination';
-                    summary = npc.name + ' 留在原地';
+                    summary = npc.name + ' 想出游但没有可去之处';
                 }
             } else if (actionType === 'social') {
                 // 与同 location 另一 NPC 互动
@@ -260,12 +266,14 @@
     }
 
     function collectDestinations() {
-        if (!global.npcManager || typeof global.npcManager.getAllNPCs !== 'function') return [];
-        var all = global.npcManager.getAllNPCs() || [];
+        // NEW-43②：目的地池只收「世界地点」——城名（locationSystem.cityData）+ 门派名（sectsData）。
+        // 旧版取「全体 NPC 当前所在」做池子，是个自我循环：一旦有人漂进旅馆/军营/后山/山洞
+        // 这类设施格，这些格子就永久成为合法目的地，游走范围只会越滚越大。
         var set = {};
-        for (var i = 0; i < all.length; i++) {
-            if (all[i] && all[i].location) set[all[i].location] = true;
-        }
+        var cd = (global.locationSystem && global.locationSystem.cityData) || null;
+        if (cd) { for (var c in cd) set[c] = true; }
+        var sects = global.sectsData || null;
+        if (sects) { for (var s in sects) set[s] = true; }
         return Object.keys(set);
     }
 

@@ -4,6 +4,16 @@
 // ============ 建筑效果注册表 ============
 const buildingEffectsRegistry = {};
 
+// v21.5 共享建筑分城口吻：酒楼/客栈/茶馆按城从 CITY_VOICES 取词，缺城缺键回落通用文案
+function cityVoice(building, key, fallback) {
+    try {
+        if (!window.CityVoices || typeof window.CityVoices.vo !== 'function') return fallback;
+        var city = (window.currentCharData && window.currentCharData.location) || '';
+        if (!city && typeof window.getCurrentCityName === 'function') city = window.getCurrentCityName() || '';
+        return window.CityVoices.vo(city, building, key, fallback);
+    } catch (e) { return fallback; }
+}
+
 // ============ 坊市/商店效果 ============
 buildingEffectsRegistry['shop'] = {
     // 打开商店界面
@@ -155,7 +165,18 @@ buildingEffectsRegistry['inn'] = {
     // 休息恢复
     rest: function() {
         if (!window.currentCharData) return false;
-        
+
+        // 第九十五波·NEW-27：先判满再结算——生命/真气/精力全满时歇脚没有收益，
+        // 不扣钱不推时间，如实回一句话（旧版照样收 10 灵石推进两个钟头）
+        var _cdR = currentCharData;
+        var _fullH = Number(_cdR.health) >= (Number(_cdR.maxHealth) || 100);
+        var _fullQ = Number(_cdR.qi) >= (Number(_cdR.maxQi) || 100);
+        var _fullE = Number(_cdR.energy) >= (Number(_cdR.maxEnergy) || 100);
+        if (_fullH && _fullQ && _fullE) {
+            showMessage('客官精神焕发，何必破费——这一觉就免了。', 'info');
+            return false;
+        }
+
         const cost = 10;
         // 使用 DataManager 统一灵石访问
         const dm = window.XianXia?.DataManager;
@@ -170,15 +191,24 @@ buildingEffectsRegistry['inn'] = {
         } else {
             currentCharData.spiritStones = (currentCharData.spiritStones || 0) - cost;
         }
-        currentCharData.health = currentCharData.maxHealth || 100;
-        currentCharData.qi = currentCharData.maxQi || 100;
-        currentCharData.energy = currentCharData.maxEnergy || 100;
-        
+        // v23.1 睡觉有质量之分（旧版付费即满，一夜无梦）：多半酣睡全复，偶尔浅眠打八折，罕见被夜半动静搅了清梦
+        var _sleepRoll = Math.random();
+        var _sleepMul = _sleepRoll < 0.08 ? 0.6 : (_sleepRoll < 0.28 ? 0.8 : 1);
+        var _fillTo = function (cur, max) { return Math.round((cur || 0) + ((max || 100) - (cur || 0)) * _sleepMul); };
+        currentCharData.health = _fillTo(currentCharData.health, currentCharData.maxHealth || 100);
+        currentCharData.qi = _fillTo(currentCharData.qi, currentCharData.maxQi || 100);
+        currentCharData.energy = _fillTo(currentCharData.energy, currentCharData.maxEnergy || 100);
+
         if (window.timeSystem) {
-            window.timeSystem.advanceTime(120);
+            // 第九十五波·NEW-27：补 actionName——旧版无名推进，播报只能说「此番行事」，
+            // 隔壁包间静养都有自己的名号
+            window.timeSystem.advanceTime(120, '打尖歇脚');
         }
-        
-        showMessage('在客栈休息了一晚，状态完全恢复！', 'success');
+
+        var restFlavor = cityVoice('inn', 'rest', '');
+        var _sleepTxt = _sleepMul === 1 ? '状态完全恢复' : (_sleepMul === 0.8 ? '睡得浅了些，恢复了八成' : '夜半被更夫吵醒，只恢复了六成');
+        // 第八十二波·INN-01：牌面改口「打尖歇脚（一个时辰）」——旧牌面号称整夜，与实推进的120分钟矛盾
+        showMessage(restFlavor ? restFlavor + '（' + _sleepTxt + '）' : '在客栈歇了一个时辰，' + _sleepTxt + '！', _sleepMul === 1 ? 'success' : 'info');
         if (window.updateStatusPanel) window.updateStatusPanel();
         return true;
     },
@@ -203,7 +233,8 @@ buildingEffectsRegistry['inn'] = {
             showMessage('包间熏香压住了毒气，体毒暂退（解毒丹才能根除）。', 'info');
         }
         if (window.timeSystem) window.timeSystem.advanceTime(240, '包间静养');
-        showMessage('包间一觉到天光，诸般负面尽消！', 'success');
+        var roomFlavor = cityVoice('inn', 'room', '');
+        showMessage(roomFlavor ? roomFlavor + '（诸般负面尽消，状态完全恢复）' : '包间里睡了个安稳觉，诸般负面尽消！', 'success');
         if (window.updateStatusPanel) window.updateStatusPanel();
         return true;
     },
@@ -213,14 +244,14 @@ buildingEffectsRegistry['inn'] = {
         if (window.showBuildingEffectDialog) {
             showBuildingEffectDialog('客栈', `
                 <div class="space-y-3">
-                    <p class="text-sm text-gray-400 mb-2">选择要进行的操作：</p>
+                    <p class="text-sm text-gray-400 mb-2">${cityVoice('inn', 'open', '选择要进行的操作：')}</p>
                     <button onclick="useBuildingEffect('inn', 'rest')" class="w-full bg-purple-700 hover:bg-purple-600 p-3 rounded">
-                        <span class="text-purple-400 font-bold">🛏️ 休息一晚</span> <span class="text-xs text-gray-400">(10灵石)</span><br>
-                        <span class="text-xs text-gray-400">完全恢复生命、真气和精力</span>
+                        <span class="text-purple-400 font-bold">🛏️ 打尖歇脚</span> <span class="text-xs text-gray-400">(10灵石 · 一个时辰)</span><br>
+                        <span class="text-xs text-gray-400">养回生命、真气和精力——酣睡全复，偶尔浅眠打个折</span>
                     </button>
                     <button onclick="useBuildingEffect('inn', 'room_upgrade')" class="w-full bg-indigo-700 hover:bg-indigo-600 p-3 rounded">
-                        <span class="text-indigo-400 font-bold">🏠 包间休息</span> <span class="text-xs text-gray-400">(50灵石)</span><br>
-                        <span class="text-xs text-gray-400">获得修炼加成，恢复全部状态</span>
+                        <span class="text-indigo-400 font-bold">🏠 包间静养</span> <span class="text-xs text-gray-400">(50灵石 · 两个时辰)</span><br>
+                        <span class="text-xs text-gray-400">状态全复，熏香压毒、诸般负面尽消</span>
                     </button>
                 </div>
             `);
@@ -250,6 +281,9 @@ buildingEffectsRegistry['training'] = {
         // 可能触发战斗训练
         if (Math.random() < 0.3) {
             if (window.startBattle) {
+                // 第八十二波·FIX-05：先收训练弹窗再开战——旧版弹窗（fixed inset-0 z-50）残留盖住战斗区，
+                // 拦截战斗按钮的普通点击，玩家只能先手动关窗才能还手
+                try { closeBuildingDialog(); } catch (eModal) {}
                 window.startBattle('training_dummy');
             }
         }
@@ -280,7 +314,7 @@ buildingEffectsRegistry['training'] = {
         currentCharData.qi -= 30;
         currentCharData.essence = (currentCharData.essence || 0) + 10;
         if (window.timeSystem) window.timeSystem.advanceTime(60, '演武场静坐');
-        showMessage('桩上静坐一个时辰，真元 +10——练武之地也能养气。', 'success');
+        showMessage('桩上静坐半个时辰，真元 +10——练武之地也能养气。', 'success');   // 第九十五波·NEW-34 口径：实推进 60 分钟 = 半个时辰（1时辰=120分钟）
         if (window.updateStatusPanel) window.updateStatusPanel();
         return true;
     },
@@ -314,22 +348,11 @@ buildingEffectsRegistry['teleport'] = {
             showMessage('传送阵尚未联通（旅行系统未就绪）', 'error');
             return false;
         }
+        // 第九十五波·NEW-38：startTravel 内部已按 method.cost（100 灵石）扣费、已按脚力推进时间——
+        // 旧版这里又 deductSpiritStones(100) + advanceTime 一次蓄能耗时，一趟传送实扣 200 灵石/35 分钟，
+        // 与牌面「100灵石」不符。费与时间全交给 startTravel，本函数只负责成行后的回执。
         var ok = window.travelSystem.startTravel(cityName, 'teleport');
-        if (ok === false) return false; // startTravel 自带缘由提示（未解锁/已在途中等）
-        var dm = window.XianXia && window.XianXia.DataManager;
-        if (dm && typeof dm.deductSpiritStones === 'function') {
-            if (!dm.deductSpiritStones(100)) {
-                showMessage('传送耗灵甚巨，100 灵石祭阵费不够。', 'error');
-                return false;
-            }
-        } else if (window.currentCharData) {
-            if ((window.currentCharData.spiritStones || 0) < 100) {
-                showMessage('传送耗灵甚巨，100 灵石祭阵费不够。', 'error');
-                return false;
-            }
-            window.currentCharData.spiritStones -= 100;
-        }
-        if (window.timeSystem) window.timeSystem.advanceTime(30, '传送阵蓄能');
+        if (ok === false) return false; // startTravel 自带缘由提示（未解锁/灵石不足/已在途中等）
         showMessage('阵光一闪，你已立于「' + cityName + '」城门外（祭阵费 100 灵石）。', 'success');
         return true;
     },
@@ -483,20 +506,27 @@ buildingEffectsRegistry['spring'] = {
     },
     
     // v20.7 收集灵泉（原 collect 死按钮补活）：灌一瓶灵气，修炼时享余泽（存 3 止）
+    // 第八十二波·TASK-01：汲水真出一瓶「灵泉水」（走正式入袋，发 item:obtained）——
+    // 布告委托「灵泉取水」要的就是这瓶水；余泽是灵气灌体的附益，满了照旧能取水
     collect: function() {
         if (!window.currentCharData) return false;
         if ((currentCharData.energy || 0) < 10) {
             showMessage('精力不足，舀不动一捧灵泉。', 'error');
             return false;
         }
-        if ((currentCharData.springBlessing || 0) >= 3) {
-            showMessage('随身灵泉余泽已满（3），贪多则溢。', 'info');
+        var _blessFull = (currentCharData.springBlessing || 0) >= 3;
+        var _got = 0;
+        if (typeof window.addItem === 'function') _got = Number(window.addItem('spec_spring_water', 1)) || 0;
+        if (!_got) {
+            showMessage('行囊塞满了，连一瓶水都放不下——腾出格子再来汲水。', 'error');
             return false;
         }
         currentCharData.energy -= 10;
-        currentCharData.springBlessing = (currentCharData.springBlessing || 0) + 1;
+        if (!_blessFull) currentCharData.springBlessing = (currentCharData.springBlessing || 0) + 1;
         if (window.timeSystem) window.timeSystem.advanceTime(30, '灵泉汲水');
-        showMessage('🏺 灌下一瓶灵泉灵气，下次修炼事半功倍（余泽 ' + currentCharData.springBlessing + '/3）。', 'success');
+        showMessage(_blessFull
+            ? '🏺 灌了一瓶灵泉水收进行囊。随身余泽已满（3/3），灵气灌不进体了。'
+            : '🏺 灌下一瓶灵泉水，灵气灌体，下次修炼事半功倍（余泽 ' + currentCharData.springBlessing + '/3）。', 'success');
         return true;
     },
 
@@ -617,8 +647,14 @@ buildingEffectsRegistry['tavern'] = {
         }
         
         // v20.7 情报来自真传闻池（RUMOR_LOG），此前是 8 条硬编码文案掷骰
+        // v21.5 分城口吻：本城酒肆闲话垫在前头，消息还是真传闻池的消息
         const intel = generateTavernIntel();
-        if (intel) showMessage(`在酒楼听到了情报：${intel}`, 'info');
+        const drinkFlavor = cityVoice('tavern', 'drink', '');
+        if (intel) {
+            showMessage(drinkFlavor ? drinkFlavor + ' 三巡过后，消息进了耳朵：' + intel : `在酒楼听到了情报：${intel}`, 'info');
+        } else if (drinkFlavor) {
+            showMessage(drinkFlavor, 'info');
+        }
 
         if (window.timeSystem) {
             window.timeSystem.advanceTime(30);
@@ -655,7 +691,8 @@ buildingEffectsRegistry['tavern'] = {
         }
         const npc = pool[Math.floor(Math.random() * pool.length)];
         if (typeof npc.changeAffection === 'function') npc.changeAffection(2);
-        showMessage(`👥 你请「${npc.name}」吃了杯酒，对方落座攀谈起来（好感 +2）。`, 'success');
+        const meetFlavor = cityVoice('tavern', 'meet', '');
+        showMessage(`👥 ${meetFlavor ? meetFlavor + ' ' : ''}你请「${npc.name}」吃了杯酒，对方落座攀谈起来（好感 +2）。`, 'success');
         if (window.timeSystem) window.timeSystem.advanceTime(30, '酒楼做东');
         // 与街面攀谈同款：关掉本弹窗后直接开对话
         if (typeof window.closeBuildingDialog === 'function') window.closeBuildingDialog();
@@ -664,13 +701,43 @@ buildingEffectsRegistry['tavern'] = {
         }
         return true;
     },
-    
+
+    // v63 点菜吃饭：热汤热饭一顿——赶路的力气是饭吃出来的（铜钱账与喝酒/做东同源）
+    meal: function() {
+        if (!window.currentCharData) return false;
+        const cost = 30;
+        if (window.XianXia && window.XianXia.DataManager && typeof window.XianXia.DataManager.deductCopper === 'function') {
+            if (!window.XianXia.DataManager.deductCopper(cost)) { showMessage(`吃饭需${cost}铜钱`, 'error'); return false; }
+        } else if ((currentCharData.copper || 0) >= cost) {
+            currentCharData.copper -= cost;
+        } else {
+            showMessage(`吃饭需${cost}铜钱`, 'error'); return false;
+        }
+        const dish = cityVoice('tavern', 'meal', '');
+        let fedOk = false;
+        try { fedOk = !!(window.wildMapApi && window.wildMapApi.meal && window.wildMapApi.meal.feed(dish)); } catch (eFeed) {}
+        if (!fedOk) {
+            // 兜底：野外账没加载，饭也照吃（补账走人物面板的老写法）
+            const cd = window.currentCharData;
+            cd.energy = Math.min(100, Number(cd.energy != null ? cd.energy : 100) + 40);
+            cd.health = Math.min(Number(cd.maxHealth) || 100, Number(cd.health != null ? cd.health : 100) + 10);
+            showMessage('🍚 ' + (dish || '热汤热菜摆了一桌，吃得干干净净') + ' 精力 +40、气血 +10。', 'success');
+        }
+        if (window.timeSystem) window.timeSystem.advanceTime(30, '酒楼用饭');
+        if (window.updateStatusPanel) window.updateStatusPanel();
+        return true;
+    },
+
     // 打开界面
     open: function() {
         if (window.showBuildingEffectDialog) {
             showBuildingEffectDialog('酒楼', `
                 <div class="space-y-3">
-                    <p class="text-sm text-gray-400 mb-2">选择要进行的操作：</p>
+                    <p class="text-sm text-gray-400 mb-2">${cityVoice('tavern', 'open', '选择要进行的操作：')}</p>
+                    <button onclick="useBuildingEffect('tavern', 'meal')" class="w-full bg-orange-700 hover:bg-orange-600 p-3 rounded">
+                        <span class="text-orange-300 font-bold">🍚 点菜吃饭</span> <span class="text-xs text-gray-400">(30铜钱)</span><br>
+                        <span class="text-xs text-gray-400">精力+40 气血+10，饭劲顶四个时辰：赶路每格至多省回 1 精力</span>
+                    </button>
                     <button onclick="useBuildingEffect('tavern', 'drink')" class="w-full bg-amber-700 hover:bg-amber-600 p-3 rounded">
                         <span class="text-amber-400 font-bold">🍶 喝酒听情报</span> <span class="text-xs text-gray-400">(20铜钱)</span><br>
                         <span class="text-xs text-gray-400">可能触发随机事件</span>
@@ -711,6 +778,12 @@ buildingEffectsRegistry['market'] = {
 // v20.7：优先从真实传闻池（NPCLife.RUMOR_LOG）取材——听到的就是世界里真发生的事
 // （含 NPC 走形传歪的 🌀 版本）；池空时才退回旧静态池兜底。
 function generateTavernIntel() {
+    // v25.0 批六：《灵气之尽》账本翻开后，跑堂的闲话有一半概率说的是这几年的事（舆论弧线+分城腔）
+    if (window.qiStreetTavernLine && typeof window.qiStreetTavernLine === 'function' && Math.random() < 0.5) {
+        var echoCity = (window.currentCharData && window.currentCharData.location) || '';
+        var echo = window.qiStreetTavernLine(echoCity);
+        if (echo) return echo;
+    }
     if (window.NPCLife && typeof window.NPCLife.getRumorLog === 'function') {
         const log = window.NPCLife.getRumorLog(30) || [];
         if (log.length) {
@@ -773,7 +846,18 @@ function updateStatusPanel() {
 }
 
 // ============ 显示建筑效果对话框 ============
+// 第九十五波·NEW-04：开窗前先清干净同 id 的旧窗——旧版每开一个建筑就往 body 追加一个
+// #building-effect-modal，连开寺庙→茶馆→酒楼会叠罗汉，新界面被压在旧界面下面看不见
+function _removeAllBuildingDialogs() {
+    try {
+        var nodes = (document.querySelectorAll && document.querySelectorAll('#building-effect-modal')) || [];
+        for (var i = nodes.length - 1; i >= 0; i--) {
+            if (nodes[i] && typeof nodes[i].remove === 'function') nodes[i].remove();
+        }
+    } catch (e) {}
+}
 function showBuildingEffectDialog(title, content) {
+    _removeAllBuildingDialogs();
     const modal = document.createElement('div');
     modal.id = 'building-effect-modal';
     modal.className = 'fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50';
@@ -792,7 +876,17 @@ function showBuildingEffectDialog(title, content) {
 }
 
 // ============ 关闭建筑对话框 ============
+// 第九十五波·NEW-04：删「最后一个」（最新开的窗在最上层）——旧版 getElementById 只取
+// 第一个（最老的）节点，玩家点「关闭」时顶层窗口纹丝不动，以为按钮死了
 function closeBuildingDialog() {
+    try {
+        var nodes = (document.querySelectorAll && document.querySelectorAll('#building-effect-modal')) || [];
+        if (nodes.length) {
+            var top = nodes[nodes.length - 1];
+            if (top && typeof top.remove === 'function') top.remove();
+            return;
+        }
+    } catch (e) {}
     const modal = document.getElementById('building-effect-modal');
     if (modal) {
         modal.remove();

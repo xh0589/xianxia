@@ -47,7 +47,7 @@
                 assist:   { minPrimary: { qi: 25 }, maxToxic: 35, count: 2 },
                 balancer: { maxToxic: 30, count: 1 }
             },
-            result: { itemId: 'pill_zhuji', count: 1, allowFlaw: true, flawItemId: 'pill_zhuji_flaw', flawThreshold: 60 },
+            result: { itemId: 'pill_zhuji', count: 1, allowFlaw: true, flawItemId: 'pill_zhuji_flaw', flawThreshold: 32 }, // 第八十二波·ALC-01：原60高于全组合毒性上限35，瑕疵永不可达；按枚举定在p99附近,
             qiCost: 50, timeCost: 60
         },
         {
@@ -61,7 +61,7 @@
                 assist:   { minPrimary: { qi: 30 }, maxToxic: 40, count: 2 },
                 balancer: { minPrimary: { divine: 20 }, maxToxic: 40, count: 1 }
             },
-            result: { itemId: 'pill_nine_revival', count: 1, allowFlaw: true, flawItemId: 'pill_nine_revival_flaw', flawThreshold: 55 },
+            result: { itemId: 'pill_nine_revival', count: 1, allowFlaw: true, flawItemId: 'pill_nine_revival_flaw', flawThreshold: 34 }, // 第八十二波·ALC-01：原55不可达（max 37.5）,
             qiCost: 120, timeCost: 120
         },
         {
@@ -75,7 +75,7 @@
                 assist:   { minPrimary: { heal: 20, qi: 20 }, maxToxic: 25, count: 2 },
                 balancer: { maxToxic: 20, count: 1 }
             },
-            result: { itemId: 'pill_spring_recovery', count: 1, allowFlaw: true, flawItemId: 'pill_spring_recovery_flaw', flawThreshold: 50 },
+            result: { itemId: 'pill_spring_recovery', count: 1, allowFlaw: true, flawItemId: 'pill_spring_recovery_flaw', flawThreshold: 22 }, // 第八十二波·ALC-01：原50不可达（max 26.25）,
             qiCost: 30, timeCost: 12
         },
         {
@@ -89,7 +89,7 @@
                 assist:   { minPrimary: { qi: 20 }, maxToxic: 20, count: 2 },
                 balancer: { maxToxic: 15, count: 1 }
             },
-            result: { itemId: 'pill_qi_powder', count: 1, allowFlaw: true, flawItemId: 'pill_qi_powder_flaw', flawThreshold: 40 },
+            result: { itemId: 'pill_qi_powder', count: 1, allowFlaw: true, flawItemId: 'pill_qi_powder_flaw', flawThreshold: 19 }, // 第八十二波·ALC-01：原40不可达（max 21.25）,
             qiCost: 10, timeCost: 5
         },
         {
@@ -103,7 +103,7 @@
                 assist:   { minPrimary: { qi: 20 }, maxToxic: 30, count: 2 },
                 balancer: { maxToxic: 20, count: 1 }
             },
-            result: { itemId: 'pill_big_recovery', count: 1, allowFlaw: true, flawItemId: 'pill_big_recovery_flaw', flawThreshold: 55 },
+            result: { itemId: 'pill_big_recovery', count: 1, allowFlaw: true, flawItemId: 'pill_big_recovery_flaw', flawThreshold: 31 }, // 第八十二波·ALC-01：原55不可达（max 35）,
             qiCost: 40, timeCost: 30
         },
         {
@@ -209,6 +209,11 @@
         // 真气
         var cd = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
         if (cd && recipe.qiCost && (cd.qi || 0) < recipe.qiCost) return { ok: false, reason: 'qi-low(' + (cd.qi || 0) + '<' + recipe.qiCost + ')' };
+        // v23.0 材料实扣：旧版药材全程白嫖（只扣真气）——深水区就算接上门也是免费自助餐。
+        // 现在所选药材照单从背包扣账；扣不起就整炉不开（不扣真气），背包满时退料退气。
+        if (window.compoundMat && typeof window.compoundMat.consume === 'function') {
+            if (!window.compoundMat.consume(materials)) return { ok: false, reason: 'material-short' };
+        }
         // 火候 = 炼制技能 ± 随机 20
         var skill = 0;
         if (typeof window.getLifeSkill === 'function') skill = window.getLifeSkill('炼制');
@@ -228,11 +233,32 @@
         var avgToxic = totalToxic / materials.length;
         // 品质段
         var quality;
-        if (finalScore >= 85 && avgToxic < 5) quality = { id: 'imperial', name: '极品', mult: 2.0, color: 'purple' };
+        // 第八十二波·ALC-02：御品毒性线 5 → 12——全药材库最低组合毒性 5.75，<5 永假（3476 炉零御品）。
+        // 12 是按真实模块全组合枚举定的：满分火候下回春丹 128 炉、筑基丹 2 炉够得着——大师+低毒选材才出御品，稀有但可达。
+        if (finalScore >= 85 && avgToxic < 12) quality = { id: 'imperial', name: '极品', mult: 2.0, color: 'purple' };
         else if (finalScore >= 70) quality = { id: 'excellent', name: '杰出', mult: 1.5, color: 'gold' };
         else if (finalScore >= 50) quality = { id: 'good', name: '优良', mult: 1.2, color: 'blue' };
         else if (finalScore >= 30) quality = { id: 'normal', name: '普通', mult: 1.0, color: 'white' };
         else quality = { id: 'poor', name: '劣质', mult: 0.7, color: 'gray' };
+        // 第二十四波：洞府「丹房」的 qualityBoost 此前是死账——设施卡面写着「品质+1段」却没人兑现。接进来：每 1 点抬一品质段（封顶极品）。
+        try {
+            if (window.CaveFacilities && typeof window.CaveFacilities.getBuff === 'function') {
+                var _qBoost = Math.floor(Number(window.CaveFacilities.getBuff('player', 'qualityBoost')) || 0);
+                if (_qBoost > 0) {
+                    var _qLadder = [
+                        { id: 'poor', name: '劣质', mult: 0.7, color: 'gray' },
+                        { id: 'normal', name: '普通', mult: 1.0, color: 'white' },
+                        { id: 'good', name: '优良', mult: 1.2, color: 'blue' },
+                        { id: 'excellent', name: '杰出', mult: 1.5, color: 'gold' },
+                        { id: 'imperial', name: '极品', mult: 2.0, color: 'purple' }
+                    ];
+                    var _qi = 0;
+                    for (var _q = 0; _q < _qLadder.length; _q++) { if (_qLadder[_q].id === quality.id) { _qi = _q; break; } }
+                    _qi = Math.min(_qLadder.length - 1, _qi + _qBoost);
+                    quality = _qLadder[_qi];
+                }
+            }
+        } catch (eQb) {}
         // 决定 itemId（变体模板不存在时退化为基础 + quality label）
         var itemId = recipe.result.itemId;
         var isFlaw = false;
@@ -258,8 +284,11 @@
             addOk = window.addResultItem(itemId, Math.max(1, Math.floor(recipe.result.count * quality.mult)));
         }
         if (!addOk) {
-            // 回滚
+            // 回滚（v23.0 连材料一起退——炉子没开成，药材不能吞）
             if (cd && recipe.qiCost) cd.qi = (cd.qi || 0) + recipe.qiCost;
+            if (window.compoundMat && typeof window.compoundMat.refund === 'function') {
+                try { window.compoundMat.refund(materials); } catch (eRf) {}
+            }
             return { ok: false, reason: 'inventory-full' };
         }
         // 时间推进
@@ -270,6 +299,10 @@
         if (typeof window.EventBus !== 'undefined') {
             var evtName = isFlaw ? 'alchemy:compound:flaw' : (quality.id === 'imperial' ? 'alchemy:compound:imperial' : 'alchemy:compound:success');
             window.EventBus.emit(evtName, { recipeId: recipeId, itemId: itemId, quality: quality.id, materials: materials.slice(), score: finalScore, toxic: avgToxic });
+        }
+        // v20.94 熟能生巧：开炉落地长炼制（御品是大成，瑕疵也算摔打）
+        if (typeof window.growLifeSkill === 'function') {
+            window.growLifeSkill('炼制', isFlaw ? 1 : (quality.id === 'imperial' ? 3 : 2), { reason: isFlaw ? '丹有瑕疵，长了记性' : '复合炼丹' });
         }
         // StateRegistry（模块级状态）
         try {
@@ -330,16 +363,21 @@
         executeCompoundPilfar: executeCompoundPilfar,
         getState: function () { return _moduleState; },
         // 工具：列出某槽的可用材料（库存匹配）
+        // 第九十五波·NEW-37：真实背包格子的物品 id 存在 templateId 里（没有 itemId 字段）——
+        // 旧版守卫 `!s.itemId` 把每一个真实格子都 continue 掉，选材框对游戏内背包恒空。
+        // 改成 (s.itemId || s.templateId) 宽容取值，与 compound-ui.js 的 _idOf 同口径；
+        // 药性校验（checkSlotMat）原样不动——主药该拒的照拒。
         listAvailableMatsForSlot: function (slot, inventory) {
             var inv = inventory || (window.inventory && window.inventory.slots) || [];
             var result = [];
             for (var i = 0; i < inv.length; i++) {
                 var s = inv[i];
-                if (!s || !s.itemId) continue;
+                var id = (s && (s.itemId || s.templateId)) || null;
+                if (!id) continue;
                 if (s.count <= 0) continue;
-                if (!MATERIAL_PROPS[s.itemId]) continue;
-                var c = checkSlotMat(s.itemId, slot);
-                if (c.ok) result.push({ itemId: s.itemId, count: s.count, score: scoreSlot(s.itemId, slot) });
+                if (!MATERIAL_PROPS[id]) continue;
+                var c = checkSlotMat(id, slot);
+                if (c.ok) result.push({ itemId: id, count: s.count, score: scoreSlot(id, slot) });
             }
             return result;
         }

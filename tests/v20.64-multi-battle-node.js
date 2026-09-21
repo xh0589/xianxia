@@ -198,7 +198,8 @@ withSeed(11, function () {
         if (b.enemyAllies.indexOf(atk) >= 0) allyHits++;
         return { msg: '跳过' };
     };
-    b.enemyTurn();
+    // 第九十二波·行动条：玩家出手后时间轴推进——敌主与两只同伙各攒满条动一次
+    b.playerAttack('chest');
     Battle.prototype._executeAttack = origExec;
     assert(allyHits === 2, '两只同伙该各出手一次（实得 ' + allyHits + '）');
     // 主敌倒下 → 补位，战斗不结束
@@ -337,7 +338,7 @@ withSeed(44, function () {
             else if (atk === b3.enemy && def._partyMemberRef) coverHits++;
             return { msg: '跳过' };
         };
-        b3.enemyTurn();
+        b3.playerAttack('chest');   // 第九十二波：玩家出手，时间轴把敌主带到
     }
     Battle.prototype._executeAttack = origExec;
     assert(coverHits > playerHits, '掩护指令该把大多数攻击挡过去（玩家挨 ' + playerHits + ' / 队员挡 ' + coverHits + '）');
@@ -409,9 +410,11 @@ withSeed(77, function () {
     b.enemy.physiology.painLoad = 80;   // 疼痛高 → 挂减伤补丁
     var orig = b.enemy.getAttack;
     var origExec = Battle.prototype._executeAttack;
+    // 第九十二波：把玩家的条虚掷掉，推进时间轴让敌主先动（疼痛补丁挂在敌主攻击路上）
+    b.spendActionCost(b.player, 100);
     Battle.prototype._executeAttack = function () { throw new Error('炸了'); };
     var threw = false;
-    try { b.enemyTurn(); } catch (e) { threw = true; }
+    try { b._advanceTimeline(); } catch (e) { threw = true; }
     Battle.prototype._executeAttack = origExec;
     assert(threw, '该让异常原样抛出去');
     assert(b.enemy.getAttack === orig, '补丁该被还原，不该永久留在敌人身上');
@@ -424,13 +427,15 @@ withSeed(88, function () {
     function countEnemyActions(withPack) {
         var b = new Battle(mkPlayer(), mkEnemy('头狼', 10), withPack ? [mkAllyData('野狼甲'), mkAllyData('野狼乙')] : []);
         b.partyMembers = [];
+        b._actors = (b._actors || []).filter(function (a) { return a.kind !== 'member'; });   // 第九十二波：队员退出时间轴（独闯口径）
         var acts = 0;
         var origExec = Battle.prototype._executeAttack;
         Battle.prototype._executeAttack = function (atk) {
             if (atk === b.enemy || (b.enemyAllies || []).indexOf(atk) >= 0) acts++;
             return { msg: '跳过' };
         };
-        b.enemyTurn();
+        b.spendActionCost(b.player, 100);   // 玩家虚掷一下，让敌方一侧攒满条的都动一轮
+        b._advanceTimeline();
         Battle.prototype._executeAttack = origExec;
         return acts;
     }

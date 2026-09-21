@@ -13,7 +13,7 @@
             type: 'material',
             subtype: 'misc',
             category: 'material',
-            quality: 'COMMON',
+            quality: 'PIN9',
             level: 1,
             price: price || 10,
             stackable: true,
@@ -43,7 +43,10 @@
         mat('mat_salt_charter', '官盐引', 100, '🧂', '盐铁局官让盐引：官价领引、凭引行盐。贵地盐价高，引子也水涨船高——行商的利从盐路上来。'),
         mat('mat_volcanic_rock', '火山岩', 25, '🪨', '火山岩块'),
         mat('mat_wind_essence', '风之精华', 150, '💨', '纯净风灵'),
-        mat('mat_wood', '木材', 3, '🪵', '普通木材')
+        mat('mat_wood', '木材', 3, '🪵', '普通木材'),
+        // 第八十八波·收服家什实体化：收服账上的 spec_beast_trap 从来查无此物，
+        // 「带家什收服+25%」是一句永远兑现不了的空话。灵兽坊有售驭兽符纸（80灵石），机关件也照旧算数。
+        mat('tal_beast_seal', '缚兽符', 80, '📜', '绘着缚灵阵纹的驭兽符纸——收服时掷出，符力成缚，兽挣脱不得')
     ];
 
     var missingFood = [
@@ -53,7 +56,7 @@
             type: 'consumable',
             subtype: 'food',
             category: 'consumable',
-            quality: 'UNCOMMON',
+            quality: 'PIN8',
             level: 3,
             price: 40,
             stackable: true,
@@ -68,7 +71,7 @@
             type: 'consumable',
             subtype: 'food',
             category: 'consumable',
-            quality: 'COMMON',
+            quality: 'PIN9',
             level: 1,
             price: 15,
             stackable: true,
@@ -78,6 +81,30 @@
             icon: '🍖'
         }
     ];
+
+    // v20.81：钓鱼系统（app.js FISH_SPOTS）发的 9 种鱼此前全部没有物品模板，
+    // addItem 因"物品模板不存在"直接丢弃——钓上来的鱼无声消失。这里补齐 9 种。
+    function fish(id, name, quality, level, price, effect, desc, icon) {
+        return {
+            id: id, name: name, type: 'consumable', subtype: 'food', category: 'consumable',
+            quality: quality, level: level, price: price, stackable: true, maxStack: 50,
+            effect: effect, desc: desc, icon: icon || '🐟'
+        };
+    }
+    [
+        // 河流
+        fish('food_basic_fish', '鲤鱼', 'PIN9', 1, 8, { energy_recovery: 8 }, '河中常见的鲤鱼，肉嫩刺多', '🐟'),
+        fish('food_carp', '鲫鱼', 'PIN9', 1, 10, { energy_recovery: 10, hp_recovery: 5 }, '鲫鱼汤鲜，熬一碗最养人', '🐟'),
+        fish('food_grass_carp', '草鱼', 'PIN9', 2, 12, { energy_recovery: 12 }, '水草间的大个头，力道十足', '🐟'),
+        // 湖泊
+        fish('food_silver_fish', '银鱼', 'PIN8', 3, 25, { energy_recovery: 18 }, '通体晶莹的小银鱼，湖中灵机所钟', '🐟'),
+        fish('food_golden_carp', '锦鲤', 'PIN7', 4, 60, { energy_recovery: 25, mood_boost: 10 }, '金鳞赤尾的锦鲤，得之有好运', '🎏'),
+        fish('food_koi', '锦鲤（变异）', 'PIN5', 6, 150, { energy_recovery: 40, qi_recovery: 20, mood_boost: 15 }, '变异锦鲤，鳞下隐有灵光流转，食之补益真气', '🎏'),
+        // 海域
+        fish('food_sea_fish', '海鱼', 'PIN9', 2, 15, { energy_recovery: 14 }, '近海寻常渔获，咸鲜有味', '🐟'),
+        fish('food_black_fish', '黑鱼', 'PIN8', 4, 35, { energy_recovery: 20, hp_recovery: 15 }, '深水墨色的黑鱼，性烈补气', '🐟'),
+        fish('food_tuna', '金枪鱼', 'PIN7', 6, 120, { energy_recovery: 35, hp_recovery: 20 }, '远洋巨物，肉厚脂丰，一条顶十天口粮', '🐟')
+    ].forEach(function (f) { missingFood.push(f); });
 
     // 突破丹已迁移到 01-pills.js 的 extendedBreakthroughPills 中，此处不再重复注册
     var missingPills = [];
@@ -89,7 +116,7 @@
             type: 'quest',
             subtype: 'token',
             category: 'quest',
-            quality: 'EPIC',
+            quality: 'PIN5',
             level: 15,
             price: 0,
             stackable: true,
@@ -103,12 +130,13 @@
             type: 'consumable',
             subtype: 'trap',
             category: 'consumable',
-            quality: 'UNCOMMON',
+            quality: 'PIN8',
             level: 4,
             price: 80,
             stackable: true,
             maxStack: 30,
-            desc: '战斗用爆裂符箓',
+            desc: '战斗用爆裂符箓——对敌人炸出 80 点伤害',
+            effect: { attack_damage: 80 },
             icon: '💥'
         },
         {
@@ -117,12 +145,13 @@
             type: 'consumable',
             subtype: 'trap',
             category: 'consumable',
-            quality: 'UNCOMMON',
+            quality: 'PIN8',
             level: 3,
             price: 50,
             stackable: true,
             maxStack: 50,
-            desc: '袖中暗器',
+            desc: '袖中暗器——战斗中掷出，造成 45 点伤害（吃本回合动作）',
+            effect: { attack_damage: 45 },
             icon: '🗡️'
         },
         {
@@ -131,7 +160,7 @@
             type: 'material',
             subtype: 'mechanism',
             category: 'material',
-            quality: 'UNCOMMON',
+            quality: 'PIN8',
             level: 5,
             price: 60,
             stackable: true,
@@ -145,13 +174,62 @@
             type: 'consumable',
             subtype: 'poison',
             category: 'consumable',
-            quality: 'UNCOMMON',
+            quality: 'PIN8',
             level: 4,
             price: 70,
             stackable: true,
             maxStack: 30,
-            desc: '涂刃之毒',
+            desc: '涂刃之毒——战斗中撒出（敌人每回合掉血 3 回合），或淬在刃上（接下来 3 次见血渗毒）',
+            effect: { poison_enemy: 3 },
             icon: '☠️'
+        },
+        {
+            // 第九十三波·卑鄙流仪的家什：石灰掺松烟，扬出去糊敌人脸——吃不吃看他的性子（第九十四波·见招拆招）
+            id: 'special_smoke',
+            name: '迷烟散',
+            type: 'consumable',
+            subtype: 'poison',
+            category: 'consumable',
+            quality: 'PIN8',
+            level: 2,
+            price: 40,
+            stackable: true,
+            maxStack: 30,
+            desc: '石灰掺松烟——扬进敌人眼里：性急的兜头糊实（瞎 2 回）、老练的侧脸闭气（1 回）、眼毒的袖子扫开（白撒）',
+            effect: { blind_enemy: 2 },
+            icon: '💨'
+        },
+        {
+            // 第九十九波·江湖耳目的家伙：撒地的铁蒺藜——踩不踩得着，看他的性子
+            id: 'special_caltrop',
+            name: '铁蒺藜',
+            type: 'consumable',
+            subtype: 'trap',
+            category: 'consumable',
+            quality: 'PIN8',
+            level: 2,
+            price: 45,
+            stackable: true,
+            maxStack: 30,
+            desc: '四角铁刺，随手撒地——性急的抢步踩个正着（行动条 -40、下一手命中 -10），老练的步步小心也乱了脚，眼毒的纵身绕开',
+            effect: { trip_enemy: 1 },
+            icon: '🪤'
+        },
+        {
+            // 第九十九波·灶灰混辣椒面：穷人的石灰——便宜好使，只糊得住性急的
+            id: 'special_ash',
+            name: '灶灰辣粉',
+            type: 'consumable',
+            subtype: 'poison',
+            category: 'consumable',
+            quality: 'PIN8',
+            level: 1,
+            price: 25,
+            stackable: true,
+            maxStack: 50,
+            desc: '灶灰混辣椒面——兜头撒去：性急的呛得眼泪直流（瞎 1 回），老练的侧脸闭气、眼毒的袖子扫开（白撒）',
+            effect: { ash_enemy: 1 },
+            icon: '🌶️'
         }
     ];
 
@@ -162,7 +240,7 @@
             type: 'secret_art',
             subtype: 'internal',
             category: 'secret_art',
-            quality: 'LEGENDARY',
+            quality: 'PIN3',
             level: 20,
             price: 0,
             stackable: false,
@@ -178,7 +256,7 @@
             type: 'weapon',
             subtype: 'sword',
             category: 'weapon',
-            quality: 'RARE',
+            quality: 'PIN7',
             level: 10,
             price: 800,
             stackable: false,

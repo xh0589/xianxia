@@ -63,8 +63,74 @@ function settleRivalDuel(won) {
     } catch (e) {}
 }
 
+// ==================== v22.3 定期寻仇调度 ====================
+// 这条链自 v20.0 落地时就没接上头：决战与胜负结算都挂在战斗流程上，
+// 但「定期寻仇」没有任何调度调用——仇恨堆到天上也永远没人上门。现在补上：
+// 每日结算扫一遍高仇恨名单，有人憋得住劲就低概率拦路寻仇；同一宿敌两场寻仇间隔至少数日。
+var REVENGE_CHANCE = 0.35;         // 每日有仇可报时的寻仇概率
+var REVENGE_COOLDOWN_DAYS = 5;     // 同一宿敌两场寻仇的最小间隔
+var CD_KEY = 'xianxia_rival_chain_cd';
+var _revengePending = false;       // 一场寻仇已在路上，不再叠第二场
+
+function loadRevengeCd() {
+    try { return JSON.parse(localStorage.getItem(CD_KEY) || '{}') || {}; } catch (e) { return {}; }
+}
+function saveRevengeCd(cd) {
+    try { localStorage.setItem(CD_KEY, JSON.stringify(cd || {})); } catch (e) {}
+}
+function currentDayNum() {
+    var t = window.timeSystem;
+    if (t && typeof t.getAbsoluteDay === 'function') { try { var d = t.getAbsoluteDay(); if (d) return d; } catch (e) {} }
+    return (t && t.gameTime && t.gameTime.currentDay) || 1;
+}
+
+function maybeRivalRevenge() {
+    try {
+        if (!window.currentCharData) return false;
+        if (window.currentBattle) return false;                                   // 战斗中不叠台
+        if (typeof window.isInSoulState === 'function' && window.isInSoulState()) return false; // 残魂之体不被寻仇
+        var rivals = getRivals();
+        if (!rivals.length) return false;
+        var day = currentDayNum();
+        var cds = loadRevengeCd();
+        var ready = [];
+        for (var i = 0; i < rivals.length; i++) {
+            var n = rivals[i];
+            if (!n || n.isDead || n.isMissing) continue;
+            var last = cds[n.id];
+            // 冷却未过不寻仇；旧档日数大于当前日（新开档日数归零）视为过期记录
+            if (typeof last === 'number' && last <= day && day - last < REVENGE_COOLDOWN_DAYS) continue;
+            ready.push(n);
+        }
+        if (!ready.length) return false;
+        if (Math.random() >= REVENGE_CHANCE) return false;
+        var pick = ready[Math.floor(Math.random() * ready.length)];
+        cds[pick.id] = day;
+        saveRevengeCd(cds);
+        // 延迟一步开打：跨日结算常发生在赶路/闭关的同步循环里，让人先落脚，杀气再到
+        _revengePending = true;
+        setTimeout(function () {
+            _revengePending = false;
+            try {
+                if (window.currentBattle) return;
+                duelRival(pick.id);
+            } catch (e) {}
+        }, 1500);
+        return true;
+    } catch (e) { return false; }
+}
+
+// 跨日结算即扫仇——寻仇是世界的主动，不等玩家想起
+if (window.timeSystem && typeof window.timeSystem.onNewDaySubscribe === 'function') {
+    window.timeSystem.onNewDaySubscribe(function () {
+        if (_revengePending) return;
+        maybeRivalRevenge();
+    });
+}
+
 window.getRivals = getRivals;
 window.duelRival = duelRival;
 window.settleRivalDuel = settleRivalDuel;
+window.maybeRivalRevenge = maybeRivalRevenge;
 
 })();

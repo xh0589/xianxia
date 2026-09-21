@@ -212,7 +212,31 @@ function startBreakthroughRitual() {
         var _realmBonusKey = { '筑基': '_foundationBonus', '金丹': '_coreBonus', '元婴': '_primordialBonus', '化神': '_divineBonus' }[nextRealm];
         if (_realmBonusKey && _cd14[_realmBonusKey]) { baseRate += _cd14[_realmBonusKey] / 100; _cd14[_realmBonusKey] = 0; }
     }
+    // 第二十四波：洞府「闭关室」的 breakthroughBoost 此前是死账——设施建了、加成没人读。接进成功率。
+    try {
+        if (window.CaveFacilities && typeof window.CaveFacilities.getBuff === 'function') {
+            var _medBoost = Number(window.CaveFacilities.getBuff('player', 'breakthroughBoost')) || 0;
+            if (_medBoost > 0) baseRate += _medBoost;
+        }
+    } catch (eMed) {}
+    // 第七十三波·境由心转：神思不倦的关冲得稳、心灰意冷的关更凶险
+    //（加减百分点放在封顶之前——[0.1, 0.95] 的老闸不破，与标准突破路径同一本梯度账）
+    try {
+        if (window.MoodSystem && typeof window.MoodSystem.breakthroughBonus === 'function') {
+            baseRate += window.MoodSystem.breakthroughBonus();
+        }
+    } catch (eMoodBT) {}
     breakthroughState.successRate = Math.min(0.95, Math.max(0.1, baseRate));
+
+    // v21.9 燃机缘·破境必成：fortune（奇遇得手攒下的机缘值）≥30 可烧掉换这次突破必定成功。
+    // fortune 字段的注释两年前就承诺「可消耗破机缘（必成突破）」，此前全库零读零写。
+    breakthroughState._fortuneBurnAvailable = false;
+    try {
+        var _cdFb = window.currentCharData;
+        if (_cdFb && (Number(_cdFb.fortune) || 0) >= 30 && breakthroughState.successRate < 1) {
+            breakthroughState._fortuneBurnAvailable = true;
+        }
+    } catch (e) {}
 
     // 创建突破仪式UI
     showBreakthroughUI(charData, currentRealm, nextRealm, breakthroughCost, req);
@@ -305,13 +329,22 @@ function showBreakthroughUI(charData, currentRealm, nextRealm, cost, requirement
             <div class="mb-6">
                 <div class="flex justify-between text-sm text-gray-400 mb-1">
                     <span>突破成功率</span>
-                    <span class="text-yellow-400 font-bold">${Math.round(breakthroughState.successRate * 100)}%</span>
+                    <span class="text-yellow-400 font-bold" id="bt-rate-text">${Math.round(breakthroughState.successRate * 100)}%</span>
                 </div>
                 <div class="w-full bg-gray-700 rounded-full h-3">
-                    <div class="h-3 rounded-full bg-gradient-to-r from-yellow-500 to-red-500 transition-all duration-500"
+                    <div class="h-3 rounded-full bg-gradient-to-r from-yellow-500 to-red-500 transition-all duration-500" id="bt-rate-bar"
                          style="width: ${breakthroughState.successRate * 100}%"></div>
                 </div>
             </div>
+
+            ${breakthroughState._fortuneBurnAvailable ? `
+            <!-- v21.9 燃机缘·破境必成 -->
+            <div class="mb-6 bg-purple-900/30 border border-purple-600/50 rounded-lg p-3" id="fortune-burn-box">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="text-xs text-gray-300">🍀 机缘值 ${(window.currentCharData && Number(window.currentCharData.fortune)) || 0}——奇遇里得手攒下的机缘，可以烧掉照亮这一关</div>
+                    <button onclick="burnFortuneForBreakthrough()" class="px-3 py-1 bg-purple-700 hover:bg-purple-600 text-white text-xs rounded font-bold whitespace-nowrap">🔥 燃 30 机缘 · 必成</button>
+                </div>
+            </div>` : ''}
 
             <!-- 按钮 -->
             <div class="flex gap-3 justify-center">
@@ -325,6 +358,30 @@ function showBreakthroughUI(charData, currentRealm, nextRealm, cost, requirement
 
     document.body.appendChild(modal);
 }
+
+// v21.9 燃机缘·破境必成：烧 30 点机缘值，把这次突破的成功率顶到 100%
+function burnFortuneForBreakthrough() {
+    var cd = window.currentCharData;
+    if (!cd || (Number(cd.fortune) || 0) < 30) {
+        if (window.showMessage) window.showMessage('机缘不足 30 点——去人间奇遇里得手，就能攒下机缘。', 'warning');
+        return false;
+    }
+    if (breakthroughState._fortuneBurned) return false;
+    cd.fortune = (Number(cd.fortune) || 0) - 30;
+    breakthroughState.successRate = 1;
+    breakthroughState._fortuneBurned = true;
+    breakthroughState._fortuneBurnAvailable = false;
+    var box = document.getElementById('fortune-burn-box');
+    if (box) box.innerHTML = '<p class="text-xs text-purple-300">🔥 机缘已燃——这一关，必过！（剩余机缘 ' + cd.fortune + '）</p>';
+    var rateText = document.getElementById('bt-rate-text');
+    if (rateText) rateText.textContent = '100%';
+    var rateBar = document.getElementById('bt-rate-bar');
+    if (rateBar) rateBar.style.width = '100%';
+    if (window.showMessage) window.showMessage('🔥 你烧掉了 30 点机缘——冥冥中那一线机会，被你攥成了十分。', 'success');
+    if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e) {} }
+    return true;
+}
+window.burnFortuneForBreakthrough = burnFortuneForBreakthrough;
 
 // ============ 执行突破仪式过程 ============
 function executeBreakthroughRitual() {

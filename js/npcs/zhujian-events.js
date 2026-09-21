@@ -209,11 +209,93 @@ var LU_MAIN_EVENTS = {
             return { affection: aff, msg: msg };
         }
     },
+    'lu_event_009': {
+        id: 'lu_event_009', npcId: LU_NPC_ID, title: '淬火之诺', icon: '🔗',
+        desc: '他要重淬那柄断剑，向你讨一个诺。',
+        minAffection: 68, trigger: { random: 0.3 }, cooldown: 0, flag: 'lu_e009_done',
+        autoTrigger: { location: '铸剑山庄', random: 0.4 },
+        scenes: [
+            { speaker: 'narrator', text: '他把当日你从炉火里夹出来的断剑从淬火池边抱起——断口接上了，只差最后一淬。', type: 'description' },
+            { speaker: 'npc', text: '「这柄剑重淬，我想让你在场。」他没看你，看着剑，「认主的剑，淬的时候得见人。它见的第一眼，就是它一辈子的主。」' },
+            { speaker: 'npc', text: '「淬火那夜，你站池边。我要是失了控——」他顿了顿，「你把我拽出来。剑和人，你选。」' },
+            { speaker: 'player_select', text: '你如何回应？', options: [
+                { text: '「我应你。剑我拽，人我也拽。」', effect: 'promise', affection: 14 },
+                { text: '「你淬你的剑，我替你守池。」', effect: 'guard', affection: 9 },
+                { text: '「……这种话，不该对人说吗？」', effect: 'press', affection: 5 }
+            ]}
+        ],
+        effects: function(npc, choice) {
+            var aff = 0, msg = '';
+            switch (choice) {
+                case 'promise': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 6; msg = '你守池守到后半夜先打了个盹。醒来时剑已出池，他披着外衣坐在池边守你。（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 14; msg = ('他看了你很久，忽然把剑柄塞进你掌心一瞬，又收回：「……记住你说的。」那一瞬你触到的剑柄是温的——像有人先替你焐过。') + '（精力-15）'; break; }
+                case 'guard': aff = 9; msg = '他点头，眉眼松了松：「……行。你守池，我守剑。」他顿了顿，补了一句，「剑出池的时候，你先看我，别看刃。」'; break;
+                case 'press': aff = 5; msg = '他别开脸：「……不该。」半天又补一句，「剑和人，我早选好了。我怕的是你选剑。」'; break;
+            }
+            return { affection: aff, msg: msg };
+        }
+    },
+    'lu_event_010': {
+        id: 'lu_event_010', npcId: LU_NPC_ID, title: '欧冶子的考校', icon: '🐉',
+        desc: '欧冶子当面考你，冶砚替你担。',
+        minAffection: 72, trigger: { random: 0.3 }, cooldown: 0, flag: 'lu_e010_done',
+        autoTrigger: { location: '铸剑山庄', random: 0.4 },
+        scenes: [
+            { speaker: 'narrator', text: '欧冶子拄着拐立在天工炉前，眯眼上下打量你：「我义子炉前留了个人？让老夫瞧瞧，经不经得起烫。」', type: 'description' },
+            { speaker: 'narrator', text: '他袖一挥，一股灼人的炉气直压过来——是考校，也是下马威。你正要硬扛，一道身影挡在身前。', type: 'description' },
+            { speaker: 'npc', text: '冶砚单手接过那股炉气，掌心焦红，声音却稳：「师父。此人，我担。」' },
+            { speaker: 'npc', text: '欧冶子挑眉，拐杖收了：「哦？你担？」他绕着你俩走了半圈，「那老夫看你担不担得起。」' },
+            { speaker: 'player_select', text: '你如何回应？', options: [
+                { text: '对欧冶子一礼：「绝不连累少庄主。」', effect: 'respect', affection: 8 },
+                { text: '低声对冶砚：「你手都烫红了，让我自己接。」', effect: 'stand', affection: 7 },
+                { text: '什么也不说，站到他身侧并肩', effect: 'side', affection: 11 }
+            ]}
+        ],
+        effects: function(npc, choice) {
+            var aff = 0, msg = '';
+            switch (choice) {
+                case 'respect': aff = 8; msg = '欧冶子走后，冶砚低头看自己焦红的掌心，闷声：「老头子最烦没骨头的人。你这一礼，比替他挡炉气管用。」——他难得，对你咧嘴笑了。'; break;
+                case 'stand': aff = 7; msg = '他侧头看你，琥珀眼底有一瞬的烫：「……想清楚了。你替我挡，我担不起。」但他没把你护在身后的手挪开。'; break;
+                case 'side': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 4; msg = '炉气熏得人眼前发黑，考校到后半你歪了头，末了挨了欧冶子一句「回去喝三碗凉水」。（精力不足，那一场你先撑不住了）'; break; }
+                    aff = 11; msg = ('他看了你一眼，没让你退。欧冶子看完这一幕，拐杖敲了敲地，丢下一句：「臭小子，护炉倒快。」') + '（精力-15）'; break; }
+            }
+            return { affection: aff, msg: msg };
+        }
+    },
+    'lu_event_011': {
+        id: 'lu_event_011', npcId: LU_NPC_ID, title: '炉狂', icon: '🌋',
+        desc: '开刃前夜，天工炉的火失控了。',
+        minAffection: 78, trigger: { random: 0.3 }, cooldown: 0, flag: 'lu_e011_done',
+        autoTrigger: { location: '铸剑山庄', random: 0.4 },
+        scenes: [
+            { speaker: 'narrator', text: '开刃前夜，天工炉的火突然狂了——炉膛烧得透亮，火舌卷上梁柱。冶砚立在炉前没退，手里攥着那柄要开刃的剑。', type: 'description' },
+            { speaker: 'npc', text: '「火候到了……就差这一把！」他眼睛被火映得赤红，像入了魔，「退了就前功尽弃——三年的炉，不能毁在这儿！」' },
+            { speaker: 'narrator', text: '梁上的火已经舔到他背后。他浑然不觉。', type: 'description' },
+            { speaker: 'player_select', text: '你必须立刻做点什么。', options: [
+                { text: '冲进去，连人带剑把他拖出炉前', effect: 'drag', affection: 14 },
+                { text: '大喊：「冶砚！剑毁了能重铸，人毁了炉谁守！」', effect: 'shout', affection: 10 },
+                { text: '抄起淬火钩，替他压住炉膛的火', effect: 'hook', affection: 11 }
+            ]}
+        ],
+        effects: function(npc, choice) {
+            var aff = 0, msg = '';
+            switch (choice) {
+                case 'drag': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 20) : { ok: true };
+                    if (!_py.ok) { aff = 6; msg = '火太烈，你冲到一半被热浪掀退，那最后几步是他自己踉跄出来的。（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 14; msg = ('你不管燎人的火，连人带剑把他拖出炉前。火星在你背上燎开几道口子——他伏在地上喘，半晌哑声：「……你怎么敢。」你不敢。但你敢。') + '（精力-20）'; break; }
+                case 'shout': aff = 10; msg = '他浑身一震，赤红的眼睛慢慢聚焦到你身上。锤子当啷落地，他踉跄退出炉前——剑没开成刃，人还在。他盯着你，像第一次看清你：「……你比炉火醒得快。」'; break;
+                case 'hook': aff = 11; msg = '你抄起淬火钩捅进炉膛，压住翻卷的火。他趁机把剑淬了水——蒸汽轰然腾起，火头一矮。收钩时他看你，虎牙露出来，声音哑：「……你的火候，比我还稳。」'; break;
+            }
+            return { affection: aff, msg: msg };
+        }
+    },
     'lu_event_013': {
         id: 'lu_event_013', npcId: LU_NPC_ID, title: '终章·一柄为你铸的剑', icon: '💍',
         desc: '三年未成之剑，今夜开刃。',
         minAffection: 85, trigger: { random: 1.0 }, cooldown: 0, flag: 'lu_e013_done',
-        endingMap: { '炉火同道': 'lu_ending_炉火同道', '守炉': 'lu_ending_守炉', '剑友': 'lu_ending_剑友', '错过': 'lu_ending_错过' },
+        endingMap: { '炉火同道': 'lu_ending_炉火同道', '守炉': 'lu_ending_守炉', '剑友': 'lu_ending_剑友', '炉客': 'lu_ending_炉客', '冷炉': 'lu_ending_冷炉', '错过': 'lu_ending_错过' },
         scenes: [
             { speaker: 'narrator', text: '天工炉房。冶砚把一柄剑横在你面前——剑身亮得像一炉新火，配重是你虎口的茧型。三年未成之剑，开刃了。', type: 'description' },
             { speaker: 'npc', text: '「成了。」他声音哑哑的，「我铸了三年。第一年差口气，第二年差火候，第三年——差个人。」' },
@@ -222,19 +304,22 @@ var LU_MAIN_EVENTS = {
                 { text: '「要。我带你和这柄剑下山——一剑走江湖，哪里有不平就去哪里。」', effect: 'lover_travel', affection: 30 },
                 { text: '「要。但哪儿也不去。我留在铸剑山庄，陪你守每一炉火。」', effect: 'lover_stay', affection: 28 },
                 { text: '「剑我接。人就算了——我做你天下第一的试剑对手，年年铸剑山庄论剑。」', effect: 'friend', affection: 20 },
+                { text: '「剑我接。炉边给我留个位子——年年开炉我来添柴，不谈风月，只谈火候。」', effect: 'friend_stay', affection: 18 },
                 { text: '「我都不要。我只是个路过的看客。」', effect: 'none', affection: 0 }
             ]}
         ],
         effects: function(npc, choice) {
             // v20.25 门槛 5→3：三度伤透即寒心（旧 5 门槛对本线数学不可达，坏结局形同虚设）
+            // v20.71 辜负独立成结局「冷炉」：伤透的心与单纯的错过分开记账
             var negCount = (window._negativeChoiceCount && window._negativeChoiceCount[LU_NPC_ID]) || 0;
             if (negCount >= 3 && (choice === 'lover_travel' || choice === 'lover_stay')) {
-                return { affection: 0, msg: '他看着你，慢慢收回了剑。「……我铸了三年，等的不是这句话。」他把剑挂回炉房最高的梁，「你走吧。这柄剑，我留着自己听火。」', ending: '错过' };
+                return { affection: 0, msg: '他看着你，慢慢收回了剑。「……我铸了三年，等的不是这句话。」他把剑浸进淬火池——嗤的一声，白汽腾起，三年的火候淬死了。「你走吧。炉，我封了。」', ending: '冷炉' };
             }
             switch (choice) {
                 case 'lover_travel': return { affection: 30, msg: '他怔了半晌，忽然一把把你抱起来转了一圈，虎牙全露：「好——下山！我跟你走，炉子我托付给师兄了。」他的笑比炉火还亮，「三年，总算铸成了。」', ending: '炉火同道' };
                 case 'lover_stay': return { affection: 28, msg: '他点头，把剑和你一起拢进怀里：「……行。铸剑山庄的炉，往后有两盏火。」他声音闷闷的，「你陪我守——炉不冷，我也不冷了。」', ending: '守炉' };
                 case 'friend': return { affection: 20, msg: '他哼了一声，虎牙露出来：「试剑对手？行。」他把剑塞你手里，「那你接得住我一炉新剑再说。」——但他笑得像个少年。', ending: '剑友' };
+                case 'friend_stay': return { affection: 18, msg: '「炉边位子？」他愣了一下，咧嘴，「行。柴也归你劈。」他把剑挂回墙上，拍了拍炉沿，「开炉的日子你记着——炭钱我出，力气你出。」', ending: '炉客' };
                 case 'none': return { affection: 0, msg: '他沉默了很久，把剑收回鞘。「……也好。」他声音恢复平日的闷，「炉房的门，我照常锁。看客嘛，看看就走。」', ending: '错过' };
             }
             return { affection: 0, msg: '' };
@@ -276,6 +361,28 @@ var LU_ENDINGS = {
             { speaker: 'narrator', text: '有人问你们是什么关系。他答「对手」，{playerTa}答「对手」。说完两人对视，都先笑了。', type: 'description' }
         ],
         finalText: '——— 结局·剑友（挚友·同行）———'
+    },
+    'lu_ending_炉客': {
+        id: 'lu_ending_炉客', npcId: LU_NPC_ID, title: '结局·炉客', icon: '🪵',
+        route: '炉客',
+        scenes: [
+            { speaker: 'narrator', text: '{playerTa}成了天工炉房的常客。炉边那个位子，从那天起空出来就没人敢坐。', type: 'description' },
+            { speaker: 'narrator', text: '每年开炉，{playerTa}来添柴；每炉新剑，{playerTa}头一个看火候。两个人不谈风月，只谈铁。', type: 'description' },
+            { speaker: 'npc', text: '「今年这炉，炭是你劈的，火是你看的。」他淬完剑，把剑递过来，「……剑成了，有你一半。」' },
+            { speaker: 'narrator', text: '欧冶子有回路过，看见{playerTa}在拉风箱、少庄主在落锤，嘀咕一句「炉火旺了」，走了。但走时步子慢了些。', type: 'description' }
+        ],
+        finalText: '——— 结局·炉客（挚友·归隐）———'
+    },
+    'lu_ending_冷炉': {
+        id: 'lu_ending_冷炉', npcId: LU_NPC_ID, title: '结局·冷炉', icon: '🧊',
+        route: '冷炉',
+        scenes: [
+            { speaker: 'narrator', text: '那柄三年铸成的剑，被他亲手浸进淬火池。白汽腾起来的时候，他站在池边没动，像淬的不是剑，是自己。', type: 'description' },
+            { speaker: 'narrator', text: '第二日，天工炉封了火。庄里人说，少庄主把那炉的炭都清了出去，一粒没留。', type: 'description' },
+            { speaker: 'narrator', text: '铸剑山庄的炉火照旧旺，只是最里头那座天工炉，再没生过火。', type: 'description' },
+            { speaker: 'narrator', text: '再后来，江湖偶有传闻——少庄主封炉不问剑事，只在每年最冷那夜，独自去炉房坐一夜。没人知道他在那儿等谁，也没人敢问。', type: 'description' }
+        ],
+        finalText: '——— 结局·冷炉（辜负）———'
     },
     'lu_ending_错过': {
         id: 'lu_ending_错过', npcId: LU_NPC_ID, title: '结局·错过', icon: '🏔️',
@@ -361,9 +468,11 @@ if (typeof registerEndingCallback === 'function') {
         if (endingName === '炉火同道' || endingName === '守炉') {
             if (npc && typeof npc.setFlag === 'function') npc.setFlag('dao_companion');
             if (window.showMessage) window.showMessage('🔥 你与冶砚结为道侣！铸剑感悟大幅提升', 'success');
-        } else if (endingName === '剑友') {
+        } else if (endingName === '剑友' || endingName === '炉客') {
             if (npc && npc.relationship) npc.relationship.trust = Math.min(100, (npc.relationship.trust || 0) + 30);
             if (window.showMessage) window.showMessage('🔥 你与冶砚成了彼此最信得过的试剑搭档', 'success');
+        } else if (endingName === '冷炉') {
+            if (window.showMessage) window.showMessage('🧊 冶砚封了炉。有些火一旦淬死，就再也生不起来了', 'error');
         }
     });
 }

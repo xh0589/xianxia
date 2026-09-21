@@ -183,6 +183,60 @@ if (dup.affixes) {
     assert(Object.keys(uniqueKeys).length === dup.affixes.length, '词缀 key 唯一');
 }
 
+// ---- 10. 品质段（第二十六波：锻器有品相） ----
+section('10) 品质段（第二十六波）');
+function withRandom(v, fn) { var o = Math.random; Math.random = function () { return v; }; try { return fn(); } finally { Math.random = o; } }
+// 炉火＝技能±20（0.5 的随机源不偏不倚：火=技能）；工法＝词缀+铭纹
+var qLow = withRandom(0.5, function () { return F.rollQuality(20, 1, false); });
+assert(qLow.quality.id === 'poor' && qLow.score === 21, '低手艺单词缀 → 劣质（工评21）');
+var qHigh = withRandom(0.5, function () { return F.rollQuality(100, 3, true); });
+assert(qHigh.quality.id === 'imperial' && qHigh.score === 100, '宗师满词缀带铭纹 → 极品（工评100）');
+// 炼器台抬段（第二十四波记的欠账，这波还）
+mockWindow.CaveFacilities = { getBuff: function (c, k) { return k === 'qualityBoost' ? 1 : 0; } };
+var qBoost = withRandom(0.5, function () { return F.rollQuality(20, 1, false); });
+assert(qBoost.quality.id === 'normal', '装了炼器台，劣质抬成普通（「品质+1段」兑现）');
+delete mockWindow.CaveFacilities;
+// 全流程：返回值带品相；极品成双；名字带品相字头；事件带品相
+var rq = F.executeCompoundForging('recipe_sword_open', { embryo:'sword', main:['mat_star_iron'], assist:['mat_mithril','mat_meteorite'], rune:['mat_phoenix_blood'] }, { randomSource: _mulberry32(7) });
+assert(rq.ok && rq.quality && rq.score != null, '锻造返回值带品相与工评 (reason=' + rq.reason + ')');
+assert(rq.count === (rq.quality.id === 'imperial' ? 2 : 1), '极品出炉成双，其余一件');
+if (rq.quality.id !== 'normal') assert(rq.name.indexOf(rq.quality.name) === 0, '非普通的器，名字带品相字头：' + rq.name);
+var tpl = mockWindow.itemById['wpn_compound_sword'];
+assert(tpl && typeof tpl._forgeQuality === 'string', '同款器的模子记着品相（名品定模）');
+var lastImpEvt = (listeners['forging:compound:imprint'] || []).slice(-1)[0];
+assert(lastImpEvt && typeof lastImpEvt.quality === 'string', '事件总线带着品相');
+// 名品定模：粗器压不下名品定下的模子
+var qBefore = tpl._forgeQuality;
+mockWindow.currentCharData.lifeSkills['锻造'] = 20;
+mockWindow.currentCharData.qi = 1000;
+var rLow2 = F.executeCompoundForging('recipe_sword_open', { embryo:'sword', main:['mat_dark_iron'], assist:['mat_mithril','mat_meteorite'], rune:[] }, { randomSource: _mulberry32(9) });
+assert(rLow2.ok, '低手艺也开得了炉（剑方只要20）');
+assert(F.qualityIndex(mockWindow.itemById['wpn_compound_sword']._forgeQuality) >= F.qualityIndex(qBefore), '一炉次品压不下名品——品相只升不降');
+mockWindow.currentCharData.lifeSkills['锻造'] = 100;
+
+// ---- 11. 锻火试炼（第二十九波：控火得分替代随机炉火） ----
+section('11) 锻火试炼（第二十九波）');
+var _ROOT = '' + (process.env.XIANXIA_ROOT || __dirname + '/..');
+// 控火满分也顶不过手艺的封顶：手艺20，火分100 → 炉火只有40
+mockWindow._forgingFireBonus = 100;
+var qFire = F.rollQuality(20, 1, false);
+assert(qFire.score === 33 && qFire.quality.id === 'normal', '控火得分吃手艺封顶（手艺20：火再旺炉火也只有40，工评33）');
+assert(mockWindow._forgingFireBonus === null, '一炉火只管一炉（消费即清）');
+// 宗师配好火：手艺100，火分85 → 极品是控出来的
+mockWindow._forgingFireBonus = 85;
+var qFire2 = F.rollQuality(100, 3, true);
+assert(qFire2.score === 91 && qFire2.quality.id === 'imperial', '宗师配好火——满词缀带铭纹，工评91出极品');
+assert(mockWindow._forgingFireBonus === null, '极品炉也把火消费掉');
+// 没试火走随机老路（与第 10 节同数）
+var qFire3 = withRandom(0.5, function () { return F.rollQuality(20, 1, false); });
+assert(qFire3.score === 21 && qFire3.quality.id === 'poor', '没试火照旧手艺±随机（旧账同数）');
+// 接线：同一座火苗，各炉各账
+var qteSrc = fs.readFileSync(_ROOT + '/js/crafting/fire-qte.js', 'utf8');
+assert(qteSrc.includes('openForgeFireQTE') && qteSrc.includes('_forgingFireBonus'), '锻火试炼挂在同一座火苗上（得分各炉各账）');
+assert(qteSrc.includes('openFireQTE') && qteSrc.includes('_alchemyFireBonus'), '炼丹的老口子原样还在');
+var cuiSrc = fs.readFileSync(_ROOT + '/js/crafting/compound-ui.js', 'utf8');
+assert(cuiSrc.includes('_cfFire') && cuiSrc.includes('火候试炼（亲可控火，定品相）'), '炼器面板有火候试炼按钮');
+
 console.log('\n=========================================');
 console.log('forging-compound v19.5: ' + pass + ' passed, ' + fail + ' failed');
 console.log('=========================================');

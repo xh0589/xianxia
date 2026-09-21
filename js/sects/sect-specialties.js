@@ -558,6 +558,18 @@ function useSectSpecialty(sectName) {
         return;
     }
     
+    // 身份层（批二）：precheck 先于冷却检查——代价不足直接打回，不烧冷却
+    if (typeof specialty.precheck === 'function') {
+        var blocked = null;
+        try { blocked = specialty.precheck(); } catch (e) { blocked = null; }
+        if (blocked) {
+            if (typeof window.showMessage === 'function') {
+                window.showMessage('✋ ' + specialty.name + '：' + blocked, 'warning');
+            } else { alert('✋ ' + specialty.name + '：' + blocked); }
+            return;
+        }
+    }
+
     // 冷却统一使用游戏时间，且随当前存档持久化。
     var lastUse = Number(sectSpecialtyState.lastUseGameMinute[sectName]);
     var cooldownMinutes = specialty.cooldown * 60;
@@ -565,7 +577,7 @@ function useSectSpecialty(sectName) {
     if (Number.isFinite(lastUse) && now - lastUse < cooldownMinutes) {
         var remaining = Math.ceil((cooldownMinutes - (now - lastUse)) / 60);
         if (typeof window.showMessage === 'function') {
-            window.showMessage('功能冷却中，剩余 ' + remaining + ' 小时', 'warning');
+            window.showMessage('这道神通刚施展过，气力还没缓回来——约 ' + remaining + ' 小时后再来', 'warning');
         }
         return;
     }

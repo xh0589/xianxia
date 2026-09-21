@@ -15,14 +15,16 @@ var WORLD_EVENTS = [
         id: 'beast_tide', name: '兽潮来袭', icon: '🐾',
         desc: '大量妖兽从深山涌出！',
         interval: 20, chance: 0.4, duration: 3,
-        modifiers: { encounterRate: 1.8, combatExp: 1.3 },
+        // 第一百一十一波：combatExp:1.3 摘牌——全库零消费者的死修正，牌面不挂空账
+        modifiers: { encounterRate: 1.8 },
         participate: { label: '清剿兽潮', action: 'fight_beast_tide' }
     },
     {
         id: 'sect_war', name: '正邪大战', icon: '⚔️',
         desc: '正道联盟与魔教爆发大规模冲突！',
         interval: 30, chance: 0.5, duration: 5,
-        modifiers: { factionConflict: 1.5 },
+        // 第一百一十一波：factionConflict:1.5 摘牌——同为全库零消费者的死修正
+        modifiers: {},
         participate: { label: '参战', action: 'join_sect_war' }
     },
     {
@@ -82,10 +84,9 @@ function getActiveWorldEventModifiers() {
         cultivation: 1,
         exploreLoot: 1,
         encounterRate: 1,
-        combatExp: 1,
         chestChance: 0,
-        factionConflict: 1,
         qiRestore: 0
+        // 第一百一十一波：combatExp/factionConflict 两本死账摘除（全库零消费者，牌面也不挂）
     };
     for (var id in activeWorldEvents) {
         var def = getWorldEventDef(id);
@@ -95,9 +96,7 @@ function getActiveWorldEventModifiers() {
         if (m.cultivation != null) mods.cultivation *= m.cultivation;
         if (m.exploreLoot != null) mods.exploreLoot *= m.exploreLoot;
         if (m.encounterRate != null) mods.encounterRate *= m.encounterRate;
-        if (m.combatExp != null) mods.combatExp *= m.combatExp;
         if (m.chestChance != null) mods.chestChance = Math.max(mods.chestChance, m.chestChance);
-        if (m.factionConflict != null) mods.factionConflict *= m.factionConflict;
         if (m.qiRestore != null) mods.qiRestore += m.qiRestore;
     }
     return mods;
@@ -128,7 +127,7 @@ function expireWorldEvents(gameDay) {
                 }
             } catch (eEnd) {}
         }
-        if (def && window.showMessage) {
+        if (def && window.showMessage && !window._isInLongRetreat) {
             window.showMessage(def.icon + ' 「' + def.name + '」已结束', 'info');
         }
     });
@@ -142,14 +141,17 @@ function activateWorldEvent(ev, gameDay) {
         endDay: gameDay + ev.duration,
         _today: gameDay
     };
-    if (window.showMessage) {
+    if (window.showMessage && !window._isInLongRetreat) {
+        // 第一百一十一波：死关里不播报——九十日闭关曾被世界事件的开始/结束消息刷屏（world-loop 同款口径）
         window.showMessage(ev.icon + ' ' + ev.name + '！持续 ' + ev.duration + ' 天。' + (ev.desc || ''), 'success');
     }
     if (ev.id === 'spirit_tide' && typeof window.restoreWorldQi === 'function') {
         window.restoreWorldQi(ev.modifiers && ev.modifiers.qiRestore || 10);
     }
     if (ev.id === 'sect_war' && typeof window.triggerFactionConflict === 'function') {
-        try { window.triggerFactionConflict(); } catch (e) {}
+        // 第一百零九波：此前无参调用——triggerFactionConflict 要两个真势力 id，
+        // FACTIONS[undefined] 直接 return null，正邪大战的势力冲突联动从没发生过
+        try { window.triggerFactionConflict('righteous_alliance', 'demon_cult'); } catch (e) {}
     }
     // v20.0：触发兽潮世界事件时，按玩家境界调 BeastTide.triggerTide
     if (ev.id === 'beast_tide' && window.BeastTide && typeof window.BeastTide.triggerTide === 'function') {
@@ -209,7 +211,9 @@ function tryRegisterWorldEvent(ev, gameDay) {
 function checkWorldEvents(gameDay) {
     expireWorldEvents(gameDay);
     if (typeof expireCityTempModifiers === 'function') expireCityTempModifiers(gameDay);
-    if (gameDay % 10 !== 0) return;
+    // 第一百一十一波：拆掉 %10 总闸——它让 interval 15/25 的事件实际要 30/50 天才轮到一次
+    //（day%10===0 且 day%15===0 ⇒ day%30），触发频率只有名义的一半，排期账名不副实。
+    // 现在各事件按自己的 interval 走。
     for (var i = 0; i < WORLD_EVENTS.length; i++) {
         var ev = WORLD_EVENTS[i];
         if (isWorldEventActive(ev.id)) continue;
@@ -233,6 +237,15 @@ function participateWorldEvent(eventId) {
     var action = def.participate.action;
 
     if (action === 'seek_treasure') {
+        // 第一百零九波 · 一份账：天降异宝一场只寻一次——此前按钮无状态，
+        // 5 天窗口里每次只花 60 分钟就能再赌一件筑基丹/陨铁，可以刷上百次
+        var _ta = activeWorldEvents[eventId];
+        if (_ta && _ta.sought) {
+            if (window.showMessage) window.showMessage('✨ 这道金光你已寻过了——空谷余音也散了，等下一场异宝降世吧。', 'info');
+            return false;
+        }
+        if (_ta) _ta.sought = true;
+        try { saveWorldEvents(); } catch (eSave) {}
         // 寻宝：高概率给物品；v20.0 灵狐加成
         var loot = ['spec_transfer_stone', 'mat_meteorite', 'pill_foundation', 'mat_purple_gold', 'wpn_dark_iron_sword'];
         var chance = 0.7;
@@ -282,12 +295,14 @@ function participateWorldEvent(eventId) {
         var side = Math.random() < 0.5 ? '正道' : '魔教';
         if (window.showMessage) window.showMessage('⚔️ 你加入' + side + '一方参战！', 'warning');
         if (typeof window.changeFactionReputation === 'function') {
+            // 第一百零九波：id 用势力账上的真名（righteous_alliance/demon_cult）——
+            // 此前传的 'righteous'/'demon' 查无此势力，参战声望奖励静默蒸发
             if (side === '正道') {
-                window.changeFactionReputation('righteous', 50);
-                window.changeFactionReputation('demon', -30);
+                window.changeFactionReputation('righteous_alliance', 50);
+                window.changeFactionReputation('demon_cult', -30);
             } else {
-                window.changeFactionReputation('demon', 50);
-                window.changeFactionReputation('righteous', -30);
+                window.changeFactionReputation('demon_cult', 50);
+                window.changeFactionReputation('righteous_alliance', -30);
             }
         }
         if (window.currentCharData) {
@@ -389,8 +404,24 @@ function saveWorldEvents() {
 function loadWorldEvents() {
     try {
         var s = localStorage.getItem('xianxia_world_events');
-        if (s) activeWorldEvents = JSON.parse(s);
+        if (s) {
+            var parsed = JSON.parse(s) || {};
+            // 第一百一十一波：就地清键再灌——旧版整体重赋值让 window.activeWorldEvents 变陈旧指针，
+            // 读档后外部读到的还是读档前那份
+            Object.keys(activeWorldEvents).forEach(function (k) { delete activeWorldEvents[k]; });
+            Object.keys(parsed).forEach(function (k) { activeWorldEvents[k] = parsed[k]; });
+        }
     } catch (e) {}
+}
+
+// 第一百一十一波 · 新局清账：此前 resetWorldForNewGame 只清 localStorage 键，
+// 内存里的 activeWorldEvents/cityTempModifiers 没有 reset 入口——
+// 旧档的「灵气潮汐×2 修炼」等修正原样套在新角色身上，直到 endDay 追平才散。
+function resetWorldEventsState() {
+    Object.keys(activeWorldEvents).forEach(function (k) { delete activeWorldEvents[k]; });
+    Object.keys(cityTempModifiers).forEach(function (k) { delete cityTempModifiers[k]; });
+    try { saveWorldEvents(); } catch (e) {}
+    try { saveCityTempModifiers(); } catch (e2) {}
 }
 
 // 时间系统集成：EventBus 是唯一新式边界，不再覆盖 timeSystem.onNewDay。
@@ -433,35 +464,66 @@ function getGameDaySafe() {
 function setCityTempModifier(cityName, mods) {
     if (!cityName || !mods) return;
     var day = getGameDaySafe();
-    var cur = cityTempModifiers[cityName] || {};
-    var days = mods.days || 3;
-    cur.endDay = day + days;
-    if (mods.shopPrice != null) cur.shopPrice = mods.shopPrice;
-    if (mods.encounterRate != null) cur.encounterRate = mods.encounterRate;
-    if (mods.travelRisk != null) cur.travelRisk = mods.travelRisk;
-    if (mods.security != null) cur.security = mods.security;
-    if (mods.flag) {
-        cur.flags = cur.flags || [];
-        if (cur.flags.indexOf(mods.flag) < 0) cur.flags.push(mods.flag);
-    }
-    cityTempModifiers[cityName] = cur;
+    // 第一百一十一波：按 flag 分槽、各带各的 endDay——旧版单槽互踩：
+    // 兽潮的 scar 与坊市的 boom 叠在同城时 endDay 互相覆盖、到期整槽删除，
+    // 先设的残留被后设的提前带走或延寿。
+    var city = cityTempModifiers[cityName];
+    if (!city || !city.byFlag) city = { byFlag: {} };
+    city.byFlag[mods.flag || 'misc'] = {
+        endDay: day + (mods.days || 3),
+        shopPrice: mods.shopPrice != null ? mods.shopPrice : null,
+        encounterRate: mods.encounterRate != null ? mods.encounterRate : null,
+        travelRisk: mods.travelRisk != null ? mods.travelRisk : null,
+        security: mods.security != null ? mods.security : null
+    };
+    cityTempModifiers[cityName] = city;
     saveCityTempModifiers();
 }
 function expireCityTempModifiers(gameDay) {
     gameDay = gameDay != null ? gameDay : getGameDaySafe();
     var changed = false;
     for (var c in cityTempModifiers) {
-        if (cityTempModifiers[c].endDay != null && gameDay >= cityTempModifiers[c].endDay) {
+        var city = cityTempModifiers[c];
+        // 旧档单槽格式迁移：到期整槽删（与旧行为一致）
+        if (!city || !city.byFlag) {
+            if (city && city.endDay != null && gameDay >= city.endDay) {
+                delete cityTempModifiers[c];
+                changed = true;
+                if (window.showMessage && !window._isInLongRetreat) window.showMessage('【' + c + '】临时事态已平息', 'info');
+            }
+            continue;
+        }
+        var anyLeft = false;
+        for (var f in city.byFlag) {
+            var ent = city.byFlag[f];
+            if (ent && ent.endDay != null && gameDay >= ent.endDay) { delete city.byFlag[f]; changed = true; }
+            else anyLeft = true;
+        }
+        if (!anyLeft) {
             delete cityTempModifiers[c];
             changed = true;
-            if (window.showMessage) window.showMessage('【' + c + '】临时事态已平息', 'info');
+            if (window.showMessage && !window._isInLongRetreat) window.showMessage('【' + c + '】临时事态已平息', 'info');
         }
     }
     if (changed) saveCityTempModifiers();
 }
 function getCityTempModifier(cityName) {
     expireCityTempModifiers();
-    return cityTempModifiers[cityName] || null;
+    var city = cityTempModifiers[cityName];
+    if (!city) return null;
+    if (!city.byFlag) return city;   // 旧格式照旧平铺返回
+    // 第一百一十一波：分槽 → 合并成平铺视图给读者（价乘、险乘、安全取最紧、遭遇取最高）
+    var out = null;
+    for (var f in city.byFlag) {
+        var e = city.byFlag[f];
+        if (!e) continue;
+        if (!out) out = {};
+        if (e.shopPrice != null) out.shopPrice = (out.shopPrice != null ? out.shopPrice * e.shopPrice : e.shopPrice);
+        if (e.encounterRate != null) out.encounterRate = (out.encounterRate != null ? Math.max(out.encounterRate, e.encounterRate) : e.encounterRate);
+        if (e.travelRisk != null) out.travelRisk = (out.travelRisk != null ? out.travelRisk * e.travelRisk : e.travelRisk);
+        if (e.security != null) out.security = (out.security != null ? Math.min(out.security, e.security) : e.security);
+    }
+    return out;
 }
 function getCombinedShopPriceMultiplier(cityName, itemId) {
     var m = 1;
@@ -529,6 +591,18 @@ if (typeof window !== 'undefined') {
     window.expireWorldEvents = expireWorldEvents;
     window.saveWorldEvents = saveWorldEvents;
     window.loadWorldEvents = loadWorldEvents;
+    window.resetWorldEventsState = resetWorldEventsState;   // 第一百一十波·NEW-99 家族：新局清账入口
+    // 第一百一十一波：game-state 存档桥守卫的这颗名字此前全库无定义（死引用），
+    // collect 只能退化读 localStorage 镜像——现在从内存真源直出，存的就是活账
+    window.exportWorldEventsState = function () {
+        try {
+            return {
+                worldEvents: JSON.parse(JSON.stringify(activeWorldEvents)),
+                cityTemp: JSON.parse(JSON.stringify(cityTempModifiers))
+            };
+        } catch (e) { return null; }
+    };
+    window.loadCityTempModifiers = loadCityTempModifiers;   // 第一百零九波：读档回灌要用（此前只在模块加载时跑一次）
     window.cityTempModifiers = cityTempModifiers;
     window.setCityTempModifier = setCityTempModifier;
     window.getCityTempModifier = getCityTempModifier;

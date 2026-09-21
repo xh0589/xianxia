@@ -42,6 +42,8 @@ const BUILDING_TYPES = {
     CHARITY_HALL: { id: 'charity_hall', name: '善堂', icon: '🍚', color: 'text-green-300', category: 'social' },
     ODDITY_MUSEUM: { id: 'oddity_museum', name: '异闻馆', icon: '🦉', color: 'text-purple-300', category: 'social' },
     GARDEN_VILLA: { id: 'garden_villa', name: '园林别业', icon: '🎋', color: 'text-emerald-300', category: 'social' },
+    // v20.90 勾栏瓦舍：城中卖艺场——登台抚琴说书赚打赏，音律在此长进
+    GOU_LAN: { id: 'goulan_washe', name: '勾栏瓦舍', icon: '🎭', color: 'text-pink-300', category: 'social' },
     ARENA_STAGE: { id: 'arena_stage', name: '斗法台', icon: '🥊', color: 'text-red-300', category: 'combat' },
     OBSERVATORY: { id: 'observatory', name: '观星台', icon: '🌌', color: 'text-indigo-300', category: 'cultivation' },
     STELE_FOREST: { id: 'stele_forest', name: '碑林', icon: '🪨', color: 'text-stone-300', category: 'cultivation' },
@@ -57,11 +59,13 @@ const BUILDING_TYPES = {
 
 
 // ============ 城市数据（v6.0 增强版 - 16城市差异化） ============
+// v21.4 千城千面：19 座人间城的建筑清单按城市性格重裁——衙门只在有官府的地方开，
+// 红尘买卖不在仙山佛窟摆摊，海底不设消防司。四座位面城本就是精裁的，不动。
 const cityData = {
     '帝都·长安': {
         id: 'chang_an',
         region: '中州',
-        buildings: ['shop', 'weapon_shop', 'armor_shop', 'medicine_shop', 'talisman_shop', 'art_shop', 'beast_shop', 'alchemy', 'forging', 'enchant_shop', 'quest', 'inn', 'training', 'teleport', 'tavern', 'temple', 'tea_house', 'library', 'arena', 'guild_hall', 'cultivation', 'spring', 'gathering', 'mining', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['shop', 'weapon_shop', 'armor_shop', 'medicine_shop', 'talisman_shop', 'art_shop', 'beast_shop', 'alchemy', 'forging', 'enchant_shop', 'quest', 'inn', 'training', 'teleport', 'tavern', 'temple', 'tea_house', 'library', 'arena', 'guild_hall', 'cultivation', 'spring', 'gathering', 'mining', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'goulan_washe', 'works_bureau', 'salt_iron_office'],
         desc: '九州帝都，天下繁华汇聚。皇宫金碧辉煌，天牢深不可测。',
         accessLevel: 'all',
         specialFeatures: ['皇宫', '天牢', '皇家拍卖行'],
@@ -74,7 +78,7 @@ const cityData = {
     '洛水城': {
         id: 'luoshui',
         region: '中州',
-        buildings: ['shop', 'art_shop', 'tea_house', 'library', 'inn', 'tavern', 'quest', 'training', 'teleport', 'medicine_shop', 'temple', 'gathering', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['shop', 'art_shop', 'tea_house', 'library', 'inn', 'tavern', 'quest', 'training', 'teleport', 'medicine_shop', 'temple', 'gathering', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'goulan_washe', 'works_bureau', 'salt_iron_office'],
         desc: '洛水之畔的商贸重镇，画舫笙歌，文人雅士汇聚之地。',
         accessLevel: 'all',
         specialFeatures: ['画舫', '水榭', '诗会'],
@@ -87,7 +91,7 @@ const cityData = {
     '太虚山': {
         id: 'taixu_mountain',
         region: '中州',
-        buildings: ['cultivation', 'library', 'temple', 'alchemy', 'spring', 'training', 'teleport', 'quest', 'medicine_shop', 'talisman_shop', 'art_shop', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['cultivation', 'library', 'temple', 'alchemy', 'spring', 'training', 'teleport', 'quest', 'medicine_shop', 'talisman_shop', 'art_shop', 'medical_clinic', 'charity_hall', 'observatory', 'stele_forest', 'oddity_museum'],
         desc: '仙山福地，传闻有上古仙人遗迹。观星台可观测天象。',
         accessLevel: 'all',
         specialFeatures: ['观星台', '悟道碑', '试炼塔'],
@@ -100,7 +104,7 @@ const cityData = {
     '青木城': {
         id: 'qingmu_city',
         region: '东荒',
-        buildings: ['shop', 'medicine_shop', 'alchemy', 'gathering', 'quest', 'inn', 'teleport', 'training', 'tea_house', 'talisman_shop', 'library', 'beast_shop', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['shop', 'medicine_shop', 'alchemy', 'gathering', 'quest', 'inn', 'teleport', 'training', 'tea_house', 'talisman_shop', 'library', 'beast_shop', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'works_bureau', 'salt_iron_office'],
         desc: '东荒门户，木灵之气浓郁。灵药园中奇花异草遍地。',
         accessLevel: 'all',
         specialFeatures: ['灵药园', '百草堂', '木灵塔'],
@@ -113,7 +117,7 @@ const cityData = {
     '蓬莱仙岛': {
         id: 'penglai_island',
         region: '东荒',
-        buildings: ['cultivation', 'spring', 'alchemy', 'temple', 'teleport', 'library', 'medicine_shop', 'quest', 'talisman_shop', 'art_shop', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['cultivation', 'spring', 'alchemy', 'temple', 'teleport', 'library', 'medicine_shop', 'quest', 'talisman_shop', 'art_shop', 'medical_clinic', 'observatory', 'stele_forest', 'oddity_museum'],
         desc: '海上仙山，云雾缭绕，传闻有仙人在此渡劫飞升。',
         accessLevel: '筑基以上',
         specialFeatures: ['渡劫台', '仙雾阁', '灵龟池'],
@@ -126,7 +130,7 @@ const cityData = {
     '东海龙宫': {
         id: 'dragon_palace',
         region: '东荒',
-        buildings: ['shop', 'forging', 'cultivation', 'training', 'weapon_shop', 'armor_shop', 'alchemy', 'spring', 'teleport', 'quest', 'medicine_shop', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['shop', 'forging', 'cultivation', 'training', 'weapon_shop', 'armor_shop', 'alchemy', 'spring', 'teleport', 'quest', 'medicine_shop', 'bounty_hall', 'medical_clinic', 'auction_house'],
         desc: '深海龙宫，珊瑚为柱，明珠为灯，珍宝无数。',
         accessLevel: '金丹以上',
         specialFeatures: ['龙宫宝库', '潮汐殿', '龙魂锻体'],
@@ -139,7 +143,7 @@ const cityData = {
     '炎城': {
         id: 'yan_city',
         region: '南疆',
-        buildings: ['shop', 'forging', 'weapon_shop', 'mining', 'enchant_shop', 'training', 'quest', 'tavern', 'inn', 'teleport', 'armor_shop', 'arena', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['shop', 'forging', 'weapon_shop', 'mining', 'enchant_shop', 'training', 'quest', 'tavern', 'inn', 'teleport', 'armor_shop', 'arena', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'works_bureau', 'salt_iron_office'],
         desc: '建于火山之巅的钢铁之城，熔岩为河，火焰为灯。',
         accessLevel: 'all',
         specialFeatures: ['火山洞穴', '熔岩池', '炎帝像'],
@@ -152,7 +156,7 @@ const cityData = {
     '万毒谷': {
         id: 'poison_valley',
         region: '南疆',
-        buildings: ['alchemy', 'medicine_shop', 'market', 'cultivation', 'temple', 'quest', 'talisman_shop', 'gathering', 'inn', 'training', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['alchemy', 'medicine_shop', 'market', 'cultivation', 'temple', 'quest', 'talisman_shop', 'gathering', 'inn', 'training', 'bounty_hall', 'medical_clinic', 'arena_stage', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe'],
         desc: '毒瘴弥漫的神秘山谷，万毒门的宗门所在地。',
         accessLevel: '炼气三层以上',
         specialFeatures: ['毒王洞', '百草园', '毒经阁'],
@@ -162,10 +166,24 @@ const cityData = {
         priceModifier: { buy: 1.0, sell: 1.0 },
         bonus: { poison: 1.4, alchemy: 1.15 }
     },
+    // v20.94 幽灵城开门①：regions 与路线表里挂了三年的名字，cityData 一直没有户口——点「凤凰巢」只得「找不到城市」
+    '凤凰巢': {
+        id: 'phoenix_nest',
+        region: '南疆',
+        buildings: ['cultivation', 'spring', 'training', 'temple', 'quest', 'medicine_shop', 'gathering', 'inn', 'talisman_shop', 'fire_department', 'bounty_hall', 'medical_clinic', 'arena_stage', 'oddity_museum', 'pawn_shop', 'auction_house'],
+        desc: '南疆火山口上的凤裔栖地。赤焰不息，熔火成潭，凤鸣一声十里可闻。',
+        accessLevel: '筑基以上',
+        specialFeatures: ['凤栖台', '熔火渊', '赤羽市'],
+        specialties: ['凤尾羽', '熔火晶', '赤朱果'],
+        specialNPCs: ['凤裔长老·赤羽', '守火修士·烬岩'],
+        events: ['凤鸣朝旦', '熔火潮'],
+        priceModifier: { buy: 1.2, sell: 0.9 },
+        bonus: { cultivation: 1.2, fire: 1.5 }
+    },
     '金城': {
         id: 'jin_city',
         region: '西漠',
-        buildings: ['shop', 'mining', 'weapon_shop', 'market', 'inn', 'temple', 'teleport', 'forging', 'quest', 'armor_shop', 'guild_hall', 'tavern', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['shop', 'mining', 'weapon_shop', 'market', 'inn', 'temple', 'teleport', 'forging', 'quest', 'armor_shop', 'guild_hall', 'tavern', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'works_bureau', 'salt_iron_office'],
         desc: '沙漠中的黄金之城，以灵石矿脉闻名于世。',
         accessLevel: 'all',
         specialFeatures: ['黄金宫', '矿脉', '佛窟'],
@@ -178,7 +196,7 @@ const cityData = {
     '大漠孤城': {
         id: 'desert_fort',
         region: '西漠',
-        buildings: ['quest', 'training', 'inn', 'tavern', 'market', 'weapon_shop', 'mining', 'shop', 'arena', 'teleport', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['quest', 'training', 'inn', 'tavern', 'market', 'weapon_shop', 'mining', 'shop', 'arena', 'teleport', 'household_registry', 'fire_department', 'bounty_hall', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'works_bureau', 'salt_iron_office'],
         desc: '大漠中的军事要塞，抵御妖兽的前线阵地。',
         accessLevel: 'all',
         specialFeatures: ['地下集市', '烽火台', '遗迹入口'],
@@ -188,10 +206,24 @@ const cityData = {
         priceModifier: { buy: 1.1, sell: 0.9 },
         bonus: { combat: 1.15, loot: 1.1 }
     },
+    // v20.94 幽灵城开门②：佛国遗址——黄沙半埋的古佛国
+    '佛国遗址': {
+        id: 'buddha_ruins',
+        region: '西漠',
+        buildings: ['temple', 'library', 'cultivation', 'quest', 'medicine_shop', 'inn', 'gathering', 'training', 'bounty_hall', 'exorcist_bureau', 'medical_clinic', 'charity_hall', 'observatory', 'stele_forest', 'oddity_museum', 'black_market'],
+        desc: '黄沙半埋的古佛国。塔倾塔倒，风声里仍似有诵经声，夜半偶见佛光。',
+        accessLevel: '炼气五层以上',
+        specialFeatures: ['大塔遗迹', '经冢', '菩提残林'],
+        specialties: ['佛国舍利', '菩提子', '贝叶残经'],
+        specialNPCs: ['守墟老僧·燃灯', '行脚僧·一笠'],
+        events: ['佛光夜现', '地底诵经'],
+        priceModifier: { buy: 1.1, sell: 0.9 },
+        bonus: { cultivation: 1.15, enlightenment: 1.3 }
+    },
     '冰原城': {
         id: 'ice_city',
         region: '北冥',
-        buildings: ['shop', 'forging', 'training', 'inn', 'teleport', 'weapon_shop', 'armor_shop', 'spring', 'quest', 'medicine_shop', 'enchant_shop', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['shop', 'forging', 'training', 'inn', 'teleport', 'weapon_shop', 'armor_shop', 'spring', 'quest', 'medicine_shop', 'enchant_shop', 'household_registry', 'fire_department', 'bounty_hall', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'works_bureau', 'salt_iron_office'],
         desc: '极寒之地的避难所，冰晶筑成的城池。',
         accessLevel: 'all',
         specialFeatures: ['冰晶塔', '寒冰洞', '冰魄锻炉'],
@@ -204,7 +236,7 @@ const cityData = {
     '极寒之地': {
         id: 'extreme_cold',
         region: '北冥',
-        buildings: ['cultivation', 'spring', 'training', 'library', 'alchemy', 'temple', 'quest', 'medicine_shop', 'talisman_shop', 'art_shop', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['cultivation', 'spring', 'training', 'library', 'alchemy', 'temple', 'quest', 'medicine_shop', 'talisman_shop', 'art_shop', 'fire_department', 'bounty_hall', 'granary', 'medical_clinic', 'pawn_shop'],
         desc: '冰封万里的修炼圣地，天地灵气在此凝固。',
         accessLevel: '筑基以上',
         specialFeatures: ['冰宫', '寒潭', '冰灵淬体'],
@@ -214,10 +246,24 @@ const cityData = {
         priceModifier: { buy: 1.2, sell: 0.8 },
         bonus: { cultivation: 1.2, ice: 1.4 }
     },
+    // v20.94 幽灵城开门③：万剑宗——北境剑修祖地
+    '万剑宗': {
+        id: 'ten_thousand_swords',
+        region: '北冥',
+        buildings: ['weapon_shop', 'forging', 'training', 'arena', 'library', 'cultivation', 'quest', 'inn', 'teleport', 'medical_clinic', 'arena_stage', 'stele_forest', 'pawn_shop', 'auction_house'],
+        desc: '北境剑修祖地，万剑齐立如林。剑鸣起时，满山皆应，风雪避锋。',
+        accessLevel: '炼气七层以上',
+        specialFeatures: ['万剑崖', '剑冢', '试剑台'],
+        specialties: ['剑冢铁英', '万剑诀残页', '寒锋石'],
+        specialNPCs: ['守冢人·断剑老人', '万剑宗外务执事·铁面'],
+        events: ['万剑齐鸣', '剑冢开启'],
+        priceModifier: { buy: 1.15, sell: 0.9 },
+        bonus: { forging: 1.2, metal: 1.4 }
+    },
     '剑阁': {
         id: 'sword_pavilion',
         region: '蜀地',
-        buildings: ['training', 'forging', 'weapon_shop', 'art_shop', 'cultivation', 'quest', 'shop', 'arena', 'library', 'enchant_shop', 'teleport', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['training', 'forging', 'weapon_shop', 'art_shop', 'cultivation', 'quest', 'shop', 'arena', 'library', 'enchant_shop', 'teleport', 'bounty_hall', 'granary', 'medical_clinic', 'money_house', 'arena_stage', 'pawn_shop', 'auction_house', 'black_market'],
         desc: '剑修圣地，天下名剑尽藏于此。剑气纵横三万里。',
         accessLevel: 'all',
         specialFeatures: ['剑冢', '藏剑楼', '剑意碑林'],
@@ -230,7 +276,7 @@ const cityData = {
     '青城山': {
         id: 'qingcheng_mountain',
         region: '蜀地',
-        buildings: ['temple', 'cultivation', 'alchemy', 'spring', 'teleport', 'talisman_shop', 'library', 'medicine_shop', 'quest', 'tea_house', 'art_shop', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['temple', 'cultivation', 'alchemy', 'spring', 'teleport', 'talisman_shop', 'library', 'medicine_shop', 'quest', 'tea_house', 'art_shop', 'medical_clinic', 'charity_hall', 'observatory', 'stele_forest', 'oddity_museum'],
         desc: '道教名山，清静修道之所。天然阵法护佑山门。',
         accessLevel: 'all',
         specialFeatures: ['天然阵法', '道观', '天师府'],
@@ -243,7 +289,7 @@ const cityData = {
     '碧落仙宫': {
         id: 'bilo_palace',
         region: '东南海域',
-        buildings: ['cultivation', 'teleport', 'temple', 'spring', 'alchemy', 'library', 'medicine_shop', 'art_shop', 'talisman_shop', 'quest', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['cultivation', 'teleport', 'temple', 'spring', 'alchemy', 'library', 'medicine_shop', 'art_shop', 'talisman_shop', 'quest', 'medical_clinic', 'observatory', 'stele_forest', 'oddity_museum', 'auction_house'],
         desc: '海中仙宫，神秘莫测。碧波万顷中的修行圣地。',
         accessLevel: '金丹以上',
         specialFeatures: ['仙宫试炼', '碧波潭', '珊瑚林'],
@@ -256,7 +302,7 @@ const cityData = {
     '鲛人镇': {
         id: 'mermaid_town',
         region: '东南海域',
-        buildings: ['shop', 'inn', 'quest', 'tavern', 'teleport', 'medicine_shop', 'tea_house', 'gathering', 'beast_shop', 'market', 'training', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'works_bureau', 'salt_iron_office'],
+        buildings: ['shop', 'inn', 'quest', 'tavern', 'teleport', 'medicine_shop', 'tea_house', 'gathering', 'beast_shop', 'market', 'training', 'household_registry', 'fire_department', 'bounty_hall', 'granary', 'exorcist_bureau', 'medical_clinic', 'money_house', 'escort_office', 'charity_hall', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'works_bureau', 'salt_iron_office'],
         desc: '鲛人与人类共居的港口小镇，珍珠闻名遐迩。',
         accessLevel: 'all',
         specialFeatures: ['珍珠市场', '渔村码头', '灯塔'],
@@ -391,8 +437,19 @@ function enterCity(cityName) {
         try { window.EventBus.emit('location:visited', { locationId: cityName, locationName: cityName }); } catch (e) {}
     }
     saveLocationData();
+    // 第九十五波·NEW-38：抵达即解锁该城传送阵（解开「解锁需传送、传送需解锁」的死锁）
+    try { if (window.travelSystem && typeof window.travelSystem.unlockTeleport === 'function') window.travelSystem.unlockTeleport(normalizedName); } catch (eTp) {}
+    // 第一百零七波：同伴跟着你走——哪条路进的城都一样，人到齐才算到（此前只有 app.js 的老进城口同步）
+    try { if (window.partySystem && typeof window.partySystem.syncPartyLocationToPlayer === 'function') window.partySystem.syncPartyLocationToPlayer(cityName); } catch (eParty) {}
     
     showMessage(`来到了 ${cityName}：${city.desc}`, 'info');
+    // v25.0《灵气之尽》：枯脉城城景三段式叠加（读真实枯脉旗与档位，未枯城静默）
+    try {
+        if (typeof window.qiCityOverlay === 'function') {
+            var _qiOv = window.qiCityOverlay(cityName);
+            if (_qiOv) showMessage(_qiOv, 'info');
+        }
+    } catch (e) {}
     // v7.1 P0-2: 地点过渡描写
     if (typeof window.showLocationTransition === 'function') {
         try { window.showLocationTransition(cityName); } catch (e) {}
@@ -410,19 +467,26 @@ function enterCity(cityName) {
 }
 
 // ============ 检查访问要求 ============
+// v20.65 修：旧版只认「炼气 3层」这种空格分档——cityData 里实际写的是
+// 「筑基以上」「金丹以上」「炼气三层以上」，realmOrder.indexOf 拆不出来恒 -1，
+// 所有带「以上」的门槛城形同虚设（炼气一层也能进东海龙宫）。
+// 现在统一解析：境界名 + 可选中文/数字层数；「XX以上」按含 XX 本境算（与位面「元婴」口径一致）。
 function checkAccessRequirement(requirement, playerRealm, playerLayer) {
     if (requirement === 'all') return true;
-    
+
     const realmOrder = ['炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'];
-    const [realmName, layerStr] = requirement.split(' ');
-    const requiredLayer = layerStr ? parseInt(layerStr.replace('层', '')) : 1;
-    
-    const playerRealmIndex = realmOrder.indexOf(playerRealm);
-    const requiredRealmIndex = realmOrder.indexOf(realmName);
-    
+    var req = String(requirement || '').replace(/\s+/g, '');
+    var m = req.match(/^(炼气|筑基|金丹|元婴|化神|炼虚|合体|大乘|渡劫)(?:([一二三四五六七八九十\d]+)层)?/);
+    if (!m) return true;   // 认不出的门槛字样：放行，别把人锁死
+    var requiredRealmIndex = realmOrder.indexOf(m[1]);
+    var CN_LAYER = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 };
+    var requiredLayer = m[2] ? (CN_LAYER[m[2]] || parseInt(m[2], 10) || 1) : 1;
+
+    var playerRealmIndex = realmOrder.indexOf(playerRealm);
+    if (playerRealmIndex < 0) playerRealmIndex = 0;
     if (playerRealmIndex < requiredRealmIndex) return false;
-    if (playerRealmIndex === requiredRealmIndex && playerLayer < requiredLayer) return false;
-    
+    if (playerRealmIndex === requiredRealmIndex && (playerLayer || 1) < requiredLayer) return false;
+
     return true;
 }
 
@@ -542,6 +606,66 @@ function renderCityBuildings(cityName) {
                 buildingList.appendChild(featureEl);
             });
         }
+
+        // v21.5 城中人物：本城住着的具名人物列块，点「攀谈」直接对话（空城补人批）
+        if (typeof window.getCityResidentCards === 'function') {
+            var residentHtml = '';
+            try { residentHtml = window.getCityResidentCards(cityName) || ''; } catch (eRes) {}
+            if (residentHtml) {
+                const resEl = document.createElement('div');
+                resEl.className = 'mt-4 pt-3 border-t border-gray-700';
+                resEl.innerHTML = residentHtml;
+                buildingList.appendChild(resEl);
+            }
+        }
+
+        // 第六十八波·庙会：逢节日城里搭出庙会摊（非节日/模块没加载都静默，不占地方）
+        if (window.FestivalFair && typeof window.FestivalFair.panelHtml === 'function') {
+            var fairHtml = '';
+            try { fairHtml = window.FestivalFair.panelHtml(cityName) || ''; } catch (eFair) {}
+            if (fairHtml) {
+                const fairEl = document.createElement('div');
+                fairEl.className = 'mt-4 pt-3 border-t border-gray-700';
+                fairEl.innerHTML = fairHtml;
+                buildingList.appendChild(fairEl);
+            }
+        }
+
+        // 第七十波·街边摆摊：商埠城面板上支个摊口（仙山佛窟/模块没加载都静默）
+        if (window.StreetStall && typeof window.StreetStall.panelHtml === 'function') {
+            var stallHtml = '';
+            try { stallHtml = window.StreetStall.panelHtml(cityName) || ''; } catch (eStall) {}
+            if (stallHtml) {
+                const stallEl = document.createElement('div');
+                stallEl.className = 'mt-2';
+                stallEl.innerHTML = stallHtml;
+                buildingList.appendChild(stallEl);
+            }
+        }
+
+        // 第七十一波·赁屋落脚：有客栈的城面板上挂个家门口（仙山/模块没加载都静默）
+        if (window.CityLodging && typeof window.CityLodging.panelHtml === 'function') {
+            var lodgeHtml = '';
+            try { lodgeHtml = window.CityLodging.panelHtml(cityName) || ''; } catch (eLodge) {}
+            if (lodgeHtml) {
+                const lodgeEl = document.createElement('div');
+                lodgeEl.className = 'mt-2';
+                lodgeEl.innerHTML = lodgeHtml;
+                buildingList.appendChild(lodgeEl);
+            }
+        }
+
+        // 第七十二波·城里营生：有铺面的城面板上挂个招工口（差事跟着建筑走，仙山静默）
+        if (window.CityJobs && typeof window.CityJobs.panelHtml === 'function') {
+            var jobsHtml = '';
+            try { jobsHtml = window.CityJobs.panelHtml(cityName) || ''; } catch (eJobs) {}
+            if (jobsHtml) {
+                const jobsEl = document.createElement('div');
+                jobsEl.className = 'mt-2';
+                jobsEl.innerHTML = jobsHtml;
+                buildingList.appendChild(jobsEl);
+            }
+        }
     }
     
     // 底部操作
@@ -591,9 +715,10 @@ function createBuildingElement(buildingId, buildingType) {
     // 建筑没有“现实时间玩法冷却”；短暂防双击只在 useBuilding 内处理。
     const isOnCooldown = false;
 
-    // v20.17：单一“使用”入口——情景设施的弹窗选择本就含全部后续内容；
+    // v20.17：单一入口——情景设施的弹窗选择本就含全部后续内容；
     // 旧的“深挖”副按钮白名单写死了三个从未注册进情境引擎的名字，从未显示过，予以移除。
-    var btnHtml = '<button onclick="useBuilding(\'' + buildingId + '\')" class="' + (isOnCooldown ? 'bg-gray-600' : 'bg-yellow-600 hover:bg-yellow-500') + ' text-white px-3 py-1 rounded text-sm ' + (isOnCooldown ? 'cursor-not-allowed' : '') + '">' + (isOnCooldown ? '冷却中' : '使用') + '</button>';
+    // v21.2：建筑是地方不是道具——按钮从「使用」改「前往」（玩家：物品才用使用，建筑该是前往）
+    var btnHtml = '<button onclick="useBuilding(\'' + buildingId + '\')" class="' + (isOnCooldown ? 'bg-gray-600' : 'bg-yellow-600 hover:bg-yellow-500') + ' text-white px-3 py-1 rounded text-sm ' + (isOnCooldown ? 'cursor-not-allowed' : '') + '">' + (isOnCooldown ? '冷却中' : '前往') + '</button>';
     
     div.innerHTML = `
         <div class="flex items-center justify-between">
@@ -660,9 +785,10 @@ function getBuildingDescription(buildingId) {
         'exorcist_bureau': '领缉邪符契，销案可换历练',
         'medical_clinic': '看诊治伤，挂号要付灵石',
         'works_bureau': '替官府出力，汗水中换历练',
+        'goulan_washe': '登台卖艺赚打赏，幕后练琴长音律',
         'salt_iron_office': '盘盐查铁，油水与风险并存'
     };
-    return descriptions[buildingId] || '点击使用';
+    return descriptions[buildingId] || '值得一去';
 }
 
 // ============ 使用建筑 ============
@@ -700,8 +826,10 @@ function useBuilding(buildingId) {
         markBuildingUsed(buildingId);
         return;
     }
-    if (buildingId === 'tea_house' && typeof window.visitTeaHouse === 'function') {
-        window.visitTeaHouse();
+    if (buildingId === 'tea_house' && (window.TeaHouseLeisure || typeof window.visitTeaHouse === 'function')) {
+        // 第六十四波：茶馆先开「消遣菜单」——听书照旧，另有粗茶/雅座/棋局/题诗/写生；菜单没加载就回落旧听书口
+        if (window.TeaHouseLeisure && typeof window.TeaHouseLeisure.open === 'function') window.TeaHouseLeisure.open();
+        else window.visitTeaHouse();
         markBuildingUsed(buildingId);
         return;
     }
@@ -734,6 +862,13 @@ function useBuilding(buildingId) {
     var scenarioFacilities = { household_registry: 'openHouseholdRegistry', fire_department: 'openFireDepartment', bounty_hall: 'openBountyHall' };
     if (scenarioFacilities[buildingId] && typeof window[scenarioFacilities[buildingId]] === 'function') {
         window[scenarioFacilities[buildingId]]();
+        markBuildingUsed(buildingId);
+        return;
+    }
+    // 第九十五波·NEW-30：拍卖行有真面板（寄售/竞拍/成交，内含通往剧情拍卖会的按钮），
+    // 若走下面的情景路由就被截成「参加拍卖会/拍密封匣」二选一——正门反被剧情入口挡住。真面板优先。
+    if (buildingId === 'auction_house' && typeof window.openAuctionHouse === 'function') {
+        window.openAuctionHouse();
         markBuildingUsed(buildingId);
         return;
     }
@@ -819,8 +954,14 @@ function triggerSpecialFeature(featureName) {
     };
     if (handlers[featureName]) {
         handlers[featureName]();
+    } else if (window.scenarioEngine && window.scenarioEngine.facilities && window.scenarioEngine.facilities[featureName]
+        && typeof window.openFacilityScenario === 'function') {
+        // v21.4 特色景致真剧本：24 处景致已注册进情境引擎（场景+选择+成本+成败分支），
+        // 剧本自带耗时结算，不再叠加外层 20 分钟
+        window.openFacilityScenario(featureName);
+        return;
     } else {
-        // 通用：消耗时间+小奖励
+        // 通用兜底（未注册景致）：真耗精力、每日一处、奖励削薄——不再白给历练
         genericFeatureVisit(featureName, city);
     }
     if (window.timeSystem && window.timeSystem.advanceTime) {
@@ -828,16 +969,21 @@ function triggerSpecialFeature(featureName) {
     }
 }
 
+// 第九十五波·NEW-08：硬停回执要看得见——弹窗优先，退化才用一闪而过的 toast
+function _hardStop(text) {
+    if (typeof window.showModal === 'function') window.showModal('⚠️ 办不成', '<p class="text-sm text-gray-300">' + text + '</p>');
+    else if (window.showMessage) window.showMessage(text, 'error');
+}
 function _payOrFail(spiritCost, goldCost) {
     spiritCost = spiritCost || 0;
     goldCost = goldCost || 0;
     if (!window.inventory || !window.inventory.currency) return false;
     if ((window.inventory.currency.spiritStones || 0) < spiritCost) {
-        if (window.showMessage) window.showMessage('灵石不足（需' + spiritCost + '）', 'error');
+        _hardStop('灵石不足（需 ' + spiritCost + '，手头 ' + (window.inventory.currency.spiritStones || 0) + '）');
         return false;
     }
     if ((window.inventory.currency.copper || 0) < goldCost) {
-        if (window.showMessage) window.showMessage('铜钱不足', 'error');
+        _hardStop('铜钱不足（需 ' + goldCost + '，手头 ' + (window.inventory.currency.copper || 0) + '）');
         return false;
     }
     window.inventory.currency.spiritStones -= spiritCost;
@@ -846,13 +992,36 @@ function _payOrFail(spiritCost, goldCost) {
     return true;
 }
 
+// v23.0 景点闸门助手：冷却中返回 false（弹话术）；收费成功后再 _gateMark 落冷却——
+// 先付后记，灵石不够不白吃冷却。旧世代景点「点一下白拿、可无限连点」的总闸。
+function _gate(key, days, busyMsg) {
+    if (!window.actionGate) return true;
+    if (window.actionGate.cooled(key, days)) {
+        if (window.showMessage) {
+            var l = window.actionGate.left(key, days);
+            window.showMessage(busyMsg || ('此处今日已无缘，' + (l > 1 ? l + '日后' : '明日') + '再来。'), 'info');
+        }
+        return false;
+    }
+    return true;
+}
+function _gateMark(key) { if (window.actionGate) window.actionGate.mark(key); }
+function _roll(min, max) { return window.actionGate ? window.actionGate.roll(min, max) : max; }
+function _spendRes(type, amount, label) { return window.actionGate ? window.actionGate.spend(type, amount, label) : true; }
+
 function enterPalace(city) {
     var rep = typeof window.getReputationLevelIndex === 'function' ? window.getReputationLevelIndex(city) : 0;
     var hasPermit = typeof window.hasUnlockedFeature === 'function'
         ? window.hasUnlockedFeature(city, 'special_permit')
         : !!(window.currentCharData && window.currentCharData.flags && (window.currentCharData.flags.special_permit || window.currentCharData.flags['permit_' + city]));
     if (rep < 2 && !hasPermit) {
-        if (window.showMessage) window.showMessage('皇宫守卫拦住你：需本城达到「受欢迎」或持有特殊许可', 'warning');
+        // 第九十五波·NEW-08：拒绝是硬停，此前一闪而过的 toast 被消息窗吃掉=玩家以为按钮坏了。改成弹窗。
+        if (typeof window.showModal === 'function') {
+            window.showModal('🏯 皇宫', '<p class="text-sm text-gray-300">禁军横戟拦住去路：「闲杂人等，不得近前。」</p>'
+                + '<p class="text-xs text-gray-500 mt-2">需在 ' + (city || '本城') + ' 声望达到「受欢迎」，或持有特殊许可，方可入内。</p>');
+        } else if (window.showMessage) {
+            window.showMessage('皇宫守卫拦住你：需本城达到「受欢迎」或持有特殊许可', 'warning');
+        }
         return false;
     }
     var modal = document.createElement('div');
@@ -867,8 +1036,15 @@ function enterPalace(city) {
     document.body.appendChild(modal);
 }
 window._palaceAudience = function(city) {
-    if (typeof window.addReputation === 'function') window.addReputation(city, 15);
-    if (window.showMessage) window.showMessage('你恭敬朝见，留下好印象', 'success');
+    // v23.0 朝见不是白拿的声望印钞机（旧版可无限连点+15）：循朝仪、具名帖、七日一期、结果随人
+    var key = 'palace_audience_' + (city || '');
+    if (!_gate(key, 7, '朝会自有其期——宫中执事拱手：「' + (window.actionGate ? window.actionGate.left(key, 7) : 1) + '日后再来递名帖吧。」')) return;
+    if (!_payOrFail(50, 0)) return; // 朝仪之资
+    _gateMark(key);
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '候朝');
+    var rep = _roll(10, 20);
+    if (typeof window.addReputation === 'function') window.addReputation(city, rep);
+    if (window.showMessage) window.showMessage('你依礼朝见，仪表得体，执事官留下了好印象。（声望+' + rep + '，朝仪50灵石）', 'success');
 };
 window._palaceGift = function(city) {
     if (!_payOrFail(200, 0)) return;
@@ -900,12 +1076,23 @@ function enterPrison(city) {
     document.body.appendChild(modal);
 }
 window._prisonVisit = function() {
-    if (window.showMessage) window.showMessage('犯人低语：城外山贼巢穴在「黑风寨」……', 'info');
+    // v23.0 探监一日一次：狱卒不是你的传声筒
+    if (!_gate('prison_visit', 1, '狱卒拦住你：「今儿已经探过了，明儿再来吧。」')) return;
+    _gateMark('prison_visit');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '探监');
+    // 第九十五波·NEW-08：探监换来的是一条能解锁黑风寨委托的实情——一闪而过的 toast 会漏看，改成留得住的弹窗
+    if (typeof window.showModal === 'function') {
+        window.showModal('⛓️ 探监', '<p class="text-sm text-gray-300">你贴近栅栏，塞过去半块干粮。犯人四下张望，压低了嗓子：</p>'
+            + '<p class="text-sm text-yellow-300 mt-2">「城外山贼的巢穴……在<b>黑风寨</b>。他们抢来的货，都堆在那儿。」</p>'
+            + '<p class="text-xs text-gray-500 mt-2">（记下了一条线索，或可寻到差事。）</p>');
+    } else if (window.showMessage) window.showMessage('犯人低语：城外山贼巢穴在「黑风寨」……', 'info');
     if (typeof window.setFlag === 'function') window.setFlag('know_bandit_den');
     if (typeof window.unlockBanditDenQuest === 'function') window.unlockBanditDenQuest();
 };
 window._prisonBribe = function(city) {
+    if (!_gate('prison_bribe', 1, '狱卒把袖子一拢：「今儿的买卖做完了，明儿请早。」')) return;
     if (!_payOrFail(100, 0)) return;
+    _gateMark('prison_bribe');
     if (typeof window.addItem === 'function') window.addItem('spec_key', 1);
     if (window.showMessage) window.showMessage('狱卒塞给你一把旧钥匙', 'success');
 };
@@ -926,15 +1113,31 @@ function openRoyalAuction(city) {
 }
 
 function enterHuafang(city) {
-    if (window.showMessage) window.showMessage('画舫之上丝竹声声，你结识文人，魅力与见闻有所增长', 'success');
+    // v23.3 画舫一日一场——席面是实打实订满的，缘由写在门房嘴里（制度有名有据，不弹「次数已用完」）
+    if (!_gate('huafang', 1, '画舫今日的席面已订满了——鸨母翻着花名册赔笑：「贵客改日请早，老身给您留个临窗的座。」')) return;
+    if (!_payOrFail(30, 0)) return; // 酒席之资
+    _gateMark('huafang');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '画舫酒席');
     if (window.currentCharData) {
-        window.currentCharData.tempering = (window.currentCharData.tempering || 0) + 30;
-        window.currentCharData.mood = Math.min(100, (window.currentCharData.mood || 50) + 10);
+        window.currentCharData.tempering = (window.currentCharData.tempering || 0) + _roll(20, 40);
+        window.currentCharData.mood = Math.min(100, (window.currentCharData.mood || 50) + _roll(8, 12));
     }
-    if (typeof window.addReputation === 'function') window.addReputation(city, 8);
+    var rep = _roll(5, 10);
+    if (Math.random() < 0.15) {
+        rep += 10;
+        if (window.showMessage) window.showMessage('🎶 席间恰遇告老的翰林学士，一诗一酒，天亮时你的名字已传遍半座城。（声望+' + rep + '）', 'success');
+    } else {
+        if (window.showMessage) window.showMessage('画舫之上丝竹声声，你结识文人，魅力与见闻有所增长。（声望+' + rep + '，酒席30灵石）', 'success');
+    }
+    if (typeof window.addReputation === 'function') window.addReputation(city, rep);
 }
 
 function joinPoetryMeet(city) {
+    // v23.3 诗会一日一场——散场是真散场，墨干席散，缘由落在书童嘴里
+    if (!_gate('poetry_meet', 1, '今日的诗会已散了——书童正收着诗笺：「墨都干了，席也空了，客官下回赶早。」')) return;
+    if (!_payOrFail(20, 0)) return;
+    _gateMark('poetry_meet');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(90, '诗会');
     var ok = Math.random() < 0.5;
     if (ok) {
         if (window.showMessage) window.showMessage('你的诗作获得喝彩！声望与悟性提升', 'success');
@@ -947,23 +1150,31 @@ function joinPoetryMeet(city) {
 }
 
 function visitStarPlatform(city) {
-    if (window.showMessage) window.showMessage('观星台上星辉入体，真元增加', 'success');
-    if (window.currentCharData) window.currentCharData.essence = (window.currentCharData.essence || 0) + 50;
+    // v23.3 观星要凝神耗气、一夜只能读一回星轨——星官封台是台规，缘由说在当面
+    if (!_gate('star_platform', 1, '星官封台不纳人：「星轨一夜只读一回，强读则乱天机——贵客明夜再来。」')) return;
+    if (!_spendRes('qi', 20, '真气')) return;
+    _gateMark('star_platform');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '观星');
+    var gain = _roll(30, 60);
+    if (window.currentCharData) window.currentCharData.essence = (window.currentCharData.essence || 0) + gain;
+    if (window.showMessage) window.showMessage('观星台上凝神引星，星辉入体。（真元+' + gain + '，真气-20）', 'success');
     if (typeof window.guideQiCultivation === 'function' && Math.random() < 0.3) window.guideQiCultivation();
 }
 
 function visitEnlightenmentStele(city) {
+    // v23.3 参碑耗神——碑文读过一遍字色转淡、碑灵需歇，缘由由守碑老人说破
+    if (!_gate('enlightenment_stele', 1, '碑文读过一遍，字色渐渐淡了——守碑老人摆手：「碑灵乏了，强参只落个头疼。明日再来吧。」')) return;
+    if (!_spendRes('energy', 15, '精力')) return;
+    _gateMark('enlightenment_stele');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '参悟碑文');
     if (Math.random() < 0.35) {
-        if (typeof window.insightPoints !== 'undefined') {
-            // global may not exist
-        }
         if (window.currentCharData) {
             window.currentCharData.insightPoints = (window.currentCharData.insightPoints || 0) + 1;
         }
-        if (window.showMessage) window.showMessage('顿悟！领悟点+1', 'success');
+        if (window.showMessage) window.showMessage('碑文一行忽然入心——顿悟！领悟点+1', 'success');
         if (window.showEffect) window.showEffect('breakthrough');
     } else {
-        if (window.showMessage) window.showMessage('碑文晦涩，稍有所感', 'info');
+        if (window.showMessage) window.showMessage('碑文晦涩，稍有所感（真元+' + 20 + '）', 'info');
         if (window.currentCharData) window.currentCharData.essence = (window.currentCharData.essence || 0) + 20;
     }
 }
@@ -1002,21 +1213,37 @@ function visitTribulationPlatform(city) {
         window.triggerHeavenlyTribulation();
         return;
     }
-    if (window.showMessage) window.showMessage('渡劫台雷光隐现，你观摩天威，突破感悟加深', 'success');
+    // v23.3 观摩天威一日一次、耗气凝神；感悟随积累**渐悟渐淡**——雷光看多了，
+    // 神魂对它起了茧，观摩之悟终有尽头，唯有亲历真劫能再进一步（后果链递减，不设计数器不报数）
+    if (!_gate('tribulation_platform', 1, '天威不可日日观——神魂还未从雷光里定下来，明日再来。')) return;
+    if (!_spendRes('qi', 30, '真气')) return;
+    _gateMark('tribulation_platform');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '观摩天威');
     if (cd) {
-        cd._foundationBonus = (cd._foundationBonus || 0) + 5;
-        cd.essence = (cd.essence || 0) + 60;
+        var fb = cd._foundationBonus || 0;
+        var add = Math.round(_roll(1, 3) * (1 - Math.min(0.85, fb / 40)));
+        cd._foundationBonus = fb + add;
+        cd.essence = (cd.essence || 0) + _roll(30, 60);
+        if (add <= 0) {
+            if (window.showMessage) window.showMessage('渡劫台雷光隐现，却已激不起你心中的波澜——观摩之悟已至尽头，唯有亲历真劫，方能再进一步。', 'info');
+        } else {
+            if (window.showMessage) window.showMessage('渡劫台雷光隐现，你观摩天威，突破感悟加深。（感悟+' + add + '）', 'success');
+        }
     }
 }
 
 function enterDragonVault(city) {
-    if (!_payOrFail(0, 0)) {}
+    // v23.0 龙宫宝库一日一探、耗气抗龙威（旧版可无限连抽龙鳞）
+    if (!_gate('dragon_vault', 1, '宝库龙威未散，你的神魂还需歇一歇——明日再来。')) return;
     var realm = (window.currentCharData && window.currentCharData.realm) || '炼气';
     var order = ['炼气','筑基','金丹','元婴','化神','炼虚','合体','大乘','渡劫'];
     if (order.indexOf(realm) < order.indexOf('金丹')) {
         if (window.showMessage) window.showMessage('龙威压迫，金丹以下难以深入', 'warning');
         return;
     }
+    if (!_spendRes('qi', 30, '真气')) return;
+    _gateMark('dragon_vault');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '探龙宫宝库');
     if (Math.random() < 0.5) {
         if (typeof window.addItem === 'function') window.addItem('mat_dragon_scale', 1);
         if (window.showMessage) window.showMessage('取得龙鳞！', 'success');
@@ -1027,13 +1254,30 @@ function enterDragonVault(city) {
 }
 
 function enterVolcanoCave(city) {
-    if (window.showMessage) window.showMessage('熔岩映红岩壁，火灵充沛', 'info');
+    // v23.3 火山洞一日一次、耗力——火气未泄再进就是送命，缘由写在洞口热浪里
+    if (!_gate('volcano_cave', 1, '洞口火气未泄，岩壁烧得发红——此时进去要烫掉一层皮。待火潮退了再来（明日）。')) return;
+    if (!_spendRes('energy', 15, '精力')) return;
+    _gateMark('volcano_cave');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '探查火山洞');
+    var cd = window.currentCharData;
+    if (cd && Math.random() < 0.25) {
+        cd.health = Math.max(1, (cd.health || 100) - 8);
+        if (window.showMessage) window.showMessage('🔥 一股岩浆热浪扑面，灼伤了皮肤！（健康-8）', 'warning');
+        if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+    }
     if (typeof window.addItem === 'function' && Math.random() < 0.4) window.addItem('mat_fire_crystal', 1);
-    if (window.currentCharData) window.currentCharData.essence = (window.currentCharData.essence || 0) + 35;
+    var volcGain = _roll(20, 45);
+    if (cd) cd.essence = (cd.essence || 0) + volcGain;
+    if (window.showMessage) window.showMessage('熔岩映红岩壁，火灵充沛（真元+' + volcGain + '，精力-15）', 'info');
     if (typeof window.depleteQi === 'function') window.depleteQi(1);
 }
 
 function enterPoisonCave(city) {
+    // v23.0 毒窟一日一闯、闭气耗力（毒风险原有，保留）
+    if (!_gate('poison_cave', 1, '毒雾尚未散去，今日再进就是送命——明日再来。')) return;
+    if (!_spendRes('energy', 15, '精力')) return;
+    _gateMark('poison_cave');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '闯毒雾洞');
     if (window.showMessage) window.showMessage('毒雾弥漫……', 'warning');
     if (Math.random() < 0.3) {
         // v20.7 寺庙祈福 blessing 的真消费：佛门庇佑可挡一次毒
@@ -1067,6 +1311,11 @@ function openUndergroundMarket(city) {
 }
 
 function enterRuinEntrance(city) {
+    // v23.0 遗迹一日一搜、耗力（旧版可无限连抽陨铁）
+    if (!_gate('ruin_entrance', 1, '遗迹浅层已被你翻过一遍，深处的碎石还没沉实——明日再来。')) return;
+    if (!_spendRes('energy', 20, '精力')) return;
+    _gateMark('ruin_entrance');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(90, '搜探遗迹');
     if (window.showMessage) window.showMessage('踏入遗迹……', 'warning');
     if (typeof window.setFlag === 'function') window.setFlag('ruin_explored_' + city);
     if (Math.random() < 0.5 && typeof window.startBattle === 'function') window.startBattle('dungeon_guard');
@@ -1077,10 +1326,34 @@ function enterRuinEntrance(city) {
 }
 
 function visitIceTower(city) {
-    if (window.showMessage) window.showMessage('寒气刺骨，冰灵淬体', 'info');
+    // v23.3 冰塔淬体一日一次、耗力；寒毒随淬体**积在骨子里**——每淬成一次，
+    // 下次寒气蚀体更重、冰灵更难入体（代价递增+收益递减的现实后果链，不设终身计数器不报数）
+    if (!_gate('ice_tower', 1, '塔中寒气未散，今日再进会冻伤经脉——明日再来。')) return;
+    if (!_spendRes('energy', 15, '精力')) return;
+    _gateMark('ice_tower');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '冰塔淬体');
     if (window.currentCharData) {
-        window.currentCharData.constitution = (window.currentCharData.constitution || 0) + (Math.random() < 0.1 ? 1 : 0);
-        window.currentCharData.essence = (window.currentCharData.essence || 0) + 40;
+        var cd = window.currentCharData;
+        var scarred = cd._iceTowerPerm || 0;
+        var chill = 10 + scarred * 8; // 寒毒入骨一层，蚀体便重一分
+        cd.health = Math.max(1, (cd.health || 100) - chill);
+        var perm = false;
+        if (Math.random() < 0.12 / (1 + scarred)) {
+            perm = true;
+            cd._iceTowerPerm = scarred + 1;
+            cd.constitution = (cd.constitution || 0) + 1;
+        }
+        var gain = _roll(25, 50);
+        cd.essence = (cd.essence || 0) + gain;
+        if (window.showMessage) {
+            var line = perm
+                ? '寒气刺骨，一缕冰灵终于没入血肉——淬体有成，体质+1！只是这股寒毒，怕是要跟你一辈子了。（真元+' + gain + '，健康-' + chill + '）'
+                : (scarred >= 3
+                    ? '寒气刺骨，冰灵却不再入体——寒毒已深，再淬下去只剩蚀骨之痛。（真元+' + gain + '，健康-' + chill + '）'
+                    : '寒气刺骨，冰灵淬体，这一遭没能淬出名堂。（真元+' + gain + '，健康-' + chill + '）');
+            window.showMessage(line, 'success');
+        }
+        if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
     }
 }
 
@@ -1119,15 +1392,26 @@ window._swordChallenge = function() {
 };
 
 function studyFormation(city) {
+    // v23.0 参悟天然阵法一日一次、耗气凝神（旧版可连点无限刷新防御buff）
+    if (!_gate('study_formation', 1, '阵纹的纹路还在你识海里打转——贪多嚼不烂，明日再参。')) return;
+    if (!_spendRes('qi', 20, '真气')) return;
+    _gateMark('study_formation');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '参悟阵法');
     if (window.currentCharData) window.currentCharData._formationBuff = { def: 0.12, turns: 8 };
-    if (window.showMessage) window.showMessage('参悟天然阵法，临时防御提升', 'success');
+    if (window.showMessage) window.showMessage('参悟天然阵法，临时防御提升（真气-20）', 'success');
 }
 
 function visitDaoistTemple(city) {
-    if (window.showMessage) window.showMessage('道观清幽，心神安定', 'success');
+    // v23.0 上香随喜、一日一次（旧版可无限连点白拿心情+真元+声望三件套）
+    if (!_gate('daoist_temple', 1, '道长含笑送客：「心香一瓣，日日焚便俗了。明日来坐。」')) return;
+    if (!_payOrFail(10, 0)) return; // 香火钱
+    _gateMark('daoist_temple');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '道观上香');
+    var daoGain = _roll(15, 30);
+    if (window.showMessage) window.showMessage('道观清幽，心神安定（心情+15，真元+' + daoGain + '，香火10灵石）', 'success');
     if (window.currentCharData) {
         window.currentCharData.mood = Math.min(100, (window.currentCharData.mood || 50) + 15);
-        window.currentCharData.essence = (window.currentCharData.essence || 0) + 25;
+        window.currentCharData.essence = (window.currentCharData.essence || 0) + daoGain;
     }
     if (typeof window.addReputation === 'function') window.addReputation(city, 5);
 }
@@ -1150,10 +1434,28 @@ function visitLighthouse(city) {
     if (typeof window.setFlag === 'function') window.setFlag('lighthouse_' + city);
 }
 
+// v21.4 兜底探访收口：旧版免费白给历练+20/声望+3，可无限连点——是印钞机。
+// 现在：真耗精力、每处景致每日一次、奖励削薄到有成本可对价的量级。
+// （24 处有名气的景致已注册专属真剧本，走情境引擎，不进这里；这里只兜未知景致。）
+var genericFeatureVisits = {};   // { '景致名|绝对日': 1 }
 function genericFeatureVisit(name, city) {
-    if (window.showMessage) window.showMessage('你仔细探访「' + name + '」，有所见闻', 'info');
-    if (window.currentCharData) window.currentCharData.tempering = (window.currentCharData.tempering || 0) + 20;
-    if (typeof window.addReputation === 'function' && city) window.addReputation(city, 3);
+    var p = window.currentCharData;
+    if (!p) return;
+    var day = (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') ? window.timeSystem.getAbsoluteDay() : 0;
+    var key = name + '|' + day;
+    if (genericFeatureVisits[key]) {
+        if (window.showMessage) window.showMessage('「' + name + '」你今天已经逛过了——景致还是那个景致，明天再来。', 'info');
+        return;
+    }
+    if ((p.energy || 0) < 15) {
+        if (window.showMessage) window.showMessage('探访「' + name + '」要爬坡过坎，你精力不济，改日再来。', 'warning');
+        return;
+    }
+    p.energy = (p.energy || 0) - 15;
+    genericFeatureVisits[key] = 1;
+    if (window.showMessage) window.showMessage('你仔细探访「' + name + '」，走了一圈，有所见闻。精力-15，历练+5。', 'info');
+    p.tempering = (p.tempering || 0) + 5;
+    if (typeof window.addReputation === 'function' && city) window.addReputation(city, 1);
 }
 
 
@@ -1171,11 +1473,13 @@ function closeCityPanel() {
         var flexContainer = mapPanel.querySelector('.flex.gap-4');
         if (flexContainer) flexContainer.style.display = 'flex';
     }
-    // 清除城市标记
+    // v20.81（BUG-P）：旧代码在这里把角色 location 清成 null——关掉城市面板≠离开城市，
+    // 模块级 currentLocation 也没清，两边口径打架；清掉后所有依赖 location 的社交/日常钩子全部失灵。
+    // 现在保持与 currentLocation 一致。
     if (window.currentCharData) {
-        window.currentCharData.location = null;
+        window.currentCharData.location = currentLocation || window.currentCharData.location || null;
     }
-    if (window.showMessage) showMessage('离开了城市，回到地图', 'info');
+    if (window.showMessage) showMessage('回到大地图（仍在' + (currentLocation || '原处') + '）', 'info');
 }
 
 // ============ 获取当前城市 ============
@@ -1387,6 +1691,16 @@ const CITY_ATMOSPHERE = {
         events: ['毒王试炼', '百毒宴', '解毒大会'],
         colors: ['from-purple-900/40', 'to-green-900/30']
     },
+    '凤凰巢': {
+        default: '炽烈神圣',
+        descriptions: [
+            '火山口的热浪裹着赤羽翻飞，凤裔在高台上俯瞰来客。',
+            '熔火渊底火光映天，巢城的夜从不黑暗。',
+            '一声凤鸣掠过山谷，满城修士齐齐驻足。'
+        ],
+        events: ['凤鸣朝旦', '熔火潮', '赤羽祭'],
+        colors: ['from-orange-900/50', 'to-red-900/40']
+    },
     '金城': {
         default: '富丽堂皇',
         descriptions: [
@@ -1407,6 +1721,16 @@ const CITY_ATMOSPHERE = {
         events: ['沙漠商队', '绿洲寻宝', '沙暴来袭'],
         colors: ['from-yellow-800/40', 'to-orange-900/30']
     },
+    '佛国遗址': {
+        default: '苍凉梵音',
+        descriptions: [
+            '倾颓的塔林在黄沙里排成旧时的街，风穿残洞，呜呜似诵经。',
+            '守墟老僧扫着一级级埋进沙里的石阶，扫了不知多少年。',
+            '夜半大塔遗迹方向偶有佛光一闪，行脚僧百里赶来只为一见。'
+        ],
+        events: ['佛光夜现', '地底诵经', '沙掩古塔'],
+        colors: ['from-amber-900/40', 'to-yellow-950/40']
+    },
     '冰原城': {
         default: '寒冷肃穆',
         descriptions: [
@@ -1426,6 +1750,16 @@ const CITY_ATMOSPHERE = {
         ],
         events: ['极光显现', '冰川融化', '上古遗迹开启'],
         colors: ['from-indigo-900/40', 'to-blue-800/30']
+    },
+    '万剑宗': {
+        default: '剑意森然',
+        descriptions: [
+            '漫山剑林直立如碑，风过时万剑齐鸣，声声如问来者何人。',
+            '试剑台上新痕叠旧痕，北境的风雪到了山门就得绕道。',
+            '守冢老人坐在剑冢口打盹，怀里抱着一柄断了半截的剑。'
+        ],
+        events: ['万剑齐鸣', '剑冢开启', '北境论剑'],
+        colors: ['from-slate-900/50', 'to-cyan-950/40']
     },
     '剑阁': {
         default: '肃杀凌厉',
@@ -1736,7 +2070,20 @@ function enterSect(sectName) {
     
     currentSect = sectName;
     isInSectPanel = true;
-    
+
+    // v20.81：进门派写入角色位置并发到访事件——旧代码 enterSect 从不写 location，
+    // 导致所有"在门派日常"的社交/剧情钩子（读 charData.location === 门派名）全部失灵，
+    // 面板所在地也一直停留在上一个城市。
+    if (window.currentCharData) {
+        window.currentCharData.location = sectName;
+    }
+    if (window.EventBus && typeof window.EventBus.emit === 'function') {
+        try { window.EventBus.emit('location:visited', { locationId: sectName, locationName: sectName }); } catch (e) {}
+    }
+    if (typeof window.updateCharacterStatus === 'function') {
+        try { window.updateCharacterStatus(); } catch (e) {}
+    }
+
     // 隐藏地图区域
     const mapPanel = document.getElementById('panel-map');
     if (mapPanel) {
@@ -1765,7 +2112,15 @@ function enterSect(sectName) {
 function closeSectPanel() {
     isInSectPanel = false;
     currentSect = null;
-    
+
+    // v20.81：出门派还原角色位置到最近的城市（与 enterSect 写入配对）
+    if (window.currentCharData) {
+        window.currentCharData.location = currentLocation || null;
+    }
+    if (typeof window.updateCharacterStatus === 'function') {
+        try { window.updateCharacterStatus(); } catch (e) {}
+    }
+
     // 恢复地图显示
     const mapPanel = document.getElementById('panel-map');
     if (mapPanel) {
@@ -1824,7 +2179,8 @@ function renderSectFacilitiesForPanel(sectName, isMember) {
     return facilities.map(function(f) {
         const ds = window.discipleState || {};
         const canUse = isMember && ds.isInSect;
-        const locked = !canUse || f.rankReq > ds.rank;
+        // 第九十五波·NEW-45：不等号此前写反（rankReq「越小职位越高」，杂役 rank7 反而全绿、掌门 rank0 整片灰）
+        const locked = !canUse || (f.rankReq != null && (ds.rank == null ? true : ds.rank > f.rankReq));
         
         return '<div class="bg-gray-800/50 p-3 rounded border ' + (locked ? 'border-gray-700 opacity-60' : 'border-green-700') + '">' +
             '<div class="flex items-center gap-2 mb-2">' +
@@ -1833,7 +2189,7 @@ function renderSectFacilitiesForPanel(sectName, isMember) {
             '<p class="font-bold text-sm text-white">' + f.name + '</p>' +
             '<p class="text-xs text-gray-400">' + f.desc + '</p>' +
             '</div>' +
-            (canUse ? '<button onclick="useFacility(\'' + f.id + '\')" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-2 py-1 rounded text-xs font-bold">使用</button>'
+            (canUse ? '<button onclick="useFacility(\'' + f.id + '\')" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-2 py-1 rounded text-xs font-bold">' + (window.sectFacilityActionLabel ? window.sectFacilityActionLabel(f.id) : '前往') + '</button>'
                     : '<span class="text-xs text-gray-500">' + (isMember ? '权限不足' : '需加入门派') + '</span>') +
             '</div></div>';
     }).join('');
@@ -1909,6 +2265,10 @@ function showSectPanel(sectName) {
     let panel = ensureSectPanel();
     panel.classList.remove('hidden');
     
+    // 第九波：势力显示优先走江湖座次（动态账），静态标签只兜底
+    var powerText = sect.power || '未知';
+    try { if (typeof window.sectPowerNow === 'function') { var _pn = window.sectPowerNow(sectName); if (_pn && _pn.tier) powerText = _pn.tier; } } catch (ePw) {}
+
     // 构建面板
     panel.innerHTML = '' +
         '<div class="bg-gray-900 rounded-xl border-2 border-yellow-600/50 p-6">' +
@@ -1923,7 +2283,7 @@ function showSectPanel(sectName) {
             'bg-yellow-900 text-yellow-400'
         ) + '">' + sect.type + '</span>' +
         '<span class="text-xs text-gray-400">📍 ' + (sect.location || '未知') + '</span>' +
-        '<span class="text-xs text-gray-400">⚔️ ' + (sect.power || '未知') + '</span>' +
+        '<span class="text-xs text-gray-400">⚔️ ' + powerText + '</span>' +
         '<span class="text-xs text-gray-400">🗡️ ' + (sect.weapons || '未知') + '</span>' +
         '</div></div>' +
         '<div class="flex gap-2">' +

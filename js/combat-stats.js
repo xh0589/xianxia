@@ -90,6 +90,22 @@
         var weaponSkill = _getWeaponSkill(entity);
         var cb = isPlayer ? _getCombatBonuses() : {};
 
+        // v20.81（BUG-L）：旧公式完全没有境界项——突破后攻防速一丝不变，"境界"沦为面板装饰。
+        // 这里给玩家补境界派生加成（纯派生计算，不写存档；面板与战斗同走这个入口，突破即生效）。
+        var realmAtk = 0, realmDef = 0, realmSpd = 0, realmTgh = 0;
+        if (isPlayer) {
+            var _REALM_ORDER = ['炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'];
+            var _rcd = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
+            var _ri = _rcd ? _REALM_ORDER.indexOf(_rcd.realm) : -1;
+            if (_ri >= 0) {
+                var _ly = Math.max(1, Math.min(9, Number(_rcd.layer) || 1));
+                realmAtk = _ri * 4 + _ly;
+                realmDef = _ri * 3 + Math.ceil(_ly / 2);
+                realmSpd = _ri * 2 + Math.floor(_ly / 3);
+                realmTgh = _ri * 2;
+            }
+        }
+
         // —— 攻击 ——
         var meridianMul = _meridianMul(mer);
         var attack = Math.floor(str * 1.0 + neigong * 0.1 * meridianMul);
@@ -98,6 +114,7 @@
             if (weaponSkill === 0 && window.currentEquipment && window.currentEquipment.mainHand) wsb = -5;
             attack += Math.floor(wsb);
             if (cb.attack) attack += cb.attack;
+            attack += realmAtk;
         } else if (entity.skills) {
             // 非玩家：已在 getAttack 用最高技能；此处与力量对齐
             attack = Math.floor(str * 1.0 + weaponSkill * 0.12);
@@ -106,14 +123,16 @@
         // —— 防御 ——
         var defense = Math.floor(con * 0.4 + will * 0.2);
         if (cb.defense) defense += cb.defense;
+        defense += realmDef;
 
         // —— 速度（负荷修正在批次四接入，此处预留 loadMul） ——
         var loadMul = (opts.loadSpeedMul != null) ? opts.loadSpeedMul : 1;
-        var speed = Math.floor((dex * 0.7 + qinggong * 0.1 + (cb.speed || 0)) * loadMul);
+        var speed = Math.floor((dex * 0.7 + qinggong * 0.1 + (cb.speed || 0)) * loadMul) + realmSpd;
 
         // —— 韧性 ——
         var toughness = entity.toughness != null ? entity.toughness : con * 0.3;
         if (cb.toughness) toughness += cb.toughness;
+        toughness += realmTgh;
 
         // —— 毒抗 ——
         var poisonRes = _clamp(con * 0.15 + (cb.poisonRes || 0), 0, 50);
@@ -357,5 +376,71 @@
     window.getLoadCapacity = getLoadCapacity;
     window.getCurrentLoad = getCurrentLoad;
     window.getItemWeight = getItemWeight;
+
+    // ============ v21.6 全境界数值实测批：敌人强度接回境界 ============
+    // 此前 charData.level 恒为 1（创角写死后无任何正常玩法更新它），主战斗入口
+    // `level = charData.level || layer` 永远出 1 级怪——筑基起敌人只打得动 1 点血，
+    // 金丹起彻底沦为木桩；胜利奖励也被钉死在 +2 历练 +1 真元，与指数级修为需求差 5-8 个数量级。
+    var REALM_TIERS = ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'];
+    function _realmTierOf(realm) {
+        try {
+            if (typeof window.getRealmTier === 'function') {
+                var t = window.getRealmTier(realm);
+                if (isFinite(t)) return t;
+            }
+        } catch (e) {}
+        var i = REALM_TIERS.indexOf(realm);
+        return i >= 0 ? i : 1;
+    }
+    // 敌人等级 = 境界连续刻度：炼气1层→1，渡劫9层→65。斜率 7/境（不是 9——渡劫怪六维
+    // 若顶到 base=2L+5=167，对满装玩家每击 50+ 太狠；7 落 135，伤害带 20-40 正好）。
+    // 境界边界允许 1 级回落（炼气9=9 > 筑基1=8）：刚突破的人碾压上一层，符合体感。
+    window.realmScaledEnemyLevel = function (cd) {
+        cd = cd || {};
+        var tier = _realmTierOf(cd.realm);
+        if (tier < 1) tier = 1;
+        var layer = Math.max(1, Math.min(9, Number(cd.layer) || 1));
+        return Math.max(1, (tier - 1) * 7 + layer);
+    };
+    // 无六维敌人兜底合成：手造 {level,attack,defense,speed} 的敌人（心魔/势力刺客/部分剧情boss）
+    // Entity 只认 attrs——此前它们全部六维=10 进场，写好的等级/攻击全是死字段，boss 皆木桩。
+    // 按 generateRandomEnemy 同款曲线合成（base=2L+5），手写 attack/defense/speed 作偏置（钳 0.5~2 倍）。
+    window.synthesizeEnemyAttrs = function (data) {
+        data = data || {};
+        var L = Math.max(1, Number(data.level) || 1);
+        var base = L * 2 + 5;
+        function bias(v) { v = Number(v); return (isFinite(v) && v > 0) ? Math.min(2, Math.max(0.5, v / base)) : 1; }
+        var a = bias(data.attack), d = bias(data.defense), s = bias(data.speed);
+        return {
+            strength: Math.max(5, Math.floor(base * a)),
+            dexterity: Math.max(5, Math.floor(base * s)),
+            intelligence: Math.max(5, base),
+            willpower: Math.max(5, Math.floor(base * d * 0.8)),
+            constitution: Math.max(5, Math.floor(base * d * 1.2)),
+            meridian: Math.max(5, base)
+        };
+    };
+    // 敌人血肉随等级长：10 级以下不动（新手节奏不变），10 级以上每级 +12% 血量与部位耐久——
+    // 高境界玩家攻击四五百，此前敌人血肉恒 100，一刀一个没有战斗可言。
+    window.scaleEnemyEntityToLevel = function (entity, data) {
+        try {
+            if (!entity || (data && data.physiology)) return entity; // 调用方自带生理账的不越权
+            var L = Math.max(1, Number(entity.level) || 1);
+            var mul = 1 + Math.max(0, L - 10) * 0.12;
+            if (mul <= 1) return entity;
+            if (entity.physiology) {
+                entity.physiology.bloodVolume = Math.round((entity.physiology.bloodVolume || 100) * mul);
+                entity.physiology.health = entity.physiology.bloodVolume;
+            }
+            if (entity.durabilities) {
+                Object.keys(entity.durabilities).forEach(function (p) {
+                    entity.durabilities[p] = Math.round(entity.durabilities[p] * mul);
+                });
+                entity.maxDurabilities = Object.assign({}, entity.durabilities);
+            }
+            return entity;
+        } catch (e) { return entity; }
+    };
+
     console.log('[combat-stats] 动态战斗属性+负荷模块已加载');
 })();

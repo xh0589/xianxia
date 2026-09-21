@@ -61,6 +61,10 @@
         if (typeof npc.setFlag === 'function') { try { npc.setFlag('dao_companion'); } catch (e) {} }
         // v20.36 深情账：许下终身的一刻，深情自有底（后续靠真诚里程碑往上积）
         if (npc.relationship) npc.relationship.love = Math.max(Number(npc.relationship.love) || 0, 30);
+        // v20.91 主角信物：结契那一刻，那个人独一份的信物落进背包（名册在 17-lead-tokens.js，幂等）
+        if (typeof global.grantLeadToken === 'function') {
+            try { global.grantLeadToken(npc.name || npcId, { silent: !!opts.silent, gender: npc.gender }); } catch (e) {}
+        }
         // v20.48 修断线：族谱导出名是 NpcLineage（npc-lineage.js），此前误拼 NPCLineage —— 恒 undefined，
         // 结契永远登不进族谱，「道侣婚配/开枝散叶」整条链空转。两拼写都认，兼容未来改名。
         var _lineage = global.NpcLineage || global.NPCLineage;
@@ -150,7 +154,9 @@
         if (bond) bond.lastMetDay = _day();
         if (npc._companionData) npc._companionData.lastInteraction = _day();
         _log('湖上烟水如织。' + _ta(npc) + '说到第三刻你还在赶来——终究是来了，伞下两人并肩走了整段苏堤。（耗时半日，好感+5，信任+1）', 'success');
-        if (global.timeSystem && typeof global.timeSystem.advanceTime === 'function') global.timeSystem.advanceTime(30, '湖上赴约');
+        // 第一百一十一波：文案写「耗时半日」，账上却只收 30 分钟——advanceTime 单位是分钟，半日=720。
+        // 与节日桥同款单位病：时间代价被架空，赴约成了白捡的半日。
+        if (global.timeSystem && typeof global.timeSystem.advanceTime === 'function') global.timeSystem.advanceTime(720, '湖上赴约');
         return true;
     }
 

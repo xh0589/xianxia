@@ -116,6 +116,9 @@ function inHourRange(hour, range) {
  */
 function maybeAutoTriggerPersonalEvent(npcId, source, opts) {
     opts = opts || {};
+    // v22.0 远程查看不弹事件：showNPCDialog 的远程档案分支也会取问候语（各线 greet 钩子挂在 getGreeting 上），
+    // 人不在跟前却弹「她叫住了你」穿帮——对话面板取问候语前置 _npcDialogIsRemote 旗，greet 源见旗即止。
+    if (source === 'greet' && window._npcDialogIsRemote) return false;
     if (!window.npcManager || !window.currentCharData) return false;
     if (typeof NPC_PERSONAL_EVENTS === 'undefined') return false;
     var npc = window.npcManager.getNPC ? window.npcManager.getNPC(npcId) : null;

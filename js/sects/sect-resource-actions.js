@@ -307,7 +307,7 @@ function _drillMilitary(res) {
         return false;
     }
     cd.energy -= 20;
-    if (window.discipleState) window.discipleState.contribution = (window.discipleState.contribution || 0) + 15;
+    if (window.discipleState) { window.discipleState.contribution = (window.discipleState.contribution || 0) + 15; try { window.sectLedgerNote && window.sectLedgerNote(15, '武备处操练'); } catch (e) {} }
     cd.tempering = (cd.tempering || 0) + 5;
     if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(120, '操练');
     if (window.showMessage) window.showMessage('你在【' + (res.name || '武备处') + '】卖力操练了半个时辰，执事记了贡献+15，手上也有了准头（历练+5）。', 'success');

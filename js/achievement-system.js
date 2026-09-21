@@ -62,14 +62,13 @@ function buildAchievementProfile() {
     } catch (e) { p.copper = _achNum(cd.copper); p.spiritStones = _achNum(cd.spiritStones); }
     // —— 学艺 ——
     p.arts = (window.learnedSecrets && window.learnedSecrets.length) || 0;
-    // —— 收藏与人事：优先复用收藏系统真源，缺席就地自算兜底 ——
+    // —— 收藏：优先复用收藏系统真源，缺席就地自算兜底 ——
     var stats = null;
     try { if (typeof window.getCollectionStats === 'function') stats = window.getCollectionStats(); } catch (e) {}
     if (stats) {
         p.uniqueItems = _achNum(stats.items);
-        p.friends = _achNum(stats.npcs);
     } else {
-        p.uniqueItems = 0; p.friends = 0;
+        p.uniqueItems = 0;
         try {
             var seen = {};
             var slots = (window.inventory && window.inventory.slots) || [];
@@ -79,16 +78,39 @@ function buildAchievementProfile() {
             }
             p.uniqueItems = Object.keys(seen).length;
         } catch (e) {}
-        try {
-            if (window.npcManager && typeof window.npcManager.getAllNPCs === 'function') {
-                var npcs = window.npcManager.getAllNPCs() || [];
-                for (var j = 0; j < npcs.length; j++) {
-                    var aff = npcs[j] && npcs[j].relationship ? npcs[j].relationship.affection : (npcs[j] ? npcs[j].affection : 0);
-                    if (_achNum(aff) > 0) p.friends++;
-                }
-            }
-        } catch (e) {}
     }
+    // —— 人事 · 交好：第一百零五波修「一开局就完成」的白送 bug ——
+    // 旧版把收藏账的「结识数」（好感>0，打个照面就算）直接当「交好数」用；开局几百人入册、
+    // 随便寒暄几句就把「与10/30位侠客交好」秒点亮。结识≠交好：交好改用与关系面板「旧识」
+    // 同一道槛（好感≥20）——真处出交情才算一位，走街串巷打招呼不再白送成就。
+    p.friends = 0;
+    p.closeFriends = 0;   // 第一百零六波：知己档（好感≥60，与关系面板「知己」同一道槛）
+    try {
+        if (window.npcManager && typeof window.npcManager.getAllNPCs === 'function') {
+            var fnpcs = window.npcManager.getAllNPCs() || [];
+            for (var fj = 0; fj < fnpcs.length; fj++) {
+                var frel = fnpcs[fj] && fnpcs[fj].relationship;
+                var faff = frel ? _achNum(frel.affection) : (fnpcs[fj] ? _achNum(fnpcs[fj].affection) : 0);
+                if (faff >= 20) p.friends++;
+                if (faff >= 60) p.closeFriends++;
+            }
+        }
+    } catch (e) {}
+    // —— 手艺 · 采伐：第一百零六波给采集线立名分——真源就是角色身上的生活技能账，不新造计数器 ——
+    p.gatherSkill = 0;
+    try {
+        if (typeof window.getLifeSkill === 'function') p.gatherSkill = _achNum(window.getLifeSkill('采伐'));
+        else if (cd.lifeSkills) p.gatherSkill = _achNum(cd.lifeSkills['采伐']);
+    } catch (eGS) {}
+    // —— 队伍（第一百零七波）：此刻有几位同伴与你同行（只读快照，缺席保守 0） ——
+    p.partySize = 0;
+    try {
+        if (window.partySystem && typeof window.partySystem.getMembers === 'function') {
+            p.partySize = _achNum((window.partySystem.getMembers() || []).length);
+        } else if (window.partyData && window.partyData.members) {
+            p.partySize = _achNum(window.partyData.members.length);
+        }
+    } catch (ePS) {}
     // —— 门派 ——
     var ds = window.discipleState || {};
     p.sectJoined = ds.isInSect ? 1 : 0;
@@ -127,6 +149,28 @@ function buildAchievementProfile() {
     // v20.16：重塑灵根次数（存档白名单字段回灌的 _rootRefines，无则 0）
     p.rootRefines = _achNum(cd._rootRefines);
     p.day = (typeof window.getAbsoluteDay === 'function') ? _achNum(window.getAbsoluteDay()) : 0;
+    // —— 游历：见闻账三本（v39，只读派生自 _travel，缺席保守 0，不新增持久化） ——
+    p.travelRegions = 0; p.travelLandmarks = 0; p.travelSteps = 0;
+    try {
+        if (window.TravelJournal && typeof window.TravelJournal.summary === 'function') {
+            var ts = window.TravelJournal.summary() || {};
+            p.travelRegions = _achNum(ts.regions);
+            p.travelLandmarks = _achNum(ts.landmarks);
+            p.travelSteps = _achNum(ts.steps);
+        }
+    } catch (e) {}
+    // —— 洞府营造（第一百零五波）：从破山洞到仙府整条线此前没有一枚成就，先立三本真源账 ——
+    // 只读派生自 playerHouse / CaveFacilities，缺席一律保守 0；宅档用自带小表，不依赖 house-system 是否已加载。
+    var HOUSE_TIER = { ruin: 0, cave: 1, courtyard: 2, mansion: 3, palace: 4 };
+    var ph = window.playerHouse || null;
+    p.hasHouse = (ph && ph.type) ? 1 : 0;
+    p.houseTier = (ph && ph.type && HOUSE_TIER[ph.type] != null) ? HOUSE_TIER[ph.type] : 0;
+    p.houseFacilities = 0;
+    try {
+        if (window.CaveFacilities && typeof window.CaveFacilities.getFacilities === 'function') {
+            p.houseFacilities = _achNum((window.CaveFacilities.getFacilities('player') || []).length);
+        }
+    } catch (eH) {}
     return p;
 }
 
@@ -252,7 +296,7 @@ class Achievement {
                 try { window.RewardService.apply(r, { source: 'achievement' }); handled = true; } catch (e) {}
             }
             if (!handled && cd) {
-                if (r.fame) cd.fame = Math.max(0, Math.min(100, _achNum(cd.fame) + r.fame));
+                if (r.fame) cd.fame = Math.max(0, Math.min((window.FAME_CAP || 99999), _achNum(cd.fame) + r.fame)); // v21.9 名望尺度统一
                 if (r.karma) cd.karma = Math.max(-100, Math.min(100, _achNum(cd.karma) + r.karma));
             }
             if (r.fame) paid.push('名气+' + r.fame);
@@ -543,6 +587,20 @@ const PresetAchievements = [
         category: 'social', requirements: { friends: 30 },
         reward: { stones: 120, fame: 5 }, icon: '🍵', rarity: 'epic', points: 70
     }),
+    // 第一百零六波：知己档——交好之上还有一道更高的槛（好感≥60，关系面板「知己」同槛）
+    new Achievement('friends_close', '海内存知己', '与 5 位侠客处成知己（好感 ≥60）', {
+        category: 'social', requirements: { closeFriends: 5 },
+        reward: { stones: 150, fame: 6 }, icon: '🎐', rarity: 'epic', points: 65
+    }),
+    // —— 队伍（第一百零七波）：同行的人此前没有一枚成就 ——
+    new Achievement('party_first', '同道中人', '招募第一位队友同行', {
+        category: 'social', requirements: { partySize: 1 },
+        reward: { gold: 200 }, icon: '🧭', rarity: 'common', points: 10
+    }),
+    new Achievement('party_full', '四人成众', '队伍满员——四人同行', {
+        category: 'social', requirements: { partySize: 4 },
+        reward: { stones: 120, fame: 4 }, icon: '👥', rarity: 'rare', points: 40
+    }),
     new Achievement('dao_join', '凤求凰', '与有情人结为道侣', {
         category: 'social', requirements: { daoBond: 1 },
         reward: { gold: 200, fame: 2 }, icon: '💞', rarity: 'common', points: 15
@@ -640,6 +698,49 @@ const PresetAchievements = [
     new Achievement('year_of_cult', '一岁寒暑', '在山中走过一整年', {
         category: 'general', requirements: { day: 365 },
         reward: { exp: 100, gold: 200 }, icon: '🗓️', rarity: 'uncommon', points: 15
+    }),
+    // —— 游历见闻（v39）：账全读 _travel 派生快照，脚程换来的名分，一生一次 ——
+    new Achievement('travel_100', '初出茅庐', '野外步行满一百里', {
+        category: 'exploration', requirements: { travelSteps: 100 },
+        reward: { exp: 30, stones: 50 }, icon: '👣', rarity: 'uncommon', points: 15
+    }),
+    new Achievement('travel_landmarks', '百闻不如一见', '亲至六处有名有姓的大地标', {
+        category: 'exploration', requirements: { travelLandmarks: 6 },
+        reward: { stones: 80, fame: 5 }, icon: '🗺️', rarity: 'rare', points: 25
+    }),
+    new Achievement('travel_regions5', '行走山河', '足迹踏过五域山河', {
+        category: 'exploration', requirements: { travelRegions: 5 },
+        reward: { stones: 120, fame: 8 }, icon: '🧭', rarity: 'rare', points: 30
+    }),
+    new Achievement('travel_regions9', '踏遍九州', '九州内外（含灵界魔界）无一处未曾亲至', {
+        category: 'exploration', requirements: { travelRegions: 9 },
+        reward: { stones: 200, fame: 15 }, icon: '🌏', rarity: 'epic', points: 60
+    }),
+    new Achievement('travel_8000', '万里独行', '野外步行满八千里——九州都踩在脚下', {
+        category: 'exploration', requirements: { travelSteps: 8000 },
+        reward: { exp: 150, stones: 200 }, icon: '🥾', rarity: 'legendary', points: 100
+    }),
+    // —— 手艺（第一百零六波）：采集线此前零名分——账读角色身上的生活技能，练了就有，一生一次 ——
+    new Achievement('gather_60', '老于山林', '采伐的手艺练到 60', {
+        category: 'exploration', requirements: { gatherSkill: 60 },
+        reward: { gold: 400, stones: 50 }, icon: '⛏️', rarity: 'rare', points: 30
+    }),
+    new Achievement('gather_100', '手识山河', '采伐的手艺练到圆满（100）', {
+        category: 'exploration', requirements: { gatherSkill: 100 },
+        reward: { stones: 200, fame: 6 }, icon: '🏔️', rarity: 'epic', points: 70, hidden: true
+    }),
+    // —— 洞府（第一百零五波）：占山→修缮→安置的营造之路，此前整条线没有一枚成就 ——
+    new Achievement('house_first', '安身立命', '占下一处洞府（哪怕只是破山洞）', {
+        category: 'dwelling', requirements: { hasHouse: { operator: 'eq', value: 1 } },
+        reward: { gold: 150 }, icon: '🏠', rarity: 'common', points: 10
+    }),
+    new Achievement('house_facilities', '百工居肆', '洞府里安置起 4 处设施', {
+        category: 'dwelling', requirements: { houseFacilities: 4 },
+        reward: { stones: 100, gold: 300 }, icon: '🧰', rarity: 'rare', points: 40
+    }),
+    new Achievement('house_palace', '琼楼玉宇', '把洞府一路修缮成仙府', {
+        category: 'dwelling', requirements: { houseTier: 4 },
+        reward: { stones: 300, fame: 8 }, icon: '🏰', rarity: 'epic', points: 80
     })
 ];
 
@@ -662,10 +763,38 @@ function initAchievementSystem() {
     gameLog.add('成就系统已初始化', 'info');
 }
 
+// 第一百零六波 · 旧档白送复审：一百零五波之前「与10/30位侠客交好」错借图鉴的结识账，
+// 老档开局寒暄几句就点亮。读档后按真交情（好感≥20）复审一次，不达标的熄灭——
+// 摘的是名分，已发的奖励不追缴；真处出交情，还会再亮。
+var FREE_UNLOCK_IDS = ['social_butterfly', 'friends_30'];
+function _auditFreeUnlocked(mgr, profile) {
+    if (!mgr || mgr._freeAudited) return;
+    // 人事账没就位（npcManager 缺席）不动手——宁可推迟到下一次检查，不能误摘真成就
+    if (!window.npcManager || typeof window.npcManager.getAllNPCs !== 'function') return;
+    mgr._freeAudited = true;
+    var revoked = [];
+    FREE_UNLOCK_IDS.forEach(function (id) {
+        var a = mgr.getAchievement(id);
+        if (a && a.isCompleted && !a.evaluate(profile)) {
+            a.isCompleted = false;
+            a.isUnlocked = false;
+            revoked.push(a.name);
+        }
+    });
+    if (revoked.length) {
+        try { mgr.recount(); } catch (eR) {}
+        var msg = '🏅 成就复审：「' + revoked.join('」「') + '」是旧口径点亮的，按真交情复审后熄灭（已发奖励不追缴）';
+        try { if (window.showMessage) window.showMessage(msg, 'warning'); } catch (eM) {}
+        try { if (window.gameLog && typeof window.gameLog.add === 'function') window.gameLog.add(msg, 'achievement'); } catch (eL) {}
+    }
+}
+
 // 立即可用的检查入口：现场拼装档案快照再查，任何系统都能在关键节点调用
 function checkAchievementsNow() {
     if (!window.achievementManager) initAchievementSystem();
-    window.achievementManager.checkAllAchievements(buildAchievementProfile());
+    var profile = buildAchievementProfile();
+    try { _auditFreeUnlocked(window.achievementManager, profile); } catch (eA) {}
+    window.achievementManager.checkAllAchievements(profile);
 }
 
 if (typeof window !== 'undefined' && window.StateRegistry && typeof window.StateRegistry.register === 'function') {
@@ -687,9 +816,34 @@ if (typeof window !== 'undefined' && window.StateRegistry && typeof window.State
 // ==================== 成就墙面板（渲染层，不存任何状态） ====================
 var ACH_CATEGORY_CN = {
     combat: '战阵', cultivation: '修行', sect: '门派', social: '人事',
-    exploration: '游历', wealth: '货殖', karma: '因果', beasts: '御兽', general: '江湖'
+    exploration: '游历', wealth: '货殖', karma: '因果', beasts: '御兽', general: '江湖',
+    dwelling: '洞府'   // 第一百零五波：山居营造一路的成就归这一类
 };
-var ACH_RARITY_CN = { common: '凡品', uncommon: '珍品', rare: '灵品', epic: '仙品', legendary: '传说' };
+var ACH_RARITY_CN = { common: '九品', uncommon: '七品', rare: '五品', epic: '三品', legendary: '一品' };   // v20.92 成就稀有度同归九品制话术
+
+// 第一百零五波：每枚成就挂自己的真进度（当前/目标）——旧版把「本类完成数/本类总数」错挂在
+// 每一行的描述后面，读起来像「与 10 位侠客交好（2/6）」这种鬼话；类账挪回类标题，行账各归各。
+function _achProgressText(ac, profile) {
+    if (!ac || ac.isCompleted || !ac.requirements) return '';
+    var keys = Object.keys(ac.requirements);
+    if (keys.length !== 1) return '';
+    var key = keys[0], req = ac.requirements[key];
+    var target;
+    if (req && typeof req === 'object' && req.operator) {
+        // 位分这类「越低越好」的反向门槛（lte/lt/eq）进度条会误导，不显示
+        if (req.operator === 'lte' || req.operator === 'lt' || req.operator === 'eq') return '';
+        target = req.value;
+    } else {
+        target = req;
+    }
+    if (typeof target !== 'number' || target <= 0) return '';
+    var cur = 0;
+    try { cur = _achNum(ac.getNestedValue(profile, key)); } catch (e) { cur = 0; }
+    if (cur < 0) cur = 0;
+    if (cur > target) cur = target;
+    var f = window.XianXia && window.XianXia.fmt;
+    return f ? '（' + f.num(cur) + '/' + f.num(target) + '）' : '（' + cur + '/' + target + '）';
+}
 
 function renderAchievementPanel() {
     if (typeof document === 'undefined') return;
@@ -697,7 +851,10 @@ function renderAchievementPanel() {
     var summary = document.getElementById('achievement-summary');
     if (!list || !summary) return;
     if (!window.achievementManager) initAchievementSystem();
-    try { window.achievementManager.checkAllAchievements(buildAchievementProfile()); } catch (e) {}
+    var profile = null;
+    try { profile = buildAchievementProfile(); } catch (eP) { profile = {}; }
+    try { _auditFreeUnlocked(window.achievementManager, profile); } catch (eA2) {}
+    try { window.achievementManager.checkAllAchievements(profile); } catch (e) {}
     var mgr = window.achievementManager;
     var stats = mgr.getStatistics();
     summary.textContent = '已点亮 ' + stats.completed + ' / ' + stats.total + ' 枚，成就点 ' + stats.totalPoints + '（' + stats.completionRate + '%）';
@@ -711,14 +868,18 @@ function renderAchievementPanel() {
     }
     var html = '';
     for (var c in byCat) {
-        html += '<div class="mb-4"><h3 class="text-base font-bold text-amber-300 mb-2">' + (ACH_CATEGORY_CN[c] || c) + '</h3>';
-        html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-2">';
         var doneCount = 0;
         for (var j = 0; j < byCat[c].length; j++) if (byCat[c][j].isCompleted) doneCount++;
+        html += '<div class="mb-4"><h3 class="text-base font-bold text-amber-300 mb-2">' + (ACH_CATEGORY_CN[c] || c) +
+            ' <span class="text-xs text-gray-500 font-normal">已点亮 ' + doneCount + '/' + byCat[c].length + '</span></h3>';
+        html += '<div class="grid grid-cols-1 md:grid-cols-2 gap-2">';
         for (var k = 0; k < byCat[c].length; k++) {
             var ac = byCat[c][k];
             if (ac.hidden && !ac.isCompleted) {
-                html += '<div class="bg-gray-800/40 border border-gray-700 rounded p-2 text-gray-500 text-xs">❓ ？？？<span class="float-right">' + (ACH_RARITY_CN[ac.rarity] || ac.rarity) + '</span></div>';
+                // 第一百零六波：隐藏成就也给剪影——名字照旧保密，但线索的方向如实给（去哪一类墙上找）
+                html += '<div class="bg-gray-800/40 border border-gray-700 rounded p-2 text-gray-500 text-xs">❓ ？？？' +
+                    '<span class="text-gray-600 ml-1">（线索藏在「' + (ACH_CATEGORY_CN[c] || c) + '」里）</span>' +
+                    '<span class="float-right">' + (ACH_RARITY_CN[ac.rarity] || ac.rarity) + '</span></div>';
                 continue;
             }
             var border = ac.isCompleted ? 'border-yellow-600 bg-yellow-900/20' : 'border-gray-700 bg-gray-800/40';
@@ -727,7 +888,7 @@ function renderAchievementPanel() {
                 + '<span class="font-bold ' + (ac.isCompleted ? 'text-yellow-300' : 'text-gray-300') + '">' + ac.name + '</span>'
                 + (ac.isCompleted ? ' <span class="text-yellow-500">✓</span>' : '')
                 + '<span class="float-right text-gray-500">' + (ACH_RARITY_CN[ac.rarity] || ac.rarity) + ' · ' + ac.points + '分</span>'
-                + '<div class="text-gray-400 mt-1">' + ac.description + '（' + (doneCount) + '/' + byCat[c].length + '）</div>'
+                + '<div class="text-gray-400 mt-1">' + (window.XianXia && window.XianXia.fmt ? window.XianXia.fmt.text(ac.description) : ac.description) + (ac.isCompleted ? ' <span class="text-yellow-600">已成</span>' : _achProgressText(ac, profile)) + '</div>'
                 + '</div>';
         }
         html += '</div></div>';

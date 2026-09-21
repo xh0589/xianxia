@@ -2,7 +2,10 @@
  * sect-year-goal.js — v19.0 P0-3 批次 C：年度宗门目标 5 选 1
  *
  * 目的（v18.8 路线图 §5 P0-3 验收 4）：
- *   玩家入宗时 5 选 1 选择本年年目标；日结推进进度；年末结算发奖。
+ *   年度宗门目标由掌门/副掌门定（批五资格门：入宗只告知规矩，这支笔到副掌门以上才到你手里）；
+ *   日结推进进度；年末结算发奖。
+ *   第一百零九波：「影响力/弟子数」这类存量账改按**本年净增**判定（baseValue 不再是死数据）；
+ *   sectBuff/buff 奖励接上真消费端（此前 policyBuffs 只写不读，全是空头发奖）。
  *
  * 设计宪法（强制规则.md）：
  *   - 单一真源：SECT_YEAR_GOAL_STORE[sectName] = { year, goalId, baseValue, startedDay, currentValue, history }
@@ -127,16 +130,36 @@
     }
 
     /**
+     * 第一百零九波 · 进度口径：influence/disciples 是存量账——目标写的是「本年 +200/+30」，
+     * 就得看立目标那天的基线之后的净增（baseValue 终于有用武之地）；
+     * resourceGain/tournamentWins/allies 本就是本年流量账，直接读现值。
+     */
+    function goalProgress(st, goal) {
+        if (!st || !goal) return 0;
+        var cur = Number(st.currentValue) || 0;
+        if (goal.metric === 'influence' || goal.metric === 'disciples') {
+            return cur - (Number(st.baseValue) || 0);
+        }
+        return cur;
+    }
+
+    /**
      * 玩家入宗时调用：弹出 5 选 1 选择。若已选过本年，不重复弹。
      * @param {string} sectName
      * @returns {boolean} true=本年是首次选择
      */
     function promptChooseYearGoal(sectName) {
         if (!sectName) return false;
-        // BUG 修复：年度宗门目标只有掌门(rank 0)/副掌门(rank 1)能设置；普通弟子静默跳过，不弹提示
+        // 批五：资格门不再静默——按钮人人看得见，点进来才知道这门事归谁定（有叙事，不是死键）
         var ds = global.discipleState || {};
         var isLeader = (ds.rank === 0 || ds.rank === 1);
-        if (!isLeader) return false;
+        if (!isLeader) {
+            if (global.showMessage) {
+                var rankName = ds.rankName || '弟子';
+                global.showMessage('📜 年度宗门目标是掌门在大殿里定的事——你如今是' + rankName + '，说不上这个话。若有主张，去议事厅提出来，长老们听得见；等你坐到副掌门以上，这支笔自然到你手里。', 'info');
+            }
+            return false;
+        }
         var st = getOrCreateState(sectName);
         var curYear = yearOfDay((typeof global.getAbsoluteDay === 'function') ? global.getAbsoluteDay() : 1);
         if (st.year === curYear && st.goalId) return false; // 已有
@@ -245,9 +268,9 @@
         var goal = getGoal(st.goalId);
         if (!goal) return;
         st.currentValue = readMetric(sectName, goal.metric);
-        // 发出进度事件
+        // 发出进度事件（第一百零九波：报的是本年净增的进度，不是存量现值）
         if (global.EventBus && typeof global.EventBus.emit === 'function') {
-            try { global.EventBus.emit('sect:goal:progress', { sectName: sectName, goalId: st.goalId, current: st.currentValue, target: goal.target }); } catch (e) {}
+            try { global.EventBus.emit('sect:goal:progress', { sectName: sectName, goalId: st.goalId, current: goalProgress(st, goal), target: goal.target }); } catch (e) {}
         }
     }
 
@@ -261,7 +284,10 @@
         var goal = getGoal(st.goalId);
         if (!goal) return null;
         st.currentValue = readMetric(sectName, goal.metric);
-        var completed = st.currentValue >= goal.target;
+        // 第一百零九波：增量目标按本年净增判——此前拿绝对值冒充增量，
+        // 「影响力+200」大派开局即完成、小派永远完不成
+        var _prog = goalProgress(st, goal);
+        var completed = _prog >= goal.target;
         var reward = null;
         if (completed) {
             reward = goal.reward || {};
@@ -272,23 +298,27 @@
             }
             if (reward.contribution && global.discipleState) {
                 global.discipleState.contribution = (Number(global.discipleState.contribution) || 0) + reward.contribution;
+                try { global.sectLedgerNote && global.sectLedgerNote(reward.contribution, '年度目标结算'); } catch (e) {}
             }
             if (reward.fame) {
                 if (typeof global.addFame === 'function') {
                     try { global.addFame(reward.fame); } catch (e) {}
                 }
             }
-            if (reward.sectBuff) {
+            // 第一百零九波：sectBuff 与 expand_territory 的 reward.buff 记同一本账——
+            // 此前 buff 字段被 settleYear 静默丢弃；且 policyBuffs 全库只写不读，如今有真消费端了
+            var _buffEffect = reward.sectBuff || (reward.buff && reward.buff.id) || null;
+            if (_buffEffect) {
                 // 写入宗门 buff（简化版：直接 push 到 SECT_INTERNAL.policyBuffs）
                 var internal = getInternal(sectName);
                 if (internal) {
                     if (!internal.policyBuffs) internal.policyBuffs = [];
                     internal.policyBuffs.push({
-                        id: 'yearGoal_' + reward.sectBuff,
+                        id: 'yearGoal_' + _buffEffect,
                         name: '年目标奖励：' + goal.name,
                         appliedAtDay: (typeof global.getAbsoluteDay === 'function') ? global.getAbsoluteDay() : 1,
-                        durationDays: 30,
-                        effect: reward.sectBuff
+                        durationDays: (reward.buff && reward.buff.days) || 30,
+                        effect: _buffEffect
                     });
                 }
             }
@@ -297,7 +327,7 @@
         if (global.showMessage) {
             var msg = completed
                 ? ('🎉 ' + year + '年宗门目标达成：' + goal.name + '！奖励已发')
-                : ('📋 ' + year + '年宗门目标未达成：' + goal.name + '（当前 ' + st.currentValue + '/' + goal.target + '）');
+                : ('📋 ' + year + '年宗门目标未达成：' + goal.name + '（本年 ' + _prog + '/' + goal.target + '）');
             global.showMessage(msg, completed ? 'success' : 'info');
         }
         if (global.EventBus && typeof global.EventBus.emit === 'function') {
@@ -320,14 +350,16 @@
         }
         var goal = getGoal(st.goalId);
         if (!goal) return '';
-        var pct = Math.min(100, Math.floor((st.currentValue / goal.target) * 100));
+        // 第一百零九波：进度条走「本年净增」的账，和完成判定同一口径
+        var _pv = goalProgress(st, goal);
+        var pct = Math.min(100, Math.floor((_pv / goal.target) * 100));
         return '<div class="bg-amber-900/30 border border-amber-600 rounded p-3 mb-3">' +
             '<p class="text-sm text-amber-200 font-bold mb-1">📜 本年目标：' + goal.icon + ' ' + goal.name + '</p>' +
             '<p class="text-xs text-gray-400 mb-2">' + goal.desc + '</p>' +
             '<div class="w-full bg-gray-700 rounded h-3 overflow-hidden">' +
                 '<div class="bg-amber-500 h-full" style="width:' + pct + '%"></div>' +
             '</div>' +
-            '<p class="text-xs text-gray-400 mt-1">' + st.currentValue + ' / ' + goal.target + '（' + pct + '%）</p>' +
+            '<p class="text-xs text-gray-400 mt-1">' + _pv + ' / ' + goal.target + '（' + pct + '%）</p>' +
             '<p class="text-xs text-green-400 mt-1">完成奖励：' + JSON.stringify(goal.reward).substring(0, 60) + '</p>' +
             '</div>';
     }
@@ -340,7 +372,7 @@
         if (!st || !st.goalId) return 0;
         var goal = getGoal(st.goalId);
         if (!goal) return 0;
-        return Math.min(1, st.currentValue / goal.target);
+        return Math.min(1, goalProgress(st, goal) / goal.target);
     }
 
     // 外部登记 NPC 任务完成数（用于 grand_tournament 目标）
@@ -351,6 +383,28 @@
     function addAlly(sectName) {
         var st = getOrCreateState(sectName);
         st.allies = (st.allies || 0) + 1;
+    }
+
+    /**
+     * 第一百零九波 · policyBuffs 的真消费口：玩家所在宗门此刻是否带着某条年目标政策（有效期内）。
+     * 此前这本账只写不读——harvest_30（灵田丰收）/training_15（修行砥砺）/reputation_20（声名远播）
+     * 全是空头发奖；现在修炼、灵田收获、名望发放三处管线真来问它。
+     */
+    function hasPolicyBuff(effectId) {
+        try {
+            var ds = global.discipleState;
+            if (!ds || !ds.isInSect || !ds.sectId) return false;
+            var internal = getInternal(ds.sectId);
+            if (!internal || !Array.isArray(internal.policyBuffs)) return false;
+            var day = (typeof global.getAbsoluteDay === 'function') ? global.getAbsoluteDay() : 1;
+            for (var i = 0; i < internal.policyBuffs.length; i++) {
+                var b = internal.policyBuffs[i];
+                if (b && b.effect === effectId
+                    && typeof b.appliedAtDay === 'number' && typeof b.durationDays === 'number'
+                    && (day - b.appliedAtDay) < b.durationDays) return true;
+            }
+        } catch (e) {}
+        return false;
     }
 
     // ============ 公开 API ============
@@ -365,6 +419,8 @@
         getProgress: getProgress,
         addTournamentWin: addTournamentWin,
         addAlly: addAlly,
+        hasPolicyBuff: hasPolicyBuff,
+        goalProgress: goalProgress,
         // 内部访问
         _getStore: function () { return STORE; }
     };

@@ -8,12 +8,18 @@ var EventBus = {
     events: {},
 
     // 注册事件监听器
+    // 第一百一十一波：返回退订函数（不再返回 this）——long-retreat 的「闭关至事件」
+    // 一直把返回值当 unsub 用：旧返回是总线对象，unsub() 必抛 TypeError 被 try/catch 吞掉，
+    // 每用一次泄漏一个 worldCalendar:due 监听器，永不摘除。全库无链式 on(...).on(...) 调用，改口径零牵连。
     on: function(eventName, callback) {
         if (!this.events[eventName]) {
             this.events[eventName] = [];
         }
         if (this.events[eventName].indexOf(callback) < 0) this.events[eventName].push(callback);
-        return this; // 链式调用
+        var self = this;
+        return function unsubscribe() {
+            self.off(eventName, callback);
+        };
     },
 
     // 发射事件

@@ -1,6 +1,6 @@
 /**
  * v20.30-jealousy-deep-node.js — 吃醋扩容包（接线验收）：
- * 32 桩结构齐、效果函数全分支可跑；余波只认 festival-bridge 账本
+ * 144 桩结构齐、效果函数全分支可跑；余波只认 festival-bridge 账本
  * （declined/stood 才作伤、spent 为证才点名、看过一次账上落旗不再重复）；
  * 试探→敲打链、小心眼 30 日重入、节日伤十二日窗口。
  *
@@ -103,12 +103,12 @@ function confessOf(id, name) { return { id: id, name: name, isDaoCompanion: fals
 var W = makeWorld({});
 var all = Object.assign({}, W.JEALOUSY_PROBE_EVENTS, W.JEALOUSY_COLD_EVENTS,
     W.JEALOUSY_AFTERMATH_EVENTS, W.JEALOUSY_SULK_EVENTS);
-assert(Object.keys(all).length === 32, 'A1 八人×四类=32 桩，一桩不少');
-assert(Object.keys(W.JEALOUSY_PROBE_EVENTS).length === 8
-    && Object.keys(W.JEALOUSY_COLD_EVENTS).length === 8
-    && Object.keys(W.JEALOUSY_AFTERMATH_EVENTS).length === 8
-    && Object.keys(W.JEALOUSY_SULK_EVENTS).length === 8,
-    'A2 四类各 8 桩：试探/敲打/余波/小心眼');
+assert(Object.keys(all).length === 144, 'A1 三十六人×四类=144 桩，一桩不少');
+assert(Object.keys(W.JEALOUSY_PROBE_EVENTS).length === 36
+    && Object.keys(W.JEALOUSY_COLD_EVENTS).length === 36
+    && Object.keys(W.JEALOUSY_AFTERMATH_EVENTS).length === 36
+    && Object.keys(W.JEALOUSY_SULK_EVENTS).length === 36,
+    'A2 四类各 36 桩：试探/敲打/余波/小心眼');
 var structOk = true, effectOk = true, optionCount = 0;
 Object.keys(all).forEach(function (k) {
     var ev = all[k];
@@ -124,7 +124,7 @@ Object.keys(all).forEach(function (k) {
 });
 assert(structOk, 'A3 每桩都有 id/npcId/title 与至少两个选项的选择场景');
 assert(effectOk, 'A4 全部效果函数逐分支跑通，返回 {affection, msg}');
-assert(optionCount === 88, 'A5 回应合计 88 个（试探/敲打/余波各3×8，小心眼2×8）');
+assert(optionCount === 396, 'A5 回应合计 396 个（试探/敲打/余波各3×36，小心眼2×36）');
 
 // ============ B 余波门禁与账本 ============
 var bonds = {};
@@ -191,9 +191,18 @@ assert(W7.__fired.length === 0, 'E1 小心眼是旧事——已发生且未到�
 npcs7[BH].__rearm = true; W7.__dayHooks.forEach(function (fn) { fn(); });
 assert(W7.__fired.join(',') === 'bh_event_sulk', 'E2 隔够日子（重入闸开）→ 同一桩小心眼还会再撞见');
 
-// ============ F 文案覆盖：八人余波逐人可弹、场景按节令换装 ============
+// ============ F 文案覆盖：三十六人余波逐人可弹、场景按节令换装 ============
 var SECTS = { bh: '百花谷', xl: '修罗宫', ts: '天山派', wx: '五仙教',
-    lu: '铸剑山庄', su: '药王谷', ms: '茅山派', jg: '金刚宗' };
+    lu: '铸剑山庄', su: '药王谷', ms: '茅山派', jg: '金刚宗',
+    em: '峨眉派', hs: '华山派', tm: '唐门', wd: '武当派',
+    pl: '蓬莱派', xy: '逍遥派',
+    heng: '恒山派', song: '嵩山派', tai: '泰山派', qing: '青城派',
+    xiang: '衡山派', gai: '丐帮',
+    yan: '阎罗殿', xue: '血手门', xie: '飞蝎坞', lie: '烈日教',
+    long: '天龙教',
+    sj: '神机门', pi: '霹雳堂', shu: '天书阁', dy: '大隐阁', yin: '侠隐阁',
+    ty: '天涯海阁', dq: '大旗门', tz: '铁掌帮', kl: '昆仑派', qz: '全真教',
+    shao: '少林寺' };
 var placeholderSeen = false;
 Object.keys(SECTS).forEach(function (p) {
     var sect = SECTS[p], id = 'sect_leader_' + sect;
@@ -210,7 +219,7 @@ Object.keys(SECTS).forEach(function (p) {
         && ev2.scenes[1].text.length > 10;
     if (!ok) placeholderSeen = true;
 });
-assert(!placeholderSeen, 'F1 八人余波均可按除夕账弹出，场景第一二句均为专属文案（不留占位）');
+assert(!placeholderSeen, 'F1 三十六人余波均可按除夕账弹出，场景第一二句均为专属文案（不留占位）');
 
 // ============ G 一次性与重演语义 ============
 var probeOnce = W.NPC_PERSONAL_EVENTS['bh_event_probe'];
@@ -220,7 +229,7 @@ assert(W.NPC_PERSONAL_EVENTS['bh_event_sulk'].ambient === true
     'G2 小心眼与余波标 ambient：是日常与账后追补，不吃「大事占半日」的时辰账');
 assert(Object.keys(W.JEALOUSY_AFTERMATH_EVENTS).every(function (k) {
     return W.JEALOUSY_AFTERMATH_EVENTS[k].requireFestivalWound === true;
-}), 'G3 八桩余波全部挂 requireFestivalWound——吃醋的根必须是账本里的真亏欠');
+}), 'G3 三十六桩余波全部挂 requireFestivalWound——吃醋的根必须是账本里的真亏欠');
 
 // ============ H 每日优先级：余波 > 试探 ============
 var npcs9 = {}; npcs9[BH] = makeNpc(BH, '温蘅', { aff: 60 }); npcs9[BH].memory = {};
@@ -280,12 +289,12 @@ assert(K3.affection === -6 && K3.msg === '哼。',
     'K3 反呛的扣分与坦白、立誓均不经折价——只动安抚类的正加成');
 
 // ============ L 被晾提醒：三十日未见，账实驱动 ============
-assert(Object.keys(W.JEALOUSY_NEGLECT_EVENTS).length === 8
+assert(Object.keys(W.JEALOUSY_NEGLECT_EVENTS).length === 36
     && Object.keys(W.JEALOUSY_NEGLECT_EVENTS).every(function (k) {
         var ev = W.JEALOUSY_NEGLECT_EVENTS[k];
         return ev.requireDaoCompanion === true && ev.ambient === true && ev.scenes.length === 3;
     }),
-    'L1 八桩被晾提醒齐——皆挂道侣门、ambient 不吃时辰、景语+开口+两选项三段');
+    'L1 三十六桩被晾提醒齐——皆挂道侣门、ambient 不吃时辰、景语+开口+两选项三段');
 var npcsL = {}; npcsL[BH] = makeNpc(BH, '温蘅', { aff: 60 });
 var bondsL = {}; bondsL[BH] = daoBond('温蘅'); bondsL[BH].lastMetDay = 100;
 var WL = makeWorld({ loc: '百花谷', npcs: npcsL, bonds: bondsL, day: 135 }); // 三十五日未见

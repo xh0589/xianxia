@@ -1,13 +1,16 @@
-// ==================== fire-qte.js - v20.1 炼丹火候试炼（玩家控火 QTE） ====================
+// ==================== fire-qte.js - v20.1 炼丹火候试炼（玩家控火 QTE）· 第二十九波添锻火试炼 ====================
 // 把炼丹火候从「技能±随机」升级为玩家可操作的控火小游戏：指针来回移动，黄区收火=极佳
 // 得分写入 window._alchemyFireBonus，下次炼丹（alchemy-compound.craft）读取替代随机火候，消费即清
+// 第二十九波：同一座火苗也供炼器炉——openForgeFireQTE 得分写 window._forgingFireBonus，
+// 下次开锻（forging-compound.rollQuality）读取替代随机炉火，消费即清（与炼丹同一把尺，各炉各账）
 // 不重构既有 craft 同步流程；得分变量运行时临时，不存档（读档后需重新试火）
 
 (function () {
 
 var _pos = 0, _dir = 1, _timer = null, _moving = false;
+var _target = 'alchemy'; // 这次试的火供哪座炉子：alchemy 炼丹 / forge 炼器
 
-function openFireQTE() {
+function _open(kind) {
     var cd = window.currentCharData;
     if (!cd) { if (window.showMessage) window.showMessage('请先创建角色进入游戏。', 'info'); return; }
     // v20.41 试火有价：盯火苗半炷香也是熬神——精力 5，不白试
@@ -15,13 +18,16 @@ function openFireQTE() {
     if (energy < 5) { if (window.showMessage) window.showMessage('精神不济，盯不住火苗——精力不足 5。', 'warning'); return; }
     cd.energy = energy - 5;
     if (window.updateCharacterStatus) window.updateCharacterStatus();
+    _target = kind === 'forge' ? 'forge' : 'alchemy';
     if (_timer) { clearInterval(_timer); _timer = null; }
     _pos = 0; _dir = 1; _moving = true;
     var old = document.getElementById('fire-qte-modal'); if (old) old.remove();
+    var forge = _target === 'forge';
+    var useWord = forge ? '下次<strong class="text-orange-300">开锻</strong>' : '下次<strong class="text-orange-300">炼丹</strong>';
     var html = '<div class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" id="fire-qte-modal">'
         + '<div class="bg-gray-800 border-2 border-orange-500 rounded-xl p-6 max-w-md w-full" style="box-shadow:0 0 60px rgba(249,115,22,0.3)">'
-        + '<h2 class="text-2xl font-bold text-orange-400 mb-2">🔥 火候试炼</h2>'
-        + '<p class="text-xs text-gray-400 mb-4">指针来回扫动，移入<span class="text-yellow-400">黄区</span>时按空格或点「收火」。命中黄区=火候极佳(80-100)，近黄次之，远则差。得分供<strong class="text-orange-300">下次炼丹</strong>用。<br>试火耗精力 5——盯火苗也是熬神。</p>'
+        + '<h2 class="text-2xl font-bold text-orange-400 mb-2">🔥 ' + (forge ? '锻火试炼' : '火候试炼') + '</h2>'
+        + '<p class="text-xs text-gray-400 mb-4">指针来回扫动，移入<span class="text-yellow-400">黄区</span>时按空格或点「收火」。命中黄区=火候极佳(80-100)，近黄次之，远则差。得分供' + useWord + '用。<br>试火耗精力 5——盯火苗也是熬神。</p>'
         + '<div class="relative h-10 bg-gray-900 rounded mb-4 overflow-hidden border border-gray-600">'
         + '<div class="absolute top-0 bottom-0 bg-yellow-500/30 border-x border-yellow-500" style="left:40%;width:20%"></div>'
         + '<div class="absolute top-0 bottom-0 w-1 bg-orange-400" id="fire-qte-pointer" style="left:0%;box-shadow:0 0 8px rgba(249,115,22,0.8)"></div>'
@@ -41,6 +47,9 @@ function openFireQTE() {
     }, 30);
 }
 
+function openFireQTE() { _open('alchemy'); }
+function openForgeFireQTE() { _open('forge'); }
+
 function _shoot() {
     if (!_moving) return;
     if (window.playSfx) window.playSfx('fire');
@@ -52,11 +61,14 @@ function _shoot() {
     else if (_pos >= 25 && _pos <= 75) score = 50 + Math.round((1 - Math.abs(_pos - 50) / 25) * 30);
     else score = Math.round(50 - Math.abs(_pos - 50) / 50 * 50);
     score = Math.max(0, Math.min(100, score));
-    window._alchemyFireBonus = score;
+    var forge = _target === 'forge';
+    if (forge) window._forgingFireBonus = score;
+    else window._alchemyFireBonus = score;
     var grade = score >= 80 ? '极佳🔥' : score >= 50 ? '尚可' : score >= 30 ? '勉强' : '失手';
+    var useWord = forge ? '下次开锻生效' : '下次炼丹生效';
     var r = document.getElementById('fire-qte-result');
-    if (r) r.textContent = '火候得分 ' + score + '（' + grade + '）— 下次炼丹生效';
-    if (window.gameLog && window.gameLog.add) window.gameLog.add('🔥 火候试炼得分 ' + score + '（' + grade + '），下次炼丹生效', 'info');
+    if (r) r.textContent = '火候得分 ' + score + '（' + grade + '）— ' + useWord;
+    if (window.gameLog && window.gameLog.add) window.gameLog.add('🔥 ' + (forge ? '锻火' : '火候') + '试炼得分 ' + score + '（' + grade + '），' + useWord, 'info');
     // 2.5 秒后自动关闭
     setTimeout(function () { var m = document.getElementById('fire-qte-modal'); if (m) m.remove(); }, 2500);
 }
@@ -78,6 +90,7 @@ document.addEventListener('keydown', function (e) {
 });
 
 window.openFireQTE = openFireQTE;
+window.openForgeFireQTE = openForgeFireQTE;
 window._fireQTEShoot = _shoot;
 window.closeFireQTE = closeFireQTE;
 

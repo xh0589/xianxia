@@ -219,21 +219,27 @@ Wk.eng.choose(2); // 大量 → do_generous
 res = Wk.eng.choose(0); // 捐 200
 assert(!(res && res.error) && Wk.w.currentCharData.karma === -14,
     'C6 大额捐赠消业更快：-18 → -14（捐得多压得快）');
-// C7 拍卖价随本城买价行情现算
-var Wa = fullWorld({ stones: 2000, buyMod: 1.2 });
+// C7 拍卖价随本城买价行情现算（v23.2：竞价改真掷骰——跟价有成败、落槌价随场子热度浮动）
+var Wa = fullWorld({ stones: 2000, buyMod: 1.2 }); // rng=0.5 < 0.55 → 跟价胜出，落槌 500×1.2×(1.1+0.5×0.4)=780
 Wa.eng.start('auction_house', 'auction');
-Wa.eng.choose(0); Wa.eng.choose(0);
-var dsc = Wa.eng.current && Wa.eng.current();
-res = Wa.eng.choose(0); // 付款
-assert(!(res && res.error) && Wa.currency.spiritStones === 2000 - 720 &&
+Wa.eng.choose(0); // 参与竞拍
+res = Wa.eng.choose(0); // 奋力跟价 → 当场掷骰结算
+assert(!(res && res.error) && Wa.currency.spiritStones === 2000 - 780 &&
     Wa.w.inventory.slots.filter(function (x) { return (x.templateId || x.id) === 'pill_foundation'; }).length === 1,
-    'C7a 贵价城落槌 500×1.2×1.2=720：拍行随本城行情定价（2000→' + Wa.currency.spiritStones + '）');
-var Wb = fullWorld({ stones: 2000, buyMod: 0.8 });
+    'C7a 贵价城跟价胜出落槌 780：拍行随本城行情定价（2000→' + Wa.currency.spiritStones + '）');
+var Wb = fullWorld({ stones: 2000, buyMod: 0.8 }); // 落槌 500×0.8×1.3=520
 Wb.eng.start('auction_house', 'auction');
-Wb.eng.choose(0); Wb.eng.choose(0);
+Wb.eng.choose(0);
 res = Wb.eng.choose(0);
-assert(!(res && res.error) && Wb.currency.spiritStones === 2000 - 480,
-    'C7b 贱地拍行起拍就便宜：500×0.8×1.2=480，同一颗丹两地两价');
+assert(!(res && res.error) && Wb.currency.spiritStones === 2000 - 520,
+    'C7b 贱地拍行起拍就便宜：520，同一颗丹两地两价');
+var Wc = fullWorld({ stones: 2000, buyMod: 1.2, rng: 0.99 }); // 0.99 > 0.55 → 被人截胡
+Wc.eng.start('auction_house', 'auction');
+Wc.eng.choose(0);
+res = Wc.eng.choose(0);
+assert(!(res && res.error) && Wc.currency.spiritStones === 2000 &&
+    Wc.w.inventory.slots.filter(function (x) { return (x.templateId || x.id) === 'pill_foundation'; }).length === 0,
+    'C7c 跟价失手：丹被神秘客截走，分文未付只长了见识');
 // C8 销赃信用：办成 +1，办砸 -1，且办砸不卡死（门槛只拦黑名单）
 var Wg = fullWorld({ stones: 100, rng: 0.1 }); // 0.1<0.7 胜
 Wg.eng.start('black_market', 'black_fence');
@@ -263,7 +269,7 @@ assert(Ws.w.currentCharData.qi === 80 && Ws.w.currentCharData.health === 70 && W
 
 // ============ E: 商店回购接城市卖价 ============
 var srcShop = loadScript('js/enhanced-shop.js');
-var i0 = srcShop.indexOf('getRegionMultiplier: function(location)');
+var i0 = srcShop.indexOf('getRegionMultiplier: function(location, opts)');   // v42 添可选 opts（野市旗），老调用单参照旧
 var i1 = srcShop.indexOf('getMerchantDemandModifier', i0);
 assert(i0 > 0 && i1 > i0, 'E1 回购倍率函数在案');
 var fnSrc = srcShop.slice(i0, i1);
@@ -308,7 +314,10 @@ assert(guildBody.indexOf('guildSellPrice') >= 0 && guildBody.indexOf('showModal'
     guildBody.indexOf('openBountyHall') < 0,
     'F7 公会堂做实商会代售台，不再是悬赏楼的影子');
 assert(appSrc.indexOf('window.openBountyBoard') >= 0, 'F8 悬赏楼接上真悬赏榜');
-assert(/function openHouseholdRegistry[\s\S]{0,400}qi -= 10/.test(appSrc), 'F9 户籍司与七衙门同一规矩（10 真气翻档）');
+// v21.4 户籍司进情境引擎公务剧本：app.js 只剩委托，10 真气门槛与扣减在 facility-offices.js 里成对在案
+assert(/function openHouseholdRegistry\(\)\s*\{[\s\S]{0,200}openFacilityScenario\('household_registry'\)/.test(appSrc) &&
+    /require: \{ qi: 10 \}[\s\S]{0,120}cost: \{ qi: 10 \}/.test(loadScript('js/city-facilities/facility-offices.js')),
+    'F9 户籍司委托情境引擎，10 真气翻档规矩原样进剧本');
 var deSrc = loadScript('js/core/daily-events.js');
 assert(deSrc.indexOf('patrolConsequence') >= 0 && deSrc.indexOf('酒钱') >= 0, 'F10 夜巡从纯文案改成真罚钱');
 var beSrc = loadScript('js/building-effects.js');

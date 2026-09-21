@@ -145,7 +145,7 @@ function planeTravel(dest) {
 }
 
 // ==================== 位面营生：采撷（仙田/魔材矿脉）====================
-// 位面特产不入人间货架：灵界出仙品，魔界出魔材，都得靠真元护身才采得动
+// 位面特产不入人间货架：灵界出三品稀货，魔界出魔材，都得靠真元护身才采得动
 var PLANE_GATHER = {
     '灵界': {
         minutes: 90, qi: 25,
@@ -259,8 +259,9 @@ function planeExplore() {
     if (roll < 0.9) {
         // 仙缘/魔缘：顿悟
         var insight = 1 + (tier >= 5 ? 1 : 0);
-        if (typeof window.addInsightPoints === 'function') window.addInsightPoints(insight);
-        else if (typeof window.insightPoints === 'number') window.insightPoints += insight;
+        // 第一百一十波 · 叫错名字族：addInsightPoints 全库无定义、旧兜底还要等第一次突破后才成立——
+        // 领悟点此前在位面上一分都落不下。按 cultivation.js 同款写法直接记真源。
+        window.insightPoints = (window.insightPoints || 0) + insight;
         passTime(120, '位面悟道');
         say(here === '灵界'
             ? '🌊 你在灵气潮汐里枯坐两时辰，忽有所悟——此地灵气自己会流动，照着它的路子走，比你过去二十年苦修都顺。（领悟 +' + insight + '）'
@@ -322,7 +323,7 @@ function planeBloodPool() {
     if (planeOf(cd.location) !== '魔界') { say('此地没有血池。', 'warning'); return false; }
     if ((Number(cd.qi) || 0) < 50) { say('你需要至少 50 点真气护住心脉，才能在血池里泡着。', 'warning'); return false; }
     cd.qi = Math.max(0, (Number(cd.qi) || 0) - 50);
-    if (typeof window.addExp === 'function') window.addExp(400 + realmTierOf() * 200);
+    if (typeof window.gainExp === 'function') window.gainExp(400 + realmTierOf() * 200);   // 第一百一十波：addExp 全库无定义——血池文案说「修为涨得飞快」，此前一点没涨；真名是 gainExp（event-system）
     if (typeof window.spendLifespan === 'function') window.spendLifespan(1);
     passTime(180, '血池淬体');
     say('🩸 你沉入血池，浊气顺着毛孔往里钻——修为涨得飞快，代价是你能听见自己的寿元在滴漏。（寿元 -1）', 'success');
@@ -338,7 +339,7 @@ function planeCultivate() {
     if (!spendQi(30)) return false;
     passTime(120, '位面悟道');
     var gain = 300 + realmTierOf() * 150;
-    if (typeof window.addExp === 'function') window.addExp(gain);
+    if (typeof window.gainExp === 'function') window.gainExp(gain);   // 第一百一十波：同上，addExp→gainExp——「修为 +300」此前是空话
     say('🧘 你在' + cd.location + '入定两时辰，此地灵气自己往你经脉里钻。（修为 +' + gain + '）', 'success');
     return true;
 }

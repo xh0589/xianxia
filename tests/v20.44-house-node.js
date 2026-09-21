@@ -72,8 +72,8 @@ assert(W2b.harvestCrop(0) === true && W2b.__added[0].n === 3,
 var W3 = makeWorld(10000);
 W3.buyHouse('cave');
 assert(W3.buyFurniture('mat') === true && W3.inventory.currency.spiritStones === 8200
-    && Math.abs(W3.getHouseBonus('cultivation') - 1.15) < 1e-9,
-    'H7 聚灵蒲团：真扣 800，洞府修炼 1.1→1.15（加成落真的）');
+    && Math.abs(W3.getHouseBonus('cultivation') - 1.15 * 1.05) < 1e-9,
+    'H7 聚灵蒲团：真扣 800，洞府修炼 1.1→1.15，再吃太虚中脉+5%（第一百零六波地脉入账）');
 assert(W3.buyFurniture('mat') === false && W3.__msgs.join('').indexOf('已置办过') >= 0,
     'H8 家具不重购——同一件只置一次');
 assert(W3.buyFurniture('lamp') === true && Math.floor(W3.getHouseBonus('storage')) === 15,

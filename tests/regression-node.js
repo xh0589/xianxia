@@ -313,6 +313,7 @@ fleer.physiology.bloodVolume = 20; fleer.physiology.health = 20;
 const heroEsc = mkEnt('追击侠客', 'ally');
 const escWin = new window.Battle(heroEsc, fleer);
 let origRand = queueRandom([0.01, 0.01]);
+escWin.spendActionCost(escWin.player, 100);   // 第九十二波·行动条：先虚掷玩家的条，让敌主攒满先动
 escWin.enemyTurn();
 Math.random = origRand;
 assert(escWin.isFinished === true && escWin.winner === 'player', 'escapee flee should end battle as player win');
@@ -323,6 +324,7 @@ fleer2.physiology.bloodVolume = 20; fleer2.physiology.health = 20;
 const heroEsc2 = mkEnt('追击侠客二', 'ally');
 const escFail = new window.Battle(heroEsc2, fleer2);
 origRand = queueRandom([0.01, 0.95]);
+escFail.spendActionCost(escFail.player, 100);   // 第九十二波·行动条：先虚掷玩家的条，让敌主攒满先动
 escFail.enemyTurn();
 Math.random = origRand;
 assert(escFail.isFinished === false && escFail.noSpoils !== true, 'failed escape must not end battle');
@@ -333,6 +335,7 @@ stubborn.physiology.bloodVolume = 5; stubborn.physiology.health = 5;
 const heroStub = mkEnt('追击侠客三', 'ally');
 const escNone = new window.Battle(heroStub, stubborn);
 origRand = queueRandom([0.01, 0.01]);
+escNone.spendActionCost(escNone.player, 100);   // 第九十二波·行动条：先虚掷玩家的条，让敌主攒满先动
 escNone.enemyTurn();
 Math.random = origRand;
 assert(escNone.isFinished !== true || escNone.winner !== 'player' || escNone.noSpoils !== true, 'non-escape holder must never flee');
@@ -447,6 +450,7 @@ for (let gl9 = 0; gl9 < 300; gl9++) {
 // 叛门弟子首见台词：第0回合插入一次
 const renE = mkEnt('叛徒·某某', 'enemy', { _renegadeTauntPending: true });
 const tauntBattle = new window.Battle(mkEnt('前同门', 'ally'), renE);
+tauntBattle.spendActionCost(tauntBattle.player, 100);   // 第九十二波·行动条：先虚掷玩家的条，让敌主攒满先动
 tauntBattle.enemyTurn();
 assert(tauntBattle.log.some(function (l) { return /师门？早就是笑话了/.test(l.msg); }), 'renegade taunt missing');
 assert(renE._renegadeTauntPending === false, 'taunt must fire only once');
@@ -621,7 +625,10 @@ currentBattle = { // 写 app.js 内部 let
   getState: function () {
     return { player: { durabilities: {}, maxDurabilities: {} }, enemy: { durabilities: {}, maxDurabilities: {} }, log: this.log, isFinished: false };
   },
-  enemyTurn: function () {}
+  enemyTurn: function () {},
+  // 第九十二波·行动条：逃跑失败扣条推进——mock 补齐两个新口
+  spendActionCost: function () {},
+  _advanceTimeline: function () {}
 };
 let origRandD = queueRandom([0.99]); // 固定逃跑失败分支：避开 closeBattle 的 DOM 访问
 window.battleFlee();

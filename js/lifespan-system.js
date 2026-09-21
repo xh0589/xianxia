@@ -17,13 +17,29 @@ var LIFESPAN_CONFIG = {
     '渡劫': { years: 15000, desc: '渡劫期寿元' }
 };
 
-var playerLifespan = { maxAge: 100, currentAge: 18, remainingDays: 0, isImmortal: false };
+// v20.81：初值补齐——旧代码 remainingDays:0，新开一局寿元面板直接显示"余0天"并弹凶兆
+var playerLifespan = { maxAge: 100, currentAge: 18, remainingDays: (100 - 18) * 360, isImmortal: false };
 
 function initLifespan() {
     try {
         var saved = localStorage.getItem('xianxia_lifespan');
         if (saved) { playerLifespan = JSON.parse(saved); }
     } catch(e) {}
+    // v20.81：老存档修复——旧版本存下来的 remainingDays:0 且没到寿终的人，按历法重算
+    if (!playerLifespan.isImmortal && !(playerLifespan.remainingDays > 0) &&
+        !playerLifespan._endingShown && playerLifespan.currentAge < playerLifespan.maxAge) {
+        playerLifespan.remainingDays = (playerLifespan.maxAge - playerLifespan.currentAge) * 360;
+        saveLifespan();
+    }
+    if (typeof window !== 'undefined') window.playerLifespan = playerLifespan;
+    updateLifespanDisplay();
+}
+
+// v20.81：新开局重置寿元（startGame 调用），避免上一世的年龄/凶兆标记带进新档
+function resetLifespanForNewGame() {
+    playerLifespan = { maxAge: 100, currentAge: 18, remainingDays: (100 - 18) * 360, isImmortal: false };
+    if (typeof window !== 'undefined') window.playerLifespan = playerLifespan;
+    saveLifespan();
     updateLifespanDisplay();
 }
 
@@ -174,6 +190,16 @@ function increaseLifespanOnBreakthrough(realm) {
     saveLifespan();
 }
 
+// 「余 29520 天」读不出量级——但世界历是 360 日一年，且本世界只有 一年/百日/三十日/十日 四档说法，
+// 不许凭空造「月」。所以只在满两年（720 日）时折算成年，其余照原样报天，
+// 与上面将死之相的配色（360 日黄 / 30 日红）同一把尺。
+function _remainingText(days) {
+    var f = window.XianXia && window.XianXia.fmt;
+    var n = function (v) { return f ? f.num(v) : String(v); };
+    if (days >= 720) return '余 ' + n(Math.floor(days / 360)) + ' 年';
+    return '余 ' + n(Math.floor(days)) + ' 天';
+}
+
 function updateLifespanDisplay() {
     var el = document.getElementById('lifespan-display');
     if (!el) return;
@@ -185,7 +211,7 @@ function updateLifespanDisplay() {
     // v20.40 将死之相上脸：暮年一步步暗下去
     var days = playerLifespan.remainingDays;
     el.style.color = days <= 30 ? '#f87171' : (days <= 360 ? '#fbbf24' : '');
-    el.innerHTML = '⌛ ' + Math.floor(playerLifespan.currentAge) + '岁 / ' + playerLifespan.maxAge + '年（余' + Math.floor(days) + '天）';
+    el.innerHTML = '⌛ ' + Math.floor(playerLifespan.currentAge) + ' 岁 / ' + playerLifespan.maxAge + ' 年（' + _remainingText(days) + '）';
 }
 
 // 突破寿元由成功事件驱动，禁止通过包裹 performBreakthrough 猜测结果。
@@ -204,6 +230,7 @@ if (typeof window !== 'undefined') {
     window.LIFESPAN_CONFIG = LIFESPAN_CONFIG;
     window.playerLifespan = playerLifespan;
     window.initLifespan = initLifespan;
+    window.resetLifespanForNewGame = resetLifespanForNewGame;
     window.updateLifespanDisplay = updateLifespanDisplay;
     window.updatePlayerLifespan = updatePlayerLifespan;
     window.increaseLifespanOnBreakthrough = increaseLifespanOnBreakthrough;

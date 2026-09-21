@@ -75,8 +75,9 @@ const mainQuestChain = [
         priority: QUEST_PRIORITIES.CRITICAL,
         description: '你踏上了修仙之路，首先需要前往一个门派拜师学艺。',
         objectives: [
-            { type: 'visit', location: '门派列表', count: 1, completed: false },
-            { type: 'join_sect', sectId: null, count: 1, completed: false }
+            // v20.81：description 给追踪栏一个人话标签；locationId 由"门派列表"页签打开时发射（见 app.js switchListMode）。
+            { type: 'visit', locationId: 'sect_list', location: '门派列表', description: '浏览门派列表', count: 1, completed: false },
+            { type: 'join_sect', sectId: null, description: '拜入任意门派', count: 1, completed: false }
         ],
         rewards: {
             exp: 100,
@@ -371,15 +372,108 @@ function initQuestSystem() {
             };
         }
     }
-    
+    // 第一百一十波 · NEW-100：账本去重（旧档里已有 main_001 两颗的现实样本）+ 回灌模板（NEW-105）
+    if (Array.isArray(playerQuestProgress.activeQuests)) {
+        playerQuestProgress.activeQuests = playerQuestProgress.activeQuests.filter(function (x, i, arr) { return arr.indexOf(x) === i; });
+    }
+    _syncTemplatesFromLedger();
+
     // 检查是否需要重置日常任务
     checkDailyReset();
 }
 
 // ============ 保存任务进度 ============
+// 第九十五波·NEW-03：槽存档要装活的任务账——此前 app.js 读 window.playerQuestProgress（从没挂上 window），
+// 槽里 questProgress 恒为空壳，任务恢复全靠全局独立键，多槽多角色会配到别人的任务账
+function getQuestProgressSnapshot() {
+    try {
+        return JSON.parse(JSON.stringify(playerQuestProgress));
+    } catch (e) {
+        return { activeQuests: [], completedQuests: [], totalCompleted: 0 };
+    }
+}
+
 function saveQuestProgress() {
+    // 第一百一十波 · NEW-105：活跃任务的目标进度也随账落盘（questState）——
+    // 此前账里只有 id 列表，读档后 [2/10] 的进度全归零、模板 accepted 全丢
+    try {
+        var stMap = {};
+        (playerQuestProgress.activeQuests || []).forEach(function (id) {
+            var q = findQuestById(id);
+            if (q && Array.isArray(q.objectives)) {
+                stMap[id] = { objectives: q.objectives.map(function (o) { return { currentCount: (o && o.currentCount) || 0, completed: !!(o && o.completed) }; }) };
+            }
+        });
+        playerQuestProgress.questState = stMap;
+    } catch (eQS) {}
     localStorage.setItem('xianxia_quest_progress', JSON.stringify(playerQuestProgress));
 }
+
+// ============ 第一百一十波 · NEW-105/109：账本回灌模板（真源接口） ============
+// 模板是定义、账本是进度——启动/读档后必须拿账本把模板灌回来，否则面板状态列（只看模板）
+// 与账本永远对不上：已接取的任务显示「未接取」还能再接一遍，[2/10] 的进度也归零。
+function _syncTemplatesFromLedger() {
+    try {
+        var active = playerQuestProgress.activeQuests || [];
+        var done = playerQuestProgress.completedQuests || [];
+        var stMap = playerQuestProgress.questState || {};
+        allQuests.forEach(function (q) {
+            if (!q || !q.id) return;
+            if (done.indexOf(q.id) >= 0) {
+                q.accepted = true; q.completed = true; q.turnedIn = true;
+                return;
+            }
+            if (active.indexOf(q.id) >= 0) {
+                q.accepted = true;
+                var st = stMap[q.id];
+                if (st && Array.isArray(st.objectives) && Array.isArray(q.objectives)) {
+                    for (var i = 0; i < q.objectives.length && i < st.objectives.length; i++) {
+                        var so = st.objectives[i];
+                        if (so && typeof so === 'object') {
+                            if (so.currentCount != null) q.objectives[i].currentCount = so.currentCount;
+                            q.objectives[i].completed = !!so.completed;
+                        }
+                    }
+                    q.completed = q.objectives.length > 0 && q.objectives.every(function (o) { return o && o.completed; });
+                }
+            }
+        });
+    } catch (e) {}
+}
+
+/** 读档真接口：就地灌账本 + 回灌模板 + 落盘（game-state 的 importQuestState 守卫指到这里，不再写 window 幻影） */
+function importQuestProgress(data) {
+    var d = data || {};
+    playerQuestProgress.activeQuests = Array.isArray(d.activeQuests)
+        ? d.activeQuests.filter(function (x, i, arr) { return typeof x === 'string' && arr.indexOf(x) === i; }) : [];
+    playerQuestProgress.completedQuests = Array.isArray(d.completedQuests) ? d.completedQuests.slice() : [];
+    playerQuestProgress.totalCompleted = Number(d.totalCompleted) || 0;
+    playerQuestProgress.dailyResetTime = d.dailyResetTime || null;
+    playerQuestProgress.questState = (d.questState && typeof d.questState === 'object') ? d.questState : {};
+    _syncTemplatesFromLedger();
+    saveQuestProgress();
+    try { if (typeof updateQuestUI === 'function') updateQuestUI(); } catch (eUI) {}
+    try { if (typeof updateQuestTracker === 'function') updateQuestTracker(); } catch (eUT) {}
+}
+
+// ============ 第八十二波·SAVE-01b：新角色任务账清零 ============
+// 旧账：任务进度存全局键，内存态 playerQuestProgress 与各任务模板的 accepted/completed 也不随新角色重置——
+// 上一个角色的 activeQuests 残留到新角色面板（把 accepted:false 的任务显示成「活跃」）。
+// 新开一局调这里：内存账与存档键一起清零，任务模板全部复位。
+function resetQuestProgressForNewCharacter() {
+    playerQuestProgress = {
+        activeQuests: [],
+        completedQuests: [],
+        dailyResetTime: null,
+        totalCompleted: 0
+    };
+    (window.allQuests || []).forEach(function (q) { if (q) resetQuest(q); });
+    try { localStorage.removeItem('xianxia_quest_progress'); } catch (e) {}
+    try { updateQuestUI(); } catch (e) {}
+    try { updateRandomQuestUI(); } catch (e) {}
+    try { updateDailyQuestUI(); } catch (e) {}
+}
+window.resetQuestProgressForNewCharacter = resetQuestProgressForNewCharacter;
 
 // ============ 检查日常任务重置 ============
 function checkDailyReset() {
@@ -416,20 +510,52 @@ function acceptQuest(questId) {
         return false;
     }
     
-    if (quest.accepted) {
+    // 第一百一十波 · NEW-100/105：重复门查账本，不只查模板布尔——模板每次刷新都回 false，
+    // 旧口径刷新一次就能把同一条主线再接一遍（activeQuests 里真出现过 main_001 两颗）
+    if (quest.accepted || (playerQuestProgress.activeQuests || []).indexOf(questId) >= 0) {
         showMessage('该任务已经接取了', 'warning');
         return false;
     }
-    
+    if ((playerQuestProgress.completedQuests || []).indexOf(questId) >= 0) {
+        showMessage('该任务已经完成了', 'info');
+        return false;
+    }
+
     // 检查任务数量限制
     if (playerQuestProgress.activeQuests.length >= 10) {
         showMessage('活跃任务数量已达上限（10个）', 'error');
         return false;
     }
-    
+
     quest.accepted = true;
-    playerQuestProgress.activeQuests.push(questId);
+    if (playerQuestProgress.activeQuests.indexOf(questId) < 0) playerQuestProgress.activeQuests.push(questId);
     saveQuestProgress();
+
+    // 第九十五波·NEW-21：先入门再接任务=永久卡 1/2 的死账——接取当场回溯既成事实：
+    // 人已在门派里，join_sect 目标按现状对账（走同一条事件桥，不另立规则）
+    try {
+        var _ds21 = window.discipleState;
+        if (_ds21 && _ds21.isInSect && Array.isArray(quest.objectives) &&
+            quest.objectives.some(function (o) { return o && o.type === 'join_sect' && !o.completed; })) {
+            advanceQuestObjectivesFromEvent('sect:joined', { sectId: _ds21.sectId, rank: _ds21.rank });
+        }
+    } catch (eRetro) {}
+
+    // v21.9：宗门守卫战接取时当面问一句——誓死守护还是暂避锋芒。
+    // 此前 main_025_protect/main_025_flee 两笔选择记录无来源（demon_heart_count 永远为 0）。
+    if (questId === 'main_025' && typeof window.showModal === 'function' &&
+        !(window.currentCharData && window.currentCharData._main025_asked)) {
+        if (window.currentCharData) window.currentCharData._main025_asked = true;
+        setTimeout(function () {
+            window.showModal('⚔️ 宗门守卫战 · 战前立誓',
+                '<div class="space-y-3">' +
+                '<p class="text-sm text-gray-300 leading-relaxed">魔教来袭，长老们在点将，火把映着满院的脸。你站到哪一边？</p>' +
+                '<div class="flex gap-2 justify-end flex-wrap">' +
+                '<button onclick="main025Resolve(\'protect\'); this.closest(\'.fixed\').remove();" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-4 py-2 rounded text-sm font-bold">🛡️ 誓死守护（交付奖励+10%）</button>' +
+                '<button onclick="main025Resolve(\'flee\'); this.closest(\'.fixed\').remove();" class="bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">🌫️ 暂避锋芒</button>' +
+                '</div></div>');
+        }, 600);
+    }
     
     // v12.4：在任务目标地注册 🎯 地图标记（无地点字段或地图无对应点时内部自动跳过）
     if (typeof window.syncQuestTargetMarkers === 'function') {
@@ -446,6 +572,21 @@ function acceptQuest(questId) {
     updateNpcQuestUI();
     return true;
 }
+
+// v21.9：main_025 守卫战立誓结算——两笔抉择真实入册（选择记忆/NPC 旧事重提均会引用）
+function main025Resolve(kind) {
+    try {
+        if (kind === 'protect') {
+            if (window.currentCharData) window.currentCharData._main025_stood = true;
+            if (typeof window.recordChoice === 'function') window.recordChoice('main_025_protect', '宗门守卫战');
+            if (typeof window.showMessage === 'function') window.showMessage('🛡️ 你在山门前立誓：「人在，宗门在！」——誓死者，交付时奖励多一成。', 'success');
+        } else {
+            if (typeof window.recordChoice === 'function') window.recordChoice('main_025_flee', '宗门守卫战');
+            if (typeof window.showMessage === 'function') window.showMessage('🌫️ 你退进了人群，保存了实力。没人当场说什么——但抉择簿上记了一笔。', 'warning');
+        }
+    } catch (e) {}
+}
+window.main025Resolve = main025Resolve;
 
 // ============ 剧情演出系统（v6.0 新增） ============
 
@@ -691,6 +832,28 @@ function showEndingScreen(endingId) {
     for (var s = 0; s < 5; s++) {
         stars += s < starCount ? '⭐' : '☆';
     }
+
+    // v21.9 选择记忆通电：_endingModifiers 此前只写不读——现在结局评价随此生抉择改写，
+    // 并展示「你走过的路」判词（choice-memory.checkEndingFromChoices 产出）。
+    var em = window._endingModifiers || null;
+    var kAdjust = 0, fAdjust = 0;
+    if (em && em.totalChoices > 0) {
+        kAdjust = Math.round((em.mercyRatio - 0.5) * 20 + (em.daoRatio - 0.5) * 20);
+        fAdjust = Math.round((em.helperRatio - 0.5) * 10 + (em.wisdomRatio - 0.5) * 10);
+    }
+    var showPower = ending.stats ? ending.stats.endingPower : 0;
+    var showFame = Math.max(0, Math.min(120, (ending.stats ? ending.stats.endingFame : 0) + fAdjust));
+    var showKarma = Math.max(0, Math.min(120, (ending.stats ? ending.stats.endingKarma : 0) + kAdjust));
+    var roadHtml = '';
+    if (em && em.totalChoices > 0) {
+        roadHtml = '<div class="mb-6 max-w-lg mx-auto bg-gray-900/60 border border-yellow-700/40 rounded-lg p-4 text-left">' +
+            '<p class="text-sm font-bold text-yellow-500 mb-2">📜 你走过的路 · 「' + em.tendency + '」</p>' +
+            '<p class="text-xs text-gray-400 leading-relaxed">此生 ' + em.totalChoices + ' 笔记录在案的抉择：仁慈 ' + Math.round(em.mercyRatio * 100) + '% · 助人 ' + Math.round(em.helperRatio * 100) + '% · 道心 ' + Math.round(em.daoRatio * 100) + '% · 明智 ' + Math.round(em.wisdomRatio * 100) + '%。</p>' +
+            '<p class="text-xs text-gray-500 mt-1">' + ((kAdjust || fAdjust)
+                ? '这些抉择改写了结局评价：因果 ' + (kAdjust >= 0 ? '+' : '') + kAdjust + '，声望 ' + (fAdjust >= 0 ? '+' : '') + fAdjust + '。'
+                : '不偏不倚——这些抉择没有偏向任何一侧。') + '</p>' +
+            '</div>';
+    }
     
     modal.innerHTML = `
         <div class="text-center max-w-2xl mx-auto px-6 py-8 animate-fadeIn" style="animation: fadeIn 1.5s ease;">
@@ -717,6 +880,8 @@ function showEndingScreen(endingId) {
                     ${ending.description}
                 </p>
             </div>
+
+            ${roadHtml}
             
             <!-- 结局统计 -->
             <div class="flex justify-center gap-6 mb-8 text-sm">
@@ -725,11 +890,11 @@ function showEndingScreen(endingId) {
                     <div class="text-gray-500">战力评价</div>
                 </div>
                 <div class="text-center">
-                    <div class="text-purple-400 text-xl font-bold">${ending.stats ? ending.stats.endingFame : 0}</div>
+                    <div class="text-purple-400 text-xl font-bold">${showFame}</div>
                     <div class="text-gray-500">声望评价</div>
                 </div>
                 <div class="text-center">
-                    <div class="text-green-400 text-xl font-bold">${ending.stats ? ending.stats.endingKarma : 0}</div>
+                    <div class="text-green-400 text-xl font-bold">${showKarma}</div>
                     <div class="text-gray-500">因果评价</div>
                 </div>
             </div>
@@ -768,9 +933,15 @@ function turnInQuest(questId) {
         showMessage('任务不存在', 'error');
         return false;
     }
-    
+
     if (!quest.completed) {
         showMessage('任务尚未完成，无法交付', 'warning');
+        return false;
+    }
+
+    // 第一百一十波 · NEW-105：交付门也查账本——「刷新→重接→重做→再交付」的重复领赏回路在此掐断
+    if (quest.turnedIn || (playerQuestProgress.completedQuests || []).indexOf(questId) >= 0) {
+        showMessage('该任务已经交付过了', 'warning');
         return false;
     }
     
@@ -795,19 +966,16 @@ function turnInQuest(questId) {
     
     quest.turnedIn = true;
     quest.accepted = false;
-    
-    // 从活跃任务中移除
-    var index = playerQuestProgress.activeQuests.indexOf(questId);
-    if (index > -1) {
-        playerQuestProgress.activeQuests.splice(index, 1);
-    }
-    
+
+    // 从活跃任务中移除（第一百一十波：重复项一次清干净——旧版 indexOf 只删第一颗，重复接取的清不掉）
+    playerQuestProgress.activeQuests = (playerQuestProgress.activeQuests || []).filter(function (x) { return x !== questId; });
+
     // 添加到已完成列表
     if (!playerQuestProgress.completedQuests.includes(questId)) {
         playerQuestProgress.completedQuests.push(questId);
+        playerQuestProgress.totalCompleted++;
     }
-    
-    playerQuestProgress.totalCompleted++;
+
     saveQuestProgress();
 
     // F-1.2 重构：补全 quest:completed 事件 emit。quest-system.js 事件桥监听此事件推进 complete_quests objective
@@ -850,6 +1018,12 @@ function giveQuestRewards(quest) {
     }
 
     var rewards = quest.rewards;
+    // v21.9：誓死者得偿——main_025 立过「誓死守护」的，交付时经验/灵石 +10%
+    if (quest.id === 'main_025' && window.currentCharData && window.currentCharData._main025_stood) {
+        rewards = Object.assign({}, rewards);
+        if (rewards.exp) rewards.exp = Math.round(rewards.exp * 1.1);
+        if (rewards.spiritStones) rewards.spiritStones = Math.round(rewards.spiritStones * 1.1);
+    }
     var city = (quest.city || quest.location ||
         (window.locationSystem && window.locationSystem.getCurrentLocation && window.locationSystem.getCurrentLocation()) ||
         (window.currentCharData && window.currentCharData.location) || '');
@@ -985,9 +1159,18 @@ function getActiveQuests() {
 
 // ============ 获取已完成但未交付的任务 ============
 function getCompletedQuests() {
-    return playerQuestProgress.completedQuests
-        .map(id => findQuestById(id))
-        .filter(q => q && q.completed && !q.turnedIn);
+    // 第一百一十波 · NEW-50：旧谓词自我排除——completedQuests 只在 turnInQuest 落 turnedIn=true
+    // 之后才 push，这里却又要求 !turnedIn，列表恒空，交付按钮在面板上没有任何入口。
+    // 改扫「活跃 ∪ 已完成」两本账：目标做满、还没交付的，都进可交付列表。
+    var seen = {};
+    var out = [];
+    (playerQuestProgress.activeQuests || []).concat(playerQuestProgress.completedQuests || []).forEach(function (id) {
+        if (seen[id]) return;
+        seen[id] = 1;
+        var q = findQuestById(id);
+        if (q && q.completed && !q.turnedIn) out.push(q);
+    });
+    return out;
 }
 
 // ============ 获取主线任务列表 ============
@@ -1036,6 +1219,232 @@ function restorePlayerQi(amount) {
     updateQuestStatusPanel();
 }
 
+// ==================== 任务页呈现层（v21.x 界面整改） ====================
+// 以下只管「怎么摆」：接取/交付判定、任务数据、onclick 里的函数名与参数一律照旧。
+// 卡片骨架 = 左正文列（min-width:0，愿意换行）+ 右动作列（不伸缩 + nowrap）。
+// 旧版按钮和正文同为可伸缩 flex 项，描述一长按钮列就被压成「接/取」竖排。
+
+var QG_PRIO_NAMES = { critical: '主线', high: '紧急', medium: '重要', low: '普通' };
+var QG_STATUS_NAMES = { todo: '未接取', doing: '进行中', ready: '可交付', done: '已完成' };
+
+// priority 历史上有三种写法（对象 / 'critical' 字符串 / 数字），只取显示名
+function _qgPrioId(quest) {
+    const p = quest && quest.priority;
+    const id = (p && typeof p === 'object') ? p.id : (typeof p === 'string' ? p : '');
+    return QG_PRIO_NAMES[id] ? id : 'low';
+}
+function _qgPrioName(quest) { return QG_PRIO_NAMES[_qgPrioId(quest)]; }
+
+// todo 没接 / doing 接了在做 / ready 目标做满等交付 / done 已了结
+function _qgStatusOf(quest) {
+    if (!quest) return 'todo';
+    if (quest.turnedIn) return 'done';
+    if (quest.completed) return 'ready';
+    if (quest.accepted) return 'doing';
+    return 'todo';
+}
+
+function _qgProgressOf(quest) {
+    const objs = (quest && quest.objectives) || [];
+    if (!objs.length) return null;
+    let done = 0;
+    objs.forEach(o => { if (o && o.completed) done++; });
+    return { done: done, total: objs.length, pct: Math.round(done / objs.length * 100) };
+}
+
+/** 读数千分位。fmt 取不到时原样返回，不赌加载顺序。 */
+function _qn(v) {
+    const f = window.XianXia && window.XianXia.fmt;
+    return f ? f.num(v) : String(v);
+}
+
+function _qgRewardText(quest) {
+    const r = (quest && quest.rewards) || {};
+    const f = window.XianXia && window.XianXia.fmt;
+    const out = [];
+    if (r.spiritStones) out.push('灵石 ' + _qn(r.spiritStones));
+    if (r.exp) out.push('历练 ' + _qn(r.exp));
+    if (r.qiRecovery) out.push('真气 ' + _qn(r.qiRecovery));
+    if (r.contribution) out.push('贡献 ' + _qn(r.contribution));
+    if (Array.isArray(r.items) && r.items.length) {
+        r.items.slice(0, 2).forEach(it => {
+            const tpl = (window.itemById && window.itemById[it.itemId]) || null;
+            const name = (tpl && tpl.name) || it.itemId;
+            out.push(f ? f.qty(name, it.count || 1) : name + ' ×' + _qn(it.count || 1));
+        });
+        if (r.items.length > 2) out.push('等 ' + r.items.length + ' 件');
+    }
+    return out.join(' · ');
+}
+
+// custom 类目标（灵气之尽章节）的 target 是内部旗标名，直接印出来玩家只看得见 qi_c11
+function _qgObjLabel(obj) {
+    if (!obj) return '目标';
+    if (obj.type === 'custom') return '经历这段剧情（自动记档）';
+    const label = _objectiveLabel(obj);
+    if (label && !/[\u4e00-\u9fa5]/.test(label) && /^[A-Za-z0-9_.\-]+$/.test(label)) return '完成对应经历（自动记档）';
+    return label || '目标';
+}
+
+function _qgObjectiveHtml(quest, max) {
+    const objs = (quest && quest.objectives) || [];
+    if (!objs.length) return '';
+    const cap = max || 3;
+    let html = '';
+    objs.slice(0, cap).forEach(obj => {
+        const need = obj.count || 1;
+        const cur = Math.min((obj && obj.currentCount) || 0, need);
+        html += '<p class="qg-obj' + (obj && obj.completed ? ' is-done' : '') + '">'
+            + '<span class="qg-obj__mark">' + (obj && obj.completed ? '✓' : '○') + '</span>'
+            + '<span class="qg-obj__text">' + _qgObjLabel(obj) + '</span>'
+            + '<span class="qg-obj__num">' + _qn(cur) + '/' + _qn(need) + '</span></p>';
+    });
+    if (objs.length > cap) html += '<p class="qg-obj qg-obj--rest">另有 ' + (objs.length - cap) + ' 项目标</p>';
+    return '<div class="qg-objs">' + html + '</div>';
+}
+
+// cfg: { state, extra, no, title, prio, tag, desc, status, statusText, progress,
+//        rewardLabel, reward, lock, objectives, actions }
+function _qgCardHtml(cfg) {
+    let html = '<div class="qg-card qg-card--' + cfg.state + (cfg.extra ? ' ' + cfg.extra : '') + '">';
+    html += '<div class="qg-card__body">';
+    html += '<div class="qg-card__head">';
+    if (cfg.no != null) html += '<span class="qg-card__no">第 ' + cfg.no + ' 章</span>';
+    html += '<p class="qg-card__title">' + (cfg.title || '（无名任务）') + '</p>';
+    if (cfg.prio) html += '<span class="qg-chip qg-chip--prio-' + cfg.prioId + '">' + cfg.prio + '</span>';
+    if (cfg.tag) html += '<span class="qg-chip qg-chip--tag">' + cfg.tag + '</span>';
+    html += '</div>';
+    if (cfg.desc) html += '<p class="qg-card__desc">' + cfg.desc + '</p>';
+    html += '<div class="qg-card__meta">';
+    html += '<span class="qg-chip qg-chip--' + cfg.status + '">' + (cfg.statusText || QG_STATUS_NAMES[cfg.status] || '') + '</span>';
+    if (cfg.progress) html += '<span class="qg-meter"><i style="width:' + cfg.progress.pct + '%"></i></span>'
+        + '<span class="qg-card__pct">目标 ' + cfg.progress.done + '/' + cfg.progress.total + '</span>';
+    if (cfg.reward) html += '<span class="qg-card__reward">' + (cfg.rewardLabel || '酬劳') + '：' + cfg.reward + '</span>';
+    html += '</div>';
+    if (cfg.lock) html += '<p class="qg-card__lock">🔒 ' + cfg.lock + '</p>';
+    html += (cfg.objectives || '');
+    html += '</div>';
+    html += '<div class="qg-card__side">' + (cfg.actions || '') + '</div>';
+    html += '</div>';
+    return html;
+}
+
+// 一屏只留一颗金色按钮：被 _qgMainFocus 选中的那一条；其余走中性描边，交付另用绿色。
+function _qgAcceptBtn(quest, primary, label) {
+    return '<button onclick="acceptQuest(\'' + quest.id + '\')" class="qg-btn'
+        + (primary ? ' qg-btn--primary' : '') + '">' + (label || '接取') + '</button>';
+}
+function _qgTurnInBtn(quest, primary) {
+    return '<button onclick="turnInQuest(\'' + quest.id + '\')" class="qg-btn qg-btn--turnin'
+        + (primary ? ' qg-btn--primary' : '') + '">交付</button>';
+}
+function _qgTrackBtn(quest) {
+    const on = isQuestTracked(quest.id);
+    return '<button onclick="toggleTrackQuest(\'' + quest.id + '\'); updateQuestTracker(); updateQuestUI();"'
+        + ' class="qg-btn qg-btn--track' + (on ? ' is-on' : '') + '">' + (on ? '★ 追踪中' : '☆ 追踪') + '</button>';
+}
+
+// 主线是分五批 push 进来的（001~005、021~035、006~009、010~058），数组顺序 ≠ 章节顺序。
+// 只排一份副本用于显示，原数组不动——别的系统按原顺序取任务。
+function _qgSeq(q) {
+    const m = /(\d+)/.exec((q && q.id) || '');
+    return m ? Number(m[1]) : 9999;
+}
+function _qgMainOrdered() {
+    return mainQuestChain.slice().sort((a, b) => _qgSeq(a) - _qgSeq(b));
+}
+
+// 眼下最该动的那一条：先交付做满的，再催在做的，最后才是接下一章。
+function _qgMainFocus(chain) {
+    const order = ['ready', 'doing', 'todo'];
+    for (let i = 0; i < order.length; i++) {
+        for (let j = 0; j < chain.length; j++) {
+            if (_qgStatusOf(chain[j]) === order[i]) return { index: j, kind: order[i] };
+        }
+    }
+    return null;
+}
+
+// 列表开头的吸顶计数条：面板是一整条长页，光看列表头不知道下面还压着多少章。
+// 「下方还有 N 条」在滚动时实时改写；面板没显示时不量，省一次强制布局。
+function _qgScrollerOf(el) {
+    let n = el;
+    while (n && n !== document.body) {
+        try {
+            const oy = window.getComputedStyle(n).overflowY;
+            if (oy === 'auto' || oy === 'scroll') return n;
+        } catch (e) { return null; }
+        n = n.parentElement;
+    }
+    return null;
+}
+
+function _qgMountBar(list, headHtml) {
+    if (!list) return;
+    let bar = list._qgBar;
+    if (!bar || bar.parentNode !== list) {
+        bar = document.createElement('div');
+        bar.className = 'qg-bar';
+        list.insertBefore(bar, list.firstChild);
+        list._qgBar = bar;
+    }
+    bar.innerHTML = headHtml;
+    const rest = bar.querySelector('.qg-bar__rest');
+
+    const update = function () {
+        if (!list.offsetParent) return;                 // 面板没显示，量出来的矩形全是 0
+        const sc = list._qgScroller || (list._qgScroller = _qgScrollerOf(list));
+        if (!sc) return;
+        const box = sc.getBoundingClientRect();
+        if (box.height <= 0) return;
+        let below = 0;
+        const kids = list.children;
+        for (let i = 0; i < kids.length; i++) {
+            if (!kids[i].classList || !kids[i].classList.contains('qg-card')) continue;
+            if (kids[i].getBoundingClientRect().top > box.bottom - 8) below++;
+        }
+        if (rest) rest.textContent = below > 0 ? '· 下方还有 ' + below + ' 条' : '';
+        if (!list._qgWired) {
+            list._qgWired = true;
+            let ticking = false;
+            sc.addEventListener('scroll', function () {
+                if (ticking) return;
+                ticking = true;
+                window.requestAnimationFrame(function () {
+                    ticking = false;
+                    if (list._qgUpdate) list._qgUpdate();
+                });
+            }, { passive: true });
+        }
+    };
+    list._qgUpdate = update;
+    update();
+}
+
+// 空态不许只写「暂无」：说清为什么空、下一步点哪儿。
+function _qgActiveEmptyHtml() {
+    const chain = _qgMainOrdered();
+    const focus = _qgMainFocus(chain);
+    const nextMain = focus ? chain[focus.index] : null;
+    const verb = { ready: '去交付', doing: '去做完', todo: '去接取' }[focus && focus.kind] || '去接取';
+    let boardable = 0;
+    (window.allQuests || []).forEach(q => {
+        if (q && q.type === 'random' && !q.accepted && !q.completed) boardable++;
+    });
+    let html = '<div class="qg-empty">'
+        + '<p class="qg-empty__title">手里还没有任务</p>'
+        + '<p class="qg-empty__why">任务不会自己上身——要在左栏「主线任务」，或下面的「门派日常」「布告委托」里点一次接取。</p>';
+    if (nextMain) {
+        html += '<p class="qg-empty__next">下一步：主线第 ' + (focus.index + 1) + ' 章《'
+            + (nextMain.title || '') + '》，' + verb + '。</p>';
+    }
+    if (boardable > 0) {
+        html += '<p class="qg-empty__hint">布告栏上还贴着 ' + boardable + ' 单现结的活计，不要前置，赏钱当场给。</p>';
+    }
+    html += '<p class="qg-empty__hint">接了之后就会出现在这一栏，并自动挂上右上角的追踪条。</p></div>';
+    return html;
+}
+
 // ============ 更新任务UI ============
 function updateQuestUI() {
     // BUG-10 修复：HTML 任务面板容器是 panel-quests，旧守卫查的 quest-panel（幽灵面板）不存在，
@@ -1056,7 +1465,7 @@ function updateQuestUI() {
         const activeQuests = getActiveQuests();
         
         if (activeQuests.length === 0) {
-            activeList.innerHTML = '<p class="text-gray-500 text-sm">暂无活跃任务</p>';
+            activeList.innerHTML = _qgActiveEmptyHtml();
         } else {
             activeQuests.forEach(quest => {
                 const questItem = createQuestItemElement(quest);
@@ -1072,7 +1481,10 @@ function updateQuestUI() {
         const completedQuests = getCompletedQuests();
         
         if (completedQuests.length === 0) {
-            completedList.innerHTML = '<p class="text-gray-500 text-sm">暂无已完成任务</p>';
+            completedList.innerHTML = '<div class="qg-empty">'
+                + '<p class="qg-empty__title">这里还空着</p>'
+                + '<p class="qg-empty__why">目标做满的任务不会自己结掉——要在「活跃任务」或左栏主线里点【交付】，领了赏才归档到这一栏。</p>'
+                + '</div>';
         } else {
             completedQuests.forEach(quest => {
                 const questItem = createQuestItemElement(quest, true);
@@ -1122,6 +1534,33 @@ function isQuestTracked(questId) {
     return _trackedQuests.indexOf(questId) >= 0;
 }
 
+// v20.81：追踪栏人话标签。旧代码只拼 obj.location||obj.target||obj.item，
+// join_sect/cultivation_realm/meditate 等目标全部渲染成空白（"○  0/1"），采集目标直接露 mat_lingzhi 这类内部 ID。
+var OBJECTIVE_TYPE_NAMES = {
+    visit: '到访地点', join_sect: '加入门派', collect: '采集物品', craft: '制作物品',
+    kill: '讨伐', combat: '战斗', meditate: '打坐修炼', practice: '修炼', cultivate: '修炼',
+    cultivation_realm: '修为达标', breakthrough_realm: '境界突破', reputation: '声望',
+    sparring: '切磋', complete_quests: '完成任务', talk: '交谈', talk_to_npc: '交谈',
+    explore: '探索', explore_dungeon: '探索秘境', dungeon: '通关秘境',
+    arenaWin: '比武获胜', arena_win: '比武获胜', escort: '护送',
+    gather: '采集', mine: '采矿', fish: '垂钓'
+};
+function _objectiveLabel(obj) {
+    if (!obj) return '';
+    if (obj.description) return obj.description;
+    if (obj.location) return obj.location;
+    if (obj.target || obj.enemyId || obj.enemyType) return obj.target || obj.enemyId || obj.enemyType;
+    if (obj.item) {
+        var tpl = (typeof window !== 'undefined' && window.itemById) ? window.itemById[obj.item] : null;
+        return (tpl && tpl.name) ? tpl.name : obj.item;
+    }
+    if (obj.dungeon || obj.dungeonId) return obj.dungeon || obj.dungeonId;
+    if (obj.npcName || obj.npcId) return obj.npcName || obj.npcId;
+    if (obj.realm) return obj.realm + (obj.layer ? obj.layer + '层' : '');
+    if (obj.toRealm) return '突破至' + obj.toRealm;
+    return OBJECTIVE_TYPE_NAMES[obj.type] || obj.type || '目标';
+}
+
 // ============ 更新任务追踪栏 ============
 function updateQuestTracker() {
     var bar = document.getElementById('quest-tracker-bar');
@@ -1151,7 +1590,7 @@ function updateQuestTracker() {
                 var cur = obj.currentCount || 0;
                 var done = obj.completed;
                 return '<span class="' + (done ? 'text-green-400' : 'text-yellow-400') + '">'
-                    + (done ? '✓' : '○') + ' ' + (obj.location || obj.target || obj.item || '') + ' ' + cur + '/' + obj.count + '</span>';
+                    + (done ? '✓' : '○') + ' ' + _objectiveLabel(obj) + ' ' + _qn(cur) + '/' + _qn(obj.count || 1) + '</span>';
             }).join(' ');
         }
         
@@ -1185,42 +1624,27 @@ turnInQuest = function(questId) {
 
 // ============ 创建任务项元素（v10.0 增强：追踪按钮） ============
 function createQuestItemElement(quest, isCompleted = false) {
-    const div = document.createElement('div');
-    div.className = `p-2 rounded mb-2 ${isCompleted ? 'bg-green-900' : 'bg-gray-800'}`;
-    
-    const priorityColor = quest.priority?.color || 'text-gray-400';
-    var isTracked = isQuestTracked(quest.id);
-    var trackBtn = quest.accepted && !quest.completed
-        ? '<button onclick="toggleTrackQuest(\'' + quest.id + '\'); updateQuestTracker(); updateQuestUI();" class="text-xs px-2 py-1 rounded ' + (isTracked ? 'bg-yellow-600 text-gray-900' : 'bg-gray-600 text-white') + '">' + (isTracked ? '★追踪中' : '☆追踪') + '</button>'
-        : '';
-    
-    div.innerHTML = `
-        <div class="flex justify-between items-start">
-            <div class="flex-1">
-                <p class="text-sm font-bold ${priorityColor}">${quest.title}</p>
-                <p class="text-xs text-gray-400 mt-1">${quest.description}</p>
-                ${quest.objectives ? `
-                    <div class="mt-1 text-xs text-gray-500">
-                        ${quest.objectives.map(obj => {
-                            const current = obj.currentCount || 0;
-                            const status = obj.completed ? 'text-green-400' : 'text-yellow-400';
-                            return `<span class="${status}">[${current}/${obj.count}]</span> `;
-                        }).join('')}
-                    </div>
-                ` : ''}
-            </div>
-            <div class="flex items-center gap-1">
-                ${trackBtn}
-                ${isCompleted ? `
-                    <button onclick="turnInQuest('${quest.id}')" class="text-xs bg-green-600 hover:bg-green-700 px-2 py-1 rounded">
-                        交付
-                    </button>
-                ` : ''}
-            </div>
-        </div>
-    `;
-    
-    return div;
+    const tpl = document.createElement('template');
+    const status = _qgStatusOf(quest);
+
+    let actions = '';
+    if (quest.accepted && !quest.completed) actions += _qgTrackBtn(quest);
+    if (isCompleted || (quest.completed && !quest.turnedIn)) actions += _qgTurnInBtn(quest, false);
+
+    tpl.innerHTML = _qgCardHtml({
+        state: status,
+        title: quest.title,
+        prio: _qgPrioName(quest),
+        prioId: _qgPrioId(quest),
+        desc: quest.description,
+        status: status,
+        progress: (status === 'doing' || status === 'ready') ? _qgProgressOf(quest) : null,
+        reward: _qgRewardText(quest),
+        objectives: _qgObjectiveHtml(quest, 3),
+        actions: actions
+    });
+
+    return tpl.content.firstChild;
 }
 
 // ============ 显示任务面板 ============
@@ -1251,33 +1675,65 @@ function updateMainQuestUI() {
     
     list.innerHTML = '';
     
-    mainQuestChain.forEach(quest => {
-        const questItem = document.createElement('div');
-        questItem.className = 'p-3 bg-gray-800 rounded mb-3';
-        
-        const statusText = quest.completed ? '<span class="text-green-400">已完成</span>' :
-                          quest.accepted ? '<span class="text-yellow-400">进行中</span>' :
-                          '<span class="text-gray-400">未接取</span>';
-        
-        const acceptBtn = !quest.accepted ? `
-            <button onclick="acceptQuest('${quest.id}')" class="text-xs bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded">
-                接取
-            </button>
-        ` : '';
-        
-        questItem.innerHTML = `
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="font-bold text-yellow-400">${quest.title}</p>
-                    <p class="text-sm text-gray-400 mt-1">${quest.description}</p>
-                    <p class="text-xs text-gray-500 mt-1">状态：${statusText}</p>
-                </div>
-                ${acceptBtn}
-            </div>
-        `;
-        
-        list.appendChild(questItem);
+    const chain = _qgMainOrdered();
+    const focus = _qgMainFocus(chain);
+    let doneCnt = 0, runCnt = 0, todoCnt = 0;
+    chain.forEach(q => {
+        const st = _qgStatusOf(q);
+        if (st === 'done') doneCnt++;
+        else if (st === 'todo') todoCnt++;
+        else runCnt++;
     });
+    
+    const cards = chain.map((quest, i) => {
+        const status = _qgStatusOf(quest);
+        const isFocus = !!focus && focus.index === i;
+        const prev = i > 0 ? chain[i - 1] : null;
+        const prevStatus = prev ? _qgStatusOf(prev) : 'done';
+        
+        // 顺序判定只用于「显示成什么样」：接不接得了仍由 acceptQuest 说了算，锁不拦点击。
+        let state = status, lock = '', tag = '', primary = false;
+        if (isFocus) {
+            tag = status === 'ready' ? '该交付了' : (status === 'doing' ? '当前在做' : '下一步');
+            primary = status !== 'doing';          // 在做的那条要在世界里做，面板上不给假按钮
+        } else if (status === 'todo' && prevStatus !== 'done') {
+            state = 'locked';
+            lock = '前置《' + (prev.title || prev.id) + '》'
+                + ({ ready: '已做满，先交付', doing: '还在进行中', todo: '还没接取' }[prevStatus] || '还没了结');
+        }
+        
+        let actions = '';
+        if (status === 'ready') actions = _qgTurnInBtn(quest, primary);
+        else if (status === 'doing') actions = isFocus ? _qgTrackBtn(quest) : '';
+        else if (status === 'todo') actions = _qgAcceptBtn(quest, primary);
+        
+        return _qgCardHtml({
+            state: state,
+            extra: isFocus ? 'is-focus' : '',
+            no: i + 1,
+            title: quest.title,
+            prio: _qgPrioName(quest),
+            prioId: _qgPrioId(quest),
+            tag: tag,
+            desc: quest.description,
+            status: status,
+            progress: (status === 'doing' || status === 'ready') ? _qgProgressOf(quest) : null,
+            reward: _qgRewardText(quest),
+            lock: lock,
+            objectives: _qgObjectiveHtml(quest, isFocus ? 3 : 2),
+            actions: actions
+        });
+    });
+    
+    list.innerHTML = cards.join('');
+    
+    const now = focus ? chain[focus.index] : null;
+    _qgMountBar(list, '<span class="qg-bar__title">共 ' + chain.length + ' 章</span>'
+        + '<span class="qg-bar__stat">已了结 ' + doneCnt + '</span>'
+        + '<span class="qg-bar__stat">在做 ' + runCnt + '</span>'
+        + '<span class="qg-bar__stat">待接 ' + todoCnt + '</span>'
+        + (now ? '<span class="qg-bar__now">当前 · 第 ' + (focus.index + 1) + ' 章《' + (now.title || '') + '》</span>' : '')
+        + '<span class="qg-bar__rest"></span>');
 }
 
 // ============ 更新日常任务UI ============
@@ -1287,33 +1743,37 @@ function updateDailyQuestUI() {
     
     list.innerHTML = '';
     
-    dailyQuestPool.forEach(quest => {
-        const questItem = document.createElement('div');
-        questItem.className = 'p-3 bg-gray-800 rounded mb-3';
+    let tookCnt = 0;
+    const cards = dailyQuestPool.map(quest => {
+        const status = _qgStatusOf(quest);
+        if (status !== 'todo') tookCnt++;
         
-        const statusText = quest.completed ? '<span class="text-green-400">已完成</span>' :
-                          quest.accepted ? '<span class="text-yellow-400">进行中</span>' :
-                          '<span class="text-gray-400">未接取</span>';
+        let actions = '';
+        if (status === 'todo') actions = _qgAcceptBtn(quest, false);
+        else if (status === 'ready') actions = _qgTurnInBtn(quest, false);
+        else if (status === 'doing') actions = _qgTrackBtn(quest);
+        else actions = '<span class="qg-card__note">今日已了结</span>';
         
-        const acceptBtn = !quest.accepted ? `
-            <button onclick="acceptQuest('${quest.id}')" class="text-xs bg-yellow-600 hover:bg-yellow-700 px-3 py-1 rounded">
-                接取
-            </button>
-        ` : '';
-        
-        questItem.innerHTML = `
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="font-bold text-blue-400">${quest.title}</p>
-                    <p class="text-sm text-gray-400 mt-1">${quest.description}</p>
-                    <p class="text-xs text-gray-500 mt-1">状态：${statusText}</p>
-                </div>
-                ${acceptBtn}
-            </div>
-        `;
-
-        list.appendChild(questItem);
+        return _qgCardHtml({
+            state: status,
+            title: quest.title,
+            prio: _qgPrioName(quest),
+            prioId: _qgPrioId(quest),
+            desc: quest.description,
+            status: status,
+            statusText: status === 'done' ? '今日已交' : null,
+            progress: (status === 'doing' || status === 'ready') ? _qgProgressOf(quest) : null,
+            reward: _qgRewardText(quest),
+            objectives: _qgObjectiveHtml(quest, 2),
+            actions: actions
+        });
     });
+    
+    list.innerHTML = cards.join('');
+    
+    _qgMountBar(list, '<span class="qg-bar__title">共 ' + dailyQuestPool.length + ' 条</span>'
+        + '<span class="qg-bar__stat">已接 ' + tookCnt + ' 条</span>'
+        + '<span class="qg-bar__hint">到点自动重置</span><span class="qg-bar__rest"></span>');
 }
 
 // ============ v20.53 布告委托 / 故人心事 ============
@@ -1325,39 +1785,38 @@ function updateRandomQuestUI() {
     list.innerHTML = '';
     const randoms = (window.allQuests || []).filter(q => q && q.type === 'random');
     if (!randoms.length) {
-        list.innerHTML = '<p class="text-gray-500 text-sm">布告栏空着。</p>';
+        list.innerHTML = '<div class="qg-empty">'
+            + '<p class="qg-empty__title">布告栏空着</p>'
+            + '<p class="qg-empty__why">城里的活计是贴上去的，也会被领完——过些时辰再来瞧一眼。</p>'
+            + '<p class="qg-empty__next">眼下先去左栏接主线，历练和灵石不会自己长出来。</p></div>';
         return;
     }
-    randoms.forEach(quest => {
-        const item = document.createElement('div');
-        item.className = 'p-3 bg-gray-800 rounded mb-2';
-        const prio = quest.priority || {};
-        const statusText = quest.completed ? '<span class="text-green-400">已完成</span>'
-            : quest.accepted ? '<span class="text-yellow-400">进行中</span>'
-            : `<span class="${prio.color || 'text-gray-400'}">${prio.name || '普通'}</span>`;
-        const rewardText = [];
-        if (quest.rewards) {
-            if (quest.rewards.spiritStones) rewardText.push('灵石 ' + quest.rewards.spiritStones);
-            if (quest.rewards.exp) rewardText.push('历练 ' + quest.rewards.exp);
-            if (quest.rewards.items && quest.rewards.items.length) {
-                quest.rewards.items.forEach(it => {
-                    const t = (window.itemById && window.itemById[it.itemId]) || {};
-                    rewardText.push((t.name || it.itemId) + ' x' + (it.count || 1));
-                });
-            }
-        }
-        item.innerHTML = `
-            <div class="flex justify-between items-start gap-2">
-                <div>
-                    <p class="font-bold text-amber-300">${quest.title}</p>
-                    <p class="text-sm text-gray-400 mt-1">${quest.description}</p>
-                    <p class="text-xs text-gray-500 mt-1">赏格：${rewardText.join('、') || '—'}</p>
-                    <p class="text-xs text-gray-500 mt-1">状态：${statusText}</p>
-                </div>
-                ${!quest.accepted && !quest.completed ? `<button onclick="acceptQuest('${quest.id}')" class="text-xs bg-amber-600 hover:bg-amber-500 px-3 py-1 rounded shrink-0">接下</button>` : ''}
-            </div>`;
-        list.appendChild(item);
+    let openCnt = 0;
+    const cards = randoms.map(quest => {
+        const status = _qgStatusOf(quest);
+        if (status === 'todo') openCnt++;
+        let actions = '';
+        if (status === 'todo') actions = _qgAcceptBtn(quest, false, '接下');
+        else if (status === 'ready') actions = _qgTurnInBtn(quest, false);
+        else if (status === 'doing') actions = _qgTrackBtn(quest);
+        return _qgCardHtml({
+            state: status,
+            title: quest.title,
+            prio: _qgPrioName(quest),
+            prioId: _qgPrioId(quest),
+            desc: quest.description,
+            status: status,
+            progress: (status === 'doing' || status === 'ready') ? _qgProgressOf(quest) : null,
+            reward: _qgRewardText(quest),
+            rewardLabel: '赏格',
+            objectives: _qgObjectiveHtml(quest, 2),
+            actions: actions
+        });
     });
+    list.innerHTML = cards.join('');
+    _qgMountBar(list, '<span class="qg-bar__title">共 ' + randoms.length + ' 单</span>'
+        + '<span class="qg-bar__stat">未接 ' + openCnt + ' 单</span>'
+        + '<span class="qg-bar__hint">赏钱现结，不要前置</span><span class="qg-bar__rest"></span>');
 }
 
 // 故人心事：交情没到的不显示（人物心里没把你当自己人，自然不会托付）
@@ -1367,7 +1826,9 @@ function updateNpcQuestUI() {
     list.innerHTML = '';
     const npcQuests = (window.allQuests || []).filter(q => q && q.type === 'npc_story');
     if (!npcQuests.length) {
-        list.innerHTML = '<p class="text-gray-500 text-sm">暂时没有故人托付心事。</p>';
+        list.innerHTML = '<div class="qg-empty">'
+            + '<p class="qg-empty__title">暂时没有故人托付心事</p>'
+            + '<p class="qg-empty__why">这一栏要靠交情开箱：认得的人越多、话说得越深，才有人把私事递到你手上。</p></div>';
         return;
     }
     const rel = (window.npcSystem && typeof window.npcSystem.getNPCRelationship === 'function')
@@ -1378,27 +1839,40 @@ function updateNpcQuestUI() {
         if (nps && nps[npcId]) return Number(nps[npcId].affection) || 0;
         return 0;
     };
-    let shown = 0;
+    const cards = [];
     npcQuests.forEach(quest => {
         const aff = getAff(quest.npcId);
         if (quest.minAffection && aff < quest.minAffection) return;
-        shown++;
-        const item = document.createElement('div');
-        item.className = 'p-3 bg-gray-800 rounded mb-2';
-        const statusText = quest.completed ? '<span class="text-green-400">已了结</span>'
-            : quest.accepted ? '<span class="text-yellow-400">记挂在心</span>' : '<span class="text-pink-400">有话想说</span>';
-        item.innerHTML = `
-            <div class="flex justify-between items-start gap-2">
-                <div>
-                    <p class="font-bold text-pink-300">${quest.title}</p>
-                    <p class="text-sm text-gray-400 mt-1">${quest.description}</p>
-                    <p class="text-xs text-gray-500 mt-1">交情 ${aff}/${quest.minAffection || 0} · ${statusText}</p>
-                </div>
-                ${!quest.accepted && !quest.completed ? `<button onclick="acceptQuest('${quest.id}')" class="text-xs bg-pink-700 hover:bg-pink-600 px-3 py-1 rounded shrink-0">细听</button>` : ''}
-            </div>`;
-        list.appendChild(item);
+        const status = _qgStatusOf(quest);
+        let actions = '';
+        if (status === 'todo') actions = _qgAcceptBtn(quest, false, '细听');
+        else if (status === 'ready') actions = _qgTurnInBtn(quest, false);
+        else if (status === 'doing') actions = _qgTrackBtn(quest);
+        cards.push(_qgCardHtml({
+            state: status,
+            title: quest.title,
+            prio: _qgPrioName(quest),
+            prioId: _qgPrioId(quest),
+            tag: '交情 ' + aff + '/' + (quest.minAffection || 0),
+            desc: quest.description,
+            status: status,
+            statusText: { ready: '话已办妥', doing: '记挂在心', todo: '有话想说', done: '已了结' }[status],
+            progress: (status === 'doing' || status === 'ready') ? _qgProgressOf(quest) : null,
+            reward: _qgRewardText(quest),
+            objectives: _qgObjectiveHtml(quest, 2),
+            actions: actions
+        }));
     });
-    if (!shown) list.innerHTML = '<p class="text-gray-500 text-sm">交情还不够，没人肯把心事托给你。</p>';
+    if (!cards.length) {
+        list.innerHTML = '<div class="qg-empty">'
+            + '<p class="qg-empty__title">交情还不够，没人肯把心事托给你</p>'
+            + '<p class="qg-empty__why">这些人认得你，但还没把你当自己人——差的是交情，不是机会。</p>'
+            + '<p class="qg-empty__next">下一步：去「人物 → 关系」看看都认得谁，再当面交谈、送礼把交情养到门槛，心事自己会找上门。</p></div>';
+        return;
+    }
+    list.innerHTML = cards.join('');
+    _qgMountBar(list, '<span class="qg-bar__title">可托付 ' + cards.length + ' 条</span>'
+        + '<span class="qg-bar__hint">交情到了才看得见下文</span><span class="qg-bar__rest"></span>');
 }
 
 // ============ 显示消息 ============
@@ -1413,11 +1887,17 @@ function updateQuestStatusPanel() {
 }
 
 // ============ 导出到全局 ============
+// 第一百一十波 · NEW-99/109：game-state 的存档桥守卫认的就是这两颗名——
+// 此前它们全库无定义，collect 落回硬编码空壳、apply 写进 window 幻影，任务账两头都进不了档。
+window.exportQuestState = getQuestProgressSnapshot;
+window.importQuestState = importQuestProgress;
 window.questSystem = {
     initQuestSystem,
     updateRandomQuestUI,
     updateNpcQuestUI,
     saveQuestProgress,
+    getQuestProgressSnapshot,
+    importQuestProgress,
     acceptQuest,
     turnInQuest,
     updateQuestObjective,
@@ -1484,11 +1964,28 @@ function questObjectiveMatches(obj, eventType, data) {
         var actual = [data.enemyId, data.enemyType, data.species, data.name].concat(data.tags || []).filter(Boolean).join(' ').toLowerCase();
         return actual.indexOf(target) >= 0 || target.indexOf(actual) >= 0;
     }
+    // v20.81：collect/craft 匹配加固。
+    // ① 事件负载字段是 itemName（inventory.js addItem），旧代码比对 data.name 永远落空；
+    // ② 采集/挖矿发放的是扩展 ID（mat_lingzhi…），主线目标写的是旧 ID（lingzhi…），
+    //    两家人导致"采集灵芝"永远不计数——用去前缀桥接（mat_/food_ 剥掉后同根即命中）。
+    function _stripItemPrefix(s) { return String(s || '').replace(/^(mat|food)_/, ''); }
+    function _itemMatch(objItem, data) {
+        if (!objItem) return true;
+        if (objItem === data.itemId || objItem === data.itemName || objItem === data.name) return true;
+        var want = _stripItemPrefix(objItem).toLowerCase();
+        var gotIds = [data.itemId, data.recipeId].filter(Boolean);
+        for (var _i = 0; _i < gotIds.length; _i++) {
+            if (_stripItemPrefix(gotIds[_i]).toLowerCase() === want) return true;
+        }
+        // 目标写的是中文名、事件也带中文名
+        if (data.itemName && objItem === data.itemName) return true;
+        return false;
+    }
     if (eventType === 'item:obtained') {
-        return obj.type === 'collect' && (!obj.item || obj.item === data.itemId || obj.item === data.name);
+        return obj.type === 'collect' && _itemMatch(obj.item, data);
     }
     if (eventType === 'item:crafted') {
-        return obj.type === 'craft' && (!obj.item || obj.item === data.itemId || obj.item === data.name);
+        return obj.type === 'craft' && _itemMatch(obj.item, data);
     }
     if (eventType === 'npc:talked') {
         // 同时匹配 talk / talk_to_npc
@@ -1528,7 +2025,14 @@ function questObjectiveMatches(obj, eventType, data) {
     }
     if (eventType === 'reputation:changed') {
         if (obj.type !== 'reputation') return false;
-        if (obj.city && obj.city !== data.cityName) return false;
+        // 第九十五波·NEW-32 连带：声望账城名两本（带空格/不带空格）已归一，事件带 normalized——
+        // 任务目标匹配同时认 cityName 与 normalized，别让旧拼写的 objective 又对不上
+        if (obj.city) {
+            var _ok = (obj.city === data.cityName) ||
+                (data.normalized && obj.city === data.normalized) ||
+                (String(obj.city).replace(/\s+/g, '') === String(data.cityName || '').replace(/\s+/g, ''));
+            if (!_ok) return false;
+        }
         return true;
     }
     if (eventType === 'quest:completed') {
@@ -1551,6 +2055,15 @@ function advanceQuestObjectivesFromEvent(eventType, eventData) {
             obj.completed = obj.currentCount >= need;
             changed = true;
         });
+        // 第九十五波·NEW-01：所有目标都满就升 quest 级 completed——
+        // 此前事件桥只置 obj.completed，而「交付」按钮与 turnInQuest 都拿 quest.completed 当门槛，
+        // 于是灵芝委托 10/10、逐条 objective 都 true，却永远没有交付按钮（updateQuestObjective 才有这步升级）
+        if (!quest.completed && quest.objectives.length > 0 &&
+            quest.objectives.every(function(o) { return o.completed; })) {
+            quest.completed = true;
+            if (typeof showMessage === 'function') showMessage('任务完成：' + (quest.title || qid) + '！', 'success');
+            if (typeof window.showEffect === 'function') { try { window.showEffect('quest_done'); } catch (eEff) {} }
+        }
     });
     if (changed) {
         saveQuestProgress();

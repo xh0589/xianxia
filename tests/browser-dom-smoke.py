@@ -99,6 +99,57 @@ results['calendar']=evaljs("""(()=>{var hasUI=typeof window.WorldCalendarUI==='o
 results['debug']=evaljs("""(()=>{if(window.DebugPanel&&DebugPanel.renderDebugPanel) DebugPanel.renderDebugPanel(); return {cityRepInput:!!document.getElementById('debug-city-reputation'),fameInput:!!document.getElementById('debug-fame'),labelText:(document.getElementById('debug-panel')||{}).innerText||''};})()""")
 # Exact regression for the reported bug: a tourist entering 修罗宫 must not even ask the romance auto-trigger to run.
 results['xiuluo_gate']=evaljs("""(()=>{var old=window.maybeAutoTriggerFeiLeiEvent,calls=0; window.maybeAutoTriggerFeiLeiEvent=function(){calls++;return true;}; Object.assign(window.discipleState,{isInSect:false,sectId:null}); currentCharData=currentCharData||{}; window.currentCharData=currentCharData; currentCharData.location='修罗宫'; showSectGateScene('修罗宫'); window.maybeAutoTriggerFeiLeiEvent=old; var npc=window.npcManager&&window.npcManager.getNPC?window.npcManager.getNPC('sect_leader_修罗宫'):null; var access=false; if(npc){npc.memory=npc.memory||{};npc.memory.firstMet=false;npc.memory.meetCount=0;access=canPlayerAccessPersonalEvent(NPC_PERSONAL_EVENTS['xl_event_001'],npc);} return {autoCalls:calls,access:access,hasGate:!!document.getElementById('sect-panel')};})()""")
+# v22.0 沉浸模式审计：个人事件全池可达性 + 开关默认关 + 远程不弹 + 交谈拦面板
+results['event_reach']=evaljs("""(()=>{
+ var pool=window.NPC_PERSONAL_EVENTS||{}; var keys=Object.keys(pool);
+ var flagged=0,unflagged=0,ambient=0,noNpc=[],npcIds={};
+ keys.forEach(function(k){var ev=pool[k];
+  if(ev.autoTrigger)flagged++;else unflagged++;
+  if(ev.ambient)ambient++;
+  npcIds[ev.npcId]=(npcIds[ev.npcId]||0)+1;
+  var npc=(window.npcManager&&window.npcManager.getNPC)?window.npcManager.getNPC(ev.npcId):null;
+  if(!npc)noNpc.push(k+'->'+ev.npcId);});
+ var sep=document.getElementById('setting-social-event-panel');
+ var xl=(window.npcManager&&window.npcManager.getNPC)?window.npcManager.getNPC('sect_leader_修罗宫'):null;
+ window._settings=window._settings||{};
+ var hadSep=Object.prototype.hasOwnProperty.call(window._settings,'socialEventPanel');
+ var savedSep=window._settings.socialEventPanel;
+ delete window._settings.socialEventPanel;
+ var offHtml=xl?getPersonalEventButtons(xl,'sect_leader_修罗宫'):'ERR';
+ window._settings.socialEventPanel=true;
+ var onHtml=xl?getPersonalEventButtons(xl,'sect_leader_修罗宫'):'';
+ if(hadSep){window._settings.socialEventPanel=savedSep;}else{delete window._settings.socialEventPanel;}
+ var remoteGuard=(function(){window._npcDialogIsRemote=true;var r=maybeAutoTriggerPersonalEvent('sect_leader_修罗宫','greet');window._npcDialogIsRemote=false;return r;})();
+ return {total:keys.length,npcCount:Object.keys(npcIds).length,flagged:flagged,unflagged:unflagged,ambient:ambient,
+  noNpcCount:noNpc.length,noNpcSample:noNpc.slice(0,10),
+  hasToggle:!!sep,toggleUnchecked:sep?!sep.checked:null,
+  offEmpty:offHtml==='',onNonEmpty:onHtml.length>50,
+  gateFns:[typeof window.personalEventGreetGate,typeof window.tryInterceptPersonalEvent,typeof window.isEventReadyNow,typeof window.isPersonalLineFinished],
+  remoteGuardFalse:remoteGuard===false};})()""")
+# v22.0 交谈即入戏（确定性）：就绪的低门槛事件直接开场并拦住社交面板
+results['intercept']=evaljs("""(()=>{
+ var id='sect_leader_修罗宫';
+ var npc=window.npcManager.getNPC(id);
+ npc.memory=npc.memory||{};npc.memory.firstMet=true;npc.memory.meetCount=1;
+ npc.relationship=npc.relationship||{};npc.relationship.affection=25;
+ currentCharData.location='修罗宫';
+ var pool=window.NPC_PERSONAL_EVENTS,expected=null,bestRank=null;
+ Object.keys(pool).forEach(function(k){var ev=pool[k];
+  if(ev.npcId!==id)return;
+  if(!((ev.minAffection||0)<=20||!ev.autoTrigger))return;
+  if(!isEventReadyNow(npc,ev,25))return;
+  var m=ev.id.match(/_event_(s|d)?(\\d+)/i);var r0=ev.ambient?1:0,r1=m?parseInt(m[2],10):0;
+  if(!expected||r0<bestRank[0]||(r0===bestRank[0]&&r1<bestRank[1])){expected=ev.id;bestRank=[r0,r1];}});
+ document.querySelectorAll('.personal-event-modal').forEach(function(m){m.remove();});
+ document.querySelectorAll('.npc-dialog-modal').forEach(function(m){m.remove();});
+ window._pendingEventComplete=null;
+ showNPCDialog(id);
+ var modal=document.querySelector('.personal-event-modal');
+ var res={expected:expected,modal:!!modal,pending:window._pendingEventComplete||null,dialogAbsent:!document.querySelector('.npc-dialog-modal')};
+ if(modal)modal.remove();
+ document.querySelectorAll('.npc-dialog-modal').forEach(function(m){m.remove();});
+ window._pendingEventComplete=null;window._currentPersonalEvent=null;
+ return res;})()""")
 # Collect browser exceptions from script execution and interactions.
 exceptions=[]
 for e in events:
@@ -119,6 +170,12 @@ checks = [
     (results['panels']['sectHidden'] is True and results['panels']['sectCount']==1 and not results['panels']['duplicateIds'], 'dynamic panel lifecycle/unique IDs'),
     (results['debug']['cityRepInput'] is True and results['debug']['fameInput'] is True, 'debug reputation controls'),
     (results['xiuluo_gate']['autoCalls']==0 and results['xiuluo_gate']['access'] is False, 'xiuluo tourist personal-event gate'),
+    (results['event_reach']['total']>0 and results['event_reach']['noNpcCount']==0, 'every personal event maps to a live NPC (sample: %s)' % results['event_reach']['noNpcSample']),
+    (results['event_reach']['hasToggle'] is True and results['event_reach']['toggleUnchecked'] is True, 'social-event-panel toggle exists and defaults off'),
+    (results['event_reach']['offEmpty'] is True and results['event_reach']['onNonEmpty'] is True, 'event list hidden in immersive mode, restored when toggled on'),
+    (results['event_reach']['gateFns']==['function','function','function','function'], 'conversation event gate functions exported'),
+    (results['event_reach']['remoteGuardFalse'] is True, 'remote profile view never pops greet events'),
+    (results['intercept']['expected'] is not None and results['intercept']['modal'] is True and results['intercept']['dialogAbsent'] is True and results['intercept']['pending']==results['intercept']['expected'], 'ready low-gate event intercepts the social panel on conversation'),
     (results['calendar']['hasUI'] is True and results['calendar']['hasPanel'] is True and results['calendar']['hasBadge'] is True, 'world-calendar UI loaded'),
     (results['calendar']['rendered']['ok'] is True and results['calendar']['rendered']['err'] is None, 'switchPanel(calendar) renders without error'),
 ]
@@ -127,5 +184,5 @@ if failed:
     print(json.dumps(report,ensure_ascii=False,indent=2))
     ws.close()
     raise SystemExit('FAIL: '+', '.join(failed))
-print('OK: Chromium DOM smoke passed; local scripts=%d; browser errors=0; quest/permit/auction/panel/debug/xiuluo/calendar gates passed' % len(loaded))
+print('OK: Chromium DOM smoke passed; local scripts=%d; browser errors=0; quest/permit/auction/panel/debug/xiuluo/calendar/immersion gates passed; personal events: total=%d flagged=%d unflagged=%d ambient=%d, all mapped to live NPCs' % (len(loaded), results['event_reach']['total'], results['event_reach']['flagged'], results['event_reach']['unflagged'], results['event_reach']['ambient']))
 ws.close()

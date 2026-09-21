@@ -59,7 +59,7 @@ const EXTENDED_LOOT_TABLES = {
         uncommon: ['wpn_steel_knife', 'wpn_ring_knife', 'arm_leather_hat', 'arm_leather_armor', 'arm_leather_boots'],
         rare: ['wpn_horse_knife', 'arm_chain_mail', 'arm_iron_helm', 'spec_transfer_stone']
     },
-    // 秘境守卫：掉落珍品-极品
+    // 秘境守卫：掉落七品-五品
     dungeon_guard: {
         common: ['pill_big_recovery', 'pill_qi_gather', 'mat_meteorite', 'mat_purple_gold', 'spec_enhance_stone'],
         uncommon: ['wpn_purple_lightning', 'wpn_green_sky', 'arm_golden_crown', 'arm_golden_silk_armor',
@@ -67,7 +67,7 @@ const EXTENDED_LOOT_TABLES = {
         rare: ['wpn_gan_jiang', 'wpn_mo_xie', 'arm_cloud_armor', 'arm_dragon_scale_armor',
                'pill_golden_core', 'mat_dragon_crystal']
     },
-    // 秘境BOSS：掉落极品-仙品
+    // 秘境BOSS：掉落五品-三品
     dungeon_boss: {
         common: ['pill_nine_revival', 'pill_qi_condense', 'mat_sky_iron', 'mat_star_iron', 'spec_transfer_stone'],
         uncommon: ['wpn_xu_yuan', 'wpn_zhan_lu', 'arm_nine_sky_crown', 'arm_hun_yuan_armor',

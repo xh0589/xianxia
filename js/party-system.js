@@ -239,7 +239,44 @@ function savePartyData() {
     localStorage.setItem('xianxia_party_data', JSON.stringify(partyData));
 }
 
+// ============ 第一百一十波 · NEW-98：存档桥的真接口（就地灌，不重绑） ============
+// 此前读档走 `global.partyData = saveData.partyData`——重绑的是 window 那颗按值镜像，
+// 模块正主与 partySystem.partyData 还停在启动对象上：读档不灌内存，且此后本机队伍的任何改动
+// 永远进不了档（collect 读的是那颗孤儿）。修法照 bodyDurability 的正确样板：就地清键再灌。
+function exportPartyState() {
+    try { return JSON.parse(JSON.stringify(partyData)); } catch (e) { return { members: [], formation: partyData.formation || 'default' }; }
+}
+
+function importPartyState(data) {
+    if (!data || typeof data !== 'object') return;
+    partyData.members = (Array.isArray(data.members) ? data.members : []).map(function (m) {
+        return (m instanceof PartyMember) ? m : new PartyMember(m || {});
+    });
+    partyData.maxMembers = data.maxMembers || 4;
+    partyData.leaderId = data.leaderId || (partyData.members[0] && partyData.members[0].id) || null;
+    partyData.formation = data.formation || 'default';
+    partyData.battleLog = Array.isArray(data.battleLog) ? data.battleLog : [];
+    partyData.fallen = Array.isArray(data.fallen) ? data.fallen : [];
+    partyData.totalBattles = Number(data.totalBattles) || 0;
+    partyData.wonBattles = Number(data.wonBattles) || 0;
+    savePartyData();
+    try { updatePartyUI(); } catch (eUI) {}
+}
+window.exportPartyState = exportPartyState;
+window.importPartyState = importPartyState;
+
 // ============ 招募NPC加入队伍 ============
+// ============ 第一百零八波 · 解除人数上限（设置页「难度设置」里的实验性开关） ============
+// 默认仍是 4 人；解开后招募不再受四人限，但留一道 99 的硬顶——
+// 战斗回合、状态栏、战后结算、起居日结全随人数线性涨，不设底会拖垮低端机，也不叫「队伍」了。
+var PARTY_UNLIMITED_CAP = 99;
+function isPartyUnlimited() {
+    try { return !!(window._settings && window._settings.partyUnlimited === true); } catch (e) { return false; }
+}
+function getEffectiveMaxMembers() {
+    return isPartyUnlimited() ? PARTY_UNLIMITED_CAP : (partyData.maxMembers || 4);
+}
+
 function recruitNPC(npcId) {
     const npc = window.npcManager?.getNPC(npcId);
     if (!npc) {
@@ -252,10 +289,23 @@ function recruitNPC(npcId) {
         showMessage(npc.name + ' 已经在队伍中了', 'warning');
         return false;
     }
+
+    // 第一百零七波 · 逝者已矣：阵亡名录上的人，好感再满也招不回来——
+    // 此前名录只记在队伍一侧，NPC 本人活蹦乱跳，战死的队友转头就能满血再入队，名录和人头对不上。
+    var _fid = String(npcId);
+    var _inFallen = (partyData.fallen || []).some(function (f) {
+        return f && (f.id === _fid || (f.name && f.name === npc.name));
+    });
+    if (_inFallen) {
+        showMessage('⚰️ 逝者已矣——' + npc.name + ' 的名字在阵亡名录上，再也回不来了。', 'error');
+        return false;
+    }
     
-    // 检查队伍是否已满
-    if (partyData.members.length >= partyData.maxMembers) {
-        showMessage('队伍已满，无法招募更多成员', 'error');
+    // 检查队伍是否已满（第一百零八波：满员线看解限开关的脸色）
+    if (partyData.members.length >= getEffectiveMaxMembers()) {
+        showMessage(isPartyUnlimited()
+            ? '解了限也有个数——一支队伍最多 ' + PARTY_UNLIMITED_CAP + ' 人，再多连洞府都住不下了。'
+            : '队伍已满，无法招募更多成员', 'error');
         return false;
     }
     
@@ -397,6 +447,31 @@ function getFormationBonuses() {
     return formation ? formation.bonuses : FORMATIONS.default.bonuses;
 }
 
+// ============ 第一百零七波 · 队员战斗改算（阵型+装备的统一出口） ============
+// 此前六阵型的攻/防/速/疗加成与队友身上的兵刃防具全是死账——battle.js 建队员实体只读
+// 属性/武艺/绝技。这里把两本账并成一份改算单，战斗侧只认这一个口子：
+//   atkMul/defMul/spdMul = 阵型乘区；atkFlat/defFlat = 兵刃防具的加值；attrAdd = 装备的属性点
+function getMemberBattleMods(member) {
+    var mods = { atkMul: 1, defMul: 1, spdMul: 1, atkFlat: 0, defFlat: 0, attrAdd: {} };
+    var fb = getFormationBonuses() || {};
+    mods.atkMul = Number(fb.attack) || 1;
+    mods.defMul = Number(fb.defense) || 1;
+    mods.spdMul = Number(fb.speed) || 1;
+    var eq = (member && member.equipment) || {};
+    for (var slot in eq) {
+        var it = eq[slot];
+        var tid = it && (it.templateId || it.id);
+        var tpl = (tid && window.itemById && window.itemById[tid]) || null;
+        if (!tpl) continue;
+        var cb = tpl.combatBonus || {};
+        mods.atkFlat += Number(cb.attack) || 0;
+        mods.defFlat += Number(tpl.defense != null ? tpl.defense : cb.defense) || 0;
+        var at = tpl.attrs || {};
+        for (var k in at) mods.attrAdd[k] = (mods.attrAdd[k] || 0) + (Number(at[k]) || 0);
+    }
+    return mods;
+}
+
 // ============ 战斗中使用队伍（已废弃，Battle类自动处理）============
 function usePartyInBattle(battle) {}
 
@@ -459,8 +534,10 @@ function teachSkillToMember(memberId, skillId) {
 function restMember(memberId) {
     const member = partyData.members.find(m => m.id === memberId);
     if (!member) return false;
-    
-    member.restore(30);
+
+    // 第一百零七波：治疗阵的账真兑现——结着治疗阵休息，恢复 +30%（此前 healing 加成全库无人读）
+    var _healMul = Number((getFormationBonuses() || {}).healing) || 1;
+    member.restore(Math.round(30 * _healMul));
     advanceTimeByMemberRest(memberId);
     savePartyData();
     showMessage(`${member.name} 休息了一会儿，恢复了状态`, 'info');
@@ -570,7 +647,8 @@ function updatePartyUI() {
     }
     const maxDisplay = document.getElementById('party-max-members-display');
     if (maxDisplay) {
-        maxDisplay.textContent = partyData.maxMembers;
+        // 第一百零八波：解限开关开着就如实报硬顶，别再挂那个写死的 4
+        maxDisplay.textContent = String(getEffectiveMaxMembers());
     }
     
     // 更新战斗日志
@@ -871,7 +949,7 @@ function showMemberSkillModal(memberId) {
     if (member.skills && member.skills.length) {
         knownHtml = member.skills.map(function(s) {
             return '<div class="bg-gray-900 rounded p-2 mb-1 text-sm"><span class="text-cyan-300 font-bold">' + (s.name || s.id) + '</span>'
-                + (s.grade ? ' <span class="text-xs text-yellow-500">' + s.grade + '</span>' : '')
+                + (s.grade ? ' <span class="text-xs text-yellow-500">' + ((typeof window.normalizeGrade === 'function' ? window.normalizeGrade(s.grade) : s.grade)) + '</span>' : '')
                 + (s.desc ? '<p class="text-xs text-gray-400 mt-0.5">' + s.desc + '</p>' : '')
                 + '</div>';
         }).join('');
@@ -1056,13 +1134,15 @@ function processPostBattleRelationships(battle) {
             if (healthAfter < member.maxHealth * 0.5 && damageTaken > 50) {
                 // 严重受伤且未治疗 - 关系下降
                 member.relationship.affection = Math.max(-100, member.relationship.affection - 10);
+                _loyaltyChange(member, -5);   // 第一百零七波：忠诚真跌——重伤没人管，心会凉
 
-                member.recordPlayerAction('abandoned_in_battle', 'negative');
+                _memberRecordAction(member, 'abandoned_in_battle', 'negative');
                 addBattleLog(`${member.name} 在战斗中受伤严重，感到被抛弃`, 'warning');
             } else if (damageTaken > 30) {
                 // 受了伤但还活着 - 关系轻微下降
                 member.relationship.affection = Math.max(-100, member.relationship.affection - 5);
-                member.recordPlayerAction('hurt_in_battle', 'neutral');
+                _loyaltyChange(member, -2);   // 第一百零七波：带伤打完这一场，也记一笔
+                _memberRecordAction(member, 'hurt_in_battle', 'neutral');
             }
 
             // 重置伤害标记
@@ -1074,12 +1154,101 @@ function processPostBattleRelationships(battle) {
     const fallen = partyData.members.filter(m => m._diedThisBattle);
     fallen.forEach(member => {
         member.relationship.affection = Math.max(-100, member.relationship.affection - 20);
-        member.recordPlayerAction('member_died_in_battle', 'negative');
+        _memberRecordAction(member, 'member_died_in_battle', 'negative');
         addBattleLog(`${member.name} 在战斗中倒下，你感到非常内疚`, 'error');
     });
+    // 第一百零七波：有人倒在身边，活下来的人心里都会记一笔；同生共死打赢一场，人心会热一点
+    if (fallen.length) {
+        partyData.members.forEach(m => { if (!m._diedThisBattle) _loyaltyChange(m, -3); });
+    }
+    if (battle.winner === 'player' && !battle.noSpoils) {
+        partyData.members.forEach(m => { if (!m._diedThisBattle) _loyaltyChange(m, +1); });
+    }
 
     savePartyData();
     return fallen;
+}
+
+// 忠诚的统一写点（第一百零七波）：夹在 0~100，凉透了记进队伍日志
+function _loyaltyChange(member, delta) {
+    if (!member || !member.relationship || !delta) return;
+    var old = member.relationship.loyalty != null ? member.relationship.loyalty : 50;
+    member.relationship.loyalty = Math.max(0, Math.min(100, old + delta));
+    if (delta < 0 && member.relationship.loyalty <= 0) {
+        addBattleLog(`${member.name} 的心已经凉透了`, 'error');
+    }
+    return member.relationship.loyalty;
+}
+
+// 第一百零七波 · 队员的行为记忆写点：此前调的是 PartyMember 上根本不存在的
+// recordPlayerAction——TypeError 被外层 try/catch 吞掉，战后关系记忆整段静默空转。
+// 记忆的真源在 NPC 档案上，改写到 NPC 那一侧。
+function _memberRecordAction(member, action, tone) {
+    try {
+        var npc = (window.npcManager && typeof window.npcManager.getNPC === 'function') ? window.npcManager.getNPC(member && member.id) : null;
+        if (npc && typeof npc.recordPlayerAction === 'function') npc.recordPlayerAction(action, tone);
+    } catch (e) {}
+}
+
+// ============ 第一百零七波 · 队友成长：打赢吃足历练，打输也长记性 ============
+// 此前 gainExp/levelUp 定义了却全库零调用——队友的等级境界冻结在入队那一刻。现在战后真分历练。
+function grantBattleExp(battle) {
+    if (!battle) return [];
+    var won = battle.winner === 'player' && !battle.noSpoils;
+    var enemyLv = Number(battle.enemy && battle.enemy.level) || 1;
+    var share = Math.max(5, enemyLv * (won ? 6 : 2));
+    var leveled = [];
+    (partyData.members || []).forEach(function (m) {
+        if (m._diedThisBattle) return;
+        var before = m.level || 1;
+        try { m.gainExp(share); } catch (e) {}
+        if ((m.level || 1) > before) leveled.push(m.name + ' 升到 ' + m.level + ' 级');
+    });
+    return leveled;
+}
+
+// ============ 第一百零七波 · 队伍随世界走：NPC 本体在日结里变强，队伍分身不能掉队 ============
+function syncWithWorld() {
+    var grew = [];
+    (partyData.members || []).forEach(function (m) {
+        try {
+            var npc = (window.npcManager && typeof window.npcManager.getNPC === 'function') ? window.npcManager.getNPC(m.id) : null;
+            if (!npc || !npc.combat) return;
+            var nlv = Number(npc.combat.level) || 0;
+            if (nlv > (m.level || 1)) {
+                while ((m.level || 1) < nlv && typeof m.levelUp === 'function') m.levelUp();
+                if (npc.combat.realm) m.realm = npc.combat.realm;
+                if (npc.combat.layer) m.layer = npc.combat.layer;
+                grew.push(m.name + '（' + (m.realm || '') + ' ' + (m.level || 1) + ' 级）');
+            }
+        } catch (e) {}
+    });
+    if (grew.length) {
+        savePartyData();
+        try { showMessage('🌱 同行的日子没有白费：' + grew.join('、') + ' 的修为更进了一步。', 'info'); } catch (e2) {}
+    }
+    return grew;
+}
+
+// ============ 第一百零七波 · 忠诚见底，人是要走的 ============
+// 心凉透（忠诚 0）当夜就走；凉到 30 以下，每天有两成五的概率收拾行囊——约束来自人心，不是配额。
+function checkLoyaltyDaily() {
+    var left = [];
+    (partyData.members || []).slice().forEach(function (m) {
+        var loy = (m.relationship && m.relationship.loyalty != null) ? m.relationship.loyalty : 50;
+        if (loy >= 30) return;
+        if (loy > 0 && partyRandomChoice([0, 0, 0, 1]) !== 1) return;
+        var name = m.name;
+        removeMember(m.id);
+        left.push(name);
+        try { showMessage('💔 ' + name + ' 离心离德——同行是情分，强留不来。他连夜收拾行囊走了。', 'warning'); } catch (e) {}
+        try {
+            var npc = (window.npcManager && typeof window.npcManager.getNPC === 'function') ? window.npcManager.getNPC(m.id) : null;
+            if (npc && typeof npc.recordPlayerAction === 'function') npc.recordPlayerAction('left_party_loyalty', 'negative');
+        } catch (e2) {}
+    });
+    if (left.length) savePartyData();
+    return left;
 }
 
 // ==================== v20.64 战后统一结算 ====================
@@ -1089,6 +1258,12 @@ function processPostBattleRelationships(battle) {
 //   · 战后关系记忆一并结算（任何结局都算数）
 function finalizeBattleOutcome(battle) {
     if (!battle) return { fallen: [], transfer: null };
+    // 第一百零七波：战绩真记账、队友真成长——打赢打输逃走，这一场都算数
+    partyData.totalBattles = (partyData.totalBattles || 0) + 1;
+    if (battle.winner === 'player' && !battle.noSpoils) partyData.wonBattles = (partyData.wonBattles || 0) + 1;
+    var leveled = [];
+    try { leveled = grantBattleExp(battle); } catch (eG) {}
+    if (leveled.length) { try { showMessage('🌱 ' + leveled.join('、'), 'success'); } catch (eM) {} }
     const fallenRefs = partyData.members.filter(m => m._diedThisBattle);
     if (!fallenRefs.length) {
         processPostBattleRelationships(battle);   // 没死人也要算受伤这笔账
@@ -1115,9 +1290,15 @@ function finalizeBattleOutcome(battle) {
     if (!Array.isArray(partyData.fallen)) partyData.fallen = [];
     fallenRefs.forEach(m => {
         partyData.fallen.push({
+            id: m.id,   // 第一百零七波：名录记 id——逝者已矣，招不回来
             name: m.name, level: m.level || 1,
             diedAt: Date.now(), cause: '战死'
         });
+        // NPC 那一侧也画线：人是战死的，不该在世界日结里照常活蹦乱跳
+        try {
+            var npc = (window.npcManager && typeof window.npcManager.getNPC === 'function') ? window.npcManager.getNPC(m.id) : null;
+            if (npc) { npc.isDead = true; npc.isFollowing = false; }
+        } catch (eN) {}
     });
     partyData.members = partyData.members.filter(m => !m._diedThisBattle);
 
@@ -1182,6 +1363,19 @@ window.partySystem = {
     partyData,
     processPostBattleRelationships: processPostBattleRelationships,
     finalizeBattleOutcome: finalizeBattleOutcome,
+    // ===== 第一百零七波：阵型/装备的战斗改算单、队友成长、随世界同步、忠诚日结 =====
+    getMemberBattleMods: getMemberBattleMods,
+    grantBattleExp: grantBattleExp,
+    syncWithWorld: syncWithWorld,
+    checkLoyaltyDaily: checkLoyaltyDaily,
+    // ===== 第一百零八波：解除人数上限的实验性开关口径 =====
+    isPartyUnlimited: isPartyUnlimited,
+    getEffectiveMaxMembers: getEffectiveMaxMembers,
+    PARTY_UNLIMITED_CAP: PARTY_UNLIMITED_CAP,
+    // ===== v20.80 队伍成员只读快照：供吃醋关系网等外部系统读取「此刻谁跟着玩家」 =====
+    getMembers: function() {
+        return (partyData.members || []).map(function(m) { return { id: m.id, name: m.name }; });
+    },
     // ===== Step 3：位置同步函数 =====
     syncPartyLocationToPlayer: function(newLocation) {
         if (!window.npcManager || !partyData) return;
@@ -1206,3 +1400,17 @@ if (typeof document !== 'undefined') {
         initPartySystem();
     });
 }
+
+// 第一百零七波：接世界钟——队友修为随世界日结长进，忠诚见底的人连夜走
+// （只挂 newDay 单一真源；EventBus 缺席才退 timeSystem 订阅，不双挂）
+try {
+    var _dailyPartyTick = function () {
+        try { syncWithWorld(); } catch (e1) {}
+        try { checkLoyaltyDaily(); } catch (e2) {}
+    };
+    if (window.EventBus && typeof window.EventBus.on === 'function') {
+        window.EventBus.on('newDay', _dailyPartyTick);
+    } else if (window.timeSystem && typeof window.timeSystem.onNewDaySubscribe === 'function') {
+        window.timeSystem.onNewDaySubscribe(_dailyPartyTick);
+    }
+} catch (eBind) {}

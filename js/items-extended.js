@@ -51,7 +51,7 @@ window.extendedManuals = window.extendedManuals || []; // v13.1 绝技秘籍
     }
 
     // 同步到分类数组
-    const weapons = allExtended.filter(i => i.type === 'equipment' && ['sword','dao','staff','spear','dagger','gauntlets','claw'].includes(i.subtype));
+    const weapons = allExtended.filter(i => i.type === 'equipment' && ['sword','dao','staff','spear','dagger','gauntlets','claw','qin'].includes(i.subtype)); // v20.90 琴入兵器谱
     const armor = allExtended.filter(i => i.type === 'equipment' && ['hat','crown','robe','armor','gloves','boots','shoes','belt','ring'].includes(i.subtype));
     const consumables = allExtended.filter(i => i.type === 'consumable');
     const materials = allExtended.filter(i => i.type === 'material');

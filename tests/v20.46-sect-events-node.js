@@ -111,7 +111,8 @@ assert(visitorHtml.indexOf('进入内院') < 0 && visitorHtml.indexOf('openFacil
 assert(visitorHtml.indexOf('早课') >= 0 || visitorHtml.indexOf('执事') >= 0,
     'E11 门闭着也有场面话——叙事替禁令说话');
 var memberHtml = W3.renderSectInnerGate('少林寺', true, 2);
-assert(memberHtml.indexOf('进入内院') >= 0, 'E12 弟子照旧入内院——该开的门没误伤');
+// v20.81：按钮改名「🧰 使用设施」（与底部栏「进入内院」撞名消解），断言跟语义走——弟子有设施入口
+assert(memberHtml.indexOf('openFacilityUI') >= 0 && memberHtml.indexOf('使用设施') >= 0, 'E12 弟子照旧入内院——该开的门没误伤');
 
 // ============ G 接线 ============
 var html = loadScript('仙侠.html');

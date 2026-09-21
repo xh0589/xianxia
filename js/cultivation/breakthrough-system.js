@@ -134,6 +134,22 @@ function calculateBreakthroughRate(charData, pills) {
     const realmPenalty = 1 - (realmIndex * 0.03);
     rate *= realmPenalty;
 
+    // 第二十四波：洞府「闭关室」的 breakthroughBoost 接进标准突破路径（此前设施加成无人读）
+    try {
+        if (window.CaveFacilities && typeof window.CaveFacilities.getBuff === 'function') {
+            const _medBoost = Number(window.CaveFacilities.getBuff('player', 'breakthroughBoost')) || 0;
+            if (_medBoost > 0) rate += _medBoost;
+        }
+    } catch (eMed) {}
+
+    // 第七十三波·境由心转：神思不倦的关冲得稳、心灰意冷的关更凶险
+    //（加减百分点放在封顶之前——[0.05, 0.95] 的老闸不破，丹药与洞府的老账不动）
+    try {
+        if (window.MoodSystem && typeof window.MoodSystem.breakthroughBonus === 'function') {
+            rate += window.MoodSystem.breakthroughBonus();
+        }
+    } catch (eMoodBT) {}
+
     // 封顶
     return Math.min(0.95, Math.max(0.05, rate));
 }

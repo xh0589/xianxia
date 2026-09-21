@@ -1,0 +1,304 @@
+/* 仙路长青 · inventory 面板专属样式（v21.x 界面整改）
+   只允许出现 #panel-inventory / 本面板相关选择器，跨面板的规则请放进 ui-tokens.css
+
+   结构由 js/inventory.js 的 _ensureInventoryChrome() 在首帧重排：
+     第 1 行 .inv-meta  = 标题 + 唯一计数（#inventory-capacity）+ 两个货币 chip
+     第 2 行 .inv-toolbar = 搜索 + 分类 chips + 「更多筛选」开关（品质 11 档与排序 .inv-adv 默认折起）
+     网格 #inventory-grid = 物品格 .inv-slot + 空格子 .inv-slot--empty（按容量铺满）
+   配色分级：主色金只给一个主行动按钮，次级灰，本面板内不留红色（红色在弹窗里给「丢弃」这类真破坏操作）。
+   选择器一律带 #panel-inventory 前缀——Tailwind 运行时注入的样式排在 head 末尾，同特异度会盖过来。 */
+
+/* ---------- 第 1 行：标题 / 计数 / 货币压成一行 ---------- */
+
+#panel-inventory .inv-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 14px;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #374151;
+}
+
+#panel-inventory .inv-meta > h2 {
+    margin: 0;
+    font-size: 20px;
+    line-height: 1.35;
+    color: var(--x-gold);
+}
+
+#panel-inventory .inv-meta__gap { flex: 1 1 auto; }
+
+/* 全面板唯一的计数口径 */
+#panel-inventory .inv-cap {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--x-text);
+    white-space: nowrap;
+}
+
+#panel-inventory .inv-hits {
+    font-size: 13px;
+    color: var(--x-muted);
+    white-space: nowrap;
+}
+
+#panel-inventory .inv-coin {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 5px;
+    padding: 2px 10px;
+    border: 1px solid #4b5563;
+    border-radius: 999px;
+    background: rgba(55, 65, 81, .35);
+}
+
+#panel-inventory .inv-coin > p {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--x-text);
+}
+
+#panel-inventory .inv-coin__unit { font-size: 13px; color: var(--x-muted); }
+
+/* ---------- 第 2 行：搜索 + 分类 + 更多筛选 ---------- */
+
+#panel-inventory .inv-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+#panel-inventory .inv-search { flex: 1 1 240px; min-width: 200px; }
+#panel-inventory .inv-search > input { width: 100%; font-size: 14px; color: var(--x-text); }
+/* placeholder 落在 bg-gray-700 上：--x-muted 只有 3.8:1，这一个是 5.0:1 */
+#panel-inventory .inv-search > input::placeholder { color: #b0b8c4; opacity: 1; }
+
+#panel-inventory .inv-chips,
+#panel-inventory .inv-adv { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+
+/* 品质 11 档 + 排序：折叠状态完全不占空间，展开才占一行 */
+#panel-inventory .inv-adv {
+    display: none;
+    flex-basis: 100%;
+    padding-top: 10px;
+    border-top: 1px dashed #374151;
+}
+#panel-inventory .inv-toolbar--adv .inv-adv { display: flex; }
+#panel-inventory .inv-adv > span { font-size: 13px; color: var(--x-muted); }
+
+/* ---------- chips（分类 / 品质 / 排序 / 更多筛选开关） ---------- */
+
+#panel-inventory .inv-chip {
+    font-size: 13px;
+    line-height: 1.4;
+    padding: 4px 10px;
+    border: 1px solid #4b5563;
+    border-radius: 6px;
+    background: #2b3441;
+    color: var(--x-text);
+    cursor: pointer;
+    transition: background-color .15s, border-color .15s, color .15s;
+}
+
+#panel-inventory .inv-chip:hover { background: #374151; border-color: #6b7280; }
+
+/* 选中态：淡金底 + 金描边，不再是一整块 bg-yellow-600 */
+#panel-inventory .inv-chip.is-active {
+    background: rgba(251, 191, 36, .16);
+    border-color: var(--x-gold);
+    color: var(--x-gold);
+    font-weight: 700;
+}
+
+#panel-inventory .inv-chip--adv {
+    margin-left: auto;
+    border-style: dashed;
+    color: var(--x-muted);
+    white-space: nowrap;
+}
+#panel-inventory .inv-chip--adv:hover { color: var(--x-text); }
+
+/* ---------- 背包网格：物品格 + 空格子底版 ---------- */
+
+#panel-inventory #inventory-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    gap: 8px;
+    margin-bottom: 4px;
+}
+
+#panel-inventory .inv-slot {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: 92px;
+    padding: 8px 6px 16px;
+    border: 1px solid var(--inv-q, #4b5563);   /* 描边即品质色，由 JS 写进 --inv-q */
+    border-radius: 8px;
+    background: #252e3b;
+    cursor: pointer;
+    transition: border-color .15s, transform .15s, background-color .15s;
+}
+
+#panel-inventory .inv-slot:hover,
+#panel-inventory .inv-slot:focus-visible {
+    border-color: var(--x-gold);
+    background: #2d3a4a;
+    transform: translateY(-1px);
+}
+
+#panel-inventory .inv-slot__icon { font-size: 22px; line-height: 1.15; }
+
+#panel-inventory .inv-slot__name {
+    max-width: 100%;
+    font-size: 13px;
+    line-height: 1.35;
+    color: var(--x-text);
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#panel-inventory .inv-slot__qty {
+    position: absolute;
+    right: 5px;
+    bottom: 3px;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--x-gold);
+}
+
+#panel-inventory .inv-slot__flag { position: absolute; left: 5px; top: 3px; font-size: 13px; line-height: 1.2; }
+#panel-inventory .inv-slot__flag--fav { color: #f472b6; }
+#panel-inventory .inv-slot__flag--marked { color: var(--x-gold); }
+
+#panel-inventory .inv-slot__check {
+    position: absolute;
+    right: 5px;
+    top: 4px;
+    width: 18px;
+    height: 18px;
+    border: 1px solid #9ca3af;
+    border-radius: 50%;
+    background: #111827;
+    color: #4ade80;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+}
+
+#panel-inventory .inv-slot--fav { box-shadow: inset 0 0 0 2px rgba(244, 114, 182, .55); }
+#panel-inventory .inv-slot--picked { box-shadow: inset 0 0 0 2px rgba(74, 222, 128, .8); }
+#panel-inventory .inv-slot--marked { background: rgba(120, 90, 20, .28); }
+
+/* 空格子：虚线底版，看得见才数得清还剩几格 */
+#panel-inventory .inv-slot--empty {
+    min-height: 92px;
+    border-style: dashed;
+    border-color: #3b4655;
+    background: rgba(31, 41, 55, .5);
+    cursor: default;
+    box-shadow: none;
+}
+#panel-inventory .inv-slot--empty:hover {
+    border-color: #4b5563;
+    background: rgba(31, 41, 55, .5);
+    transform: none;
+}
+
+/* ---------- 空态与筛选脚注 ---------- */
+
+#panel-inventory .inv-empty {
+    grid-column: 1 / -1;
+    padding: 18px 16px;
+    border: 1px dashed #4b5563;
+    border-radius: 10px;
+    background: rgba(31, 41, 55, .55);
+    text-align: center;
+}
+
+#panel-inventory .inv-empty__title {
+    margin: 0 0 6px;
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--x-text);
+}
+
+#panel-inventory .inv-empty__hint {
+    margin: 0 auto 12px;
+    max-width: 60ch;
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--x-muted);
+}
+
+#panel-inventory .inv-foot {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 2px 0 0;
+    font-size: 13px;
+    color: var(--x-muted);
+}
+
+/* ---------- 底部动作按钮：一个主色 + 灰次级 ---------- */
+
+#panel-inventory .inv-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #374151;
+}
+
+#panel-inventory .inv-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border: 1px solid #4b5563;
+    border-radius: 6px;
+    background: #2b3441;
+    color: var(--x-text);
+    font-size: 14px;
+    line-height: 1.4;
+    cursor: pointer;
+    transition: background-color .15s, border-color .15s;
+}
+
+#panel-inventory .inv-btn:hover { background: #374151; border-color: #6b7280; }
+
+#panel-inventory .inv-btn--primary {
+    background: var(--x-gold);
+    border-color: var(--x-gold-deep);
+    color: #111827;
+    font-weight: 700;
+}
+#panel-inventory .inv-btn--primary:hover { background: #fcd34d; border-color: #fcd34d; }
+
+#panel-inventory .inv-btn--sm { padding: 5px 10px; font-size: 13px; }
+
+/* ---------- 窄屏：格子和按钮都不许挤成一团 ---------- */
+
+@media (max-width: 767px) {
+    #panel-inventory #inventory-grid { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
+    #panel-inventory .inv-slot,
+    #panel-inventory .inv-slot--empty { min-height: 76px; padding: 6px 4px 14px; }
+    #panel-inventory .inv-slot__icon { font-size: 19px; }
+    #panel-inventory .inv-chip--adv { margin-left: 0; }
+    #panel-inventory .inv-search { flex-basis: 100%; }
+}

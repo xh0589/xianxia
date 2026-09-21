@@ -1,0 +1,463 @@
+/* ==================== 仙路长青 · 地图面板（九州舆图 + 一域野外）v21.x 界面整改 P1 ====================
+   选择器一律锁在 #panel-map 之下，跨面板的常量在 ui-tokens.css。
+   面板显隐靠 .hidden（Tailwind display:none），而 id 特异度压得过 .hidden，
+   所以凡是要改 display 的规则都写成 #panel-map:not(.hidden)——否则地图会永久钉在屏上。
+   本文件同时管 仙侠.html 里内联的那张 #world-map：SVG 的表现属性（font-size/fill/opacity）
+   在 CSS 眼里只是「特异度 0 的作者规则」，故属性选择器可以就地抬字号、修对比度，不必动 HTML。 */
+
+/* ---------- 1. 版面：填满面板，消掉地图下方约 200px 的死白 ----------
+   注意：撑高度的责任绝不能挂在 #panel-map 上。游戏进入门派时会给地图那一行内联
+   style="display:none"，面板若仍按 min-height:100% 占满一屏，就会留下整屏空白、
+   并把兄弟节点 #sect-panel（门派信息框）顶到屏幕外。故只给行本身设最小高度。 */
+
+#panel-map:not(.hidden) {
+    display: flex;
+    flex-direction: column;
+}
+
+/* 面板唯一的一行容器：左列表 + 右地图（野外图也挂在这一行里，见下） */
+#panel-map > .flex.gap-4 {
+    flex: 1 1 auto;
+    min-height: min(70vh, 760px);
+    flex-wrap: wrap;
+}
+
+/* #random-map-section 原本是这一行的第三个 flex item——lg 断点下它会被挤成地图右边
+   一窄列，640x360 的 viewBox 在 360px 高的盒子里上下留白带（图小、空白大）。
+   让它整行换到下面，野外图才拿得到全宽。 */
+#panel-map > .flex.gap-4 > #random-map-section {
+    flex: 1 1 100%;
+}
+
+/* 左列：按内容定高。曾经给它 flex:1 想铺满整行，但 11 个州只有 470px，
+   行高 960px——剩下 475px 是个带边框的空盒子，比空在版面背景上难看多了。
+   现在行顶部对齐，州表自己带滚动上限。 */
+#panel-map > .flex.gap-4 {
+    align-items: start;
+}
+
+#panel-map > .flex.gap-4 > .lg\:w-64 {
+    max-width: 260px;
+}
+
+#panel-map #region-list {
+    max-height: min(46vh, 520px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    padding-right: 4px;
+}
+
+/* 右列：卡片竖向排布——地图在上，图例吃掉剩余高度 */
+#panel-map > .flex.gap-4 > .flex-1 {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+#panel-map > .flex.gap-4 > .flex-1 > div {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 12px;
+}
+#panel-map #world-map {
+    flex: 0 0 auto;
+    display: block;
+}
+
+/* ---------- 2. 舆图标注：字号下限 + 分层避让 ----------
+   原图 42 个标注字号 8~10（屏幕实测 8~10px），中州一带州名/城名/门派名互相压字。
+   策略：先一律兜到 13，再按原字号分层复位；门派名默认收起，悬停或点选才出全名。 */
+
+#panel-map #world-map text {
+    font-size: 13px;
+}
+
+/* 次要一层：水名、里数尺、位面注记、路线里数（原 8~8.5） */
+#panel-map #world-map text[font-size="8"],
+#panel-map #world-map text[font-size="8.5"] {
+    font-size: 12.5px;
+}
+
+/* 城市名（原 9~10） */
+#panel-map #world-map .map-city > text {
+    font-size: 13.5px;
+}
+
+/* 州名（原 16~19，验收线 ≥14，保持最大一层） */
+#panel-map #world-map text[font-size="19"] {
+    font-size: 19px;
+}
+#panel-map #world-map text[font-size="18"],
+#panel-map #world-map text[font-size="16"] {
+    font-size: 17px;
+}
+
+/* 门派名：默认不占图面（中州 9 座山门挤在 120x120 单位里，全标必糊） */
+#panel-map #world-map .map-sect > text {
+    font-size: 13px;
+    display: none;
+}
+#panel-map #world-map .map-sect:hover > text,
+#panel-map #world-map .map-sect:active > text,
+#panel-map #world-map .map-sect.x-map-sel > text,
+#panel-map.x-sect-labels #world-map .map-sect > text {
+    display: block;
+}
+/* 白环比城市点大一圈，鼠标好瞄准（r 是 SVG2 几何属性，Chromium 支持 CSS 写） */
+#panel-map #world-map .map-sect:hover circle {
+    r: 8;
+}
+
+/* 路线标注：原图在文字底下垫一块按 8px 估宽的深色牌，抬到 12.5 后牌会短一截；
+   索性收掉牌，改给文字自身描边（与城市名同一套路）。 */
+#panel-map #world-map .world-route-g path:not(.world-route) {
+    display: none;
+}
+#panel-map #world-map .world-route-g text {
+    paint-order: stroke;
+    stroke: rgba(8, 12, 20, .88);
+    stroke-width: 3.2px;
+    stroke-linejoin: round;
+}
+
+/* ---------- 3. 深底对比度 ---------- */
+
+/* 水名/位面注记原带 opacity .7，压到 2~4:1；描边光晕已够定位，不必再半透 */
+#panel-map #world-map text[opacity="0.7"] {
+    opacity: 1;
+}
+/* 魔界注记 #a2464a 实测 2.05:1 */
+#panel-map #world-map text[fill="#a2464a"] {
+    fill: #f0a8a8;
+}
+/* 城市名的光晕按 2.5px 画在 9px 字上，抬到 13.5 后描边吃笔画 */
+#panel-map #world-map text {
+    stroke-width: 3.4px !important;
+}
+/* 州名是 17~19 的大字，光晕跟着加粗，别再被上面那条压回 3.4。
+   同时把州名降成底图一层：中州/东荒的城点就挤在州名边上，同亮度时 13.5px 的城名被吃掉。
+   CSS 的 fill 压得过 SVG 的表现属性，不必动 HTML。 */
+#panel-map #world-map text[font-size="19"],
+#panel-map #world-map text[font-size="18"],
+#panel-map #world-map text[font-size="16"] {
+    fill: rgba(243, 227, 192, .66);
+    stroke-width: 5px !important;
+}
+
+/* 亮度分层救不了位置撞字。实测三处州名压住城名，按州块内的空档各自挪开：
+   北冥压寒江 26×13、南疆压赤水 23×14、蜀地压青城山 7×15（位移量 = 重叠 + 一档余量）。
+   用 x/y 表现属性当锚点，不动 HTML 坐标。 */
+#panel-map #world-map text[x="175"][y="145"] { transform: translate(30px, 20px); }
+#panel-map #world-map text[x="380"][y="445"] { transform: translate(26px, 20px); }
+#panel-map #world-map text[x="175"][y="440"] { transform: translate(-16px, 0); }
+/* 没带光晕的 JS 标注（你在此 / 山门幡 / 洞府幡）补一圈 */
+#panel-map #world-map .world-here > text,
+#panel-map #world-map .world-home-sect > text,
+#panel-map #world-map .world-home-cave > text {
+    paint-order: stroke;
+    stroke: rgba(8, 12, 20, .9);
+    stroke-width: 3.4px;
+    stroke-linejoin: round;
+}
+
+/* 面板里所有 10px 的 Tailwind 任意值小字（野外图例、指路、行脚账）抬到 12 */
+#panel-map .text-\[10px\] {
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+/* ---------- 4. 选中态与左右联动（类由 randomMap.js 打，样式在这里） ---------- */
+
+/* app.js 的选中手法是「其余州 opacity .5」——整张图被压灰，未选中的州反而读不出色块。
+   改成：其余只轻压，选中那块加金环+外发光，一眼可辨。 */
+#panel-map #world-map .map-province {
+    opacity: 1 !important;
+    transition: stroke .18s, stroke-width .18s, opacity .18s, filter .18s;
+}
+#panel-map #world-map.x-has-prov .map-province:not(.x-map-sel) {
+    opacity: .7 !important;
+}
+#panel-map #world-map .map-province.x-map-sel {
+    stroke: #fde68a !important;
+    stroke-width: 4 !important;
+    filter: drop-shadow(0 0 9px rgba(251, 191, 36, .55)) brightness(1.16);
+}
+#panel-map #world-map .map-province.x-map-hover {
+    stroke: #fbbf24 !important;
+    stroke-width: 3 !important;
+}
+
+/* 点位一律托回实色：app.js:1132 与 location-system.js:2344 会把整批圆点压到 .4，
+   再靠 [data-sect="名"] 去找要点亮的那只——图上根本没有 data-sect 这个属性（见 仙侠.html 的
+   .map-sect 只有 class 与 onclick），于是看过一次门派面板，全图点位就永久洗白且不还原。
+   「选了哪个」不由灰度承担，改看金环 + 图例那行读数。 */
+#panel-map #world-map .map-city,
+#panel-map #world-map .map-sect {
+    opacity: 1 !important;
+}
+#panel-map #world-map .map-city circle,
+#panel-map #world-map .map-sect circle {
+    transition: r .15s ease, stroke-width .15s ease;
+}
+#panel-map #world-map .map-city.x-map-sel circle,
+#panel-map #world-map .map-sect.x-map-sel circle {
+    r: 8;
+    stroke: #fde68a;
+    stroke-width: 2.6;
+}
+#panel-map #world-map .map-city.x-map-sel > text,
+#panel-map #world-map .map-sect.x-map-sel > text {
+    fill: #fff6dc;
+}
+
+/* 左侧列表：地图点了哪儿，对应州名跟着亮；反之悬停也互应 */
+#panel-map #region-list .region-item {
+    transition: background .18s, box-shadow .18s;
+}
+#panel-map #region-list .region-item.x-map-sel {
+    background: rgba(251, 191, 36, .16);
+    box-shadow: inset 3px 0 0 #fbbf24;
+}
+#panel-map #region-list .region-item.x-map-sel > div > span:first-child {
+    color: #fde68a;
+}
+#panel-map #region-list .region-item.x-map-hover {
+    background: rgba(251, 191, 36, .09);
+    box-shadow: inset 3px 0 0 rgba(251, 191, 36, .5);
+}
+#panel-map #region-list .region-item > div > span:first-child {
+    font-size: 14px;
+}
+#panel-map #region-list .region-item > div > span:last-child {
+    font-size: 12px;
+    color: var(--x-muted, #96a0b0);
+}
+
+/* ---------- 5. 图例（DOM 由 js/map/randomMap.js 注入，样例复用 #world-map 的 defs） ---------- */
+
+#panel-map .x-map-legend {
+    flex: 1 1 auto;
+    margin-top: 12px;
+    padding: 10px 12px 12px;
+    border: 1px solid #4b5563;
+    border-radius: 10px;
+    background:
+        radial-gradient(120% 140% at 20% 0%, rgba(36, 51, 73, .55), rgba(14, 20, 32, .75) 70%);
+    color: #c7d0dc;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+#panel-map .x-map-legend-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(156, 165, 180, .28);
+}
+#panel-map .x-map-legend-h {
+    font-size: 14px;
+    font-weight: 700;
+    color: #fbbf24;
+    letter-spacing: 1px;
+}
+#panel-map .x-map-now {
+    flex: 1 1 220px;
+    font-size: 13px;
+    color: #dfe6ef;
+    min-width: 0;
+}
+#panel-map .x-map-now b {
+    color: #fde68a;
+}
+/* ---------- 6. 图上开关组：两个同类开关同住，不再一个在图角一个在图例里 ---------- */
+
+/* 定位由样式表持有：world-map.js 每切一次状态就整串覆写 className，
+   写在按钮 class 上的 absolute/top/right 会在第一次点击后消失。
+   靠左不靠右：视口右上角是全局 HUD 的地盘（天气牌 + toast 栈），toast 叠到第二条
+   就把这组开关整个盖掉——实测「🏷️ 门派名」在通知底下看不见也点不着。
+   卡片左上角是海图留白，没有图元，开关住这里谁也不挡谁。 */
+#panel-map .x-map-tools {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 10;
+    display: flex;
+    gap: 6px;
+}
+/* 组里两枚开关来源不同（一枚 Tailwind、一枚 .x-map-toggle），不统一就会并排长出两种样式 */
+#panel-map .x-map-tools button {
+    font-size: 12.5px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    border: 1px solid #6b7280;
+    background: rgba(31, 41, 55, .9);
+    color: #dfe6ef;
+    cursor: pointer;
+    transition: border-color .18s, color .18s, background .18s;
+}
+#panel-map .x-map-tools button:hover {
+    border-color: #fbbf24;
+    color: #fde68a;
+}
+#panel-map .x-map-tools button[aria-pressed="true"],
+#panel-map .x-map-tools button[class*="bg-yellow"] {
+    background: #a16207;
+    border-color: #eab308;
+    color: #fff7e0;
+}
+#panel-map .x-map-cols {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(216px, 1fr));
+    gap: 10px 18px;
+    align-content: start;
+}
+#panel-map .x-map-grp-h {
+    margin: 0 0 5px;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: #96a0b0;
+    letter-spacing: .5px;
+}
+#panel-map .x-map-legend ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+}
+#panel-map .x-map-legend li {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: #c7d0dc;
+}
+#panel-map .x-map-legend li b {
+    color: #eef3f9;
+    font-weight: 700;
+}
+/* 四栏各自竖排：一行一项，长句在行内自己折 */
+#panel-map .x-map-col > ul {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 3px;
+}
+/* 只有短词的栏（州名、地物符号）排两列，图例才不至于把面板顶出滚动条 */
+#panel-map .x-map-col.x-map-pair > ul {
+    flex-wrap: wrap;
+}
+#panel-map .x-map-col.x-map-pair > ul > li {
+    flex: 0 1 calc(50% - 2px);
+    min-width: 0;
+}
+#panel-map .x-map-legend li > span {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+#panel-map .x-map-sw,
+#panel-map .x-map-dot,
+#panel-map .x-map-sym {
+    flex: none;
+    overflow: visible;
+}
+#panel-map .x-map-sw {
+    width: 26px;
+    height: 17px;
+}
+#panel-map .x-map-dot {
+    width: 26px;
+    height: 20px;
+}
+#panel-map .x-map-sym {
+    width: 34px;
+    height: 22px;
+}
+/* 图例里的州块也是入口：点了等同于点图上的州 */
+#panel-map .x-map-prov {
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 1px 4px 1px 1px;
+    transition: background .15s;
+}
+#panel-map .x-map-prov:hover,
+#panel-map .x-map-prov.x-map-hover,
+#panel-map .x-map-prov.x-map-sel {
+    background: rgba(251, 191, 36, .14);
+}
+#panel-map .x-map-prov.x-map-sel span {
+    color: #fde68a;
+}
+
+/* ---------- 6. 顶部与右上角的开关：原先又小又贴边，按不动也看不出能按 ---------- */
+
+#panel-map #btn-mode-region,
+#panel-map #btn-mode-sect {
+    font-size: 13px;
+    line-height: 1.2;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+}
+#panel-map #btn-mode-region.bg-yellow-600,
+#panel-map #btn-mode-sect.bg-yellow-600 {
+    border-color: #eab308;
+    box-shadow: 0 0 0 1px rgba(234, 179, 8, .3), 0 2px 8px rgba(0, 0, 0, .45);
+}
+#panel-map #btn-mode-region.bg-gray-600,
+#panel-map #btn-mode-sect.bg-gray-600 {
+    color: #dde3ea;
+    border-color: #6b7280;
+}
+#panel-map #btn-map-overlay {
+    font-size: 13px;
+    line-height: 1.25;
+    padding: 8px 13px;
+    border-radius: 8px;
+    border-width: 1px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .5);
+}
+#panel-map #map-info {
+    font-size: 13.5px;
+    line-height: 1.5;
+    text-align: right;
+    flex: 0 1 auto;
+    max-width: 62%;
+}
+
+/* ---------- 7. 一域野外图（#random-map-svg）标注 ---------- */
+
+/* 地名一律带深色光晕压在 terrain 上，字号由 JS 给（11.5/12.5 用户单位） */
+#panel-map #random-map-svg text.wild-label {
+    paint-order: stroke;
+    stroke: #0a0e16;
+    stroke-width: 3.4px;
+    stroke-linejoin: round;
+    font-family: 'Noto Serif SC', 'SimSun', serif;
+}
+#panel-map #random-map-svg text.wild-badge {
+    paint-order: stroke;
+    stroke: #0a0e16;
+    stroke-width: 2.6px;
+}
+#panel-map #wild-legend {
+    gap: 4px 10px;
+}
+#panel-map #wild-legend span {
+    white-space: nowrap;
+}
+
+/* 窄屏：左右两列本来竖排，图例三栏自己收成单栏 */
+@media (max-width: 1023px) {
+    #panel-map > .flex.gap-4 > .lg\:w-64 {
+        width: 100%;
+    }
+    #panel-map #region-list {
+        max-height: 42vh;
+    }
+}

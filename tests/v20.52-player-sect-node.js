@@ -5,7 +5,7 @@
  *   P1 立派地基：五处山门各有地形与安家费，择址落档入史
  *   P2 旧档迁移：老宗门补 terrain/history/_lossAcc 默认，roundtrip 不丢
  *   P3 职位真管事：长老座镇（灵石+1/声望+0.05）、堂主管库（兵器丹药+0.5），UI 预估与 tickDay 同口径
- *   P4 界面存在：立派流程/宗门总册/收徒/任命等入口齐备，未达元婴不开山
+ *   P4 界面存在：立派流程/宗门总册/收徒/任命等入口齐备；未达元婴走插旗草创（白手起家改造）
  *   P5 立派流程：起名+出身+择址+扣安家费，开山当日正邪各有来客
  *   P6 收徒规矩：好感 ≥20 才能收录（拜山门总得先认识），门中已有的不再出现
  *   P7 丹药有用：传功可用宗门丹药布置（不花灵石），库空回落灵石
@@ -170,12 +170,16 @@ console.log('\n[P4] 界面入口与立派门槛');
         if (typeof w[fn] !== 'function') { assert('入口 ' + fn + ' 在案', false); }
     });
     assert('十二个界面入口齐备（立派/总册/收徒/任命/传功/出师/方针/补址/解散）', true);
+    // 白手起家改造：未达元婴也开立宗面板——给「插旗草创」的路，择山门置灰
     var w3 = buildEnv({ tier: 3 });
     w3.openFoundSectPanel();
-    assert('未达元婴：不开山（有警告、无弹窗）', w3.__msgs.length > 0 && w3.__modals.length === 0);
+    assert('未达元婴也开面板：白手起家路在案（插旗草创入口）', w3.__modals.length === 1 &&
+        w3.__modals[0].html.indexOf('插旗草创') >= 0 && w3.__modals[0].html.indexOf('_psDoFoundCheap') >= 0);
+    assert('未达元婴：不再满屏灰卡，一行灰字指路（修到元婴）', w3.__modals[0].html.indexOf('安家费') < 0 && w3.__modals[0].html.indexOf('修到元婴') >= 0);
+    w3.__modals.length = 0;
     w3.openPlayerSectPanel();
-    assert('无宗时开总册 → 引去立派', w3.__modals.length === 0 &&
-        w3.__msgs.map(function (m) { return m.t; }).join('|').indexOf('开山') >= 0);
+    assert('无宗时开总册 → 引去立宗（同一面板，两条路都在）', w3.__modals.length === 1 &&
+        w3.__modals[0].html.indexOf('插旗草创') >= 0);
 })();
 
 console.log('\n[P5] 立派流程真跑：名/出身/择址/来客');
@@ -271,7 +275,7 @@ console.log('\n[P8] 武库有用：护宗战兵器列阵');
     var baseAtk = 40 + 4 * 6; // tier=4
     assert('妖兽进场受挫（攻 ' + baseAtk + ' → ' + e.attack + '）', e.attack === Math.round(baseAtk * 0.9));
     assert('战后兵器折损（20 → ' + sect.resources.weapon + '）', sect.resources.weapon === 14);
-    assert('战事入宗门史', sect.history.map(function (h) { return h.text; }).join('|').indexOf('妖兽攻山') >= 0);
+    assert('战事入宗门史', sect.history.map(function (h) { return h.text; }).join('|').indexOf('进山演阵') >= 0);
     // 库空：只能赤手迎敌
     w.PlayerSect.addResource(sect.id, 'weapon', -14);
     modals_clear(w);
@@ -290,8 +294,8 @@ console.log('\n[P9] 挂载哨兵');
     assert('修行界面接线：未立宗 → 立派流程；已立宗 → 宗门总册',
         cult.indexOf('window.openFoundSectPanel()') >= 0 && cult.indexOf('window.openPlayerSectPanel()') >= 0);
     var app = load('js/app.js');
-    assert('旧立宗入口转发新流程（兼容既有引用）', app.indexOf('window.openFoundSectPanel === \'function\') { window.openFoundSectPanel(); return; }'.replace(/\\/g, '')) >= 0 ||
-        app.indexOf('openFoundSectPanel(); return;') >= 0);
+    // 门派补厚批一：遗留转发壳 _quickFoundSect 已核销（全仓零调用，由 sect-economy C3 断言同守）
+    assert('旧立宗转发壳已清理（死代码核销）', app.indexOf('_quickFoundSect') < 0);
     var teach = load('js/sects/master-teach.js');
     assert('传功布置费：宗门丹药优先（teachDisciple 第二参）', teach.indexOf('function teachDisciple(npcId, usePill)') >= 0);
 })();

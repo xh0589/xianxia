@@ -35,7 +35,7 @@ function _influence(sectName, delta) {
 
 function _contrib(sectName, n) {
     var ds = window.discipleState || {};
-    if (_inSect(sectName)) ds.contribution = (ds.contribution || 0) + n;
+    if (_inSect(sectName)) { ds.contribution = (ds.contribution || 0) + n; try { window.sectLedgerNote && window.sectLedgerNote(n, '门派专属事件'); } catch (e) {} }
 }
 
 function _points(sectName, n) {
@@ -305,7 +305,7 @@ var SECT_EXCLUSIVE_EVENTS = {
         },
         'gaibang_staff': {
             type: 'internal', icon: '🥢', name: '打狗棒会',
-            desc: function () { return '丐帮一年一度的打狗棒法比试，帮众围观如堵。'; },
+            desc: function () { return '丐帮一年一度的棒法大比，帮众围观如堵；压轴是帮主亲演三式打狗棒法——满场拜伏，棒法之妙却只传帮主之位。'; },
             effect: function (s) { _morale(s, 12); _points(s, 20); return '棒会有得，士气 +12，积分 +20'; },
             minMorale: 0, maxMorale: 100
         }

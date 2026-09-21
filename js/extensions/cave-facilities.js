@@ -5,24 +5,34 @@
     'use strict';
     if (typeof window === 'undefined') return;
 
-    // ============== 1. 4 档洞府 → 槽位 ==============
+    // ============== 1. 5 档洞府 → 槽位 ==============
+    // 第一百零四波·山居：最底下添一档「破山洞」——免费占山落脚，石壁漏风，没有设施位；修缮起来才有位置
     var CAVE_LEVELS = {
+        'ruin_cave':     { name: '破山洞', tier: 0, slots: 0 },
         'grass_hut':  { name: '草庐', tier: 1, slots: 1 },
         'stone_room': { name: '石室', tier: 2, slots: 2 },
         'spirit_manor':{ name: '灵府', tier: 3, slots: 3 },
         'immortal_manor':{ name: '仙府', tier: 4, slots: 4 }
     };
 
-    // ============== 2. 8 设施 ==============
+    // ============== 2. 设施 ==============
+    // 第一百零四波·山居：设施是「修」出来的不是「点」出来的——每处设施一份工料单（materials），
+    // 安置时灵石工费之外还要真扣材料（材料账在安置口子结，引擎 install 照旧只管落位）。
+    // 新增四设施都接真账：兵器架(炼器/修炼)、田钟(灵田提速)、灵泉浴池(修炼/洒扫省力)、茶灶(突破/修炼)。
     var FACILITIES = {
-        fac_spirit_gathering: { name: '聚灵阵', category: 'cultivation', buff: { expBoostPct: 30, qiRegen: 5 }, desc: '闭关效率 +30%，每日 +5 灵气' },
-        fac_alchemy_room:     { name: '丹房',   category: 'craft',       buff: { alchemySkill: 15, qualityBoost: 1 }, desc: '炼丹技能 +15，品质 +1 段' },
-        fac_forge_table:      { name: '炼器台', category: 'craft',       buff: { forgingSkill: 15, qualityBoost: 1 }, desc: '炼器技能 +15，品质 +1 段' },
-        fac_beast_pen:        { name: '灵兽栏', category: 'beast',       buff: { beastTraining: 0.2 }, desc: '灵兽训练 +20%' },
-        fac_library:          { name: '藏书阁', category: 'study',       buff: { studyTimeMul: 0.8 }, desc: '研究时间 -20%' },
-        fac_guest_room:        { name: '客房',   category: 'social',      buff: { affectionDecay: -0.05, affectionDecayDays: 30 }, desc: '好感衰减暂停 30 天' },
-        fac_spirit_field:      { name: '灵田',   category: 'agriculture', buff: { fieldSpeedPct: 30 }, desc: '灵田作物 +30%' },
-        fac_meditation:       { name: '闭关室', category: 'cultivation', buff: { breakthroughBoost: 0.15 }, desc: '突破率 +15%' }
+        fac_spirit_gathering: { name: '聚灵阵', category: 'cultivation', buff: { expBoostPct: 30, qiRegen: 5 }, desc: '闭关效率 +30%，每日 +5 灵气', materials: [{ itemId: 'mat_spirit_wood', count: 2 }] },
+        fac_alchemy_room:     { name: '丹房',   category: 'craft',       buff: { alchemySkill: 15, qualityBoost: 1 }, desc: '炼丹技能 +15，品质 +1 段', materials: [{ itemId: 'mat_wood', count: 10 }, { itemId: 'mat_copper_ore', count: 4 }] },
+        fac_forge_table:      { name: '炼器台', category: 'craft',       buff: { forgingSkill: 15, qualityBoost: 1 }, desc: '炼器技能 +15，品质 +1 段', materials: [{ itemId: 'mat_iron_ore', count: 10 }, { itemId: 'mat_refined_iron', count: 2 }] },
+        fac_beast_pen:        { name: '灵兽栏', category: 'beast',       buff: { beastTraining: 0.2 }, desc: '灵兽训练 +20%', materials: [{ itemId: 'mat_wood', count: 12 }] },
+        fac_library:          { name: '藏书阁', category: 'study',       buff: { studyTimeMul: 0.8 }, desc: '研究时间 -20%', materials: [{ itemId: 'mat_wood', count: 8 }] },
+        fac_guest_room:        { name: '客房',   category: 'social',      buff: { affectionDecay: -0.05, affectionDecayDays: 30 }, desc: '好感衰减暂停 30 天', materials: [{ itemId: 'mat_wood', count: 10 }] },
+        fac_spirit_field:      { name: '灵田',   category: 'agriculture', buff: { fieldSpeedPct: 30 }, desc: '灵田作物 +30%', materials: [{ itemId: 'mat_wood', count: 6 }, { itemId: 'mat_spirit_wood', count: 1 }] },
+        fac_meditation:       { name: '闭关室', category: 'cultivation', buff: { breakthroughBoost: 0.15 }, desc: '突破率 +15%', materials: [{ itemId: 'mat_refined_iron', count: 2 }, { itemId: 'mat_spirit_wood', count: 2 }] },
+        // ---- 第一百零四波 · 新四设施 ----
+        fac_weapon_rack:      { name: '兵器架', category: 'craft',       buff: { forgingSkill: 8, expBoostPct: 5 }, desc: '自己打的剑挂在架上，天天看见就是勉励。炼器 +8，修炼效率 +5%', materials: [{ itemId: 'mat_refined_iron', count: 4 }, { itemId: 'mat_wood', count: 6 }] },
+        fac_field_bell:       { name: '田钟',   category: 'agriculture', buff: { fieldSpeedPct: 10 }, desc: '稻草人挂铜铃，灵植将熟时铃自响。灵田作物 +10%', materials: [{ itemId: 'mat_wood', count: 6 }, { itemId: 'mat_copper_ore', count: 2 }] },
+        fac_spring_bath:      { name: '灵泉浴池', category: 'cultivation', buff: { expBoostPct: 10, cleanDiscount: 8 }, desc: '引山泉入池，泡去一身尘乏。修炼效率 +10%，洒扫省力气（-8 精力）', materials: [{ itemId: 'mat_ice_crystal', count: 2 }, { itemId: 'mat_wood', count: 8 }] },
+        fac_tea_stove:        { name: '茶灶石桌', category: 'social',    buff: { breakthroughBoost: 0.05, expBoostPct: 5 }, desc: '石桌茶灶，与友论道心结自解。突破率 +5%，修炼效率 +5%', materials: [{ itemId: 'mat_wood', count: 8 }, { itemId: 'mat_copper_ore', count: 3 }] }
     };
 
     // ============== 3. 同伴角色 ==============
@@ -56,7 +66,21 @@
         _nextCompanionId: 1
     };
 
-    function _today() { return (window.WorldCalendar && window.WorldCalendar.day) || 0; }
+    // 第二十四波·时钟根治（第九波口径）：WorldCalendar.day 在生产里根本不存在，设施安装日/事件日戳全是死数据。
+    // 统一优先真钟 getAbsoluteDay；旧字段只作退路。客房的「落成三十日」要拿这个日子算。
+    function _today() {
+        try {
+            if (typeof window.getAbsoluteDay === 'function') { var g = window.getAbsoluteDay(); if (g) return Math.floor(g); }
+            var t = window.timeSystem;
+            if (t) {
+                if (typeof t.getAbsoluteDay === 'function') { var g2 = t.getAbsoluteDay(); if (g2) return Math.floor(g2); }
+                if (t.gameTime && t.gameTime.currentDay) return Math.floor(t.gameTime.currentDay);
+                if (t.totalDays) return Math.floor(t.totalDays);
+            }
+            if (window.WorldCalendar && window.WorldCalendar.day) return Math.floor(window.WorldCalendar.day);
+        } catch (e) {}
+        return 0;
+    }
 
     function _emit(name, payload) {
         if (window.EventBus && typeof window.EventBus.emit === 'function') {
@@ -248,6 +272,9 @@
         FACILITIES: FACILITIES,
         COMPANION_ROLES: COMPANION_ROLES,
         DAILY_EVENTS: DAILY_EVENTS,
+        // 第一百零四波：ensureCave 补上对外出口——此前 world-loop 的每日「宅型→设施位档位」同步
+        // 因 typeof 守卫一直空转（引擎里有这个函数，窗上没有），宅子修到几档设施位都还是草庐的 1 位
+        ensureCave: ensureCave,
         install: install,
         uninstall: uninstall,
         getFacilities: getFacilities,

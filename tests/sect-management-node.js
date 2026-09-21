@@ -135,9 +135,12 @@ var r_b2_nores = mockWindow.acceptElderTask('diplomacy');
 assert(r_b2_nores === false, '资源不足应拒');
 
 mockWindow.SECT_INTERNAL['少林寺'].resources = 1000; // 恢复
-// 掌门也能接
+// 掌门也能接（第十一波：长者差事有日子口径——同日「教导」已被长老接过，拨到次日验证）
+mockWindow.getAbsoluteDay = function () { return 2; };
 mockWindow.discipleState = freshDs(0);
-assert(mockWindow.acceptElderTask('teach') === true, '掌门可接长老任务');
+assert(mockWindow.acceptElderTask('teach') === true, '掌门可接长老任务（次日）');
+assert(mockWindow.acceptElderTask('teach') === false, '同日教导点到即止（一天一回）');
+mockWindow.getAbsoluteDay = function () { return 1; };
 
 // ============ B3: openSectVote / castVote / closeSectVote ============
 mockWindow.discipleState = freshDs(2); // 长老

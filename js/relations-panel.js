@@ -50,6 +50,18 @@ function renderRelationsPanel() {
             var id = npc.id;
             // 检查是否有未触发的个人事件
             if (typeof window.NPC_PERSONAL_EVENTS !== 'object') return false;
+            // v22.0「似有心事」：沉浸模式下事件清单不罗列，这枚筛选是玩家唯一的线索入口——
+            // 只标「此刻就绪、一谈就会发生」的人（与交谈拦截同一套门禁），
+            // 不再把远在天边的锁定事件也算成有心事。旧口径留作无门禁函数环境的兜底。
+            if (typeof window.isEventReadyNow === 'function') {
+                if (typeof window.isPersonalLineFinished === 'function' && window.isPersonalLineFinished(id)) return false;
+                var affReady = (npc.relationship && npc.relationship.affection) || 0;
+                for (var rkey in window.NPC_PERSONAL_EVENTS) {
+                    var rev = window.NPC_PERSONAL_EVENTS[rkey];
+                    if (rev.npcId === id && window.isEventReadyNow(npc, rev, affReady)) return true;
+                }
+                return false;
+            }
             for (var key in window.NPC_PERSONAL_EVENTS) {
                 var ev = window.NPC_PERSONAL_EVENTS[key];
                 if (ev.npcId === id && !window.hasEventTriggered(ev.id)) return true;

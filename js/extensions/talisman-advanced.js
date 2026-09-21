@@ -9,43 +9,43 @@
     // ============== 1. 高级符模板（5 类 × 2 张 = 10 张） ==============
     var ADVANCED_TALISMANS = [
         // 战斗符
-        { id: 'tal_burst', name: '爆裂符', category: 'combat', quality: 'EPIC', level: 8, price: 300,
+        { id: 'tal_burst', name: '爆裂符', category: 'combat', quality: 'PIN5', level: 8, price: 300,
           effect: { attack_damage: 150, element: 'fire', aoe: true }, desc: '🔥 爆裂火符，群体攻击' },
-        { id: 'tal_bind_soul', name: '缚灵符', category: 'combat', quality: 'RARE', level: 6, price: 220,
+        { id: 'tal_bind_soul', name: '缚灵符', category: 'combat', quality: 'PIN7', level: 6, price: 220,
           effect: { root: 3 }, desc: '🌀 缚灵，敌方 3 回合无法移动' },
-        { id: 'tal_armor_break_v2', name: '破甲符·极', category: 'combat', quality: 'EPIC', level: 10, price: 400,
+        { id: 'tal_armor_break_v2', name: '破甲符·极', category: 'combat', quality: 'PIN5', level: 10, price: 400,
           effect: { penetrate_boost: 80, duration: 5 }, desc: '🛡️ 极破甲，5 回合穿透+80' },
-        { id: 'tal_soul_calm', name: '镇魂符', category: 'combat', quality: 'EPIC', level: 12, price: 500,
+        { id: 'tal_soul_calm', name: '镇魂符', category: 'combat', quality: 'PIN5', level: 12, price: 500,
           effect: { silence: 3, divine_shield: 50 }, desc: '👻 镇魂，敌方 3 回合沉默 + 玩家神识盾' },
 
         // 生存符
-        { id: 'tal_shield_great', name: '护身符·大', category: 'survival', quality: 'RARE', level: 6, price: 250,
+        { id: 'tal_shield_great', name: '护身符·大', category: 'survival', quality: 'PIN7', level: 6, price: 250,
           effect: { shield: 200, duration: 10 }, desc: '🛡️ 大护身符，可吸收 200 伤害' },
-        { id: 'tal_escape_ground', name: '遁地符', category: 'survival', quality: 'RARE', level: 7, price: 280,
+        { id: 'tal_escape_ground', name: '遁地符', category: 'survival', quality: 'PIN7', level: 7, price: 280,
           effect: { escape_boost: 0.95, invisibility: 2 }, desc: '💨 遁地，强制逃跑+隐身 2 回合' },
-        { id: 'tal_teleport_zone', name: '传送符·域', category: 'survival', quality: 'EPIC', level: 12, price: 600,
+        { id: 'tal_teleport_zone', name: '传送符·域', category: 'survival', quality: 'PIN5', level: 12, price: 600,
           effect: { teleport: true, divine_shield: 100 }, desc: '🌀 域传送，脱离战斗 + 神识盾' },
 
         // 探索符
-        { id: 'tal_find_spirit', name: '寻灵符', category: 'explore', quality: 'UNCOMMON', level: 4, price: 180,
+        { id: 'tal_find_spirit', name: '寻灵符', category: 'explore', quality: 'PIN8', level: 4, price: 180,
           effect: { sect_effect: { key: 'spirit_detect', value: 1, duration: 5 } }, desc: '✨ 寻灵，5 回合内显示隐藏灵脉' },
-        { id: 'tal_break_seal', name: '破禁符', category: 'explore', quality: 'RARE', level: 6, price: 250,
+        { id: 'tal_break_seal', name: '破禁符', category: 'explore', quality: 'PIN7', level: 6, price: 250,
           effect: { sect_effect: { key: 'seal_break', value: 1, duration: 1 } }, desc: '🔓 破禁，解除低阶禁制' },
-        { id: 'tal_reveal', name: '显形符', category: 'explore', quality: 'RARE', level: 5, price: 200,
+        { id: 'tal_reveal', name: '显形符', category: 'explore', quality: 'PIN7', level: 5, price: 200,
           effect: { sect_effect: { key: 'reveal_enemy', value: 1, duration: 5 } }, desc: '👁️ 显形，5 回合反隐' },
 
         // 生活符
-        { id: 'tal_rain', name: '聚雨符', category: 'life', quality: 'UNCOMMON', level: 3, price: 120,
+        { id: 'tal_rain', name: '聚雨符', category: 'life', quality: 'PIN8', level: 3, price: 120,
           effect: { sect_effect: { key: 'field_rain', value: 1, duration: 1 } }, desc: '🌧️ 聚雨，灵田加速浇灌' },
-        { id: 'tal_ripen', name: '催熟符', category: 'life', quality: 'UNCOMMON', level: 4, price: 150,
+        { id: 'tal_ripen', name: '催熟符', category: 'life', quality: 'PIN8', level: 4, price: 150,
           effect: { sect_effect: { key: 'field_ripen', value: 0.3, duration: 1 } }, desc: '🌱 催熟，灵田单株 30% 加速' },
-        { id: 'tal_cleanse_area', name: '净尘符', category: 'life', quality: 'RARE', level: 5, price: 180,
+        { id: 'tal_cleanse_area', name: '净尘符', category: 'life', quality: 'PIN7', level: 5, price: 180,
           effect: { sect_effect: { key: 'field_cleanse', value: 1, duration: 1 } }, desc: '🧹 净尘，整片灵田虫害清除' },
 
         // 宗门符
-        { id: 'tal_sect_guard', name: '护山符', category: 'sect', quality: 'EPIC', level: 10, price: 800,
+        { id: 'tal_sect_guard', name: '护山符', category: 'sect', quality: 'PIN5', level: 10, price: 800,
           effect: { sect_effect: { key: 'sect_guard', value: 0.5, duration: 30 } }, desc: '⛰️ 护山，30 天被袭概率 -50%' },
-        { id: 'tal_sect_alert', name: '警戒符', category: 'sect', quality: 'RARE', level: 6, price: 300,
+        { id: 'tal_sect_alert', name: '警戒符', category: 'sect', quality: 'PIN7', level: 6, price: 300,
           effect: { sect_effect: { key: 'sect_alert', value: 1, duration: 3 } }, desc: '🚨 警戒，3 天提前事件预知' }
     ];
 
@@ -65,7 +65,7 @@
                 price: t.price,
                 effect: t.effect,
                 stackable: true,
-                maxStack: t.quality === 'LEGENDARY' ? 5 : (t.quality === 'EPIC' ? 20 : 50),
+                maxStack: (window.qualityOrder ? window.qualityOrder(t.quality) : 0) >= 7 ? 5 : ((window.qualityOrder ? window.qualityOrder(t.quality) : 0) >= 5 ? 20 : 50),
                 desc: t.desc,
                 icon: '📜',
                 implemented: true,

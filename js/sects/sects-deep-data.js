@@ -8,7 +8,7 @@ var SECT_DEEP_DATA = {};
 // ============ 通用职务体系（所有门派共用） ============
 var COMMON_RANKS = [
     { id: 7, name: '杂役弟子', desc: '纯后勤劳动力（挑水、砍柴）',
-      privileges: ['基础住宿', '公共食堂'], duties: ['打扫庭院', '挑水劈柴', '厨房帮工'],
+      privileges: ['基础住宿', '公共食堂', '藏经阁一层'], duties: ['打扫庭院', '挑水劈柴', '厨房帮工'], // 特权表跟真门对齐：一层·外门阁本就对杂役开（maxRank 7），此前表上漏写
       dailyTaskCount: 1, salary: { copper: 10, spiritStones: 0 }, contributionPerTask: 5 },
     { id: 6, name: '记名弟子', desc: '试用期/预备役（没有正式师承）',
       privileges: ['基础住宿', '公共食堂', '藏经阁一层'],
@@ -381,7 +381,7 @@ function initSectsDeepData() {
               acceptStudent: true, maxStudents: 3, requirement: { realm: '筑基', layer: 2, contribution: 400 } },
             { id: 'gb_master_3', name: '鲁有脚', title: '执法长老', realm: '金丹', layer: 3, age: 55,
               desc: '丐帮执法长老，铁面无私，掌管帮规。', personality: '刚正不阿，秉公执法',
-              skills: ['打狗棒法', '太祖长拳'],
+              skills: ['太祖长拳', '丐帮通背拳'],
               acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 6, contribution: 200 } }
         ],
         factions: [
@@ -924,13 +924,439 @@ function initSectsDeepData() {
     SECT_DEEP_DATA['天书阁'] = {
         desc: '收罗天下典籍之地，阁主归藏子以"抢救濒危武学典籍"为名收藏天下功法。',
         masters: [
-            { id: 'ts_master_1', name: '归藏子', title: '阁主', realm: '渡劫', layer: 9, age: 150,
+            { id: 'tsg_master_1', name: '归藏子', title: '阁主', realm: '渡劫', layer: 9, age: 150,
               desc: '天书阁阁主，白发长须，仙风道骨。骨子里却是天下第一藏书癖雅贼，以抢救典籍为名潜入各大门派抄录功法。', personality: '混乱善良，老狐狸',
               skills: ['万卷书藏', '天罡步', '归藏诀'],
               acceptStudent: true, maxStudents: 2, requirement: { realm: '渡劫', layer: 1, contribution: 0, karma: 100 } }
         ],
         specialResources: [
-            { id: 'ts_resource_library', name: '天书阁藏书', type: 'culture', output: 10, desc: '天下最全的功法典籍收藏' }
+            { id: 'tsg_resource_library', name: '天书阁藏书', type: 'culture', output: 10, desc: '天下最全的功法典籍收藏' }
+        ]
+    };
+
+    // ============ v20.94 补齐：其余 17 派的师徒/派系深度数据（36 派全数落户） ============
+    SECT_DEEP_DATA['武当派'] = {
+        desc: '内家拳剑之宗，以柔克刚，以静制动。真武大帝道场，山上道人个个绵里藏针。',
+        masters: [
+            { id: 'wud_master_1', name: '张三丰', title: '太上祖师', realm: '渡劫', layer: 5, age: 160,
+              desc: '武当开山祖师，太极之道自成天地。百年不出紫霄宫，出则天下震动。', personality: '冲淡谦和，深不可测',
+              skills: ['太极剑意', '太极推手', '纯阳无极功'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'wud_master_2', name: '宋远桥', title: '掌院长老', realm: '金丹', layer: 9, age: 58,
+              desc: '代掌门执掌山中事务，为人端方，弟子有过必罚、有功必录。', personality: '端方持重',
+              skills: ['太极拳', '绵掌', '梯云纵'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 6, contribution: 500 } },
+            { id: 'wud_master_3', name: '俞莲舟', title: '执法长老', realm: '金丹', layer: 7, age: 55,
+              desc: '外冷内热的执法长老，手上功夫全派第二，罚人从不留情面。', personality: '冷面热心',
+              skills: ['神门十三剑', '虎爪手'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 4, contribution: 400 } }
+        ],
+        factions: [
+            { id: 'wud_faction_zixiao', name: '紫霄讲席', icon: '☯️', desc: '主张以太极养天下，广收门徒、开坛讲学。', leader: '宋远桥', members: [], stance: { open: 30, orthodox: 15 }, influence: 40 },
+            { id: 'wud_faction_houshan', name: '后山守静', icon: '🌙', desc: '主张闭门守拙，真武之道不在人多。', leader: '俞莲舟', members: [], stance: { orthodox: 30, open: 8 }, influence: 30 }
+        ],
+        specialResources: [
+            { id: 'wud_resource_zhenwu', name: '真武道场香火', type: 'culture', output: 8, desc: '真武大帝道场，四方香客不绝' }
+        ]
+    };
+
+    SECT_DEEP_DATA['峨眉派'] = {
+        desc: '金顶佛光与剑影并存的门派，弟子多为女子，出手却比男儿更利落。',
+        masters: [
+            { id: 'em_master_1', name: '风陵师太', title: '太上长老', realm: '元婴', layer: 5, age: 96,
+              desc: '峨眉辈分最高的师太，金顶闭关多年，一句话能定派中大议。', personality: '方正严厉',
+              skills: ['峨眉剑法', '四象掌', '金顶佛光'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'em_master_2', name: '静玄师太', title: '掌事长老', realm: '金丹', layer: 8, age: 62,
+              desc: '主持峨眉日常事务，对弟子严、对山下百姓宽。', personality: '严而不苛',
+              skills: ['峨眉剑法', '飘雪穿云掌'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 5, contribution: 500 } },
+            { id: 'em_master_3', name: '明霞师太', title: '知客长老', realm: '金丹', layer: 5, age: 48,
+              desc: '接待各方来客的知客长老，笑脸背后一双眼睛毒得很。', personality: '外圆内方',
+              skills: ['九阳功', '截手九式'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '筑基', layer: 2, contribution: 300 } }
+        ],
+        factions: [
+            { id: 'em_faction_jinding', name: '金顶持律', icon: '⛰️', desc: '守金顶戒律，主张峨眉剑不出则已、出则必正。', leader: '风陵师太', members: [], stance: { orthodox: 32, open: 6 }, influence: 42 },
+            { id: 'em_faction_baisui', name: '百岁行走', icon: '🚶', desc: '主张弟子下山行走济世，剑在人间才算活。', leader: '明霞师太', members: [], stance: { open: 28, orthodox: 12 }, influence: 30 }
+        ],
+        specialResources: [
+            { id: 'em_resource_jinding', name: '金顶香火', type: 'culture', output: 8, desc: '金顶佛光，香客供奉常年不断' }
+        ]
+    };
+
+    SECT_DEEP_DATA['华山派'] = {
+        desc: '西岳剑派，剑气之争吵了三十年——气宗说内力为本，剑宗说招式为锋。',
+        masters: [
+            { id: 'hua_master_1', name: '风清扬', title: '思过崖剑祖', realm: '渡劫', layer: 3, age: 130,
+              desc: '隐居思过崖的剑宗前辈，无招胜有招的活祖宗，二十年不下崖。', personality: '孤高洒脱',
+              skills: ['独孤九剑', '华山剑法', '太岳三青峰'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'hua_master_2', name: '宁中则', title: '女侠长老', realm: '元婴', layer: 2, age: 52,
+              desc: '华山上下敬重的女侠，剑法端正，待弟子如儿女。', personality: '刚正温厚',
+              skills: ['华山剑法', '无双无对宁氏剑'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 6, contribution: 500 } },
+            { id: 'hua_master_3', name: '白云生', title: '传剑长老', realm: '金丹', layer: 8, age: 55,
+              desc: '专授外门弟子剑招的传剑长老，嘴上刻薄，手上不藏私。', personality: '嘴硬心软',
+              skills: ['华山剑法', '玉女十九剑'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '筑基', layer: 2, contribution: 300 } }
+        ],
+        factions: [
+            { id: 'hua_faction_qi', name: '气宗一脉', icon: '🌬️', desc: '主张以气御剑，内力为本。', leader: '宁中则', members: [], stance: { orthodox: 30, open: 10 }, influence: 38 },
+            { id: 'hua_faction_jian', name: '剑宗遗脉', icon: '⚔️', desc: '主张剑走偏锋，招式为锋。', leader: '白云生', members: [], stance: { open: 26, orthodox: 14 }, influence: 28 }
+        ],
+        specialResources: [
+            { id: 'hua_resource_siguo', name: '思过崖石壁剑痕', type: 'culture', output: 6, desc: '石壁上历代剑痕，参悟者络绎不绝' }
+        ]
+    };
+
+    SECT_DEEP_DATA['恒山派'] = {
+        desc: '五岳中的女尼门派，白云庵钟声一响，山下恶人先怯三分。',
+        masters: [
+            { id: 'hen_master_1', name: '定闲师太', title: '太上长老', realm: '元婴', layer: 4, age: 88,
+              desc: '恒山辈分最高的师太，慈悲是面，剑是里。', personality: '慈悲果决',
+              skills: ['恒山剑法', '万花剑阵'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'hen_master_2', name: '定静师太', title: '掌戒长老', realm: '金丹', layer: 9, age: 70,
+              desc: '执掌戒律的老师太，庵里谁的针线短了一寸都瞒不过她。', personality: '一丝不苟',
+              skills: ['恒山剑法', '白云剑意'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 4, contribution: 400 } },
+            { id: 'hen_master_3', name: '一清师太', title: '知客长老', realm: '金丹', layer: 6, age: 50,
+              desc: '管迎来送往的知客，说话轻声细语，账目分毫不差。', personality: '温和精细',
+              skills: ['恒山剑法', '回风拂柳剑'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 8, contribution: 250 } }
+        ],
+        factions: [
+            { id: 'hen_faction_baiyun', name: '白云持戒', icon: '🛕', desc: '守庵中清规，修行先修心。', leader: '定静师太', members: [], stance: { orthodox: 32, open: 5 }, influence: 40 },
+            { id: 'hen_faction_jianxing', name: '见性行走', icon: '🚶', desc: '主张入世救苦，剑随人走。', leader: '一清师太', members: [], stance: { open: 25, orthodox: 14 }, influence: 28 }
+        ],
+        specialResources: [
+            { id: 'hen_resource_zhongsheng', name: '白云庵钟声', type: 'culture', output: 6, desc: '晨钟暮鼓，闻者心静，香火自聚' }
+        ]
+    };
+
+    SECT_DEEP_DATA['泰山派'] = {
+        desc: '东岳剑派，登高望远，剑势如十八盘石阶——一步一个脚印，一步比一步高。',
+        masters: [
+            { id: 'tai_master_1', name: '天门道人', title: '退隐掌门', realm: '元婴', layer: 5, age: 90,
+              desc: '上一代掌门，把位子让给年轻人后在岱顶观日，一观三十年。', personality: '沉稳如山',
+              skills: ['泰山剑法', '岱宗如何'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'tai_master_2', name: '天松道人', title: '掌律长老', realm: '金丹', layer: 8, age: 66,
+              desc: '执掌门规的老道人，罚弟子先罚自己戒斋三日。', personality: '律己律人',
+              skills: ['泰山剑法', '五大夫剑'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 4, contribution: 450 } },
+            { id: 'tai_master_3', name: '天乙道人', title: '知观长老', realm: '金丹', layer: 6, age: 54,
+              desc: '管山下道观香火的知观，算盘打得比剑快。', personality: '精明周到',
+              skills: ['泰山剑法', '快活三剑'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 8, contribution: 250 } }
+        ],
+        factions: [
+            { id: 'tai_faction_daiding', name: '岱顶观日', icon: '🌄', desc: '守泰山正统剑路，稳字当头。', leader: '天松道人', members: [], stance: { orthodox: 30, open: 8 }, influence: 40 },
+            { id: 'tai_faction_xianghuo', name: '山下香火', icon: '🏮', desc: '主张广结善缘，香火养剑。', leader: '天乙道人', members: [], stance: { open: 26, orthodox: 12 }, influence: 28 }
+        ],
+        specialResources: [
+            { id: 'tai_resource_xianghuo', name: '岱庙香火', type: 'culture', output: 7, desc: '东岳大庙香火甲于天下' }
+        ]
+    };
+
+    SECT_DEEP_DATA['嵩山派'] = {
+        desc: '五岳盟主旧地，嵩山十三太保名震江湖——如今旗号还在，锋芒收敛了几分。',
+        masters: [
+            { id: 'song_master_1', name: '左冷禅', title: '退隐掌门', realm: '元婴', layer: 8, age: 78,
+              desc: '当年力压五岳的盟主，闭死关多年。有人说他放下了，有人说他在等一个翻盘的机会。', personality: '枭雄迟暮',
+              skills: ['嵩山剑法', '寒冰神掌', '大嵩阳神掌'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'song_master_2', name: '费彬', title: '大嵩阳手', realm: '金丹', layer: 9, age: 60,
+              desc: '十三太保里硕果仅存的老资格，掌法沉雄，最讲门面。', personality: '好胜要面子',
+              skills: ['大嵩阳神掌', '嵩山剑法'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 6, contribution: 550 } },
+            { id: 'song_master_3', name: '丁坚', title: '执法长老', realm: '金丹', layer: 6, age: 48,
+              desc: '执法堂出身，条文背得比谁都熟，罚单开得比谁都稳。', personality: '刻板公正',
+              skills: ['嵩山剑法', '执法棍'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '筑基', layer: 2, contribution: 350 } }
+        ],
+        factions: [
+            { id: 'song_faction_mengzhu', name: '盟主旧部', icon: '🏛️', desc: '念着五岳盟主的旧旗号，主张重执牛耳。', leader: '费彬', members: [], stance: { orthodox: 20, expansion: 25 }, influence: 38 },
+            { id: 'song_faction_zhifa', name: '执法堂一脉', icon: '⚖️', desc: '主张先立规矩再谈雄图，条文即门规。', leader: '丁坚', members: [], stance: { orthodox: 30, open: 6 }, influence: 30 }
+        ],
+        specialResources: [
+            { id: 'song_resource_wuyue', name: '五岳盟会旧例', type: 'culture', output: 7, desc: '五岳议事旧地，各方仍认这块招牌' }
+        ]
+    };
+
+    SECT_DEEP_DATA['青城派'] = {
+        desc: '青城天下幽。道门剑派藏在林泉深处，剑招也带着三分雾气。',
+        masters: [
+            { id: 'qc_master_1', name: '清阳道人', title: '太上长老', realm: '元婴', layer: 3, age: 92,
+              desc: '天师洞里最老的一位，幽居不出，出言必中。', personality: '清静无为',
+              skills: ['青城剑法', '松风剑意'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'qc_master_2', name: '玄真道人', title: '掌剑长老', realm: '金丹', layer: 8, age: 60,
+              desc: '掌青城剑炉的长老，铸剑如修道，火候差一分都不行。', personality: '严谨寡言',
+              skills: ['青城剑法', '鹤唳九霄'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 4, contribution: 450 } },
+            { id: 'qc_master_3', name: '松风道人', title: '知客长老', realm: '金丹', layer: 5, age: 46,
+              desc: '迎来送往的知客，笑声爽朗，茶里功夫比剑里深。', personality: '爽朗机变',
+              skills: ['青城剑法', '松风掌'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 8, contribution: 250 } }
+        ],
+        factions: [
+            { id: 'qc_faction_tianshi', name: '天师洞清修', icon: '🍃', desc: '守幽字诀，清修剑心。', leader: '玄真道人', members: [], stance: { orthodox: 30, open: 6 }, influence: 38 },
+            { id: 'qc_faction_shancha', name: '山茶结缘', icon: '🍵', desc: '主张以茶剑会友，广结四方善缘。', leader: '松风道人', members: [], stance: { open: 28, orthodox: 10 }, influence: 28 }
+        ],
+        specialResources: [
+            { id: 'qc_resource_youlin', name: '青城幽林道场', type: 'culture', output: 6, desc: '天下幽境，修行者慕名借宿不绝' }
+        ]
+    };
+
+    SECT_DEEP_DATA['衡山派'] = {
+        desc: '琴剑双修的南岳门派，潇湘烟雨里长大的剑，出手都带着节拍。',
+        masters: [
+            { id: 'xiang_master_1', name: '莫大先生', title: '琴剑祖师', realm: '元婴', layer: 6, age: 85,
+              desc: '胡琴一拉，剑已封喉。江湖上都说莫大的琴里藏着衡山最利的剑。', personality: '落拓孤高',
+              skills: ['衡山剑法', '潇湘夜雨', '琴中剑'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'xiang_master_2', name: '刘正风', title: '琴剑长老', realm: '金丹', layer: 9, age: 58,
+              desc: '金盆洗手洗了一半又收回来的长老，琴艺全派第一，剑也不差。', personality: '雅量高致',
+              skills: ['衡山剑法', '笑傲江湖曲'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 5, contribution: 500 } },
+            { id: 'xiang_master_3', name: '云松居士', title: '传艺长老', realm: '金丹', layer: 6, age: 50,
+              desc: '教弟子先学打拍子再学出剑的传艺长老，门下节奏感都是一等一。', personality: '循循善诱',
+              skills: ['衡山剑法', '回风落雁剑'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '筑基', layer: 2, contribution: 300 } }
+        ],
+        factions: [
+            { id: 'xiang_faction_qinjian', name: '琴剑堂', icon: '🎻', desc: '琴剑合璧为衡山正宗，先懂音律再谈剑。', leader: '刘正风', members: [], stance: { orthodox: 28, open: 12 }, influence: 40 },
+            { id: 'xiang_faction_xiaoxiang', name: '潇湘行走', icon: '🌧️', desc: '主张剑走江湖，烟雨里练出来的才算数。', leader: '云松居士', members: [], stance: { open: 30, orthodox: 8 }, influence: 26 }
+        ],
+        specialResources: [
+            { id: 'xiang_resource_qinpu', name: '衡山琴谱刊印', type: 'culture', output: 6, desc: '琴剑双谱刊行四方，文人剑客都买账' }
+        ]
+    };
+
+    SECT_DEEP_DATA['昆仑派'] = {
+        desc: '西域剑派，山高路远，剑法里带着雪线的寒气与戈壁的开阔。',
+        masters: [
+            { id: 'kl_master_1', name: '何太冲', title: '退隐掌门', realm: '元婴', layer: 4, age: 75,
+              desc: '把掌门位传了出去的老剑客，如今只在雪线以上练剑。', personality: '孤傲自省',
+              skills: ['昆仑剑法', '两仪剑阵'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'kl_master_2', name: '西华子', title: '掌剑长老', realm: '金丹', layer: 8, age: 62,
+              desc: '昆仑剑阵的执剑人，双剑合璧天下少见，脾气也少见。', personality: '孤僻严苛',
+              skills: ['昆仑剑法', '两仪剑阵'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 6, contribution: 500 } },
+            { id: 'kl_master_3', name: '班虚道人', title: '知观长老', realm: '金丹', layer: 5, age: 50,
+              desc: '管昆仑山门道观的知观，待人宽和，账目如山。', personality: '宽和持重',
+              skills: ['昆仑剑法', '大漠孤烟剑'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 8, contribution: 250 } }
+        ],
+        factions: [
+            { id: 'kl_faction_xuexian', name: '雪线剑庐', icon: '🏔️', desc: '剑在雪线以上练，苦寒出真锋。', leader: '西华子', members: [], stance: { orthodox: 30, open: 6 }, influence: 38 },
+            { id: 'kl_faction_shamen', name: '沙门商路', icon: '🐪', desc: '主张剑派也要吃饭，商路护航换资源。', leader: '班虚道人', members: [], stance: { open: 28, orthodox: 10 }, influence: 26 }
+        ],
+        specialResources: [
+            { id: 'kl_resource_shanglu', name: '西域商路护金', type: 'trade', output: 7, desc: '丝路商队常年聘昆仑护镖' }
+        ]
+    };
+
+    SECT_DEEP_DATA['霹雳堂'] = {
+        desc: '火器与暗器的行家里手，堂里终年硝烟不散——惊雷落地处，就是他们的练场。',
+        masters: [
+            { id: 'pli_master_1', name: '雷老太君', title: '堂主之母', realm: '元婴', layer: 5, age: 95,
+              desc: '霹雳堂真正的定海神针，八十岁还能一枪打落百步外的香头。', personality: '火爆明理',
+              skills: ['霹雳雷火弹', '惊雷枪'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'pli_master_2', name: '雷震北', title: '掌堂长老', realm: '金丹', layer: 8, age: 58,
+              desc: '管火药库的掌堂长老，堂里规矩第一条：火药库前谁抽烟谁挨罚——他自己烟瘾最大，戒了三十年。', personality: '外爆内细',
+              skills: ['霹雳雷火弹', '连环弩'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 4, contribution: 500 } },
+            { id: 'pli_master_3', name: '火千金', title: '烟火司正', realm: '金丹', layer: 6, age: 40,
+              desc: '霹雳堂唯一的烟火女司正，做出来的烟火能卖钱，做出来的雷火能要命。', personality: '心灵手辣',
+              skills: ['烟火术', '袖箭'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '筑基', layer: 2, contribution: 350 } }
+        ],
+        factions: [
+            { id: 'pli_faction_junhuo', name: '军火一脉', icon: '🧨', desc: '雷火是立堂之本，货卖三方、钱养全堂。', leader: '雷震北', members: [], stance: { trade: 30, orthodox: 10 }, influence: 42 },
+            { id: 'pli_faction_yanhuo', name: '烟火一脉', icon: '🎆', desc: '主张以烟火铺路，霹雳堂不只会炸。', leader: '火千金', members: [], stance: { open: 26, trade: 16 }, influence: 24 }
+        ],
+        specialResources: [
+            { id: 'pli_resource_huoyao', name: '雷火药坊', type: 'forge', output: 9, desc: '硝石硫磺自成一脉，雷火弹畅销江湖' }
+        ]
+    };
+
+    SECT_DEEP_DATA['大旗门'] = {
+        desc: '军伍出身的门派，旗在人在。门中不讲辈分讲军令，一杆大旗压得住江湖风浪。',
+        masters: [
+            { id: 'dq_master_1', name: '铁犁', title: '老帅', realm: '元婴', layer: 3, age: 80,
+              desc: '大旗门最后一位上过战阵的老帅，军令状比门规牌挂得高。', personality: '铁血沉稳',
+              skills: ['大旗枪法', '破阵刀'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'dq_master_2', name: '石敢当', title: '执法头', realm: '金丹', layer: 9, age: 55,
+              desc: '执法如军法，二十军棍打下去从不看人脸。', personality: '铁面无私',
+              skills: ['大旗枪法', '石锁功'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 5, contribution: 500 } },
+            { id: 'dq_master_3', name: '蓝旗', title: '旗卫头', realm: '金丹', layer: 6, age: 42,
+              desc: '掌大旗的旗卫头，旗杆比他的命重——这话他自己说的，也真做到过。', personality: '忠勇憨直',
+              skills: ['护旗枪', '行军步'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '筑基', layer: 2, contribution: 300 } }
+        ],
+        factions: [
+            { id: 'dq_faction_junling', name: '军令堂', icon: '🎖️', desc: '门中一切照军法办，旗令即门令。', leader: '石敢当', members: [], stance: { orthodox: 32, open: 4 }, influence: 42 },
+            { id: 'dq_faction_huqi', name: '护旗营', icon: '🚩', desc: '大旗所在即门户所在，人在旗在。', leader: '蓝旗', members: [], stance: { orthodox: 24, open: 14 }, influence: 28 }
+        ],
+        specialResources: [
+            { id: 'dq_resource_biaoying', name: '军旅镖营', type: 'trade', output: 8, desc: '军伍出身的镖队，官道商路都认这杆旗' }
+        ]
+    };
+
+    SECT_DEEP_DATA['血手门'] = {
+        desc: '名字最难听、规矩却最严的门派——血手血手，血债血偿，从不滥杀。',
+        masters: [
+            { id: 'xsm_master_1', name: '赤十三', title: '血衣长老', realm: '元婴', layer: 4, age: 70,
+              desc: '血手门辈分最高的长老，一身红衣洗了又洗，还是红的。', personality: '冷峻重诺',
+              skills: ['血手印', '赤影身法'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'xsm_master_2', name: '聂无咎', title: '执法判官', realm: '金丹', layer: 8, age: 52,
+              desc: '判人生死也判自己人生死的执法判官，门里没人敢在他面前撒谎。', personality: '铁面孤直',
+              skills: ['血手印', '判官笔'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 5, contribution: 500 } },
+            { id: 'xsm_master_3', name: '雪乌鸦', title: '暗卫头领', realm: '金丹', layer: 6, age: 38,
+              desc: '带暗卫的头领，白天睡在房梁上，夜里替全门看门。', personality: '沉默警觉',
+              skills: ['夜行术', '血影剑'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '筑基', layer: 2, contribution: 350 } }
+        ],
+        factions: [
+            { id: 'xsm_faction_xuezhai', name: '血债堂', icon: '🩸', desc: '有债必偿、有仇必报，血手门的规矩之源。', leader: '聂无咎', members: [], stance: { orthodox: 30, revenge: 20 }, influence: 40 },
+            { id: 'xsm_faction_anwei', name: '暗卫房', icon: '🌑', desc: '主张少动手多探路，情报比刀快。', leader: '雪乌鸦', members: [], stance: { open: 22, orthodox: 16 }, influence: 26 }
+        ],
+        specialResources: [
+            { id: 'xsm_resource_suozhai', name: '索债行当', type: 'trade', output: 7, desc: '替人讨血债的行当，报酬从来不少' }
+        ]
+    };
+
+    SECT_DEEP_DATA['飞蝎坞'] = {
+        desc: '大漠船坞立起来的门派，明面上走船护航，暗地里毒针无影。',
+        masters: [
+            { id: 'fxw_master_1', name: '蝎母', title: '老祖', realm: '元婴', layer: 5, age: 100,
+              desc: '飞蝎坞的老祖，养了一辈子蝎子，也看了一辈子人心。', personality: '阴柔通透',
+              skills: ['蝎尾针法', '万蝎噬心'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'fxw_master_2', name: '沙千里', title: '铁蝎镖头', realm: '金丹', layer: 8, age: 50,
+              desc: '走大漠商路的镖头，沙暴里能辨方向，毒虫里能睡安稳觉。', personality: '豪爽谨慎',
+              skills: ['蝎尾针法', '大漠刀'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 4, contribution: 450 } },
+            { id: 'fxw_master_3', name: '红娘子', title: '毒房头', realm: '金丹', layer: 6, age: 36,
+              desc: '掌毒房的红娘子，配毒先配解药——坞里的规矩是她立的。', personality: '细心狠辣',
+              skills: ['毒雾弥漫', '蝎毒淬针'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '筑基', layer: 2, contribution: 300 } }
+        ],
+        factions: [
+            { id: 'fxw_faction_mingbiao', name: '明镖行', icon: '🐫', desc: '走明路护商队，坞里的饭一半是镖钱。', leader: '沙千里', members: [], stance: { trade: 30, open: 10 }, influence: 38 },
+            { id: 'fxw_faction_andu', name: '暗毒房', icon: '🦂', desc: '守毒房暗艺，人不犯我针不出袖。', leader: '红娘子', members: [], stance: { orthodox: 26, revenge: 14 }, influence: 28 }
+        ],
+        specialResources: [
+            { id: 'fxw_resource_shanglu', name: '大漠商路抽成', type: 'trade', output: 8, desc: '坞外商路走谁的地盘，谁就得留下买路钱' }
+        ]
+    };
+
+    SECT_DEEP_DATA['烈日教'] = {
+        desc: '拜圣火的教门，教义只有一句：火照四方，焚尽尘妄。仪轨森严，一步不乱。',
+        masters: [
+            { id: 'lrj_master_1', name: '烈日真人', title: '退位教主', realm: '元婴', layer: 7, age: 110,
+              desc: '把教主之位传了下去的老真人，如今只在圣火台守夜。', personality: '威仪深沉',
+              skills: ['圣火诀', '焚天掌'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'lrj_master_2', name: '赤焰', title: '圣火使', realm: '金丹', layer: 9, age: 55,
+              desc: '掌圣火台的火使，三十年没让火熄过一瞬。', personality: '虔诚执拗',
+              skills: ['圣火诀', '火焰喷射'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 5, contribution: 500 } },
+            { id: 'lrj_master_3', name: '晦明', title: '焰咏执事', realm: '金丹', layer: 6, age: 44,
+              desc: '领教众诵焰经的执事，嗓子哑了三次，仪轨一次没错。', personality: '一丝不苟',
+              skills: ['焰咏经', '烈火护盾'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 8, contribution: 250 } }
+        ],
+        factions: [
+            { id: 'lrj_faction_yigui', name: '仪轨堂', icon: '🔥', desc: '圣火仪轨一字不可错，教立之本。', leader: '晦明', members: [], stance: { orthodox: 34, open: 4 }, influence: 42 },
+            { id: 'lrj_faction_shanglu', name: '商路火棚', icon: '🏮', desc: '沿丝路设火棚供商旅取暖，火照四方先照路人。', leader: '赤焰', members: [], stance: { open: 26, trade: 16 }, influence: 26 }
+        ],
+        specialResources: [
+            { id: 'lrj_resource_shenghuo', name: '圣火台供奉', type: 'culture', output: 8, desc: '西域商旅路过必献供奉，求圣火照路' }
+        ]
+    };
+
+    SECT_DEEP_DATA['神机门'] = {
+        desc: '机关术的祖师庙，门里弟子个个手上带油、袖里带簧。',
+        masters: [
+            { id: 'sjm_master_1', name: '公输班', title: '退位老门主', realm: '元婴', layer: 6, age: 98,
+              desc: '神机门上一代门主，造过会飞的木鸢，也造过拆不掉的门锁。', personality: '痴迷机巧',
+              skills: ['木鸢术', '连环机枢'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'sjm_master_2', name: '墨齿', title: '总工头', realm: '金丹', layer: 8, age: 52,
+              desc: '掌全门工造的总工头，图纸比命重，误差比仇大。', personality: '苛刻精准',
+              skills: ['机关术', '齿轮弩'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 4, contribution: 500 } },
+            { id: 'sjm_master_3', name: '铜雀', title: '机枢师', realm: '金丹', layer: 5, age: 35,
+              desc: '最年轻的机枢师，拆过的锁比开过的多。', personality: '好奇跳脱',
+              skills: ['开锁术', '铜雀机'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '筑基', layer: 2, contribution: 300 } }
+        ],
+        factions: [
+            { id: 'sjm_faction_junji', name: '军机营', icon: '⚙️', desc: '造守城器械，接官家订单，门里饭碗最稳的一脉。', leader: '墨齿', members: [], stance: { trade: 28, orthodox: 14 }, influence: 40 },
+            { id: 'sjm_faction_qiwu', name: '奇物斋', icon: '🔩', desc: '造好玩的新鲜物件卖江湖，赚得多也惹得眼红。', leader: '铜雀', members: [], stance: { open: 30, trade: 14 }, influence: 24 }
+        ],
+        specialResources: [
+            { id: 'sjm_resource_qixie', name: '机关器械坊', type: 'forge', output: 9, desc: '守城器械与江湖奇物两线开工，订单排到明年' }
+        ]
+    };
+
+    SECT_DEEP_DATA['侠隐阁'] = {
+        desc: '替江湖记档的阁楼——谁家弟子几时下山、哪桩仇怨几时了结，阁里都有一笔。',
+        masters: [
+            { id: 'xyg_master_1', name: '燕十三', title: '退隐阁主', realm: '元婴', layer: 5, age: 88,
+              desc: '上一代阁主，建了侠隐阁的档库，也立了「档不妄改」的阁规。', personality: '孤直守诺',
+              skills: ['侠隐剑', '听风辨位'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'xyg_master_2', name: '铁笔判官', title: '执法头', realm: '金丹', layer: 8, age: 56,
+              desc: '掌档库执法的头儿，一支铁笔改过生死簿，也从不改档。', personality: '铁笔无私',
+              skills: ['判官笔法', '侠隐剑'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 5, contribution: 500 } },
+            { id: 'xyg_master_3', name: '闻不倦', title: '掌籍先生', realm: '金丹', layer: 6, age: 45,
+              desc: '管天下侠名册的掌籍，记性好到吓人，眼睛毒到吓人。', personality: '博闻细致',
+              skills: ['鉴人术', '快笔功'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 8, contribution: 250 } }
+        ],
+        factions: [
+            { id: 'xyg_faction_dangku', name: '档库守旧', icon: '📚', desc: '档不妄改、秘不外泄，阁立的根。', leader: '铁笔判官', members: [], stance: { orthodox: 32, open: 4 }, influence: 42 },
+            { id: 'xyg_faction_xiaming', name: '侠名外发', icon: '✉️', desc: '主张侠名册有限外发，让江湖少些冒名顶替。', leader: '闻不倦', members: [], stance: { open: 26, orthodox: 12 }, influence: 24 }
+        ],
+        specialResources: [
+            { id: 'xyg_resource_xiaming', name: '侠名册抄录', type: 'culture', output: 7, desc: '各方势力重金求购侠名册抄本' }
+        ]
+    };
+
+    SECT_DEEP_DATA['天涯海阁'] = {
+        desc: '掌天下路引与驿路的阁门——地图在他们手里，路也在他们手里。',
+        masters: [
+            { id: 'tyg_master_1', name: '海无涯', title: '退位老阁主', realm: '元婴', layer: 6, age: 90,
+              desc: '走过天下所有驿路的老阁主，退位前把三十六条秘径的口诀烧了——他说路该自己走。', personality: '豁达念旧',
+              skills: ['天涯步', '观星辨路'],
+              acceptStudent: false, maxStudents: 0, requirement: {} },
+            { id: 'tyg_master_2', name: '陆明舟', title: '听潮长老', realm: '金丹', layer: 8, age: 54,
+              desc: '掌海路驿站的长老，听潮声就知道明天几级风。', personality: '沉稳多谋',
+              skills: ['天涯步', '海图志'],
+              acceptStudent: true, maxStudents: 2, requirement: { realm: '筑基', layer: 4, contribution: 450 } },
+            { id: 'tyg_master_3', name: '过千山', title: '驿丞头', realm: '金丹', layer: 6, age: 44,
+              desc: '管陆路驿丞的驿丞头，一张嘴能把三百里驿站说得跟一条街似的。', personality: '热络可靠',
+              skills: ['驿路刀', '快马鞭'],
+              acceptStudent: true, maxStudents: 3, requirement: { realm: '炼气', layer: 8, contribution: 250 } }
+        ],
+        factions: [
+            { id: 'tyg_faction_hailu', name: '海路一脉', icon: '⛵', desc: '海路驿栈与航线图，阁里的钱袋子。', leader: '陆明舟', members: [], stance: { trade: 30, open: 10 }, influence: 40 },
+            { id: 'tyg_faction_lulu', name: '陆路一脉', icon: '🐎', desc: '陆路驿站与路引签发，阁里的人脉网。', leader: '过千山', members: [], stance: { open: 28, trade: 14 }, influence: 28 }
+        ],
+        specialResources: [
+            { id: 'tyg_resource_luyin', name: '路引签发', type: 'trade', output: 9, desc: '天下行商过关都要天涯海阁的路引' }
         ]
     };
 }
@@ -1073,6 +1499,189 @@ const SECT_EVENTS = {
             { label: '图录记载', effects: { points: 10 }, reply: '你的手绘被掌门夸了一句"有几分意思"。' } ] },
         { id: 'se_pl_chaoxin', icon: '🐚', name: '潮信失调', text: '环岛潮汐阵的阵眼被海草缠死了。', choices: [
             { label: '潜水修复', effects: { contribution: 35 }, reply: '上来时耳朵疼了三天，潮信准了。' } ] }
+    ],
+    '嵩山派': [
+        { id: 'se_sgs_mengshi', icon: '🏵️', name: '五岳盟使巡山', text: '盟中使者持五岳令旗上山，点名要核验弟子名册与库甲。', choices: [
+            { label: '全程陪同核验', effects: { contribution: 35 }, reply: '名册库甲分毫不差，使者临走时朝你拱了拱手。' },
+            { label: '只安排食宿', effects: { points: 8 }, reply: '使者挑不出错，也记不住你的脸。' } ] },
+        { id: 'se_sgs_jianpu', icon: '📖', name: '峻极剑谱夜讲', text: '传功长老在峻极殿开讲嵩山剑谱总纲，许内门弟子旁听。', choices: [
+            { label: '秉笔记诵一夜', effects: { buff: { name: '剑理通明', effects: { intelligence: 5 }, hours: 8 } }, reply: '十七路剑招的"势"字诀，你忽然听懂了三分。' },
+            { label: '听半截回去练剑', effects: { contribution: 15 }, reply: '练是练了，可总觉得自己漏了最要紧的一句。' } ] },
+        { id: 'se_sgs_diaoke', icon: '🦅', name: '太室雕窠', text: '崖顶老雕叼走了晒场上的一柄制式铁剑。', choices: [
+            { label: '攀崖取回', effects: { contribution: 30, fame: 3 }, reply: '你从雕窠里捞回铁剑，顺带捡了三根好翎毛。' },
+            { label: '报执事补领', effects: {}, reply: '补领要写检讨——"为何连剑都看不住"。' } ] }
+    ],
+    '大旗门': [
+        { id: 'se_dq_biaoche', icon: '🚩', name: '镖车缺好手', text: '门里接了趟远镖，走到半路人手病倒两个，旗头点名补缺。', choices: [
+            { label: '随镖走一趟', effects: { contribution: 40, fame: 3 }, reply: '一路无事，过卡子时你的大旗门腰牌比银子好使。' },
+            { label: '留守看门', effects: { points: 5 }, reply: '镖回来那天，弟兄们讲了一路的山口夜话。' } ] },
+        { id: 'se_dq_jiuqi', icon: '🪡', name: '祖旗破旧', text: '传了三代的门旗被山风撕开一道大口子。', choices: [
+            { label: '亲手缝补', effects: { contribution: 30 }, reply: '针脚歪歪扭扭，旗头却把它挂在了最显眼处。' },
+            { label: '出钱做面新的', effects: { contribution: 20, fame: -2 }, reply: '新旗鲜亮，老弟兄们看了直摇头："旗是旧的硬气。"' } ] },
+        { id: 'se_dq_zhenfa', icon: '🥁', name: '旗鼓阵操演', text: '五风十雨旗阵缺一名鼓手，操演就在明日。', choices: [
+            { label: '顶上鼓位', effects: { buff: { name: '鼓荡血气', effects: { strength: 4 }, hours: 8 } }, reply: '鼓点一响，全场旗浪翻涌——你的腕子酸了三日，值。' } ] }
+    ],
+    '恒山派': [
+        { id: 'se_hsb_qinpu', icon: '🎼', name: '潇湘烟雨谱', text: '师太在无色庵整理《潇湘烟雨》琴谱，缺人誊抄。', choices: [
+            { label: '静室誊谱三日', effects: { contribution: 30, points: 8 }, reply: '抄到"烟雨中"一节，笔意不自觉慢了半拍。' },
+            { label: '请习一段', effects: { buff: { name: '琴音洗心', effects: { meridian: 4 }, hours: 8 } }, reply: '一曲终了，胸中块垒随音散了大半。' } ] },
+        { id: 'se_hsb_yaopu', icon: '🌿', name: '见性峰药圃', text: '峰后药圃的白云草熟了，师太许弟子自采自用。', choices: [
+            { label: '采一篓', effects: { item: { id: 'spirit_grass', count: 3 } }, reply: '叶上晨露未干，是入药的好时辰。' },
+            { label: '替师太晒药', effects: { contribution: 25 }, reply: '师太念了声佛号，把最大的一包药材赠了你。' } ] }
+    ],
+    '华山派': [
+        { id: 'se_hsp_zhandao', icon: '🪵', name: '苍龙岭栈道朽断', text: '通向后山的木栈道朽了三根横梁，夜里巡山险出人命。', choices: [
+            { label: '悬空换梁', effects: { contribution: 45 }, reply: '脚下千丈深渊，手上不敢有半分抖。换完梁，掌门的嘉许令到了。' },
+            { label: '封道报修', effects: { points: 5 }, reply: '工事房排期到了下月——后山晨练的师弟们绕了半月远路。' } ] },
+        { id: 'se_hsp_lunjian', icon: '⚔️', name: '云台论剑', text: '云台峰设擂，同门以剑会友，胜者留名石壁。', choices: [
+            { label: '下场比剑', effects: { buff: { name: '剑兴正酣', effects: { dexterity: 5 }, hours: 8 }, fame: 3 }, reply: '三胜一负，石壁上多了一道新刻痕。' },
+            { label: '台下观剑记招', effects: { points: 10, buff: { name: '观剑有得', effects: { intelligence: 3 }, hours: 8 } }, reply: '看懂了师兄那手"白云出岫"的起手破绽。' } ] },
+        { id: 'se_hsp_songfeng', icon: '🌲', name: '松风夜读', text: '夜半松涛大作，吵得值夜弟子无心练功。', choices: [
+            { label: '借涛声练内息', effects: { buff: { name: '涛声入定', effects: { meridian: 5 }, hours: 8 } }, reply: '松涛起伏暗合呼吸，一夜行功抵得平日三夜。' } ] }
+    ],
+    '侠隐阁': [
+        { id: 'se_xiy_mingxin', icon: '✉️', name: '无名侠客托信', text: '一位蒙面客在阁外石匣留信托你转交山下遗孤，酬银一封。', choices: [
+            { label: '千里送信', effects: { fame: 6, contribution: 20 }, reply: '孩子捧着信哭了。你没收那封银子。' },
+            { label: '转交阁主处置', effects: { points: 8 }, reply: '阁主照办了，只在册上记了"侠隐某转呈"五个字。' } ] },
+        { id: 'se_xiy_anpu', icon: '🗡️', name: '暗格刀谱', text: '整理旧架时在夹层发现半册无名刀谱，页脚写着"侠隐者，藏锋也"。', choices: [
+            { label: '献入阁库', effects: { contribution: 35, points: 10 }, reply: '阁主抚页良久："前人藏锋，今人扬锋——都是侠。"' },
+            { label: '私下参详', effects: { buff: { name: '藏锋刀意', effects: { strength: 4 }, hours: 8 } }, reply: '刀谱只练了个起手式，但"藏"字你记住了。' } ] }
+    ],
+    '天涯海阁': [
+        { id: 'se_tyhg_hangci', icon: '⛵', name: '南海航次', text: '阁中商船队下南洋，缺一位压舱的修行者随行护航。', choices: [
+            { label: '随船出海', effects: { contribution: 30, item: { id: 'spirit_stone', count: 50 } }, reply: '风浪里护住满船货，返航时分红外加一袋南海晶石。' },
+            { label: '留守整理航志', effects: { points: 10 }, reply: '你把三十年航志理出了目录，老船工说这是功德。' } ] },
+        { id: 'se_tyhg_jixin', icon: '🕯️', name: '海客急信', text: '一封火漆急信要在潮汛前送到三百里外的分舵。', choices: [
+            { label: '星夜疾驰', effects: { fame: 4, contribution: 25 }, reply: '信到时潮头刚好落——你抢出了半日。' },
+            { label: '按班次递送', effects: {}, reply: '信迟了三日，分舵错失了一批紧俏货。没人怪你，但账上记了一笔。' } ] }
+    ],
+    '泰山派': [
+        { id: 'se_tsn_richu', icon: '🌄', name: '日观峰观旭', text: '掌门率弟子登日观峰观日出，以采东升紫气。', choices: [
+            { label: '峰顶吐纳', effects: { buff: { name: '紫气东来', effects: { meridian: 5 }, hours: 8 } }, reply: '第一缕日光落在眉心，周身百骸都暖了。' },
+            { label: '睡到日上三竿', effects: {}, reply: '同门下山时讲峰顶云海，你只能跟着点头。' } ] },
+        { id: 'se_tsn_shibi', icon: '🪨', name: '摩崖碑拓', text: '岱庙残碑需人重拓，碑文是泰山剑意总诀。', choices: [
+            { label: '亲手椎拓', effects: { contribution: 30, points: 8 }, reply: '拓到"重如岳"三字，手腕沉了下去——剑意透碑而来。' } ] }
+    ],
+    '神机门': [
+        { id: 'se_sjm_muniu', icon: '⚙️', name: '木牛瘫痪', text: '运粮的木牛流马在山道上散了架，齿轮撒了一地。', choices: [
+            { label: '当场拆解重装', effects: { buff: { name: '机心入扣', effects: { intelligence: 6 }, hours: 8 }, contribution: 20 }, reply: '重装后木牛走得比原先还稳——你顺手改了个传动比。' },
+            { label: '扛回去找师傅', effects: { contribution: 10 }, reply: '师傅瞥了一眼："又是你扛回来的。拆过没有？"' } ] },
+        { id: 'se_sjm_nuli', icon: '🏹', name: '连弩验机', text: '新造的八矢连弩等着验机，弩房缺个眼疾手快的。', choices: [
+            { label: '下场试机', effects: { buff: { name: '机簧手感', effects: { dexterity: 4 }, hours: 8 } }, reply: '八矢连发全数上靶，你摸清了卡簧的脾气。' } ] }
+    ],
+    '霹雳堂': [
+        { id: 'se_plt_huoyao', icon: '🧨', name: '火药返潮', text: '梅雨天药库返潮，三百斤火药眼看要废。', choices: [
+            { label: '连夜翻晒焙干', effects: { contribution: 35 }, reply: '焙房里呛得直流泪，火药救回来了。' },
+            { label: '封库报损', effects: { contribution: -10 }, reply: '堂主批了损，也批了你一顿"早干嘛去了"。' } ] },
+        { id: 'se_plt_shilei', icon: '💥', name: '雷火新弹试爆', text: '后山试爆新型雷火弹，观爆台上还有空位。', choices: [
+            { label: '抢头排观爆', effects: { buff: { name: '胆魄淬雷', effects: { strength: 4 }, hours: 8 }, fame: 2 }, reply: '冲击波掀了帽子，你盯着火球看了个饱——值。' },
+            { label: '远远看着', effects: {}, reply: '只听见一声闷响。头排的师弟们讲细节时你插不上话。' } ] }
+    ],
+    '大隐阁': [
+        { id: 'se_dayn_chaju', icon: '🍵', name: '隐士茶局', text: '三位不世出的老隐士在阁中手谈煮茶，缺一位添水的童子。', choices: [
+            { label: '执壶侍茶', effects: { fame: 4, points: 8 }, reply: '棋到中盘，一位老者忽然问你"水开了没有"——你答"心静则水自开"。老者大笑。' },
+            { label: '推辞勿扰', effects: {}, reply: '事后听说那局棋下了三天，茶童得了半卷手稿。' } ] },
+        { id: 'se_dayn_cangshu', icon: '📚', name: '地窖藏书翻检', text: '阁中地窖藏书受潮，需人逐册翻检晾晒。', choices: [
+            { label: '翻检一窖', effects: { contribution: 30, buff: { name: '故纸余香', effects: { intelligence: 4 }, hours: 8 } }, reply: '晒书时顺手读了半册残卷，讲的居然是失传的吐纳法。' } ] }
+    ],
+    '天书阁': [
+        { id: 'se_tsg_xingxiang', icon: '🌠', name: '星象异动', text: '司天台奏报：荧惑守心，星轨偏移三度。', choices: [
+            { label: '通宵推演星盘', effects: { buff: { name: '星轨在胸', effects: { intelligence: 5 }, hours: 8 }, points: 10 }, reply: '推演到天明，偏移的三度里藏着一段被遗忘的古历。' },
+            { label: '如实录档', effects: { contribution: 20 }, reply: '档录得很工整。阁主说："录是本职，推是本事。"' } ] },
+        { id: 'se_tsg_shudu', icon: '🐛', name: '蠹鱼蚀典', text: '镇阁的《周天度厄经》被蠹虫咬穿了封皮。', choices: [
+            { label: '捉虫补经', effects: { contribution: 35 }, reply: '樟脑布囊、桑皮纸补洞——三个月后虫绝经全。' } ] }
+    ],
+    '衡山派': [
+        { id: 'se_hns_shoudai', icon: '🙏', name: '南岳寿诞大典', text: '山下信众为老观主做九十大寿，缺人手张罗法事。', choices: [
+            { label: '执礼司仪', effects: { fame: 5, contribution: 20 }, reply: '寿宴上老观主拉着你的手说"这孩子有福相"。' },
+            { label: '后厨帮忙', effects: { points: 8 }, reply: '三百碗长寿面，一碗没洒。' } ] },
+        { id: 'se_hns_xuangui', icon: '🐢', name: '玄龟碑夜光', text: '祖师殿前的玄龟驮碑半夜泛起青光。', choices: [
+            { label: '拓碑悟字', effects: { buff: { name: '龟碑古意', effects: { meridian: 4 }, hours: 8 } }, reply: '青光下碑文浮动，你记下了七个不认识却忘不掉的古字。' },
+            { label: '报知掌门', effects: { contribution: 15 }, reply: '掌门看完只说四个字："衡山有灵。"' } ] }
+    ],
+    '铁掌帮': [
+        { id: 'se_tzg_dukou', icon: '💰', name: '渡口抽头', text: '帮里控制的渡口来了支肥羊商队，按例该抽三成水钱。', choices: [
+            { label: '照例抽头', effects: { contribution: 35, fame: -2 }, reply: '商队骂骂咧咧交了钱。帮里的账好看，你的名声难看。' },
+            { label: '只收一成放走', effects: { fame: 4, contribution: -10 }, reply: '商队头子深深一揖。月底帮主问责时，水寨的弟兄替你说了话。' } ] },
+        { id: 'se_tzg_neihong', icon: '🥊', name: '水寨内讧', text: '两堂口为一批沉货的归属在水寨动了手。', choices: [
+            { label: '下场压住', effects: { contribution: 25, fame: -2 }, reply: '你把两边的头按进水里各三息，火气就消了。' },
+            { label: '请帮主裁断', effects: { points: 5 }, reply: '帮主裁得干脆，只是两堂口都觉得你"不够义气"。' } ] }
+    ],
+    '百花谷': [
+        { id: 'se_bhg_huaqi', icon: '🌸', name: '百花早发', text: '谷中奇花比花历早开了半月，花信错乱恐有地气之变。', choices: [
+            { label: '逐圃记录花期', effects: { contribution: 30, buff: { name: '花气养神', effects: { meridian: 4 }, hours: 8 } }, reply: '记完最后一圃，你发现自己站在花海里站了一个时辰没舍得走。' },
+            { label: '掘土验地气', effects: { points: 10 }, reply: '地脉温升三度——谷主依你的记录调了灌溉阵。' } ] },
+        { id: 'se_bhg_fengmi', icon: '🍯', name: '灵蜂酿蜜', text: '药蜂采了新品种的灵花，头一批蜜该起封了。', choices: [
+            { label: '帮手摇蜜', effects: { item: { id: 'qi_recovery_pill', count: 2 } }, reply: '蜜色琥珀，蜂后难得没蜇人。管事姐姐塞给你两丸蜜炼的回气丹。' } ] }
+    ],
+    '五仙教': [
+        { id: 'se_wxc_shengshe', icon: '🐍', name: '圣蛇出走', text: '蛇窟的白鳞圣蛇半夜溜了，教中规矩：寻不回者罚入蛊房一月。', choices: [
+            { label: '入林寻蛇', effects: { contribution: 40 }, reply: '你在榕树洞里找到了它——正蜕皮。它认得你的气味了。' },
+            { label: '守坛等它回来', effects: { points: 8 }, reply: '三天后圣蛇自己回了窟，路过你身边时停了停。' } ] },
+        { id: 'se_wxc_gufang', icon: '🏺', name: '蛊房月检', text: '蛊房月检缺人手，进去的人要喂蛊、清罐、抄蛊谱。', choices: [
+            { label: '进蛊房当值', effects: { buff: { name: '百蛊不侵', effects: { constitution: 4 }, hours: 8 }, contribution: 20 }, reply: '出来时袖口爬过一只金蚕，你面不改色把它放了回去。' },
+            { label: '告病回避', effects: {}, reply: '同教姐妹笑你："中原人的胆子。"' } ] }
+    ],
+    '阎罗殿': [
+        { id: 'se_yld_shadan', icon: '🗡️', name: '暗杀令存疑', text: '殿里接了张暗杀令，可目标名字旁的批注被人涂掉了。', choices: [
+            { label: '暗查令源', effects: { contribution: 40, points: 15, fame: -2 }, reply: '查到发令人是殿内一位判官，要杀的是自己欠债的证人。你把证据摆到了殿主案头。' },
+            { label: '照单执行不问', effects: { contribution: 20 }, reply: '刀很快，事很干净。只是那夜你梦见被涂掉的名字。' } ] },
+        { id: 'se_yld_guishi', icon: '🏮', name: '鬼门市集', text: '殿属鬼门市集今夜开张，三教九流的黑货都在。', choices: [
+            { label: '逛一趟市集', effects: { item: { id: 'spirit_stone', count: 40 } }, reply: '你用低价收了一批没人识货的晶石，转手赚头不小。' } ] }
+    ],
+    '昆仑派': [
+        { id: 'se_klp_jianzhen', icon: '⚔️', name: '两仪剑阵合练', text: '剑阵缺一名入阵弟子，阵眼之位空缺。', choices: [
+            { label: '入阵合练', effects: { buff: { name: '两仪剑势', effects: { dexterity: 5 }, hours: 8 }, contribution: 20 }, reply: '一入阵便知阴阳互济之妙，收剑时手心全是汗。' },
+            { label: '阵外观势', effects: { points: 10, buff: { name: '观阵识势', effects: { intelligence: 3 }, hours: 8 } }, reply: '看出剑阵转换时有半息的滞涩，报给掌阵长老被记了一功。' } ] },
+        { id: 'se_klp_daxue', icon: '❄️', name: '大雪封山道', text: '一夜暴雪封了昆仑山口，山下香客的粮道断了。', choices: [
+            { label: '带队清雪开路', effects: { contribution: 35, fame: 3 }, reply: '铁锹挖断三把，山口重开时香客们朝山上叩首。' } ] }
+    ],
+    '天龙教': [
+        { id: 'se_tlc_shenghuo', icon: '🔥', name: '圣火夜祭', text: '教中圣火百年不熄，今夜大祭需一名护火弟子彻夜值守。', choices: [
+            { label: '守护圣火', effects: { buff: { name: '圣火淬心', effects: { meridian: 5 }, hours: 8 } }, reply: '火光映了一夜，教众诵经声里你的内息竟自行走了一个大周天。' },
+            { label: '协助布置祭坛', effects: { points: 8, fame: 2 }, reply: '坛成那刻，教主亲自点了第一炷香。' } ] },
+        { id: 'se_tlc_zhengzhi', icon: '💢', name: '教众火并', text: '两堂教众为教产在殿前拔刀相向。', choices: [
+            { label: '强力弹压', effects: { contribution: 30, fame: -2 }, reply: '你打落了双方的兵刃。教主的批示："可用。"' },
+            { label: '飞报教主', effects: { points: 5 }, reply: '教主驾到时人已散了——你只捞了个"传信之功"。' } ] }
+    ],
+    '烈日教': [
+        { id: 'se_lrj_shangdui', icon: '🐫', name: '大漠商队遇袭', text: '教中庇护的商队在沙暴口遇马匪围困，烽烟已起。', choices: [
+            { label: '驰援商队', effects: { contribution: 40, item: { id: 'spirit_stone', count: 30 } }, reply: '你顶着沙暴杀散马匪，商队酬谢之外，教中另记大功。' },
+            { label: '留守圣坛', effects: { points: 8 }, reply: '商队丢了两成货。坛前诵经时，你总听见沙暴口方向的风声。' } ] },
+        { id: 'se_lrj_rixing', icon: '☀️', name: '烈日苦修', text: '正午大日当空，教规：敢入日曝台者，得"烈日淬体"之法。', choices: [
+            { label: '登台暴晒', effects: { buff: { name: '烈日淬体', effects: { strength: 5 }, hours: 8 } }, reply: '皮脱了一层，筋骨却像被大日重新锻过。' },
+            { label: '檐下观摩', effects: {}, reply: '观摩也是修行——至少你是这么跟师兄说的。' } ] }
+    ],
+    '血手门': [
+        { id: 'se_xsm_xuechi', icon: '🩸', name: '血池试炼', text: '门中血池十年一开，入池者以血气淬体，出池者或废或强。', choices: [
+            { label: '入池淬体', effects: { buff: { name: '血气冲霄', effects: { strength: 6 }, hours: 8 }, fame: -3 }, reply: '池水滚烫如沸，你在里面咬碎了后槽牙——出来时双臂青筋如蟒。' },
+            { label: '婉拒试炼', effects: { contribution: -10 }, reply: '门主盯了你三息，什么也没说。这三息比血池还冷。' } ] },
+        { id: 'se_xsm_fenzang', icon: '🪙', name: '猎物分赃', text: '一票大买卖到手，分赃堂上你的份额被人压了一成。', choices: [
+            { label: '拍案力争', effects: { contribution: 20, fame: -2 }, reply: '你把压份额的人按在桌上数了三声，钱回来了，仇也结下了。' },
+            { label: '忍让与人', effects: { fame: 2, points: 5 }, reply: '让出去的一成，换来分赃堂一句"这小子识相"。' } ] }
+    ],
+    '青城派': [
+        { id: 'se_qcp_songfeng', icon: '🌲', name: '松风晨课', text: '青城天下幽——晨课设在松风亭，以松涛和太极。', choices: [
+            { label: '随松涛走拳', effects: { buff: { name: '松风入拳', effects: { meridian: 4 }, hours: 8 } }, reply: '拳意随松涛起伏，一套走完，呼吸绵长得像换了个人。' },
+            { label: '扫亭前落叶', effects: { points: 8 }, reply: '扫完落叶，早课也散了。师兄说你把"幽"字扫走了半边。' } ] },
+        { id: 'se_qcp_shixi', icon: '🍚', name: '下山施斋', text: '山下遭了雹灾，观里开仓施斋，缺弟子押粮。', choices: [
+            { label: '押粮施粥', effects: { fame: 5, contribution: 15 }, reply: '粥棚前排起长队，老灾民朝青城山的方向作了个揖。' } ] }
+    ],
+    '峨眉派': [
+        { id: 'se_emp_hounao', icon: '🐒', name: '猴群袭斋堂', text: '后山猴群第三次下山抢斋堂的馒头，管事的师太头疼不已。', choices: [
+            { label: '提剑驱猴', effects: { contribution: 25, fame: 2 }, reply: '剑未出鞘，猴王先退了——它认得峨眉的剑穗。' },
+            { label: '以果易馒', effects: { item: { id: 'spirit_grass', count: 2 } }, reply: '你拿灵果跟猴王谈了笔买卖。它临走丢给你两株崖上才有的药草。' } ] },
+        { id: 'se_emp_yunhai', icon: '☁️', name: '金顶云海坐忘', text: '金顶云海翻涌，正是坐忘观心的好时辰，掌门许弟子各占一峰。', choices: [
+            { label: '云海前坐忘', effects: { buff: { name: '云海观心', effects: { meridian: 5 }, hours: 8 } }, reply: '云起云落间，心头那点杂念自己散了。' },
+            { label: '值守山门', effects: { contribution: 20, points: 5 }, reply: '香客如潮，你扶了三位险些被挤下台阶的老菩萨。' } ] }
+    ],
+    '飞蝎坞': [
+        { id: 'se_fxw_haidao', icon: '🏴‍☠️', name: '海盗夜袭', text: '一伙黑帆海盗趁夜摸向坞外的船坞，哨塔已鸣螺。', choices: [
+            { label: '登墙御敌', effects: { contribution: 45, fame: 4 }, reply: '你砍断了第一个爬上墙头的钩索，海盗退潮而去。坞主在晨会上点了你的名。' },
+            { label: '加固坞防', effects: { contribution: 20 }, reply: '你把三处松动的墙垛连夜砌实——第二天海盗正是从那里试的钩索。' } ] },
+        { id: 'se_fxw_xiefang', icon: '🦂', name: '蝎房躁动', text: '养蛊蝎的蝎房集体躁动，钳子声密得像下雨。', choices: [
+            { label: '入房安抚', effects: { buff: { name: '蝎胆沉稳', effects: { dexterity: 4 }, hours: 8 } }, reply: '你按坞里的法子压住了蝎王，满房钳声渐息——手背上添了道白痕。' },
+            { label: '请坞主处置', effects: { points: 8 }, reply: '坞主来了，撒了把药粉就没事了。他瞥你一眼："下回自己来。"' } ] }
     ]
 };
 window.SECT_EVENTS = SECT_EVENTS;

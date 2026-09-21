@@ -59,7 +59,7 @@ let proficiencyData = {}; // { skillId: { level: 0, exp: 0, breakthroughAttempts
 
 // ============ 功法领悟系统 ============
 let insights = []; // 已获得的领悟
-let insightPoints = 0; // 领悟点数
+let insightPoints = 0; // 领悟点数（v36 起仅作无角色时的兜底，真源在角色数据 insightPoints 字段）
 
 // ============ 领悟类型 ============
 const INSIGHT_TYPES = {
@@ -230,7 +230,7 @@ function breakthroughProficiency(skillId) {
         
         // 获得领悟点数（v20.42 悟道树·静功生慧：悟过此节点者多得一）
         var _insightGain = 2 + (typeof window.getInsightGainBonus === 'function' ? window.getInsightGainBonus() : 0);
-        insightPoints += _insightGain;
+        window.insightPoints = (window.insightPoints || 0) + _insightGain;
 
         alert(`突破成功！\n功法提升至 ${nextLevel.name}！\n获得领悟点数 +${_insightGain}`);
         
@@ -299,7 +299,7 @@ function addInsight(type, name) {
 
 // ============ 使用领悟点数获得领悟 ============
 function spendInsightPoint() {
-    if (insightPoints <= 0) {
+    if ((window.insightPoints || 0) <= 0) {
         alert('没有领悟点数！');
         return false;
     }
@@ -319,7 +319,7 @@ function spendInsightPoint() {
     
     if (confirm(`消耗1点领悟点数，尝试获得领悟：${randomEffect.name}\n${randomEffect.desc}`)) {
         if (addInsight(randomType, randomEffect.name)) {
-            insightPoints--;
+            window.insightPoints = Math.max(0, (window.insightPoints || 0) - 1);
             alert(`获得领悟：${randomEffect.name}！\n${randomEffect.desc}`);
             updateInsightUI();
             return true;
@@ -361,10 +361,10 @@ function cultivateSkill(skillId, amount = 10) {
     const exp = Math.floor(amount * efficiency);
     const result = addProficiencyExp(skillId, exp);
     if (Math.random() < 0.05) {
-        insightPoints += 1;
+        window.insightPoints = (window.insightPoints || 0) + 1;
         alert('修炼有所感悟，获得1点领悟点数！');
     }
-    if (result.upgraded) alert(`功法升级！\n当前等级：${PROFICIENCY_LEVELS[result.level].name}\n效果加成：x${result.multiplier}`);
+    if (result.upgraded) alert(`功法升级！\n当前等级：${PROFICIENCY_LEVELS[result.level].name}\n效果加成：×${result.multiplier}`);
 
     if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') window.timeSystem.advanceTime(timeCost, '修炼功法');
     else if (typeof window.advanceTime === 'function') window.advanceTime(timeCost, '修炼功法');
@@ -401,7 +401,7 @@ function updateCultivationUI() {
                         <span class="font-bold text-white ml-2">${skill.name}</span>
                         <span class="text-xs text-purple-400 ml-2">${currentLevel.name}</span>
                     </div>
-                    <span class="text-xs text-gray-400">效果：x${currentLevel.multiplier}</span>
+                    <span class="text-xs text-gray-400">效果：×${currentLevel.multiplier}</span>
                 </div>
                 
                 <div class="mb-2">
@@ -457,19 +457,23 @@ function updateCultivationUI() {
                 '<div><span class="text-lg">🌅</span><span class="font-bold text-amber-400 ml-2">' + _cd.realm + '</span>' +
                 '<span class="text-xs text-amber-300 ml-2">香火·信徒 ' + _inc + ' 人 · 每日回馈真元</span></div>' +
                 '<div class="flex gap-2">' +
+                '<button onclick="window.enterTianjie()" class="bg-amber-700 hover:bg-amber-600 text-white px-3 py-1 rounded text-xs" title="登上天界野外——灵气如潮，玉液成池，罡风扫野；回尘世在天界侧栏">🌅 登上天界</button>' +
                 '<button onclick="window.tianjieSpar()" class="bg-blue-700 hover:bg-blue-600 text-white px-3 py-1 rounded text-xs">天界切磋</button>' +
                 (_cd.realm === '飞升' ? '<button onclick="window.trySecondAscension()" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-3 py-1 rounded text-xs">二段飞升</button>' : '') +
+                '<button onclick="window.ascendedDescension()" class="bg-purple-700 hover:bg-purple-600 text-white px-3 py-1 rounded text-xs" title="散去仙躯入轮回——飞升者的转世，积分按「超脱」计">🔄 回入尘世</button>' +
                 '</div></div>';
         }
-        // 1.6 玩家建宗入口：元婴+可开山立宗（既有 PlayerSect 系统，此前无 UI 入口）
+        // 1.6 玩家建宗入口：白手起家改造——任何境界可插旗草创，元婴+置地才是开山立宗
         var _tier = (typeof window.getRealmTier === 'function') ? window.getRealmTier(_cd.realm) : 0;
         var _psMine = (window.PlayerSect && typeof window.PlayerSect.listMySects === 'function') ? (window.PlayerSect.listMySects() || []) : [];
-        if (_tier >= 4 && _cd.realm !== '飞升' && _cd.realm !== '金仙') {
+        if (_cd.realm !== '飞升' && _cd.realm !== '金仙') {
             if (_psMine.length === 0) {
                 html += '<div class="bg-indigo-900/30 p-3 rounded border border-indigo-600/50 flex items-center justify-between">' +
-                    '<div><span class="text-lg">🏯</span><span class="font-bold text-indigo-400 ml-2">开山立宗</span>' +
-                    '<span class="text-xs text-indigo-300 ml-2">元婴可分神操持，自立宗门——起名、定出身、择山门</span></div>' +
-                    '<button onclick="window.openFoundSectPanel()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded text-xs">开山立宗</button>' +
+                    '<div><span class="text-lg">🏯</span><span class="font-bold text-indigo-400 ml-2">自立宗门</span>' +
+                    '<span class="text-xs text-indigo-300 ml-2">' + (_tier >= 4
+                        ? '元婴可分神操持，自立宗门——起名、定出身、择山门'
+                        : '白手也能起家：插旗草创，招人、赁屋、挣家底——有没有人投，另说') + '</span></div>' +
+                    '<button onclick="window.openFoundSectPanel()" class="bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded text-xs">' + (_tier >= 4 ? '开山立宗' : '竖旗立宗') + '</button>' +
                     '</div>';
             } else {
                 var _ps = _psMine[0];
@@ -556,10 +560,16 @@ function updateCultivationUI() {
                     '<button onclick="window.claimSpiritVein()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1 rounded text-xs">占据灵脉</button>' +
                     '</div>';
             } else {
+                // v35 灵脉有了地点：地图脉眼上布的大阵，标出脉在哪、一键去看
+                var _locTxt = (typeof window.veinLocationText === 'function') ? window.veinLocationText(_sv) : '';
                 html += '<div class="bg-emerald-900/30 p-3 rounded border border-emerald-600/50 flex items-center justify-between">' +
                     '<div><span class="text-lg">💎</span><span class="font-bold text-emerald-400 ml-2">灵脉·' + _sv.tier + '阶</span>' +
-                    '<span class="text-xs text-emerald-300 ml-2">日产 ' + (_sv.dailyOutput||20) + ' 灵石</span></div>' +
+                    '<span class="text-xs text-emerald-300 ml-2">日产 ' + (_sv.dailyOutput||20) + ' 灵石</span>' +
+                    (_locTxt ? '<div class="text-xs text-emerald-500/80 mt-1 ml-7">' + _locTxt + '</div>' : '') + '</div>' +
+                    '<div class="flex gap-2 items-center">' +
+                    (_sv.location && typeof window.openWildernessMap === 'function' ? '<button onclick="window.openWildernessMap(\'' + _sv.location.region + '\')" class="bg-emerald-800 hover:bg-emerald-700 text-emerald-100 px-2 py-1 rounded text-xs">看脉</button>' : '') +
                     (_sv.tier < 5 ? '<button onclick="window.upgradeVein()" class="bg-emerald-700 hover:bg-emerald-600 text-white px-3 py-1 rounded text-xs">升级</button>' : '<span class="text-xs text-emerald-500">已臻极盛</span>') +
+                    '</div>' +
                     '</div>';
             }
         }
@@ -568,11 +578,15 @@ function updateCultivationUI() {
             var _dc = window.getDaoCompanionBond();
             if (_dc && (_dc.bond.level || 1) >= 2) {
                 var _kids = (window.currentCharData._children || []).length;
+                // v21.9 子嗣长线：长成的孩子可以会见——传功/历练/留在身边
+                var _grownKids = (window.currentCharData._children || []).filter(function (c) { return c.grown; }).length;
                 html += '<div class="bg-pink-900/30 p-3 rounded border border-pink-600/50 flex items-center justify-between">' +
                     '<div><span class="text-lg">👶</span><span class="font-bold text-pink-400 ml-2">道侣子嗣</span>' +
-                    '<span class="text-xs text-pink-300 ml-2">已有 ' + _kids + ' 子嗣（上限3）</span></div>' +
+                    '<span class="text-xs text-pink-300 ml-2">已有 ' + _kids + ' 子嗣（上限3）' + (_grownKids ? ' · ' + _grownKids + ' 已长成' : '') + '</span></div>' +
+                    '<div class="flex gap-2">' +
+                    (_grownKids ? '<button onclick="window.openChildPanel()" class="bg-pink-700 hover:bg-pink-600 text-white px-3 py-1 rounded text-xs">会见子嗣</button>' : '') +
                     (_kids < 3 ? '<button onclick="window.haveChild()" class="bg-pink-600 hover:bg-pink-500 text-white px-3 py-1 rounded text-xs">诞育后代</button>' : '<span class="text-xs text-pink-500">子嗣已满</span>') +
-                    '</div>';
+                    '</div></div>';
             }
         }
         // 2.12 自创丹方：消耗材料+灵石炼制，按材料映射效果
@@ -643,7 +657,7 @@ function updateCultivationUI() {
 function updateInsightUI() {
     const insightText = document.getElementById('insight-points');
     if (insightText) {
-        insightText.textContent = insightPoints;
+        insightText.textContent = window.insightPoints || 0;
     }
     
     const container = document.getElementById('insights-list');
@@ -693,7 +707,7 @@ function openCultivationUI() {
             <div class="mb-4 p-3 bg-gray-700/50 rounded flex justify-between items-center">
                 <span class="text-sm text-gray-400">领悟点数：</span>
                 <div class="flex items-center gap-2">
-                    <span class="text-xl font-bold text-purple-400" id="insight-points">${insightPoints}</span>
+                    <span class="text-xl font-bold text-purple-400" id="insight-points">${window.insightPoints || 0}</span>
                     <button onclick="spendInsightPoint()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded text-xs">使用1点</button>
                 </div>
             </div>
@@ -826,26 +840,14 @@ function getRealmEffectDescription(realmName) {
 // ==================== v6.2 功法组合系统 ====================
 
 // 五行相性定义
+// 第八十一波·死账清理：相生表连同功法间相性查询（getElementInteraction）一并删除——
+// 用户铁律「不准五行相克」（功法之间），且那本查询零调用躺了多年；
+// 克制表保留的唯一消费方是对敌战术账 getElementalDamageMul（battle.js 敌人冰/火元素克制，0.2.2 #2 老账）。
 var ELEMENT_INTERACTIONS = {
-    // 相生：金生水、水生木、木生火、火生土、土生金
-    mutual_generation: {
-        '金': '水', '水': '木', '木': '火', '火': '土', '土': '金'
-    },
-    // 相克：金克木、木克土、土克水、水克火、火克金
+    // 相克：金克木、木克土、土克水、水克火、火克金（仅用于对敌战术账）
     mutual_restriction: {
         '金': '木', '木': '土', '土': '水', '水': '火', '火': '金'
     }
-};
-
-// 功法元素标签映射
-var SKILL_ELEMENT_MAP = {
-    '九阳神功': '火', '九阴真经': '水', '混元功': '土',
-    '玄冰诀': '水', '离火诀': '火', '青木诀': '木', '厚土诀': '土', '金锋诀': '金',
-    '水月诀': '水', '太极玄功': '土', '混沌诀': '无',
-    '烈火剑法': '火', '冰霜剑法': '水', '太乙剑法': '木', '太极剑法': '土',
-    '清风剑法': '木', '诛仙剑诀': '金',
-    '破风刀法': '风', '断水刀法': '水', '血饮刀法': '火', '屠龙刀法': '金',
-    '金刚掌': '金', '降龙掌': '土', '太虚拳': '无'
 };
 
 // 功法组合技定义
@@ -879,15 +881,18 @@ var SKILL_COMBINATIONS = [
         name: '风火连天',
         desc: '破风刀法+烈火剑法，风助火势，伤害+40%',
         skills: ['破风刀法', '烈火剑法'],
-        bonus: { fire_damage: 40, wind_damage: 40 },
+        // 第七十八波兑现账：风与火是一件事（牌面「伤害+40%」），此前记两笔四零没人读——并成一笔攻击乘数
+        bonus: { attack: 40 },
         icon: '🔥'
     },
     {
         id: 'ice_freeze',
         name: '冰封万里',
-        desc: '玄冰诀+冰霜剑法，极寒之力，冰冻概率+30%',
+        desc: '玄冰诀+冰霜剑法，极寒之力，敌锋先钝——命中+20、格挡+10',
         skills: ['玄冰诀', '冰霜剑法'],
-        bonus: { freeze_chance: 30, water_damage: 35 },
+        // 第七十八波改账：战斗谱里从来没有「冰冻」这个机制——与其挂一张兑不出来的牌，
+        // 不如把话说实：寒气冻的是对面的刀锋（命中/格挡走战斗派生表真管线）
+        bonus: { hit: 20, block: 10 },
         icon: '❄️'
     },
     {
@@ -947,6 +952,68 @@ function getSkillCombinationBonuses(equippedSkills) {
     return totalBonus;
 }
 
+// ============ 第七十八波 · 组合技全链通电 ============
+// 此前两处断账：①检测源头读错（战斗实体那边读的是角色身上的空口袋，真运功账在 window.currentSkills）；
+// ②同型死局——「九阳+九阴」都是内功，三槽各容一门，头牌组合物理上凑不齐。
+// 修法：组合检测认真源（运功三槽），并放宽为「身上运着一门 + 功法册里参悟过另一门」也算——
+// 阴阳互济，功法不在身上运，理也在身上。五套空头承诺（减伤/反击/回复/破暴/格挡）逐条接进真管线。
+function comboActiveNames() {
+    var names = [];
+    try {
+        var cs = window.currentSkills || {};
+        for (var k in cs) {
+            var s = cs[k];
+            if (s && s.name) names.push(s.name);
+        }
+    } catch (e1) {}
+    try {
+        var ls = window.learnedSecrets || [];
+        for (var i = 0; i < ls.length; i++) {
+            var id = (typeof ls[i] === 'string') ? ls[i] : (ls[i] && ls[i].id);
+            var t = id && window.itemById && window.itemById[id];
+            if (t && t.name) names.push(t.name);
+        }
+    } catch (e2) {}
+    return names;
+}
+// 当前点亮的组合（含图标与说法，运功页户口行直接用）
+// 规矩：两门都得在身上（运着或参悟过），且**至少一门正在运转**——道理全在书里、一门没运，不算配合
+function getActiveSkillCombos() {
+    var names = comboActiveNames();
+    var equipped = [];
+    try {
+        var cs = window.currentSkills || {};
+        for (var k in cs) { if (cs[k] && cs[k].name) equipped.push(cs[k].name); }
+    } catch (e) {}
+    return SKILL_COMBINATIONS.filter(function (combo) {
+        var allKnown = combo.skills.every(function (n) { return names.indexOf(n) >= 0; });
+        var oneWorn = combo.skills.some(function (n) { return equipped.indexOf(n) >= 0; });
+        return allKnown && oneWorn;
+    });
+}
+// 组合总账（八套的原样键——百分数键走战斗实体，点数键走汇总河，回复键走自然恢复）
+function getSkillComboTotals() {
+    var total = {};
+    getActiveSkillCombos().forEach(function (combo) {
+        for (var key in combo.bonus) {
+            if (Object.prototype.hasOwnProperty.call(combo.bonus, key)) total[key] = (total[key] || 0) + combo.bonus[key];
+        }
+    });
+    return total;
+}
+// 点数键（进战斗加成汇总河——暴击/破防/格挡/闪避/命中都是现成消费口）
+function getSkillComboFlatBonus() {
+    var t = getSkillComboTotals();
+    var out = {};
+    ['crit', 'penetrate', 'block', 'dodge', 'hit'].forEach(function (k) { if (t[k]) out[k] = t[k]; });
+    return out;
+}
+// 回复百分数（进每日自然恢复——与功法掌握/开山秘艺同一口加法）
+function getSkillComboRegenPct() {
+    var t = getSkillComboTotals();
+    return { hp: Number(t.health_regen) || 0, qi: Number(t.qi_regen) || 0 };
+}
+
 // 0.2.2 #2 五行相克伤害倍率：攻方元素克守方→1.15，被克→0.85，其余1.0
 // 中性/无属性/同元素不参与；为后续敌人五行扩展留统一入口
 function getElementalDamageMul(atkElement, defElement) {
@@ -959,24 +1026,8 @@ function getElementalDamageMul(atkElement, defElement) {
     return 1.0;
 }
 
-// 检查五行相性（两个功法之间）
-function getElementInteraction(skill1Name, skill2Name) {
-    var elem1 = SKILL_ELEMENT_MAP[skill1Name];
-    var elem2 = SKILL_ELEMENT_MAP[skill2Name];
-    if (!elem1 || !elem2 || elem1 === '无' || elem2 === '无') return null;
-    
-    // 检查相生
-    var gen = ELEMENT_INTERACTIONS.mutual_generation;
-    if (gen[elem1] === elem2) return { type: 'generation', name: '相生', bonus: 1.15 };
-    if (gen[elem2] === elem1) return { type: 'generation', name: '相生', bonus: 1.15 };
-    
-    // 检查相克
-    var res = ELEMENT_INTERACTIONS.mutual_restriction;
-    if (res[elem1] === elem2) return { type: 'restriction', name: '相克', bonus: 1.10 };
-    if (res[elem2] === elem1) return { type: 'restriction', name: '相克', bonus: 1.10 };
-    
-    return null;
-}
+// 第八十一波·死账清理：功法间五行相性查询（getElementInteraction）删除——
+// 零调用死函数，且用户铁律「不准五行相克」（功法之间的相克/相生都不做，系统特意更自由）
 
 // 功法融合（两种功法→新功法）
 function mergeSkills(skill1Id, skill2Id, mergeMaterial) {
@@ -1161,13 +1212,17 @@ function startHeartDemonBattle(demonId) {
     
     // 创建一个心魔敌人
     var charData = window.currentCharData;
+    // v21.6：心魔等级接回境界刻度；attack/defense/speed 由 openBattleWithEntity 的
+    // synthesizeEnemyAttrs 兜底合成六维（此前手写字段全是死数据，心魔六维=10 进场）
+    var _hdBase = (typeof window.realmScaledEnemyLevel === 'function')
+        ? window.realmScaledEnemyLevel(charData) : (Number(charData.level) || 10);
     var demonEnemy = {
         name: demon.icon + ' ' + demon.name,
-        level: (charData.level || 10) + 5,
+        level: _hdBase + 5,
         attack: Math.floor((charData.strength || 10) * demon.battle.attack),
         defense: Math.floor((charData.constitution || 10) * demon.battle.defense),
         speed: (charData.dexterity || 10),
-        health: 100 + (charData.level || 10) * 5,
+        health: 100 + _hdBase * 5,
         skills: demon.battle.skills,
         type: 'demon',
         isBoss: true
@@ -1201,7 +1256,8 @@ function resolveHeartDemonSuccess(demonId) {
     // 奖励
     var bonus = {
         willpower: 5,
-        exp: 500 + (charData.level || 10) * 20,
+        exp: 500 + (typeof window.realmScaledEnemyLevel === 'function'
+            ? window.realmScaledEnemyLevel(charData) : (Number(charData.level) || 10)) * 20,
         spiritStones: 200
     };
     
@@ -1335,8 +1391,10 @@ function _getMainTechniqueElement() {
                 }
             }
         }
-        const mainSkill = window.currentSkills && (window.currentSkills.main || window.currentSkills.neigong || window.currentSkills.inner);
-        if (!mainSkill) return 'neutral';
+        // 第七十九波·读键修正：真运功账的槽位键是 skill_main——旧读法 main/neigong/inner 三个键从来不存在，
+        // 主修元素恒报「无属性」，0.2.2 的单元素根倍率（0.8~1.43）对绝大多数玩家空转了两年
+        const mainSkill = window.currentSkills && (window.currentSkills.skill_main || window.currentSkills.main || window.currentSkills.neigong || window.currentSkills.inner);
+        if (!mainSkill) return 'none';   // 没运功法 ≠ 无属性功法——混元是功法的性质，不白送（基准速度照旧）
         
         // 优先读取功法本身的 elements 字段
         if (mainSkill.elements) {
@@ -1366,13 +1424,44 @@ function _getMainTechniqueElement() {
                 }
                 return Object.keys(elements)[0] || 'neutral';
             }
-            
-            // 最后回退到 SKILL_ELEMENT_MAP
-            if (typeof SKILL_ELEMENT_MAP !== 'undefined' && SKILL_ELEMENT_MAP[sid]) {
-                return SKILL_ELEMENT_MAP[sid];
-            }
+
+            // 第八十一波·专精桥：真实装备流里槽中放的是运功页（skill_XX，页上没有元素标记），
+            // 此前一路查空恒报无属——专精账在真实玩法里从没生效过。现回知识账查「凭哪本秘籍学来的这页」：
+            // 先认知识条目上记的秘籍（manualId，最近一次研读的书），没有再反查映射谱里已学会的同页秘籍
+            //（多本命中按谱序取第一本，确定论）；查到秘籍的 elements 取主导元素。
+            try {
+                var _ksB = window.KnowledgeSystem;
+                if (_ksB) {
+                    var _dominant = function (tpl) {
+                        if (!tpl || !tpl.elements) return null;
+                        var _els = tpl.elements;
+                        for (var _ek in _els) { if (_els[_ek] > 0.5) return _ek; }
+                        var _ks2 = Object.keys(_els);
+                        return _ks2.length ? _ks2[0] : null;
+                    };
+                    var _artTpl = function (aid) {
+                        if (!aid) return null;
+                        if (window.itemById && window.itemById[aid]) return window.itemById[aid];
+                        return (window.extendedArts || []).find(function (a) { return a && a.id === aid; }) || null;
+                    };
+                    var _ent = (typeof _ksB.getEntry === 'function') ? _ksB.getEntry(sid) : null;
+                    var _el = _dominant(_artTpl(_ent && _ent.manualId));
+                    if (_el) return _el;
+                    var _m2s = _ksB.MANUAL_TO_SKILL || {};
+                    var _learnedList = window.learnedSecrets || [];
+                    for (var _mid in _m2s) {
+                        if (_m2s[_mid] !== sid) continue;
+                        var _entM = (typeof _ksB.getEntry === 'function') ? _ksB.getEntry(_mid) : null;
+                        var _learnedM = (_entM && (_entM.state === 'learned' || _entM.state === 'mastered'))
+                            || _learnedList.indexOf(_mid) >= 0;
+                        if (!_learnedM) continue;
+                        _el = _dominant(_artTpl(_mid));
+                        if (_el) return _el;
+                    }
+                }
+            } catch (eBridge) { /* 桥断不炸账——落到无属基准 */ }
         }
-        
+
         return 'neutral';
     } catch (e) {
         console.error('获取功法元素失败:', e);
@@ -1380,18 +1469,48 @@ function _getMainTechniqueElement() {
     }
 }
 
-// 灵根修炼速度倍率：灵根值/100，无属性功法直接返回基准值
+// 第七十九波·混元账（定稿口径来自用户设计文档《混元计算.md》）：
+// 混元取代所有无属性功法，加成走**几何平均**——五行相乘，缺一不可：
+//   几何结果 = (5/S)^5 × (金×木×水×火×土)   （S=五根之和，灵根以小数代入，20% 即 0.2）
+//   五灵根各 20% → 1（100%）；金 100% 其余 0 → 0；金 40% 其余各 15% → ≈63.3%
+// 最终倍率 = 保底 10% + 几何结果 × 90%（**保底为 10% 是用户最终决定**）：
+//   完美均衡 ×1.0——混元效率的顶就是基准，混元功法的价值在其自身效果（真气上限/全属性），
+//   饼不圆则效率重罚；四行为零 → ×0.1，练是练得成，一成效率，逼你去补短板（惩罚严厉是设计本意）。
+// 没有灵根账（老档/异常）按基准 1.0 宽待——缺数据不当罪证。
+function hunyuanGeo(roots) {
+    if (!roots) return 1.0;
+    var vals = ['metal', 'wood', 'water', 'fire', 'earth'].map(function (k) {
+        return Math.max(0, Number(roots[k]) || 0) / 100;
+    });
+    var s = vals.reduce(function (a, b) { return a + b; }, 0);
+    if (s <= 0) return 0;
+    var prod = vals.reduce(function (a, b) { return a * b; }, 1);
+    if (prod <= 0) return 0;
+    var geo = Math.pow(5 / s, 5) * prod;
+    return Math.max(0, Math.min(1, geo));
+}
+function getRootBalanceMultiplier(roots) {
+    if (!roots) return 1.0;
+    return 0.1 + 0.9 * hunyuanGeo(roots);
+}
+// 混元效率百分数（面板口径用）：100=五行各两成全圆，0=有一行为零
+function getRootBalancePct(roots) {
+    if (!roots) return 100;
+    return Math.round(hunyuanGeo(roots) * 100);
+}
+
+// 灵根修炼速度倍率：元素功法吃单元素根（第八十波·按用户定稿拉直：单灵根 80% 就按 +80% 加成，
+// 乘数 = 1 + 灵根/100，不再有 0.8 起步折损，也删掉了老版 >80 暗乘 1.1 的无逻辑设定——按用户指示移除），
+// 混元类（无属性）功法吃五行几何平均（第七十九波·混元计算.md 定稿），
+// 没运功法（'none'）走基准——均衡账是混元功法的性质，不白送
 function getRootSpeedMultiplier(roots, element) {
     if (!roots) return 1.0;
-    element = element || 'neutral';
-    // v9.8: 0.8 + root/200 (~0.8~1.3); heaven root >80 *1.1
-    if (element === 'neutral' || !element) {
-        return 1.0;
+    if (!element || element === 'none') return 1.0;
+    if (element === 'neutral') {
+        return getRootBalanceMultiplier(roots);
     }
-    const value = roots[element] || 0;
-    var mul = 0.8 + value / 200;
-    if (value > 80) mul *= 1.1;
-    return mul;
+    const value = Math.max(0, Number(roots[element]) || 0);
+    return 1 + value / 100;
 }
 
 // effect mult (v9.8 separate from speed): 0.95 + root/500
@@ -1430,13 +1549,24 @@ function calculateCultivationExpFromRoots(charData, baseExp) {
 window.PROFICIENCY_LEVELS = PROFICIENCY_LEVELS;
 window.proficiencyData = proficiencyData;
 window.insights = insights;
-// 领悟点是可变标量，使用访问器保持模块内变量与外部系统单一真源。
+// v36 悟道账合一：真源在角色数据上（随存档走、换人不串账）；模块内变量只当无角色时的兜底。
+// 此前访问器只读写模块变量——刷新页面悟道点就没了；而藏经阁等处写进角色数据的点又无人读。
+function _ipChar() {
+    return (typeof window.getCurrentCharData === 'function' ? window.getCurrentCharData() : null) || window.currentCharData || null;
+}
 try {
     Object.defineProperty(window, 'insightPoints', {
         configurable: true,
         enumerable: true,
-        get: function() { return insightPoints; },
-        set: function(v) { insightPoints = Math.max(0, Math.floor(Number(v) || 0)); }
+        get: function() {
+            const cd = _ipChar();
+            return cd ? Math.max(0, Math.floor(Number(cd.insightPoints) || 0)) : insightPoints;
+        },
+        set: function(v) {
+            const n = Math.max(0, Math.floor(Number(v) || 0));
+            const cd = _ipChar();
+            if (cd) cd.insightPoints = n; else insightPoints = n;
+        }
     });
 } catch (e) { window.insightPoints = insightPoints; }
 window.INSIGHT_TYPES = INSIGHT_TYPES;
@@ -1466,9 +1596,14 @@ window.getRealmEffectDescription = getRealmEffectDescription;
 window.SKILL_COMBINATIONS = SKILL_COMBINATIONS;
 window.checkSkillCombinations = checkSkillCombinations;
 window.getSkillCombinationBonuses = getSkillCombinationBonuses;
+// 第七十八波·组合技全链通电：认真源的检测与三口分账（实体百分数/汇总河点数/自然恢复）
+window.comboActiveNames = comboActiveNames;
+window.getActiveSkillCombos = getActiveSkillCombos;
+window.getSkillComboTotals = getSkillComboTotals;
+window.getSkillComboFlatBonus = getSkillComboFlatBonus;
+window.getSkillComboRegenPct = getSkillComboRegenPct;
 window.getElementalDamageMul = getElementalDamageMul;
 window._getMainTechniqueElement = _getMainTechniqueElement;
-window.getElementInteraction = getElementInteraction;
 window.mergeSkills = mergeSkills;
 window.HEART_DEMON_TYPES = HEART_DEMON_TYPES;
 window.checkHeartDemonTrigger = checkHeartDemonTrigger;
@@ -1478,10 +1613,12 @@ window.resolveHeartDemonSuccess = resolveHeartDemonSuccess;
 window.resolveHeartDemonWithInsight = resolveHeartDemonWithInsight;
 window.surrenderToHeartDemon = surrenderToHeartDemon;
 window.breakthroughWithHeartDemon = breakthroughWithHeartDemon;
-window.SKILL_ELEMENT_MAP = SKILL_ELEMENT_MAP;
 window.ELEMENT_INTERACTIONS = ELEMENT_INTERACTIONS;
 // v9.6.2 灵根系统（简化版）
 window.getRootSpeedMultiplier = getRootSpeedMultiplier;
 window.getRootEffectMultiplier = getRootEffectMultiplier;
+// 第七十九波·混元均衡账：均衡倍率与均衡度百分数（纯派生读数口）
+window.getRootBalanceMultiplier = getRootBalanceMultiplier;
+window.getRootBalancePct = getRootBalancePct;
 window.calculateCultivationExpFromRoots = calculateCultivationExpFromRoots;
 window.canUseTechniqueByRoots = canUseTechniqueByRoots;

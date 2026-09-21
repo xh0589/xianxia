@@ -410,6 +410,23 @@ function determineEnemyType(enemyData) {
     return ENEMY_TYPES.NORMAL_HUMAN;
 }
 
+// ============ v20.95 毕业装掉落梯（品级补阶批次的新货全在这四本账里） ============
+var GRAD_LOOT_BANDS = {
+    // 六品：中段补档货，15+ 精英起步
+    pin6: ['arm_cloud_shield', 'arm_agate_necklace', 'arm_twin_fish_ring', 'arm_bronze_bell', 'arm_azure_robe',
+        'arm_cloud_step_boots', 'pill_gather_yuan', 'mat_spirit_pattern_copper', 'wpn_frost_sword'],
+    // 四品：中上段，20+ 首领与灵脉强敌
+    pin4: ['arm_black_iron_shield', 'arm_warm_jade_neck', 'arm_star_ring', 'arm_sword_ring', 'arm_bodhi_pendant',
+        'arm_talisman_pouch', 'arm_golden_silk', 'arm_cloud_walk_boots', 'pill_jade_marrow', 'mat_meteor_essence', 'wpn_crimson_dao'],
+    // 二品：高端货，26+ 首领与灵脉二重以上
+    pin2: ['arm_tortoise_shield', 'arm_jiao_necklace', 'arm_moon_ring', 'arm_soul_jade', 'arm_cloud_charm',
+        'arm_purple_robe', 'arm_qilin_ring', 'pill_purple_vault', 'mat_chaos_marrow'],
+    // 一品：毕业装，灵脉三重魔头与 30+ 深层首领的压箱底
+    pin1: ['arm_pangu_shield', 'arm_starry_necklace', 'arm_heaven_ring', 'arm_dao_ring', 'arm_primordial_pendant',
+        'arm_immortal_seal', 'arm_nine_turn_robe', 'arm_heaven_crown', 'arm_cloud_shoes', 'arm_xuan_belt',
+        'arm_jiao_gauntlets', 'wpn_heaven_ask', 'wpn_nirvana_staff', 'dragon_staff']
+};
+
 // ============ 携带物选取 ============
 
 function pickItems(poolId, level) {
@@ -418,7 +435,7 @@ function pickItems(poolId, level) {
     
     const items = [];
     
-    // 等级低于最低要求，给少量凡品
+    // 等级低于最低要求，给少量九品货
     if (level < table.minLevel) {
         if (table.common && table.common.length > 0) {
             const count = 1 + Math.floor(Math.random() * 2);
@@ -439,7 +456,7 @@ function pickItems(poolId, level) {
     }
     
     // 从各品质池中选取
-    // 凡品：1~2种
+    // 九品：1~2种
     const commonCount = 1 + Math.floor(Math.random() * 2);
     for (let i = 0; i < commonCount; i++) {
         if (table.common && table.common.length > 0) {
@@ -448,7 +465,7 @@ function pickItems(poolId, level) {
         }
     }
     
-    // 良品：50%概率获得1种
+    // 八品：50%概率获得1种
     if (availablePools.includes('uncommon') && table.uncommon && table.uncommon.length > 0) {
         if (Math.random() < 0.5) {
             const item = weightedPick(table.uncommon);
@@ -456,7 +473,7 @@ function pickItems(poolId, level) {
         }
     }
     
-    // 珍品：低概率获得
+    // 七品：低概率获得
     if (availablePools.includes('rare') && table.rare && table.rare.length > 0) {
         const rareChance = poolId === 'boss' || poolId === 'dungeon_boss' || poolId === 'boss_beast' ? 0.6 : 0.2;
         if (Math.random() < rareChance) {
@@ -526,6 +543,25 @@ function generateEnemyInventory(enemyData) {
         }
     }
 
+    // v20.95 毕业装掉落梯：顶级货不进普通表——只有灵脉魔头、高阶首领、深层秘境boss才压箱底带着
+    try {
+        var leyTier = Number(enemyData._leyElite) || 0;
+        var bossish = enemyType === 'boss' || enemyType === 'dungeon_boss' || enemyType === 'boss_beast';
+        var eliteish = enemyType === 'elite' || enemyType === 'demon_beast' || enemyType === 'dungeon_guard';
+        function _gradPick(band) {
+            var l = GRAD_LOOT_BANDS[band];
+            return l && l.length ? l[Math.floor(Math.random() * l.length)] : null;
+        }
+        // 六品：15 级以上精英/boss 系，四分之一带着中段货
+        if (level >= 15 && (bossish || eliteish) && Math.random() < 0.25) { var g6 = _gradPick('pin6'); if (g6) inventory.items.push(g6); }
+        // 四品：20 级以上 boss 系 18%，灵脉一重以上 12%
+        if (((level >= 20 && bossish) ? Math.random() < 0.18 : false) || (leyTier >= 1 && Math.random() < 0.12)) { var g4 = _gradPick('pin4'); if (g4) inventory.items.push(g4); }
+        // 二品：26 级以上 boss 系 12%，灵脉二重以上 20%
+        if (((level >= 26 && bossish) ? Math.random() < 0.12 : false) || (leyTier >= 2 && Math.random() < 0.20)) { var g2 = _gradPick('pin2'); if (g2) inventory.items.push(g2); }
+        // 一品：灵脉三重魔头 35%、30 级以上秘境 boss 10%、33 级以上 boss 系 6%
+        if ((leyTier >= 3 && Math.random() < 0.35) || (level >= 30 && enemyType === 'dungeon_boss' && Math.random() < 0.10) || (level >= 33 && bossish && Math.random() < 0.06)) { var g1 = _gradPick('pin1'); if (g1) inventory.items.push(g1); }
+    } catch (e) {}
+
     // 0.2.7 接通 EXTENDED_LOOT_TABLES：getExtendedLoot 此前定义从不调用，扩展掉落表形同虚设
     // 对野兽/山贼/秘境类敌人追加掉落（覆盖武器/防具/材料），与主表叠加
     try {
@@ -561,6 +597,7 @@ function getBeastMaterialDescription(beastName) {
 
 // ============ 导出到全局 ============
 window.LOOT_TABLES = LOOT_TABLES;
+window.GRAD_LOOT_BANDS = GRAD_LOOT_BANDS;
 window.ENEMY_TYPES = ENEMY_TYPES;
 window.determineEnemyType = determineEnemyType;
 window.generateEnemyInventory = generateEnemyInventory;

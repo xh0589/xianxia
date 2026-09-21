@@ -30,13 +30,14 @@ var wrapped = '(function(window){' + src + '})(mockWindow);';
 eval(wrapped);
 var C = mockWindow.CaveFacilities;
 assert(!!C, 'CaveFacilities 已注册');
-assert(Object.keys(C.FACILITIES).length === 8, '8 设施 (got ' + Object.keys(C.FACILITIES).length + ')');
-assert(Object.keys(C.CAVE_LEVELS).length === 4, '4 档洞府 (got ' + Object.keys(C.CAVE_LEVELS).length + ')');
+assert(Object.keys(C.FACILITIES).length === 12, '12 设施 (got ' + Object.keys(C.FACILITIES).length + ')');   // 第一百零四波：+兵器架/田钟/灵泉浴池/茶灶石桌
+assert(Object.keys(C.CAVE_LEVELS).length === 5, '5 档洞府 (got ' + Object.keys(C.CAVE_LEVELS).length + ')');   // 第一百零四波：+破山洞（0槽，修缮起步）
 assert(Object.keys(C.COMPANION_ROLES).length === 3, '3 同伴角色');
 assert(C.DAILY_EVENTS.length === 7, '7 小事件');
 
-// ---- 1. 4 档洞府 → 槽位 ----
-section('1) 4 档洞府槽位');
+// ---- 1. 5 档洞府 → 槽位 ----
+section('1) 5 档洞府槽位');
+assert(C.CAVE_LEVELS['ruin_cave'].slots === 0, '破山洞 0 槽（第一百零四波：修缮起步）');
 assert(C.CAVE_LEVELS['grass_hut'].slots === 1, '草庐 1 槽');
 assert(C.CAVE_LEVELS['stone_room'].slots === 2, '石室 2 槽');
 assert(C.CAVE_LEVELS['spirit_manor'].slots === 3, '灵府 3 槽');
@@ -203,7 +204,13 @@ assert(bl[0].name && bl[0].buff, 'buff 项含 name+buff');
 section('9) 事件总线');
 // 重新监听 cave_3
 listeners = {};
-for (var dk = 0; dk < 100; dk++) C.tickDay('cave_3');
+// v23.2 此断言原靠骰运：可用的低概率事件若百日不中（实测约 1/40 的运行会撞上一回），
+// 总线记账明明没坏也会被判死——钉住随机数，让「有设施有同伴就出事件」变成确定账
+var _origRndCave = Math.random;
+Math.random = function () { return 0.0; };
+try {
+    for (var dk = 0; dk < 100; dk++) C.tickDay('cave_3');
+} finally { Math.random = _origRndCave; }
 assert((listeners['cave:dailyEvent'] || []).length >= 1, 'cave_3 ≥ 1 事件');
 
 // ---- 10. StateRegistry ----

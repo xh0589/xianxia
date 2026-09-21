@@ -146,7 +146,14 @@ console.log('\n[F2] 撒布随地形：名字按脚下地皮取');
                     var pool = api.habitatFlavor(c).beasts;
                     if (pool.indexOf(e.name) < 0) { ok = false; console.error('    ' + c.terrainKey + ' 上冒出「' + e.name + '」'); }
                     if (e.habitat !== c.terrainKey) { ok = false; console.error('    兽未记栖息地'); }
+                } else if (e.symbol === '🦌') {
+                    // 第八十四波：名种灵兽按分布表（地区×地形）落图，名字出自 BEAST_DISTRIBUTION 而非地皮闲名录
+                    checked++;
+                    var dist = (window.BeastEcosystem && window.BeastEcosystem.BEAST_DISTRIBUTION) || [];
+                    if (!dist.some(function (d) { return d.name === e.name; })) { ok = false; console.error('    ' + c.terrainKey + ' 上的名种「' + e.name + '」不在分布表'); }
                 } else if (e.kind === 'person') {
+                    // v20.89 灵脉强敌用生成的名号（「不用地皮闲名」是既定设计），不入地皮名录账
+                    if (e.data && e.data._leyElite) return;
                     checked++;
                     var pool2 = api.habitatFlavor(c).persons;
                     if (pool2.length && pool2.indexOf(e.name) < 0) { ok = false; console.error('    ' + c.terrainKey + ' 上的人「' + e.name + '」不在名录'); }
@@ -265,7 +272,7 @@ console.log('\n[F4] 四时入图：季节改色，冬天雪路更慢');
 })();
 
 // ==================== F5 舆图题跋 ====================
-console.log('\n[F5] 舆图题跋：图名 / 小印 / 罗盘 / 边框');
+console.log('\n[F5] 舆图题跋：图名 / 小印 / 罗盘（金框已移除）');
 (function () {
     global.renderMap(els['random-map-svg'], global.currentMap, 0, 0);
     var texts = [], goldFrames = 0, strokedRects = 0;
@@ -281,7 +288,8 @@ console.log('\n[F5] 舆图题跋：图名 / 小印 / 罗盘 / 边框');
     assert(joined.indexOf('《蜀地山河舆图》') >= 0, '图名应随地区（实得 ' + joined.slice(0, 60) + '）');
     assert(texts.indexOf('蜀') >= 0, '应有一方落地区首字的小印');
     assert(texts.indexOf('北') >= 0, '应有罗盘指北');
-    assert(goldFrames >= 3, '外粗内细边框 + 题签应有三道金线（实得 ' + goldFrames + '）');
+    // v20.82：野外图周边双层金框移除（与大地图 v20.69 同口径），只剩题签一道金线
+    assert(goldFrames === 1, '周边金框应已移除，仅剩题签一道金线（实得 ' + goldFrames + '）');
     assert(strokedRects === 0, '题跋不得引入描边方块（格线门禁），实得 ' + strokedRects);
     // 题跋不挡点击
     var blocked = false;
@@ -292,7 +300,7 @@ console.log('\n[F5] 舆图题跋：图名 / 小印 / 罗盘 / 边框');
         });
     })(els['random-map-svg']);
     assert(!blocked, '题跋不应拦截点击');
-    console.log('    图名/小印/罗盘/边框齐备，方块仍零描边');
+    console.log('    图名/小印/罗盘齐备，周边金框已移除，方块仍零描边');
 })();
 
 // ==================== F6 已见注记 ====================

@@ -133,17 +133,29 @@ mockWindow.currentCharData = {
     bonds: { np1: { type: 'dao_companion', name: '道侣', level: 3 } },
     _children: [{ name: '甲' }, { name: '乙' }],
     // v20.16 后天改命真源：三次重塑（破而后立/洗尽铅华满配应亮）
-    _rootRefines: 3
+    _rootRefines: 3,
+    // 第一百零六波：手艺账满配——采伐圆满（老于山林/手识山河应亮）
+    lifeSkills: { '采伐': 100 }
 };
 copperPool = 20000; stonesPool = 3000;
 mockWindow.learnedSecrets = new Array(25);
 mockWindow.getCollectionStats = function () { return { items: 50, npcs: 35 }; };
+// 第一百零五波：「交好」真源改 npcManager 好感≥20（不再借收藏账的结识数）——满配 65 位好感过二十的侠客
+// 第一百零六波：其中 25 位好感过六十——「海内存知己」（知己档）也要吃得上饭
+mockWindow.npcManager = { getAllNPCs: function () { var arr = []; for (var ni = 0; ni < 65; ni++) arr.push({ relationship: { affection: 20 + ni } }); return arr; } };
+// 第一百零五波：洞府三枚新成就的满配世界——仙府档 + 四处设施
+mockWindow.playerHouse = { type: 'palace', upgrades: {}, furniture: [], planted: [], location: 'taixu' };
+mockWindow.CaveFacilities = { getFacilities: function () { return [{ slot: 0 }, { slot: 1 }, { slot: 2 }, { slot: 3 }]; } };
+// 第一百零七波：队伍两枚新成就的满配世界——四人成众
+mockWindow.partySystem = { getMembers: function () { return [{ id: 'm1', name: '甲' }, { id: 'm2', name: '乙' }, { id: 'm3', name: '丙' }, { id: 'm4', name: '丁' }]; } };
 mockWindow.discipleState = { isInSect: true, rank: 1, contribution: 600 };
 mockWindow.tamedBeasts = [
     { level: 20 }, { level: 5 }, { level: 12 }, { level: 20 }, { level: 8 }
 ];
 mockWindow.CityDepth = { progress: function () { return { trialBest: 18, swordIntent: 12 }; } };
 mockWindow.dayNow = 400;
+// v39 游历见闻满配：九域踏遍、十二地标亲至、八千里脚程（五枚游历成就应全亮）
+mockWindow.TravelJournal = { summary: function () { return { regions: 9, regionTotal: 9, landmarks: 12, landmarkTotal: 12, steps: 8000, marks: 16 }; } };
 // 池先垫资：财富成就本身要求池里有 1 万铜/2 千灵石，核账用「终值−垫资」
 var copperSeed = 20000, stonesSeed = 3000;
 AS.checkAchievementsNow();

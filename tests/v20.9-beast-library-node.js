@@ -100,7 +100,7 @@ ok(r4 === false, 'C10 两头都不够则拒');
 
 // D：培养日限计数器已删，精力是唯一闸门
 beastMock.tamedBeasts.length = 0;
-BT.captureBeast && beastMock.tamedBeasts.push({ templateId: 'wind_wolf', name: '风狼', level: 1, exp: 0, affection: 50, skills: ['风刃'], combatAbilities: [], trait: { id: 'fierce', name: '凶猛', attr: 'strength', mul: 1.12 }, mount: null });
+beastMock.tamedBeasts.push({ templateId: 'wind_wolf', name: '风狼', level: 1, exp: 0, affection: 50, skills: ['风刃'], combatAbilities: [], trait: { id: 'fierce', name: '凶猛', attr: 'strength', mul: 1.12 }, mount: null });
 beastMock.currentCharData.energy = 100;
 var ok4 = BT.trainBeast(0), ok5 = BT.trainBeast(0), ok6 = BT.trainBeast(0), ok7 = BT.trainBeast(0);
 ok(ok4 && ok5 && ok6 && ok7, 'D1 同日第四次培养不再被日限拦下');

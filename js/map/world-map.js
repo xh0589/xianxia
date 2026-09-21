@@ -206,12 +206,21 @@
     function setOut(target, opts) {
         opts = opts || {};
         var from = currentRegion();
+        // v20.65：位面闸门前置——旧版「不知身在何方」的兜底会直开位面野外图，
+        // 等于境界闸门被绕开；位面住客出门探野是另一回事，照常放行。
+        if (isPlane(target)) {
+            if (from === target) {
+                if (!opts.quiet) global.openWildernessMap(target);
+                return true;
+            }
+            say('「' + target + '」不是脚力能到的地方，得寻位面之门。', 'info');
+            return false;
+        }
         if (!from) {
             // 不知身在何方：照旧直开，别把人锁在野外门外
             if (typeof global.openWildernessMap === 'function') global.openWildernessMap(target);
             return true;
         }
-        if (isPlane(target)) { say('「' + target + '」不是脚力能到的地方，得寻位面之门。', 'info'); return false; }
         if (!knownRegion(target)) { say('没听说过这个地方。', 'warning'); return false; }
         if (target === from) {
             if (!opts.quiet) global.openWildernessMap(target);
@@ -247,6 +256,43 @@
         return true;
     }
 
+    // ============ 地图标记开关（v20.66） ============
+    // 距离线与关隘标注有人嫌吵：收进一个图层整体显隐，偏好记在本地，默认关（图面清爽）。
+    // 「你在此」不在此列——那是定位，不是标注，永远画。
+    var OVERLAY_KEY = 'xianxia_map_overlay';
+    function overlayVisible() {
+        try { return global.localStorage.getItem(OVERLAY_KEY) === '1'; } catch (e) { return false; }
+    }
+    function applyOverlayVisibility() {
+        var doc = global.document;
+        if (!doc || !doc.getElementById) return;
+        var on = overlayVisible();
+        var svg = doc.getElementById('world-map');
+        if (svg && svg.querySelector) {
+            var g = svg.querySelector('#world-overlay');
+            if (g && g.style) g.style.display = on ? '' : 'none';
+        }
+        var btn = doc.getElementById('btn-map-overlay');
+        if (btn) {
+            btn.textContent = on ? '🧭 路线标记：开' : '🧭 路线标记：关';
+            btn.className = 'text-xs px-2 py-1 rounded border transition ' +
+                (on ? 'bg-yellow-900/60 border-yellow-600 text-yellow-300 hover:bg-yellow-800/60'
+                    : 'bg-gray-800/80 border-gray-600 text-gray-400 hover:text-yellow-400 hover:border-yellow-600');
+        }
+        var cb = doc.getElementById('setting-map-overlay');
+        if (cb) cb.checked = on;
+    }
+    function setOverlayVisible(on, quiet) {
+        try { global.localStorage.setItem(OVERLAY_KEY, on ? '1' : '0'); } catch (e) {}
+        applyOverlayVisibility();
+        if (!quiet) say(on ? '🧭 路线标记已开：九州关隘与里数上图。' : '🧭 路线标记已关：舆图恢复清爽。', 'info');
+    }
+    global.toggleMapOverlay = function () { setOverlayVisible(!overlayVisible()); };
+    global.toggleMapOverlayFromSettings = function () {
+        var cb = global.document && global.document.getElementById ? global.document.getElementById('setting-map-overlay') : null;
+        setOverlayVisible(cb ? !!cb.checked : !overlayVisible());
+    };
+
     // ============ 上图：九州之间画出路来 ============
     function framePathD(x, y, w, h) { return 'M' + x + ' ' + y + ' H' + (x + w) + ' V' + (y + h) + ' H' + x + ' Z'; }
 
@@ -263,6 +309,13 @@
         if (!svg) return;
         if (svg._worldRoutesBound) return;
         svg._worldRoutesBound = true;
+
+        // v20.66：所有标注（路线 + 关名 + 位面注记）收进一个图层，由「路线标记」开关整体显隐
+        var overlay = svg.querySelector ? svg.querySelector('#world-overlay') : null;
+        if (!overlay) {
+            overlay = svgEl(doc, 'g', { id: 'world-overlay' });
+            svg.appendChild(overlay);
+        }
 
         // 路：一弯细线连两地，关名落在半途
         WORLD_BORDERS.forEach(function (bd, i) {
@@ -296,17 +349,18 @@
                 }
                 setOut(from === bd.a ? bd.b : bd.a);
             });
-            svg.appendChild(g);
+            overlay.appendChild(g);
         });
 
         // 位面不在九州之列，图上只留一句话
         var planeNote = svgEl(doc, 'text', { x: 690, y: 26, 'font-size': 9, fill: '#7fd6d0', opacity: 0.7, 'text-anchor': 'middle' });
         planeNote.textContent = '位面之上 · 灵界（须走位面之门）';
-        svg.appendChild(planeNote);
+        overlay.appendChild(planeNote);
         var abyssNote = svgEl(doc, 'text', { x: 110, y: 585, 'font-size': 9, fill: '#a2464a', opacity: 0.7, 'text-anchor': 'middle' });
         abyssNote.textContent = '位面之下 · 魔界（须走位面之门）';
-        svg.appendChild(abyssNote);
+        overlay.appendChild(abyssNote);
 
+        applyOverlayVisibility();
         drawHereMarker(doc, svg);
     }
 
@@ -325,6 +379,62 @@
         svg.appendChild(g);
     }
 
+    // v35 自家山门上图：立了宗，世界图的所在域上就插一面 🏯 幡——点它走正常关隘路回去
+    function drawSectMarkers(doc, svg) {
+        var old = svg.querySelector ? svg.querySelector('.world-home-sect') : null;
+        if (old && old.parentNode) old.parentNode.removeChild(old);
+        var home = null;
+        try { if (global.PSectWorld && typeof global.PSectWorld.homeName === 'function') home = global.PSectWorld.homeName(); } catch (e) {}
+        if (!home) return;
+        var sd = (global.sectsData || {})[home];
+        var reg = sd && sd.location;
+        if (!reg || !REGION_ANCHORS[reg]) return;
+        var a = REGION_ANCHORS[reg];
+        var x = a.x + 26, y = a.y + 14;
+        var g = svgEl(doc, 'g', { 'class': 'world-home-sect', 'style': 'cursor:pointer;' });
+        g.appendChild(svgEl(doc, 'circle', { cx: x, cy: y, r: 9, fill: 'rgba(15,12,6,0.6)', stroke: '#fde68a', 'stroke-width': 1, opacity: 0.9 }));
+        var ico = svgEl(doc, 'text', { x: x, y: y + 3.5, 'font-size': 10, 'text-anchor': 'middle' });
+        ico.textContent = '🏯';
+        g.appendChild(ico);
+        var t = svgEl(doc, 'text', { x: x, y: y + 20, 'font-size': 8.5, 'text-anchor': 'middle', fill: '#fde68a', opacity: 0.9 });
+        t.textContent = home;
+        g.appendChild(t);
+        g.addEventListener('click', function () {
+            if (currentRegion() === reg) {
+                if (typeof global.openWildernessMap === 'function') global.openWildernessMap(reg);
+            } else {
+                setOut(reg);   // 隔州的回山也走关隘路——不绕脚力账
+            }
+        });
+        svg.appendChild(g);
+    }
+
+    // 第一百零三波 自家洞府上图：洞府扎在野外的固定洞天（每州一座），世界图的所在州上挂一面 🏠 幡——
+    // 点它走正常关隘路回山（与 v35 山门幡同一套路，脚力/时辰/关隘上的事全按疆界的账）
+    function drawCaveMarkers(doc, svg) {
+        var old = svg.querySelector ? svg.querySelector('.world-home-cave') : null;
+        if (old && old.parentNode) old.parentNode.removeChild(old);
+        var site = null;
+        try { if (global.getHouseSite && typeof global.getHouseSite === 'function') site = global.getHouseSite(); } catch (e) {}
+        if (!site || !site.region) return;
+        var reg = site.region;
+        if (!REGION_ANCHORS[reg]) return;
+        var a = REGION_ANCHORS[reg];
+        var x = a.x - 26, y = a.y + 14;
+        var g = svgEl(doc, 'g', { 'class': 'world-home-cave', 'style': 'cursor:pointer;' });
+        g.appendChild(svgEl(doc, 'circle', { cx: x, cy: y, r: 9, fill: 'rgba(15,12,6,0.6)', stroke: '#a7f3d0', 'stroke-width': 1, opacity: 0.9 }));
+        var ico = svgEl(doc, 'text', { x: x, y: y + 3.5, 'font-size': 10, 'text-anchor': 'middle' });
+        ico.textContent = '🏠';
+        g.appendChild(ico);
+        var t = svgEl(doc, 'text', { x: x, y: y + 20, 'font-size': 8.5, 'text-anchor': 'middle', fill: '#a7f3d0', opacity: 0.9 });
+        t.textContent = site.name;
+        g.appendChild(t);
+        g.addEventListener('click', function () {
+            setOut(reg);   // 同州直接开那片山河（出城上山便到家），隔州走关隘路——不绕脚力账
+        });
+        svg.appendChild(g);
+    }
+
     // 重画「你在此」（换了州就要挪窝）；路只画一遍
     function refresh(svgId) {
         var doc = global.document;
@@ -332,7 +442,10 @@
         var svg = doc.getElementById(svgId || 'world-map');
         if (!svg) return;
         renderRoutes(svgId);
+        applyOverlayVisibility();
         drawHereMarker(doc, svg);
+        drawSectMarkers(doc, svg);
+        drawCaveMarkers(doc, svg);
     }
 
     // ============ 野外栏「出此境往」 ============
@@ -368,7 +481,10 @@
         setOut: setOut,
         renderRoutes: renderRoutes,
         refresh: refresh,
-        renderExits: renderExits
+        renderExits: renderExits,
+        overlayVisible: overlayVisible,
+        setOverlayVisible: setOverlayVisible,
+        applyOverlayVisibility: applyOverlayVisibility
     };
 
     global.WorldMap = api;

@@ -368,6 +368,20 @@ function checkSectEvents(sectName) {
     if (active) {
         if (now < Number(active.expiryGameMinute || 0)) return active.event;
         delete sectEventState.activeEvents[sectName];
+        // 第一百一十一波：没人管的灾难到期=真发生了——旧版静默删除、零损失，
+        // 最优策略成了「只领福利不接灾」。福利没领到期就是真过期，不补账。
+        try {
+            var _eid = active.event && active.event.id;
+            var _def = SECT_EVENTS_POOL[_eid]
+                || ((window.SECT_EXCLUSIVE_EVENTS && window.SECT_EXCLUSIVE_EVENTS[sectName]) || {})[_eid]
+                || null;
+            if (_def && _def.type === 'disaster' && typeof _def.effect === 'function') {
+                var _res = _def.effect(sectName);
+                if (typeof window.showMessage === 'function' && !window._isInLongRetreat) {
+                    window.showMessage('📜 「' + ((active.event && active.event.name) || '灾祸') + '」没人处置——事情真发生了：' + _res, 'warning');
+                }
+            }
+        } catch (eExp) {}
     }
 
     if (now - lastCheck < cfg.checkCooldownMinutes) return null;

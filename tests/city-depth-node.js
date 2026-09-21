@@ -105,6 +105,11 @@ mockWindow.travelSystem = {
     startTravel: function (to, mode) {
         this.lastCall = { to: to, mode: mode };
         if (this.result === false) { mockWindow.showMessage('传送阵尚未解锁', 'warning'); return false; }
+        // 第九十五波·NEW-38：真实 startTravel 按 method.cost 扣 100 灵石、按脚力推进时间——桩照做。
+        // 此前桩不扣费，测的是旧版「go 自己又扣 100 + 推 30 分」的双扣行为（NEW-38 已删那半）。
+        var dm = mockWindow.XianXia.DataManager;
+        if (!dm.deductSpiritStones(100)) { mockWindow.showMessage('灵石不足（需100）', 'error'); return false; }
+        mockWindow.timeSystem.advanceTime(30);
         return true;
     }
 };
@@ -240,7 +245,8 @@ function rng(v) { return function () { return v; }; }
     eq(cd.springBlessing, 1, 'E3 余泽 +1');
     eq(cd.energy, 90, 'E4 耗 10 精力');
     cd.springBlessing = 3;
-    ok(useB('spring', 'collect') === false, 'E5 存满 3 止');
+    // 第八十二波·TASK-01：水是水、泽是泽——余泽满 3 照旧能取水（委托要的是那瓶水），只是不再涨泽
+    ok(useB('spring', 'collect') === true, 'E5 泽满仍能取水');
     eq(cd.springBlessing, 3, 'E6 满时不再增加');
 }
 

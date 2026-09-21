@@ -63,6 +63,14 @@
                 if (bond && bond.cultivation > 1) bonus *= bond.cultivation;
             }
         } catch (e6) {}
+        // 第七十三波·境由心转：闭关收成认心境（与打坐同一本梯度 ×0.90–×1.10）——
+        // 进关带进去的心气决定这场效率；关内静心、心境不回落（dailyTick 认闭关旗），整场看到的是同一个数
+        try {
+            if (global.MoodSystem && typeof global.MoodSystem.cultivationMul === 'function') {
+                var _moodMulR = global.MoodSystem.cultivationMul();
+                if (_moodMulR !== 1) bonus *= _moodMulR;
+            }
+        } catch (eMoodR) {}
         var mainSkillId = global.currentSkills && global.currentSkills.skill_main;
         if (mainSkillId) bonus *= 1.10;
 
@@ -168,7 +176,9 @@
         var player = global.currentCharData;
         if (!player) return null;
         if (global.checkSoulBlock && global.checkSoulBlock('闭关')) return null;
-        if (global.document && global.document.querySelector && global.document.querySelector('.battle-modal')) {
+        // 第九十五波·NEW-23：旧版拿拼错的 class 选择器找战斗弹窗（战斗面板是 id 不是那个 class），
+        // 判定恒 false，打着架也能进关。改判 window.currentBattle 非空（开战挂上、收兵清空，app.js 里两头都写）。
+        if (global.currentBattle) {
             if (global.showMessage) global.showMessage('战斗中无法闭关', 'warning');
             return null;
         }
@@ -198,6 +208,8 @@
         var mainSkillId = null;
         var actualDays = 0;
         var stoppedReason = null;
+        // v23.1 闭关不是打卡上班：每日有小概率灵光顿悟（当日收成三倍），也有心魔滋扰（紊乱+6、当日折半）
+        var _rtNotes = { enlighten: 0, deviation: 0 };
         var oldRetreat = global._isInLongRetreat;
         var oldSuppress = global._suppressTimeFlowMessages;
         global._isInLongRetreat = true;
@@ -209,7 +221,17 @@
                     if (flag.stop) { stoppedReason = flag.reason || 'due'; break; }
                 }
                 var y = getRetreatDailyYield();
-                totalEssence += y.essence;
+                var _dayYield = y.essence;
+                var _rtRoll = Math.random();
+                if (_rtRoll < 0.04) {
+                    _dayYield *= 3;
+                    _rtNotes.enlighten++;
+                } else if (_rtRoll < 0.10 && typeof global.addQiDeviation === 'function') {
+                    try { global.addQiDeviation(6); } catch (eQd) {}
+                    _dayYield = Math.floor(_dayYield / 2);
+                    _rtNotes.deviation++;
+                }
+                totalEssence += _dayYield;
                 mainSkillId = y.mainSkillId || mainSkillId;
                 if (y.mainSkillId && typeof global.addProficiencyExp === 'function') {
                     try { global.addProficiencyExp(y.mainSkillId, 48); } catch (eProf) {}
@@ -242,7 +264,12 @@
             var endDay = global.timeSystem.gameTime ? global.timeSystem.gameTime.currentDay : startDay + actualDays;
             var extra = insightGain > 0 ? '，领悟点+' + insightGain : '';
             var stopNote = stoppedReason ? '（提前出关：' + stoppedReason + '）' : '';
-            global.showMessage('🔒 闭关结束：第' + startDay + '天 → 第' + endDay + '天，' + actualDays + '日' + stopNote + '，真元+' + totalEssence + extra, 'success');
+            var _rtNote = (_rtNotes.enlighten ? '，途中灵光顿悟×' + _rtNotes.enlighten : '') +
+                (_rtNotes.deviation ? '，心魔滋扰×' + _rtNotes.deviation + '（气机微乱，静养可复）' : '');
+            // 第七十三波：出关回执报心境折头（平平常常不开口——与打坐结算单同一张嘴）
+            var _moodNoteR = '';
+            try { if (global.MoodSystem && typeof global.MoodSystem.cultivationNote === 'function') _moodNoteR = global.MoodSystem.cultivationNote(); } catch (eMn) {}
+            global.showMessage('🔒 闭关结束：第' + startDay + '天 → 第' + endDay + '天，' + actualDays + '日' + stopNote + '，真元+' + totalEssence + extra + _rtNote + (_moodNoteR ? '。' + _moodNoteR : ''), 'success');
             var summary = buildRetreatSummary(startDay, endDay);
             if (summary) global.showMessage(summary, 'info');
         }
@@ -344,11 +371,14 @@
         }
         var html = '<div class="space-y-3"><p class="text-sm text-gray-300">闭关会一次推进较长的游戏时间。期间NPC修炼、寿元、宗门日结与世界系统照常推进；普通随机日常不会打断闭关。</p>';
         // 固定档位
+        // 第九十五波·NEW-23：能点的行不再挂装饰锁——旧版每行标题硬拼 '🔒 '，照常生效的档位
+        // 看着像没解锁，玩家以为整套闭关被锁死（真锁住的行才保留 🔒 并置灰）
         RETREAT_OPTIONS.forEach(function (o) {
             var cost = o.days * o.costPerDay;
-            html += '<button onclick="startLongRetreat(' + o.days + '); this.closest(\'#xianxia-modal-overlay\')?.remove();" class="w-full text-left bg-indigo-800 hover:bg-indigo-700 p-3 rounded border border-indigo-600">' +
-                '<span class="text-indigo-200 font-bold">🔒 ' + o.label + '</span><br>' +
-                '<span class="text-xs text-gray-400">' + o.desc + ' · ' + o.days + '天 · 阵法耗费' + cost + '灵石</span></button>';
+            var afford = getSpiritStones() >= cost;
+            html += '<button onclick="startLongRetreat(' + o.days + '); this.closest(\'#xianxia-modal-overlay\')?.remove();" class="w-full text-left ' + (afford ? 'bg-indigo-800 hover:bg-indigo-700 border-indigo-600' : 'bg-gray-800 opacity-70 border-gray-600') + ' p-3 rounded border">' +
+                '<span class="' + (afford ? 'text-indigo-200' : 'text-gray-400') + ' font-bold">' + o.label + '</span><br>' +
+                '<span class="text-xs text-gray-400">' + o.desc + ' · ' + o.days + '天 · 阵法耗费' + cost + '灵石' + (afford ? '' : '（灵石不足，凑够阵法费再来）') + '</span></button>';
         });
         // v18.9：闭关至下次事件
         html += '<div class="mt-4 pt-3 border-t border-gray-600"><p class="text-xs text-amber-400 mb-2">📅 闭关至下次事件（v18.9）：</p>';
@@ -357,11 +387,12 @@
             RETREAT_TARGET_CATEGORIES.forEach(function (cat) {
                 var next = global.WorldCalendar.getNextByCategory(cat.key, now);
                 if (!next) {
-                    html += '<button disabled class="w-full text-left bg-gray-700/40 p-2 rounded text-xs text-gray-500 mb-1">🔒 至' + cat.label + '：暂无</button>';
+                    // 真没有登记在册的日子才锁——给出缘由，不再是干巴巴的「暂无」
+                    html += '<button disabled class="w-full text-left bg-gray-700/40 p-2 rounded text-xs text-gray-500 mb-1">🔒 至' + cat.label + '：天机未显——尚无登记在册的日子</button>';
                 } else {
                     var dleft = next.dueAbsoluteDay - now;
                     html += '<button onclick="startLongRetreatUntilEvent(\'' + cat.key + '\', 90); this.closest(\'#xianxia-modal-overlay\')?.remove();" class="w-full text-left bg-amber-800 hover:bg-amber-700 p-2 rounded text-xs mb-1">' +
-                        '<span class="text-amber-200 font-bold">🔒 至' + cat.label + '：第 ' + next.dueAbsoluteDay + ' 天（' + dleft + ' 日后）</span><br>' +
+                        '<span class="text-amber-200 font-bold">📅 至' + cat.label + '：第 ' + next.dueAbsoluteDay + ' 天（' + dleft + ' 日后）</span><br>' +
                         '<span class="text-gray-400">' + next.title + ' · 约 ' + (dleft * 5) + ' 灵石</span></button>';
                 }
             });
@@ -370,7 +401,7 @@
         }
         html += '</div>';
         html += '<p class="text-xs text-gray-500">闭关只积累修为与功法熟练，不自动替你突破境界；遇到瓶颈仍需出关亲自突破。出关时会汇总闭关期间世界发生的大事。</p></div>';
-        if (typeof global.showModal === 'function') global.showModal('🔒 长期闭关', html);
+        if (typeof global.showModal === 'function') global.showModal('🧘 长期闭关', html);
     }
 
     global.RETREAT_OPTIONS = RETREAT_OPTIONS;

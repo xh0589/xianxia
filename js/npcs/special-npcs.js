@@ -459,6 +459,38 @@ const SPECIAL_NPC_DATA = {
                 unlocked: false
             }
         }
+    },
+
+    // v20.79 第五批少林收官：破戒僧·无咎（特殊紧凑线主角，独立 id，不占掌门位、不入任何名册）。
+    // 与释玄慈方丈（远景一句「留他在灶上，是少林寺的福气」）、竺照禅（005 戒堂问话一场对手戏）正典共存；
+    // 豁口钵自锔、戒折页第五百零一条「不欺心」在 wujiu 线展开；酒具全禁（破酒戒旧事只一句「药酒」带过）
+    shaolin_wujiu: {
+        id: 'shaolin_wujiu',
+        name: '无咎',
+        gender: 'male',
+        age: 28,
+        occupation: '少林寺火头僧（被戒堂公开除名的破戒僧，却没被逐出山门——他烧的饭全寺离不开）',
+        location: '少林寺',
+        icon: '🍲',
+        appearance: { hair: '烧短的头发茬', eyes: '笑起来先看你吃没吃饱', clothing: '旧僧袍挽到肘，围裙上灶灰渐层洗不掉', features: '双手烫疤层层，一把大铲磨得发亮' },
+        background: {
+            origin: '逃荒年间被少林灶房收留的孩子，从挑水烧火做到火头',
+            family: '没有——灶房是家，全寺僧众是家人',
+            history: '少林建寺以来唯一一个被戒堂公开除名的破戒僧，除名文书他自己裱在灶房墙上「辟邪」。破的戒条条是为了别人：喝过一碗药酒是替人暖身续命、撒过的谎全替人挡过灾、动过的那回刀是挡在香客身前。讲自己破戒的事像讲别人的笑话，口头禅「佛看见，也会懂的。」',
+            goal: '把第五百零一条戒——「不欺心」——念完',
+            secret: '破色戒那一夜无人知晓，是你来的那晚；他在戒折页上添了「第五百零一条：不欺心」，然后坐了一夜'
+        },
+        personalityBig5: { openness: 70, conscientiousness: 60, extraversion: 66, agreeableness: 76, neuroticism: 30 },
+        combat: { level: 58, realm: '金丹', layer: 1, attack: 66, defense: 60, speed: 52, skills: ['铁臂铲法', '灶火金刚', '破戒禅心'] },
+        schedule: { default: [
+            {time: '03:00-06:00', location: '灶房', activity: '生火熬粥'},
+            {time: '06:00-09:00', location: '斋堂', activity: '行早斋'},
+            {time: '09:00-11:00', location: '后山', activity: '挑水劈柴'},
+            {time: '11:00-14:00', location: '灶房', activity: '备午斋'},
+            {time: '14:00-17:00', location: '菜园', activity: '种菜担粪'},
+            {time: '17:00-20:00', location: '灶房', activity: '备晚斋'},
+            {time: '20:00-22:00', location: '灶房', activity: '擦钵、看墙上那份除名文书'}
+        ]}
     }
 };
 
@@ -724,6 +756,841 @@ var SPECIAL_NPC_DEFINITIONS = {
         skills: ['百花医经', '迷幻术', '百花剑法'],
         relationship: { affection: 15, trust: 12, respect: 0, favor: 0 },
         state: { mood: 70, stress: 25 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+    // v20.72 女主·夙孤鸿（峨眉派戒律首座，代掌门务）——端庄持戒感情线核心NPC
+    // 与灭绝师太（掌门，后山闭关）并存：师太隐修，孤鸿执戒律、代掌门务
+    'sect_leader_峨眉派': {
+        name: '夙孤鸿',
+        trueName: '夙孤鸿',     // 江湖称"峨眉剑戒"
+        title: '峨眉剑戒',
+        gender: 'female',
+        age: 24,
+        occupation: '戒律首座',
+        location: '峨眉派',
+        icon: '🪷',
+        appearance: { hair: '墨黑长发束得一丝不苟，银戒簪绾住', eyes: '杏眼清亮，眉目端严，极少笑', clothing: '缟色素劲装，腰间悬一把磨亮的木戒尺', features: '剑上系一截褪色旧红剑穗，打了三道结' },
+        background: {
+            origin: '雪夜孤儿→峨眉派',
+            family: '不详（襁褓弃于峨眉山门，窗外孤雁哀鸣一夜）',
+            history: '被前任戒律首座寂度拾回抚养，取名孤鸿——「孤鸿哀鸣，其声也远」。自幼持戒如山，十八岁接戒尺，三年前师父在金顶夜袭中战殁，她接掌戒律、代掌门务。灭绝师太自此闭死关。她夜夜巡金顶，风雨无阻',
+            goal: '守住师父留下的戒，守住金顶，想明白戒尺上第七条该刻什么',
+            secret: '师父留白的第七条戒；她夜夜巡金顶的真正缘由；刀子嘴是怕一软就辜负师父'
+        },
+        personalityBig5: { openness: 58, conscientiousness: 90, extraversion: 30, agreeableness: 55, neuroticism: 45 },
+        mainAttributes: { strength: 60, dexterity: 84, intelligence: 80, willpower: 86, constitution: 62, meridian: 80 },
+        combatSkills: { 内功: 80, 轻功: 76, 绝技: 74, 剑法: 90, 拳掌: 45, 刀法: 25, 长兵: 50, 奇门: 40, 射术: 30 },
+        combat: { level: 73, realm: '金丹', layer: 5, attack: 76, defense: 68, speed: 78 },
+        skills: ['峨眉剑戒', '素心剑意', '金顶云步'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 48, stress: 38 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+    // v20.72 男主·竺听雨（华山派大师兄、代掌门）——笑傲担待型感情线核心NPC
+    // 与前掌门（师父）并存于追忆；风不平（师叔祖）线内回归坐镇
+    'sect_leader_华山派': {
+        name: '竺听雨',
+        trueName: '竺听雨',     // 江湖称"华山首座"
+        title: '华山首座',
+        gender: 'male',
+        age: 28,
+        occupation: '代掌门',
+        location: '华山派',
+        icon: '🌧️',
+        appearance: { hair: '黑发高束，松针常落肩头', eyes: '剑眉星目，嘴角总噙着一点笑', clothing: '青衫剑袍，腰间挂一只旧酒葫芦', features: '右手虎口一层厚茧，眉间一道淡旧疤' },
+        background: {
+            origin: '幼孤→华山派前掌门亲传',
+            family: '不详（八岁入华山山门）',
+            history: '十年前华山遭逢大变，外敌勾内鬼夜袭，前掌门杀退来人后重伤七日而逝，临终一句「华山，交给你了」。十八岁的竺听雨接下这个字，一人撑起凋零的华山：账他垫、伤他扛、笑他给。佩剑「听雨」是师父断剑重铸——师父没听完的雨，他替他听',
+            goal: '重振华山门楣；在思过崖续完师父石壁剑意的最后一笔「归」',
+            secret: '师父身故那夜的真相；华山账上他私产填了多少；「归」字为何一个人刻不出'
+        },
+        personalityBig5: { openness: 65, conscientiousness: 85, extraversion: 72, agreeableness: 68, neuroticism: 58 },
+        mainAttributes: { strength: 72, dexterity: 85, intelligence: 76, willpower: 88, constitution: 74, meridian: 78 },
+        combatSkills: { 内功: 78, 轻功: 80, 绝技: 75, 剑法: 90, 拳掌: 55, 刀法: 40, 长兵: 45, 奇门: 35, 射术: 25 },
+        combat: { level: 74, realm: '金丹', layer: 6, attack: 78, defense: 68, speed: 80 },
+        skills: ['华山剑法', '听雨剑意', '松风步'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 62, stress: 40 },
+        _isFixedDefinition: true
+    },
+
+    // v20.74 第一批扩线：唐门·晏万解（女主）。与门主唐无痕（其父）、长老唐影/唐铸、唐老太太（祖母辈老封君）并存：
+    // 无痕主门、老太太坐镇后堂、万解掌毒堂并为亲点下任当家——牵机散旧案与母姓之由在 tm_event_006/010 展开
+    'sect_leader_唐门': {
+        name: '晏万解',
+        trueName: '晏万解',     // 江湖称"毒手仁心"
+        title: '毒堂之主',
+        gender: 'female',
+        age: 22,
+        occupation: '毒堂堂主（唐老太太亲点下任当家）',
+        location: '唐门',
+        icon: '🪡',
+        appearance: { hair: '乌发绾蜀中髻，一支银针簪固定', eyes: '凤目微挑，看人时嘴角带笑、眼底不带', clothing: '深紫窄袖劲装，小臂常年覆白丝手套', features: '袖口暗器囊，衣领有淡淡药气混着一线冷香' },
+        background: {
+            origin: '唐门毒堂嫡女→毒堂堂主',
+            family: '父为门主唐无痕；母系外姓女子，殁于牵机散旧案；祖母辈唐老太太坐镇',
+            history: '自幼以毒淬体，百毒不侵，代价是毒积体内三分、双手浸毒，白丝手套从不离身。一门制毒，她偏偷偷制解药「万解丹」——「万解」二字是母亲取的。她随母姓晏，是纪念，也是无声的控告',
+            goal: '把万解丹炼到第十八方；翻出牵机散旧案，还母亲清白',
+            secret: '手套不是洁癖，是怕伤人；母亲试毒那夜的真相；万解丹一炉其实只成三粒'
+        },
+        personalityBig5: { openness: 70, conscientiousness: 78, extraversion: 55, agreeableness: 48, neuroticism: 62 },
+        mainAttributes: { strength: 58, dexterity: 92, intelligence: 86, willpower: 80, constitution: 66, meridian: 74 },
+        combatSkills: { 内功: 70, 轻功: 82, 绝技: 88, 剑法: 40, 拳掌: 45, 刀法: 30, 长兵: 25, 奇门: 95, 射术: 80 },
+        combat: { level: 72, realm: '金丹', layer: 4, attack: 78, defense: 60, speed: 86 },
+        skills: ['牵机散', '散花针', '百毒淬体'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 55, stress: 45 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+
+    // v20.74 第一批扩线：武当·阙守拙（男主）。与张三丰（闭关百年的祖师，偶留墨迹）、宋远桥（现任掌门，主持山务）并存：
+    // 守拙为三代首徒、真武殿执剑侍，守祖师佩剑「问道」——考校与旧墨之秘在 wd_event_006/010 展开
+    'sect_leader_武当派': {
+        name: '阙守拙',
+        trueName: '阙守拙',     // 江湖称"不争剑侍"
+        title: '真武殿执剑侍',
+        gender: 'male',
+        age: 27,
+        occupation: '三代首徒（掌门宋远桥主持山务）',
+        location: '武当派',
+        icon: '☯️',
+        appearance: { hair: '道髻，木簪，洗得发白的青道袍', eyes: '眼神慢而稳，看人像总慢半拍', clothing: '袖口磨出毛边的旧道袍，补丁针脚极齐', features: '腰间佩剑「不争」——没有鞘' },
+        background: {
+            origin: '病弱孤儿→山门石阶下被拾回武当',
+            family: '不详',
+            history: '幼时体弱又慢，历次考较垫底，被议下山那年真武殿墙上多了一行新墨「先学慢，再学快」——他当是祖师显迹，其实是掌门宋远桥写的，这一留就是二十年。如今三代首徒、真武殿执剑侍，守祖师佩剑「问道」，每晨扫阶撞钟',
+            goal: '把「慢」字练到头；想明白「不争」什么时候该争',
+            secret: '墙上那行墨其实是宋远桥写的；「问道」剑夜里自鸣过，满殿只有他听见'
+        },
+        personalityBig5: { openness: 50, conscientiousness: 92, extraversion: 22, agreeableness: 72, neuroticism: 30 },
+        mainAttributes: { strength: 70, dexterity: 74, intelligence: 72, willpower: 94, constitution: 78, meridian: 82 },
+        combatSkills: { 内功: 90, 轻功: 72, 绝技: 70, 剑法: 88, 拳掌: 80, 刀法: 30, 长兵: 40, 奇门: 30, 射术: 25 },
+        combat: { level: 73, realm: '金丹', layer: 5, attack: 74, defense: 76, speed: 70 },
+        skills: ['太极剑法', '云梯纵', '纯阳功'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 58, stress: 25 },
+        _isFixedDefinition: true
+    },
+
+    // v20.75 第一批扩线（续）：蓬莱·瀛晚照（女主）。与白眉真人（掌门，闭关观海，不问世务）并存：
+    // 晚照为观汐台执录、掌门座下亲传，代管岛务——母亲出海旧事与潮信图录在 pl_event_006/010 展开
+    'sect_leader_蓬莱派': {
+        name: '瀛晚照',
+        trueName: '瀛晚照',     // 江湖称"潮信娘子"
+        title: '观汐执录',
+        gender: 'female',
+        age: 23,
+        occupation: '观汐台执录（掌门闭关，代管岛务）',
+        location: '蓬莱派',
+        icon: '🐚',
+        appearance: { hair: '长发以一支珊瑚簪松挽，发梢常带海雾的湿意', eyes: '眼神极静，看人像在看潮——一等一等，很有耐心', clothing: '月白鲛绡长裙外罩青灰短打，便于潜潮', features: '腰间系一只磨得发亮的旧螺' },
+        background: {
+            origin: '蓬莱观汐台执录之女→观汐台执录',
+            family: '母亲是前任观汐执录，二十年前一个傍晚出海追海市蜃楼，没有回来',
+            history: '自幼在观汐台长大，跟着母亲录潮信、摹海市。母亲出海那日蜃楼里有炊烟，母亲说「楼里有人做饭，就不是假的」。此后她每日黄昏录海市，二十年图录成册——她不说找娘，她说「录全」。白眉真人曾评她的手绘「有几分意思」',
+            goal: '把海市录全；守住环岛潮汐阵；弄明白蜃楼里那个执灯的影子',
+            secret: '图录第一页上那个执灯人影是母亲；旧螺贴耳能听见潮，也能听见别的；她把疼记成数目，从不记成话'
+        },
+        personalityBig5: { openness: 66, conscientiousness: 92, extraversion: 26, agreeableness: 60, neuroticism: 50 },
+        mainAttributes: { strength: 62, dexterity: 80, intelligence: 84, willpower: 90, constitution: 70, meridian: 82 },
+        combatSkills: { 内功: 82, 轻功: 78, 绝技: 76, 剑法: 74, 拳掌: 40, 刀法: 30, 长兵: 45, 奇门: 70, 射术: 35 },
+        combat: { level: 73, realm: '金丹', layer: 4, attack: 72, defense: 72, speed: 76 },
+        skills: ['蓬莱剑法', '潮汐阵', '蜃楼步'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 50, stress: 36 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+
+    // v20.75 第一批扩线（续）：逍遥·闻人酌（男主）。与无崖子（上代人物，一句「我去云游」走后未归）及长老天琴/棋圣并存：
+    // 闻人酌为亲传弟子、琅嬛福地守藏人——「不留人也不送人」的入山第一课在 xy_event_006/010 展开
+    'sect_leader_逍遥派': {
+        name: '闻人酌',
+        trueName: '闻人酌',     // 江湖称"醉藏仙"；「闻人」是复姓
+        title: '琅嬛守藏',
+        gender: 'male',
+        age: 29,
+        occupation: '亲传弟子、琅嬛福地守藏人（无崖子云游未归，山务由长老分理）',
+        location: '逍遥派',
+        icon: '🍶',
+        appearance: { hair: '墨发半束，一支旧竹簪，常有一缕落在额前', eyes: '桃花眼半睁，看人像醉，其实什么都看在眼里', clothing: '洗旧的青衫，襟口微敞，袖里常年揣着酒盏', features: '指腹有琴茧，落子时手比抚琴时还稳' },
+        background: {
+            origin: '弃婴→无崖子拾回逍遥派，取名「酌」——酌酒，也是斟酌',
+            family: '不详（师父无崖子云游未归）',
+            history: '满派都说他懒：躺在酒坛边抚琴、石桌上下残棋、琅嬛福地看尽天下书卷，从不认真练功。可酒仙池的酒曲是他半夜添的、琅嬛的灯油是他月月续的、山门的亏空是他拿私藏古谱换钱填的——北冥神功早已大成，闲是他的道。师父那日背着琴出门，只说「我去云游」',
+            goal: '把「不留人，也不送人」的入山第一课学完后半句；解开石桌上那局残棋',
+            secret: '他怕羁绊，因为逍遥道的人最后都会走；残局是走的人留下的，差最后一手；他的疼从不说破，疼了就斟酒'
+        },
+        personalityBig5: { openness: 88, conscientiousness: 52, extraversion: 66, agreeableness: 64, neuroticism: 40 },
+        mainAttributes: { strength: 66, dexterity: 88, intelligence: 92, willpower: 74, constitution: 68, meridian: 90 },
+        combatSkills: { 内功: 92, 轻功: 88, 绝技: 80, 剑法: 60, 拳掌: 65, 刀法: 30, 长兵: 35, 奇门: 75, 射术: 30 },
+        combat: { level: 74, realm: '金丹', layer: 6, attack: 76, defense: 66, speed: 84 },
+        skills: ['北冥神功', '凌波微步', '七弦琴心'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 66, stress: 28 },
+        _isFixedDefinition: true
+    },
+
+    // v20.76 第二批扩线：恒山·祁清禅（女主）。与定逸师太（掌门，闭关清修）并存：
+    // 清禅为师太关门弟子、白云庵戒律首座，代掌戒堂——抄经回向页与锔过木鱼旧事在 heng_event_003/009 展开
+    'sect_leader_恒山派': {
+        name: '祁清禅',
+        trueName: '祁清禅',     // 江湖称"白云首座"
+        title: '戒堂木鱼',
+        gender: 'female',
+        age: 21,
+        occupation: '白云庵戒律首座（定逸师太关门弟子，师太闭关清修，代掌戒堂）',
+        location: '恒山派',
+        icon: '📿',
+        appearance: { hair: '剃度后的青发只余一层青影，头顶圆润，眉目清净', eyes: '目光温而定，看人像看灯火——不晃，也不灭', clothing: '灰僧袍洗得发白，袖口两处补丁针脚极齐，袈裟叠成方块抱在臂弯', features: '袖中一只磨得发亮的旧木鱼，铜锔着一道旧裂' },
+        background: {
+            origin: '山门孤儿→白云庵戒律首座',
+            family: '自幼出家，定逸师太亦师亦母',
+            history: '卯时诵戒、巳时抄经、亥时敲木鱼，十年无一日间断。《华严经》抄了六年，回向页一直空着。木鱼是受戒日师太所授，摔裂过一回，她锔了铜锔继续用，不换',
+            goal: '把《华严经》抄圆，把回向页写好',
+            secret: '回向页头一个想写的俗家名字是你的；晚课后的木鱼有时多敲一声，谁也没告诉是为谁'
+        },
+        personalityBig5: { openness: 58, conscientiousness: 94, extraversion: 24, agreeableness: 72, neuroticism: 34 },
+        mainAttributes: { strength: 52, dexterity: 74, intelligence: 82, willpower: 94, constitution: 66, meridian: 78 },
+        combatSkills: { 内功: 84, 轻功: 70, 绝技: 72, 剑法: 74, 拳掌: 36, 刀法: 24, 长兵: 40, 奇门: 58, 射术: 30 },
+        combat: { level: 71, realm: '金丹', layer: 2, attack: 62, defense: 80, speed: 72 },
+        skills: ['万花剑法', '恒山剑法·绵密', '木鱼安心咒'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 52, stress: 26 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+
+    // v20.76 第二批扩线：嵩山·逵佩南（男主）。与左冷禅（正典掌门）并存：
+    // 佩南为养子、执法堂首座，只管执法不夺权——并盟章程两本之异在 song_event_002 展开，左冷禅全程只以手令朱批出场
+    'sect_leader_嵩山派': {
+        name: '逵佩南',
+        trueName: '逵佩南',
+        title: '执法首座',
+        gender: 'male',
+        age: 28,
+        occupation: '执法堂首座（左冷禅养子，掌五岳并盟章程与执法）',
+        location: '嵩山派',
+        icon: '⚖️',
+        appearance: { hair: '发髻束得方正，一丝不乱，一根旧铜簪', eyes: '目光平直，看人像在核对卷宗', clothing: '玄色执法袍浆洗得笔挺，腰牌绳结每日重系', features: '腰间悬半枚执法令牌，断口很旧，铜面被摩挲得温亮' },
+        background: {
+            origin: '旧案遗孤→左冷禅收为养子',
+            family: '养父左冷禅（他从不叫父亲，叫掌门）',
+            history: '十四岁入执法堂，把堂规背到一字不差；二十岁头一回主审大案，得罪三位长老，没低头。五岳并盟的章程、卷宗、旧案他都管——自己的份，争得最少',
+            goal: '把执法堂的条文改得比江湖规矩更公道',
+            secret: '第一百零八条空了很多年——那一条他留给自己；他的善意从不宣之于口，全藏在判词里'
+        },
+        personalityBig5: { openness: 54, conscientiousness: 96, extraversion: 30, agreeableness: 44, neuroticism: 30 },
+        mainAttributes: { strength: 78, dexterity: 72, intelligence: 88, willpower: 90, constitution: 80, meridian: 76 },
+        combatSkills: { 内功: 80, 轻功: 66, 绝技: 74, 剑法: 86, 拳掌: 72, 刀法: 40, 长兵: 48, 奇门: 52, 射术: 34 },
+        combat: { level: 75, realm: '金丹', layer: 7, attack: 82, defense: 78, speed: 70 },
+        skills: ['峻极剑势', '大嵩阳神掌', '执法符令'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 48, stress: 44 },
+        _isFixedDefinition: true
+    },
+
+    // v20.76 第二批扩线：泰山·岳清晓（女主）。与天门道人（正典掌门）并存：
+    // 清晓为掌门孙女、玉皇顶晨光临火人，只管火坛不掌门派事务——摩崖「日」字拓片在 tai_event_005 展开
+    'sect_leader_泰山派': {
+        name: '岳清晓',
+        trueName: '岳清晓',     // 江湖称"第一缕娘子"
+        title: '临火执晨',
+        gender: 'female',
+        age: 22,
+        occupation: '玉皇顶晨光临火人（天门道人之孙女）',
+        location: '泰山派',
+        icon: '🌄',
+        appearance: { hair: '高马尾用红绳扎住，发梢常被火星燎得微黄', eyes: '眼睛亮而黑白分明，笑起来有两颗小虎牙', clothing: '赤色短打外罩防火粗布褂，袖口挽到小臂', features: '指尖常带一点火绒气味，贴身收着一卷拓片' },
+        background: {
+            origin: '生在泰山长在泰山→玉皇顶临火人',
+            family: '爷爷天门道人掌门务，爹娘守过山道',
+            history: '五岁爬十八盘，十二岁接火坛。泰山一千次日出她都看过，没有一次是与人同看。摩崖「日」字她拓了十年，只有一幅送得出手',
+            goal: '晨火不断；看一次不是一个人看的日出',
+            secret: '第一幅「日」字拓片没进卷袋，压在她枕头底下'
+        },
+        personalityBig5: { openness: 76, conscientiousness: 78, extraversion: 88, agreeableness: 74, neuroticism: 24 },
+        mainAttributes: { strength: 72, dexterity: 76, intelligence: 70, willpower: 84, constitution: 78, meridian: 74 },
+        combatSkills: { 内功: 76, 轻功: 74, 绝技: 70, 剑法: 80, 拳掌: 58, 刀法: 36, 长兵: 44, 奇门: 40, 射术: 38 },
+        combat: { level: 71, realm: '金丹', layer: 3, attack: 76, defense: 70, speed: 72 },
+        skills: ['泰山十八盘', '紫气东来诀', '临火步'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 70, stress: 24 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+
+    // v20.76 第二批扩线：青城·幽翠微（女主）。与余沧海（正典掌门）并存：
+    // 翠微为最小弟子、松风观后山茶園看茶人——她知道的「山门里的事」在 qing_event_004/010 展开，余沧海地位不动
+    'sect_leader_青城派': {
+        name: '幽翠微',
+        trueName: '幽翠微',
+        title: '青城看茶人',
+        gender: 'female',
+        age: 20,
+        occupation: '松风观后山茶園看茶人（余沧海最小的弟子）',
+        location: '青城派',
+        icon: '🍃',
+        appearance: { hair: '双鬟松挽，竹簪别住，鬓边几缕碎发', eyes: '眼神转得快，心思一动全写在眼睛里', clothing: '青色采茶短打系茶染围裙，兜里常年揣着茶样', features: '掌心有焙茶烫出的薄茧，指甲修得极短' },
+        background: {
+            origin: '山下茶户之女→余沧海关门小弟子',
+            family: '家里在山下开茶铺，入派是为学剑护铺',
+            history: '剑术天赋最好，却选了看茶园——茶不骗人，火候到了就是到了。青城雪茶头一茬由她炒，装茶的旧罐是娘留的。山门里有些事她看见了，不该看的，她还没想好说不说',
+            goal: '护住茶园和师弟们；把头一茬雪茶炒到值得送人',
+            secret: '功德簿被撕去一角的旧页在她手里；焙房第二把钥匙她没给过任何人'
+        },
+        personalityBig5: { openness: 74, conscientiousness: 70, extraversion: 80, agreeableness: 56, neuroticism: 36 },
+        mainAttributes: { strength: 58, dexterity: 86, intelligence: 80, willpower: 74, constitution: 64, meridian: 76 },
+        combatSkills: { 内功: 70, 轻功: 84, 绝技: 66, 剑法: 78, 拳掌: 44, 刀法: 30, 长兵: 36, 奇门: 56, 射术: 40 },
+        combat: { level: 68, realm: '金丹', layer: 2, attack: 64, defense: 62, speed: 76 },
+        skills: ['青城剑法', '雪茶焙香诀', '松涛步'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 64, stress: 34 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+
+    // v20.76 第二批扩线：衡山·奚湘筠（女主）。与莫大先生（正典掌门）并存：
+    // 湘筠为关门弟子、回雁琴台承传人——「潇湘夜雨只拉半阙」在 xiang_event_001/013 展开，莫大之问「曲归她，山也归她」
+    'sect_leader_衡山派': {
+        name: '奚湘筠',
+        trueName: '奚湘筠',
+        title: '回雁琴承',
+        gender: 'female',
+        age: 23,
+        occupation: '莫大先生关门弟子、回雁琴台承传人',
+        location: '衡山派',
+        icon: '🎻',
+        appearance: { hair: '长发半绾，一支乌木琴头簪', eyes: '眼神总像隔着一层雨汽，落在人身上很轻', clothing: '雨青长裙外罩素白衫，袖口被琴弓磨得发毛', features: '怀里揣一块松香，被体温焐得圆熟' },
+        background: {
+            origin: '湘江船家孤女→莫大先生拾回衡山',
+            family: '师父如父，琴声如家',
+            history: '《潇湘夜雨》她只拉半阙——师父说拉完的人就该下山。于是她把另一半一直留着，留了十年。琴音是派里最好的，话是派里最少的',
+            goal: '把下半阙长出来',
+            secret: '旧谱的下半阙空白处，她用铅笔淡淡记着指法——写到哪儿，看雨下到哪儿'
+        },
+        personalityBig5: { openness: 80, conscientiousness: 66, extraversion: 18, agreeableness: 68, neuroticism: 46 },
+        mainAttributes: { strength: 50, dexterity: 88, intelligence: 84, willpower: 80, constitution: 60, meridian: 84 },
+        combatSkills: { 内功: 80, 轻功: 82, 绝技: 78, 剑法: 76, 拳掌: 30, 刀法: 24, 长兵: 32, 奇门: 68, 射术: 28 },
+        combat: { level: 71, realm: '金丹', layer: 3, attack: 70, defense: 68, speed: 78 },
+        skills: ['衡山剑法', '潇湘夜雨', '琴中藏剑'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 54, stress: 32 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+
+    // v20.76 第二批扩线：丐帮·桑拾玖（男主）。与洪七公（正典帮主）、鲁有脚（执法长老）并存：
+    // 拾玖为讯房最年轻长老，只掌天下消息总口，不涉帮主之位——娘的百衲衣与青布在 gai_event_001/009 展开
+    'sect_leader_丐帮': {
+        name: '桑拾玖',
+        trueName: '桑拾玖',     // 「拾玖」是当年灾民队伍里第十九个被收留的孩子
+        title: '讯房守口',
+        gender: 'male',
+        age: 26,
+        occupation: '讯房最年轻长老（掌天下消息总口，帮务归洪帮主，讯房只递一次口）',
+        location: '丐帮',
+        icon: '🥣',
+        appearance: { hair: '短发用布条随便一扎，总有点乱', eyes: '听人说话时永远带着笑，像在给说书人对词', clothing: '补了十几年的百衲衣，每块补丁颜色来历各不相同', features: '袖口一方新青布，针脚比别处密' },
+        background: {
+            origin: '灾年逃荒的孩子→丐帮义庄养大',
+            family: '娘病故在路上，留下一件百衲衣',
+            history: '十二岁进讯房，听来的消息过耳不忘、从不外泄，帮里人人知道他嘴严。讲天下的故事眉飞色舞，讲自己的事就岔开。百衲衣补了十几年，最后一方青布是娘旧衣裁剩的，一直贴身收着',
+            goal: '把讯房的故事讲到讲不动为止',
+            secret: '那方青布他说过要缝给这辈子最信的人的袖口——话出了口，他自己先红了脸'
+        },
+        personalityBig5: { openness: 78, conscientiousness: 72, extraversion: 64, agreeableness: 70, neuroticism: 30 },
+        mainAttributes: { strength: 60, dexterity: 80, intelligence: 95, willpower: 76, constitution: 66, meridian: 82 },
+        combatSkills: { 内功: 70, 轻功: 82, 绝技: 64, 剑法: 50, 拳掌: 66, 刀法: 40, 长兵: 44, 奇门: 88, 射术: 36 },
+        combat: { level: 68, realm: '金丹', layer: 2, attack: 62, defense: 66, speed: 78 },
+        skills: ['听风辨讯', '百衲密针', '九州接力'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 62, stress: 30 },
+        _isFixedDefinition: true
+    },
+
+    // v20.77 第三批反派阵营扩线：阎罗殿·聂明泽（男主）。与阎罗王（正典殿主秦广，见 sects-deep-data）、
+    // 左判官（掌生死簿）、孟婆（右判官掌汤）并存：明泽为档房最不起眼的记档文吏，判官属下，不越位——
+    // 殿主全程只以朱批/帘后存在感施压，互动位由记档人承接（yan_event_001 建档起）
+    'sect_leader_阎罗殿': {
+        name: '聂明泽',
+        trueName: '聂明泽',
+        title: '生死簿记档人',
+        gender: 'male',
+        age: 24,
+        occupation: '档房记档人（左判官属下文吏，只记档，不索命）',
+        location: '阎罗殿',
+        icon: '📖',
+        appearance: { hair: '束得一丝不苟，一根乱发都没有', eyes: '看人像在读档——先看名字，再看生辰', clothing: '洗得发白的青布直裰，袖口磨出了翻档的亮痕', features: '指腹一层握笔的茧，怀里总揣着一支朱笔' },
+        background: {
+            origin: '殿里捡回的无名孤儿→档房文吏',
+            family: '没有——他把档房当家，把天下人的档当邻里',
+            history: '能背全江湖的档案，却读不懂空气；说三个字停一下，被夸一句耳朵红着开始背条例。记档人的手比杀手干净，也比杀手冷。善意全是程序性的：把你的档案调到离他手最近的那一格',
+            goal: '复核完那一页「命格：未定」',
+            secret: '生死簿记尽了天下人该死的日子，唯独你那一页他「弄丢」过一回——丢档是死罪，他头一次知法犯法，自己都没弄明白为什么'
+        },
+        personalityBig5: { openness: 55, conscientiousness: 92, extraversion: 8, agreeableness: 60, neuroticism: 58 },
+        mainAttributes: { strength: 34, dexterity: 58, intelligence: 96, willpower: 88, constitution: 44, meridian: 50 },
+        combatSkills: { 内功: 40, 轻功: 36, 绝技: 30, 剑法: 20, 拳掌: 18, 刀法: 16, 长兵: 16, 奇门: 62, 射术: 20 },
+        combat: { level: 36, realm: '筑基', layer: 2, attack: 26, defense: 30, speed: 44 },
+        skills: ['过目千卷', '朱笔勾决', '纸甲藏锋'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 46, stress: 52 },
+        _isFixedDefinition: true
+    },
+
+    // v20.77 第三批反派阵营扩线：血手门·耿雪衣（女主）。与血手人屠（正典门主）并存：
+    // 雪衣为其养女，守门里一角的药庐，不学刀只学医、不涉门务——门主只以走廊尽头的脚步声/堂上的影子存在；
+    // 血池十年一开、烧档之夜后档房新规等既有埋象已织入 xue 线
+    'sect_leader_血手门': {
+        name: '耿雪衣',
+        trueName: '耿雪衣',
+        title: '药庐守灯',
+        gender: 'female',
+        age: 21,
+        occupation: '药庐守庐人（门主养女，门里抬回来的人她缝）',
+        location: '血手门',
+        icon: '🩹',
+        appearance: { hair: '一根木簪松松挽着，总有几缕垂在耳边', eyes: '干净，看人像看伤口——先看多深，再想怎么缝', clothing: '洗得发白的青衣，袖口挽起，衣角有淡淡药渍', features: '掌心一层药碾磨出的薄茧，指上一枚磨亮的顶针' },
+        background: {
+            origin: '血手人屠从血地里捡回的养女',
+            family: '门主是养父——她只称「他」',
+            history: '全门嗓门最轻的人。把血腥讲得像天气：「今天抬进来七个，都缝好了。有一个没救回来，我吃了午饭。」不是装酷——她从小环境里的死亡就是日常，脱敏是真实的平。药庐八年，门里抬回来的人她缝',
+            goal: '想知道普通日子长什么样——赶一次集、为菜价吵一次架、被人骂一次「怎么这么晚才回来」',
+            secret: '她开出的第一张方子不是治伤的，是治伤风的——姜三片，枣五枚，葱白两段。方子她收着，对折，压在柜底'
+        },
+        personalityBig5: { openness: 62, conscientiousness: 78, extraversion: 20, agreeableness: 74, neuroticism: 24 },
+        mainAttributes: { strength: 46, dexterity: 82, intelligence: 80, willpower: 84, constitution: 58, meridian: 70 },
+        combatSkills: { 内功: 56, 轻功: 54, 绝技: 40, 剑法: 24, 拳掌: 30, 刀法: 26, 长兵: 22, 奇门: 72, 射术: 24 },
+        combat: { level: 66, realm: '金丹', layer: 1, attack: 54, defense: 58, speed: 66 },
+        skills: ['金疮百针', '白药掰两', '脉平如水'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 58, stress: 36 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+
+    // v20.77 第三批反派阵营扩线：飞蝎坞·拓银沙（女主）。与蝎母（正典坞主）并存：
+    // 银沙为幺女/少坞主，只管蝎不管坞务，几位兄长都怕娘、只有她敢掰腕子——
+    // 坞规「被蜇不许叫」、蝎王窝三十年老种等既有埋象已织入 xie 线
+    'sect_leader_飞蝎坞': {
+        name: '拓银沙',
+        trueName: '拓银沙',
+        title: '蝎母幺女',
+        gender: 'female',
+        age: 23,
+        occupation: '飞蝎坞少坞主/牧蝎人（坞务归蝎母，她只管蝎）',
+        location: '飞蝎坞',
+        icon: '🦂',
+        appearance: { hair: '辫子盘在头顶，插一根沙漠红柳枝', eyes: '笑起来眯成缝，认真起来比蝎子还凶', clothing: '沙漠短打，靴筒里永远有沙，腰间一排小皮囊', features: '臂缚上一枚金蝎壳——蝎王窝老种蜕的头一枚' },
+        background: {
+            origin: '蝎母幺女，大漠里生、蝎房里大',
+            family: '上头几位兄长都怕娘，只有她不怕',
+            history: '坞里牧蝎最好的人，也是唯一敢跟汉子们掰腕子掀桌的。坞规「被蜇不许叫」她头一个守。说话糙，手上稳，蝎册上那个「不蛰」的标记是她亲手描的',
+            goal: '把册上那一笔一直描下去——不让任何人把它改成「蛰」',
+            secret: '掰腕子第三局她输给了一个人——那回她踹翻凳子落荒而逃，金蝎翘着尾钩追出半里地'
+        },
+        personalityBig5: { openness: 84, conscientiousness: 58, extraversion: 88, agreeableness: 60, neuroticism: 22 },
+        mainAttributes: { strength: 82, dexterity: 84, intelligence: 66, willpower: 76, constitution: 78, meridian: 74 },
+        combatSkills: { 内功: 66, 轻功: 80, 绝技: 74, 剑法: 40, 拳掌: 56, 刀法: 78, 长兵: 50, 奇门: 84, 射术: 44 },
+        combat: { level: 74, realm: '金丹', layer: 4, attack: 76, defense: 62, speed: 82 },
+        skills: ['蝎尾针', '驭蝎诀', '大漠分水刀'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 66, stress: 24 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+
+    // v20.77 第三批反派阵营扩线：烈日教·伏璃茵（女主）。与烈日法王（正典教主）并存：
+    // 璃茵为圣火看守/圣女，仪轨归长老、焰归她——法王只以高台远景存在；
+    // 七口井井规、曝日崖「烈日淬体」、赤袍祭司等既有埋象已织入 lie 线
+    'sect_leader_烈日教': {
+        name: '伏璃茵',
+        trueName: '伏璃茵',
+        title: '守焰双相',
+        gender: 'female',
+        age: 22,
+        occupation: '圣火看守·圣女（烈日法王座下，仪轨归长老，焰归她）',
+        location: '烈日教',
+        icon: '🕯️',
+        appearance: { hair: '戴冠时一丝不乱，摘了冠松松垂到肩', eyes: '人前静得像井水，人后亮得像火星', clothing: '赤袍祭司常服，衣缘烫金，冠却总晚戴一刻', features: '指尖一点捻灯芯的薄茧，贴身一只檀木匣' },
+        background: {
+            origin: '七口井的井规人家女儿，被选进圣火龛守焰',
+            family: '没有——教里都叫她「圣女」，没人叫她名字',
+            history: '公开场合是完美圣女，私下是吐槽役。分水岭那日长老把「照十方」诵成「照四方」，她肩膀一抖——从那天起你成了她唯一的观众。仰头哭过两回，第三回她没忍住笑出声',
+            goal: '亲眼看一次真正的日出——曝日崖上没人见过的那种',
+            secret: '檀木匣里那根捻熄过的灯芯，档上批的是「风大，灯油不济」——那晚没有风'
+        },
+        personalityBig5: { openness: 76, conscientiousness: 70, extraversion: 52, agreeableness: 62, neuroticism: 44 },
+        mainAttributes: { strength: 58, dexterity: 76, intelligence: 82, willpower: 86, constitution: 66, meridian: 78 },
+        combatSkills: { 内功: 74, 轻功: 70, 绝技: 72, 剑法: 44, 拳掌: 52, 刀法: 36, 长兵: 30, 奇门: 68, 射术: 30 },
+        combat: { level: 70, realm: '金丹', layer: 3, attack: 74, defense: 68, speed: 71 },
+        skills: ['烈日真焰', '巡火步', '捻芯指'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 56, stress: 44 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+
+    // v20.77 第三批反派阵营扩线：天龙教·檀望舒（女主）。与天龙王（正典教主，金丹八层、不见真容）并存：
+    // 望舒只是传声房传令人，帘后归教主、传令归她——教主只以帘后影子与一句隔帘的话存在；
+    // 经台旧谚、八方贡「进贡的先吃」、万魔洞隔日调息等既有埋象已织入 long 线
+    'sect_leader_天龙教': {
+        name: '檀望舒',
+        trueName: '檀望舒',
+        title: '百声传令',
+        gender: 'female',
+        age: 23,
+        occupation: '传声房传令人（教令口传比文书还准，她只传令，不掌权）',
+        location: '天龙教',
+        icon: '🪞',
+        appearance: { hair: '随手一挽，换完声常忘了自己没戴钗', eyes: '看人先看嘴——学口型的习惯', clothing: '黑袍传令服，里子却悄悄染了浅色', features: '袖中半片风磨石片，对镜练声磨得溜圆' },
+        background: {
+            origin: '传声房从小养大的孤女',
+            family: '没有——教里她的声音是工具，工具不需要家',
+            history: '传声房嗓子最好的人，学谁像谁，教令口传比文书还准。可她不知道自己本来的声音什么样——开口全是别人的调子：（用山门老仆的调子）「进来。」（用黑袍知客的调子）「出去。」',
+            goal: '有人用她自己的调子叫一声「檀望舒」，她用自己的声音应',
+            secret: '贴身收着半面残铜镜——镜里只照得下半张脸，她的声音也只留半句给自己'
+        },
+        personalityBig5: { openness: 80, conscientiousness: 74, extraversion: 58, agreeableness: 72, neuroticism: 40 },
+        mainAttributes: { strength: 44, dexterity: 86, intelligence: 80, willpower: 72, constitution: 56, meridian: 80 },
+        combatSkills: { 内功: 62, 轻功: 84, 绝技: 58, 剑法: 26, 拳掌: 30, 刀法: 22, 长兵: 20, 奇门: 86, 射术: 34 },
+        combat: { level: 68, realm: '金丹', layer: 2, attack: 52, defense: 56, speed: 78 },
+        skills: ['百声口技', '传音入密', '空谷回音'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 54, stress: 40 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+
+    // v20.78 第四批奇门扩线：神机门·戚巧机（女主）。与鲁妙子（正典门主，见 SECT_LEADER_NAMES）并存：
+    // 巧机是图房首席机师，机关归她、门务归门主；旧铜雀与「能记住人」的新雀在 sj 线展开
+    'sect_leader_神机门': {
+        name: '戚巧机',
+        trueName: '戚巧机',
+        title: '巧机算齿',
+        gender: 'female',
+        age: 22,
+        occupation: '图房首席机师（跟机关说话比跟人多，齿数比是她的诗）',
+        location: '神机门',
+        icon: '⚙️',
+        appearance: { hair: '随手拿细铜丝一绾，簪是半截锉刀', eyes: '看人先看手——手上茧在哪里，功夫就在哪里', clothing: '短打工装，袖口磨亮，兜里叮当响', features: '指腹一层薄茧，攥紧时掌心血印正好压住齿轮刻痕' },
+        background: {
+            origin: '神机门图房养大的匠户孤女',
+            family: '没有——师父病故后，一只学舌的铜雀是她唯一的家人',
+            history: '门里手最巧的机师，跟齿轮说话比跟人多，把齿数比当诗背；能算尽天下机关，唯独见你时心口那一下，只说得出三个字「算不出」',
+            goal: '造一具「能记住人」且「不会坏」的机关雀',
+            secret: '柜子里锁着一只散了架的铜雀——零件一枚没丢，记性丢了，她拼了八回没拼回去'
+        },
+        personalityBig5: { openness: 78, conscientiousness: 86, extraversion: 36, agreeableness: 64, neuroticism: 44 },
+        mainAttributes: { strength: 46, dexterity: 88, intelligence: 84, willpower: 70, constitution: 52, meridian: 66 },
+        combatSkills: { 内功: 55, 轻功: 62, 绝技: 50, 剑法: 20, 拳掌: 26, 刀法: 18, 长兵: 30, 奇门: 92, 射术: 40 },
+        combat: { level: 58, realm: '筑基', layer: 9, attack: 40, defense: 46, speed: 72 },
+        skills: ['十指悬丝', '听齿辨簧', '万机归一'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 54, stress: 42 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+
+    // v20.78 第四批奇门扩线：霹雳堂·雷惊蛰（男主）。与雷震天（正典名册名）并存：雷震天为其父、上代堂主名讳（早亡），
+    // 惊蛰接印仍自称「配药的」；无声花执念与火药方子册批注在 pi 线展开
+    'sect_leader_霹雳堂': {
+        name: '雷惊蛰',
+        trueName: '雷惊蛰',
+        title: '默雷堂主',
+        gender: 'male',
+        age: 23,
+        occupation: '霹雳堂历代最年轻堂主（接了堂主印仍自称配药的）',
+        location: '霹雳堂',
+        icon: '🎆',
+        appearance: { hair: '束得一丝不苟，鬓角有一点燎黄的旧痕', eyes: '看人先看嘴——听不清就俯身，俯得很近', clothing: '防火短褐，腰上一只囊口焦痕的旧布囊', features: '指节有火药染的洗不净的黄，指甲修得极短' },
+        background: {
+            origin: '霹雳堂雷家火药匠，七岁随老匠学验雷',
+            family: '父亲是上代堂主雷震天，早亡；娘缝了那只防火布囊，走得早——囊口焦痕他一直没换',
+            history: '老匠死于炸膛后他接过「验」字，如今验雷一枚验三遍。说话极轻，要紧的话更轻，说完必补「……我说了。我真的说了。」再把原话抄进火药方子册当批注',
+            goal: '配成无声花，在满坡光底下，把那句话对一个不用捂耳朵的人说完',
+            secret: '他想配一支没有声音的烟花——看花的人都捂着耳朵，捂着耳朵就听不见他在旁边说什么；十六年没说出口的话，全抄在方子册的批注里'
+        },
+        personalityBig5: { openness: 66, conscientiousness: 88, extraversion: 24, agreeableness: 74, neuroticism: 48 },
+        mainAttributes: { strength: 48, dexterity: 88, intelligence: 82, willpower: 76, constitution: 54, meridian: 60 },
+        combatSkills: { 内功: 40, 轻功: 38, 绝技: 46, 剑法: 12, 拳掌: 20, 刀法: 14, 长兵: 12, 奇门: 84, 射术: 52 },
+        combat: { level: 34, realm: '筑基', layer: 1, attack: 28, defense: 26, speed: 38 },
+        skills: ['研硝七遍', '验雷半寸', '默花无声'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 50, stress: 46 },
+        _isFixedDefinition: true
+    },
+
+    // v20.78 第四批奇门扩线：天书阁·宓书言（男主）。与归藏子（正典阁主）并存：书言是总校勘，校书归他、阁务归归藏子
+    // （归藏子只以催卷施压，已织入 shu 线）；校讎剑与「存疑不改」的页边字在 shu 线展开
+    'sect_leader_天书阁': {
+        name: '宓书言',
+        trueName: '宓书言',
+        title: '佩剑校书郎',
+        gender: 'male',
+        age: 27,
+        occupation: '天书阁总校勘（佩剑「校讎」，给天下字句挑错、给江湖招式正名）',
+        location: '天书阁',
+        icon: '🖋️',
+        appearance: { hair: '玉簪束发，一丝不乱，伏案久了鬓边压出一道印', eyes: '看人先看字——你写的每一个字他都过了目', clothing: '青衫洗得发白，袖口掖着一管笔、一叠夹批签', features: '中指第一节一枚厚茧，是笔茧不是剑茧——可他的剑比笔快' },
+        background: {
+            origin: '翰林院校书郎，辞官入天书阁任总校勘',
+            family: '三代抄书之家：祖父抄书至眼盲，父亲校书校到人嫌',
+            history: '书生气质，武功同样高强——对敌时当场修正对方招式名，「你这套叫『鸿雁来宾』？不对。第三式发力在肩不在腕，是『雁落平沙』」，剑随话到，一字一式。批语从不超四个字',
+            goal: '校完那部三年残卷——除了卷尾那个永不改的字',
+            secret: '他校了三年的残卷只有一个字终身不圈不改——你研墨夜随手写错的「墨」字脱了「土」，他裱进了卷尾，注「此处存疑。存疑，不改。」'
+        },
+        personalityBig5: { openness: 84, conscientiousness: 92, extraversion: 48, agreeableness: 52, neuroticism: 36 },
+        mainAttributes: { strength: 62, dexterity: 78, intelligence: 96, willpower: 86, constitution: 64, meridian: 78 },
+        combatSkills: { 内功: 74, 轻功: 72, 绝技: 70, 剑法: 88, 拳掌: 30, 刀法: 26, 长兵: 24, 奇门: 58, 射术: 30 },
+        combat: { level: 70, realm: '金丹', layer: 3, attack: 76, defense: 62, speed: 80 },
+        skills: ['一字之校', '剑鸣正讹', '存疑不注'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 52, stress: 40 },
+        _isFixedDefinition: true
+    },
+
+    // v20.78 第四批奇门扩线：大隐阁·隗九爻（男主）。与观虚子（正典阁主）并存：九爻是隐进食摊街的隐修，阁务不沾
+    // （观虚子全程不出场）；「莫尽」卦辞与签头风干山楂在 dy 线展开
+    'sect_leader_大隐阁': {
+        name: '隗九爻',
+        trueName: '隗九爻',
+        title: '市井半句仙',
+        gender: 'male',
+        age: 26,
+        occupation: '大隐阁隐修（隐在食摊街口，以糖葫芦数签起卦为生，欠账遍及全街）',
+        location: '大隐阁',
+        icon: '🍡',
+        appearance: { hair: '半披半束，插着一根糖葫芦竹签当簪', eyes: '总像没睡醒，可街对面谁掏了钱袋他先看见', clothing: '旧道袍洗成灰白，外头罩一件沾糖渍的粗布坎肩', features: '袖里常年半根糖葫芦，签头那颗山楂永远不吃' },
+        background: {
+            origin: '九华山嘴最碎的少年，隐进食摊街口的大隐阁隐士',
+            family: '没有家人——师父十年前走得干净，留给他一园山楂树和一句没说完的话，一条食摊街就是他的家',
+            history: '跟师父学卦、跟市井学吃饭，起卦不用蓍草不用铜钱，数签子上剩几颗山楂定吉凶。说话永远只说半句就停：「你今日……」——然后捻一颗山楂，让你猜',
+            goal: '寻一个猜得中下半句的人，把签头那颗风干的山楂吃掉',
+            secret: '他给自己起过一卦，卦辞两个字「莫尽」——话说尽了要出事，所以只说半句；他心里门儿清，这卦八成是当年师父哄他少顶嘴编的，却还是守了二十年'
+        },
+        personalityBig5: { openness: 76, conscientiousness: 48, extraversion: 70, agreeableness: 78, neuroticism: 28 },
+        mainAttributes: { strength: 56, dexterity: 62, intelligence: 90, willpower: 84, constitution: 70, meridian: 76 },
+        combatSkills: { 内功: 78, 轻功: 70, 绝技: 56, 剑法: 62, 拳掌: 34, 刀法: 28, 长兵: 26, 奇门: 66, 射术: 24 },
+        combat: { level: 58, realm: '金丹', layer: 2, attack: 42, defense: 55, speed: 60 },
+        skills: ['数签知机', '半句藏锋', '朝市大隐'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 58, stress: 32 },
+        _isFixedDefinition: true
+    },
+
+    // v20.78 第四批奇门扩线：侠隐阁·简知忆（男主）。与燕南天（正典阁主）并存：知忆是档房文吏，只管档案不管阁务；
+    // 空白自档页与「危险程度：想一直说话」在 yin 线展开；与阎罗殿聂明泽的念档腔全面拉开（批注腔，无朱笔/生死簿/命格字样）
+    'sect_leader_侠隐阁': {
+        name: '简知忆',
+        trueName: '简知忆',
+        title: '侠隐阁建档人',
+        gender: 'male',
+        age: 25,
+        occupation: '侠隐阁档房文吏（侠名录岁末修名，他是最好使的那支笔）',
+        location: '侠隐阁',
+        icon: '🗂️',
+        appearance: { hair: '用一截档案麻绳随手扎着，绳头还挂着页签', eyes: '看人一眼就归档——目光在你身上停留的时长都记了数', clothing: '靛青直裰，胸前一只油布包，包角磨圆', features: '右手食指内侧一道笔杆磨出的旧痕，中指茧比剑茧厚' },
+        background: {
+            origin: '武昌城脚吃着百家饭长大的孤儿，侠隐阁档房文吏',
+            family: '没有——侠名录亲属栏涂改三次：同门、挚友、留白，最后只填得下一个人的名字',
+            history: '建档狂魔，见人先归档：姓名、师承、兵器、忌口、走路先迈哪只脚。他给你建的那一档越写越不像档案：「危险程度：想一直说话。」「附页销毁。」',
+            goal: '把自己那页档写全，且不进架子里',
+            secret: '侠名录记尽天下人，唯独他自己那页空了八年——不是没人写，是他每回提笔又放下：写全了，就被收进架子里了'
+        },
+        personalityBig5: { openness: 80, conscientiousness: 94, extraversion: 44, agreeableness: 66, neuroticism: 40 },
+        mainAttributes: { strength: 40, dexterity: 58, intelligence: 95, willpower: 85, constitution: 50, meridian: 56 },
+        combatSkills: { 内功: 42, 轻功: 48, 绝技: 36, 剑法: 30, 拳掌: 22, 刀法: 18, 长兵: 16, 奇门: 52, 射术: 28 },
+        combat: { level: 34, realm: '筑基', layer: 2, attack: 24, defense: 28, speed: 46 },
+        skills: ['过目归档', '千架在胸', '落笔成档'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 52, stress: 44 },
+        _isFixedDefinition: true
+    },
+
+    // v20.78 第四批奇门扩线：天涯海阁·狄长亭（男主）。与花无缺（正典阁主）并存：长亭是总驿写引人，驿路归他、阁务归阁主；
+    // 半枚驿站铜符与颤笔「建议滞留数日」在 ty 线展开；意象走驿站/路引/马灯，与蓬莱派海螺潮信零接触
+    'sect_leader_天涯海阁': {
+        name: '狄长亭',
+        trueName: '狄长亭',
+        title: '驿路写引人',
+        gender: 'male',
+        age: 26,
+        occupation: '天涯海阁总驿写引人（三十六站路引出自他手，公文腔藏挽留）',
+        location: '天涯海阁',
+        icon: '🏮',
+        appearance: { hair: '风里束得整齐，发梢却总有一缕翘着——赶路赶的', eyes: '温和，看人先看路——他习惯了替你打量前路', clothing: '驿路青灰行装，肩上一只风雨不侵的信匣', features: '右手虎口一层挽缰的茧，写字时那层茧压着笔杆，颤笔就是这么来的' },
+        background: {
+            origin: '第一站被老驿丞捡回的无名孤儿，天涯海阁驿路行客、总驿写引人',
+            family: '没有——十年前告老的老驿丞是师父也是养父，师徒两代家书写成路引',
+            history: '三十六站驿路跑了十年，认路极准、手极稳、夜里听得出蹄声远近。轻声细语礼数周全，可每句都像道别——「前路不利」是想多看你一眼，「天色将晚，早寻宿处」是舍不得你走；学不会挽留，就把挽留全写进公文格式里',
+            goal: '等到一个持着另一半铜符进站的人',
+            secret: '贴身收着半枚驿站铜符——驿制见符如见人，持符者可于任何一站换马换灯换一夜安寝；十年里只有别人持符来求他，从没有人拿着另一半来找他'
+        },
+        personalityBig5: { openness: 72, conscientiousness: 82, extraversion: 40, agreeableness: 82, neuroticism: 54 },
+        mainAttributes: { strength: 44, dexterity: 88, intelligence: 76, willpower: 80, constitution: 72, meridian: 58 },
+        combatSkills: { 内功: 44, 轻功: 66, 绝技: 40, 剑法: 34, 拳掌: 26, 刀法: 22, 长兵: 20, 奇门: 48, 射术: 36 },
+        combat: { level: 34, realm: '筑基', layer: 1, attack: 24, defense: 28, speed: 50 },
+        skills: ['十里辨蹄', '纸上千里', '挑灯五分'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 50, stress: 46 },
+        _isFixedDefinition: true
+    },
+
+    // v20.78 第四批奇门扩线：大旗门·樊惊筹（男主）。与铁中棠（正典门主）并存：惊筹是擎旗人，旗归他、门务归门主；
+    // 三十七道暗针与针码对照在 dq 线展开；缝补意象限军用物件（护腕/行篷/纛旗），无顶针、无僧衣
+    'sect_leader_大旗门': {
+        name: '樊惊筹',
+        trueName: '樊惊筹',
+        title: '大旗门擎旗人',
+        gender: 'male',
+        age: 36,
+        occupation: '大旗门擎旗人（阵前一声令下旗进人进，三百人的步子压在他一根旗杆上）',
+        location: '大旗门',
+        icon: '🏴',
+        appearance: { hair: '铁冠束发，鬓角霜色早生', eyes: '阵前扫一眼就点清人数，灯下穿针一眼就找到线头', clothing: '旧甲外罩半旧战袍，甲缝里偶见一根不属于战场的细线', features: '左手掌心一道旗杆磨出的深沟，右手指尖却有针线磨出的细茧' },
+        background: {
+            origin: '军中缝纛匠之子，十六岁接父亲的旗杆，扛了二十年',
+            family: '娘樊周氏，军中缝纛三十一年、纛旗四百二十七面，临了只教了他一句「旗是护人的，不是命换的」；父亲二十六年前在北商道抱旗淋了一夜雨，那年冬天没回来',
+            history: '大旗门最悍的前锋，不会说整话，只会短促的军中用语：「跟上。」「别掉队。」「……冷不冷。」灯下做针线，手艺是娘教的，心里话全部缝进针脚',
+            goal: '等一个能让他把旗放下、先护住的人——把那三十七个字当着一个愿意拆的人念完',
+            secret: '护腕、行篷、他自己那面新纛的内衬里各缝了三十七道暗针，一道针脚一个字——同一句话他缝了三遍，因为一回也没敢说'
+        },
+        personalityBig5: { openness: 52, conscientiousness: 84, extraversion: 46, agreeableness: 58, neuroticism: 38 },
+        mainAttributes: { strength: 96, dexterity: 60, intelligence: 64, willpower: 92, constitution: 88, meridian: 70 },
+        combatSkills: { 内功: 80, 轻功: 44, 绝技: 76, 剑法: 30, 拳掌: 58, 刀法: 40, 长兵: 92, 奇门: 34, 射术: 46 },
+        combat: { level: 76, realm: '金丹', layer: 6, attack: 86, defense: 82, speed: 56 },
+        skills: ['擎旗不倒', '暗针缝纛', '令出如山'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 50, stress: 48 },
+        _isFixedDefinition: true
+    },
+
+    // v20.78 第四批奇门扩线：铁掌帮·裘霜莺（女主）。与裘千仞（正典帮主）并存：霜莺是其孙女，
+    // 管采石场与湖畔旧窑，不涉帮主之位；素坯泥哨与七窑哑火在 tz 线展开；
+    // 与天龙教檀望舒的口技全面区分——霜莺只会鸟叫不会人声模仿，课题是「用自己的嗓子说话」
+    'sect_leader_铁掌帮': {
+        name: '裘霜莺',
+        trueName: '裘霜莺',
+        title: '凶脸唤雀',
+        gender: 'female',
+        age: 21,
+        occupation: '铁掌帮采石场与湖畔旧窑管事（帮中上下都怵她，雀不怵）',
+        location: '铁掌帮',
+        icon: '🐦',
+        appearance: { hair: '高马尾，发绳是烧窑用的耐火麻线', eyes: '不笑时像寻仇，笑起来小孩会哭——她自己知道，所以很少笑', clothing: '劲装短打，腰后一排小布袋，袋袋装着泥哨', features: '掌心铁掌功的厚茧，指腹却留着捏泥坯的细腻' },
+        background: {
+            origin: '铁掌帮裘氏正支，老帮主裘千仞之孙女',
+            family: '母亲早逝，留下一句「哨是替嘴笨的人烧的」；老爷子疼她却不逼她问帮务',
+            history: '天生凶脸，改以泥哨代言：一长一短＝「你来了」，三短促＝「过来」，两声低回＝「……没事，就是想吹一下」（这句她打死不承认是想你）。管采石场与湖畔旧窑，雾夜航船、码头夜巡全凭她一口哨令',
+            goal: '烧一支「像人声的哨」——其实是要用自己的嗓子说完一句完整的话',
+            secret: '哨架最上层那支无釉素坯是她七岁捏的第一支哨——十一年不进窑：不进窑，就永远差一步'
+        },
+        personalityBig5: { openness: 60, conscientiousness: 74, extraversion: 38, agreeableness: 60, neuroticism: 52 },
+        mainAttributes: { strength: 88, dexterity: 72, intelligence: 60, willpower: 90, constitution: 84, meridian: 62 },
+        combatSkills: { 内功: 66, 轻功: 52, 绝技: 62, 剑法: 20, 拳掌: 90, 刀法: 24, 长兵: 22, 奇门: 44, 射术: 50 },
+        combat: { level: 55, realm: '筑基', layer: 9, attack: 76, defense: 84, speed: 70 },
+        skills: ['铁掌桩功', '分水刺法', '唤雀哨音'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 52, stress: 44 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+
+    // v20.78 第四批奇门扩线：昆仑派·姬云锦（女主）。与何足道（正典名册名）并存：何足道为前代旧名，
+    // 云锦接剑为现任掌门、百年最年轻执剑人；「不舞于生人」古礼与素绸舞袖带在 kl 线展开；
+    // 「谱」全程为剑舞谱（身段谱/步位图），与衡山派松香+半阙谱+胡琴零接触，剑柄素白无穗
+    'sect_leader_昆仑派': {
+        name: '姬云锦',
+        trueName: '姬云锦',
+        title: '剑舞掌门',
+        gender: 'female',
+        age: 24,
+        occupation: '昆仑派掌门（西域玄门百年最年轻执剑人，剑舞祭山二十年无一失仪）',
+        location: '昆仑派',
+        icon: '🎐',
+        appearance: { hair: '舞时散半肩，平时一束素绸——绸是及笄初舞的旧物', eyes: '看人像看步位，你站哪里她一眼就编排进舞里', clothing: '白袖束素绸，舞衣外罩掌门氅，氅角沾着瑶池的冰屑', features: '指节冻得发白也稳，握剑的手从不抖——抖的那回没人看见' },
+        background: {
+            origin: '昆仑山门脚下弃雪夜，被老掌门拾回养在舞台边',
+            family: '师父即上代掌门（已故），无血亲，满门为家',
+            history: '十四岁及笄初舞「迎雪」，接掌昆仑成百年最年轻执剑人。嘴上说不来「喜欢」二字，一说就卡壳、就转去擦剑——但她会跳：为你跳的那一套，名目本身就是话',
+            goal: '让剑舞从死谱变活话——为读得懂舞的人，把谱末页的留白跳成有名目的舞',
+            secret: '昆仑剑舞谱末页留白处藏着她自编三年、查无名目的一套舞——编给一个人，名目留给那个人定'
+        },
+        personalityBig5: { openness: 74, conscientiousness: 80, extraversion: 42, agreeableness: 56, neuroticism: 40 },
+        mainAttributes: { strength: 66, dexterity: 92, intelligence: 78, willpower: 84, constitution: 68, meridian: 84 },
+        combatSkills: { 内功: 76, 轻功: 88, 绝技: 82, 剑法: 92, 拳掌: 28, 刀法: 24, 长兵: 26, 奇门: 40, 射术: 30 },
+        combat: { level: 76, realm: '金丹', layer: 6, attack: 84, defense: 70, speed: 90 },
+        skills: ['迎雪剑舞', '两仪剑势', '天清诀意'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 52, stress: 42 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+
+    // v20.78 第四批奇门扩线：全真教·翀玉衡（女主）。与马钰掌教代行（已织入 qz 线）并存：玉衡是功录房执事，
+    // 只管账不管教务；功业日记与小银算盘在 qz 线展开；与逍遥派闻人酌的酒葫芦+账本零接触——玉衡是功业账，全文无酒字
+    'sect_leader_全真教': {
+        name: '翀玉衡',
+        trueName: '翀玉衡',
+        title: '功业记账',
+        gender: 'female',
+        age: 22,
+        occupation: '全真教功录房执事（掌全教功过册与外账，十一年不差一铢）',
+        location: '全真教',
+        icon: '🧮',
+        appearance: { hair: '道髻簪木钗，钗尾磨得发亮——是算盘珠改的', eyes: '看人像过账，一眼把你今日言行入了册', clothing: '青灰道袍浆洗挺括，腰间悬一具錾云纹的小银算盘', features: '指尖拨珠磨出薄茧，拨到那一栏时指会停半息' },
+        background: {
+            origin: '终南山下账房人家遗孤，七岁入全真观',
+            family: '没有——师父坐化后，功录房的算盘就是她的家',
+            history: '小银算盘被斥俗物，她拿账理当堂讲赢长老。你帮她一次她记一笔：「是日，彼替吾正了拂尘柄。记。」还的时候一本正经：「此债记账，你拿利息来还。」',
+            goal: '找到那个让她那一栏账永远不肯两讫的人',
+            secret: '功业日记末页那一栏只进不出，栏脚批着「此账，存疑」——不是算不平，是不肯平：账一旦两讫，就是你我互不相欠、再无往来'
+        },
+        personalityBig5: { openness: 68, conscientiousness: 96, extraversion: 52, agreeableness: 62, neuroticism: 36 },
+        mainAttributes: { strength: 50, dexterity: 74, intelligence: 88, willpower: 78, constitution: 60, meridian: 80 },
+        combatSkills: { 内功: 82, 轻功: 58, 绝技: 60, 剑法: 52, 拳掌: 30, 刀法: 22, 长兵: 20, 奇门: 64, 射术: 26 },
+        combat: { level: 60, realm: '金丹', layer: 1, attack: 44, defense: 58, speed: 56 },
+        skills: ['珠算通神', '过目成账', '清心守静'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 54, stress: 40 },
+        isFemale: true,
+        _isFixedDefinition: true
+    },
+
+    // v20.79 第五批少林收官：少林寺·竺照禅（女主，比丘尼戒师）。与释玄慈（正典方丈，本表上方旧卡）并存：
+    // 后键覆盖前键（同 v20.74 武当张三丰→阙守拙先例）——方丈是寺中德高长辈，只在法会主位、隔殿佛号、
+    // 朱批「照禅行事，自有分寸」里远景存在；戒律归照禅、寺务归方丈。批注经/念珠/栴檀林在 shao 线展开；
+    // 木鱼/抄经纸（恒山专属）、百衲衣/青布（嵩山专属）、朱笔（阎罗殿专属）零接触，批注用「批笔」
+    'sect_leader_少林寺': {
+        name: '竺照禅',
+        trueName: '竺照禅',
+        title: '铁口栴檀庵主',
+        gender: 'female',
+        age: 46,
+        occupation: '少林寺下院栴檀林庵主、延请戒师（戒律归她，寺务归方丈）',
+        location: '少林寺',
+        icon: '☸️',
+        appearance: { hair: '带发修行，灰布包头一丝不苟', eyes: '看人像批功课——先找错处，再找可救处', clothing: '旧僧袍浆洗得笔挺，袖口磨出毛边', features: '指间一串盘得发亮的念珠，批经时搁在案角' },
+        background: {
+            origin: '嵩山少林寺下院栴檀林',
+            family: '佛门带发修行，师父为上任栴檀林庵主',
+            history: '师父临终一句「没学会心疼」骂出她的毒舌；批经三十年，旁批比原文还利，全寺僧人都怕她把功课批成筛子。骂人先合十念一声「阿弥陀佛」，然后引经据典地骂，骂得人被点醒还要谢她',
+            goal: '把批注经里那一页空白落下去——骂遍天下人，关于你的最锋利一句，三十年落不下去',
+            secret: '她那册批注经里关于你的最锋利一句，三十年落不下去；软话她一辈子没对人讲过，讲出来比骂还生涩'
+        },
+        personalityBig5: { openness: 72, conscientiousness: 92, extraversion: 44, agreeableness: 48, neuroticism: 26 },
+        mainAttributes: { strength: 56, dexterity: 64, intelligence: 85, willpower: 92, constitution: 70, meridian: 78 },
+        combatSkills: { 内功: 82, 轻功: 48, 绝技: 66, 剑法: 30, 拳掌: 60, 刀法: 20, 长兵: 44, 奇门: 36, 射术: 14 },
+        combat: { level: 71, realm: '金丹', layer: 4, attack: 62, defense: 78, speed: 60 },
+        skills: ['狮子吼', '禅心批注', '伏魔戒律'],
+        relationship: { affection: 14, trust: 10, respect: 0, favor: 0 },
+        state: { mood: 56, stress: 34 },
         isFemale: true,
         _isFixedDefinition: true
     }

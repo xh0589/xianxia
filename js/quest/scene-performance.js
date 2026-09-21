@@ -107,23 +107,47 @@ const TIME_ICONS = {
 };
 
 // ============ 打字机效果 ============
+// v21.8 点击跳过：长段演出不用干等逐字——点一下（非按钮处）立刻显全文，callback 照常走；
+// F-39 取消令牌口径不变（新链/关窗都会让旧链失效，跳过也走令牌）
 function typewriterEffect(element, text, speed = 25, callback) {
     let index = 0;
     element.textContent = '';
     element.style.visibility = 'visible';
+    try { element.title = '点击可立即显示全文'; } catch (e) {}
     // F-39：取消令牌——每次新链自增；type 每轮校验令牌一致才写，避免连点"继续"致两条链并发追加乱码
     const token = (element._typeToken = (element._typeToken || 0) + 1);
 
+    function detach() {
+        try { document.removeEventListener('click', onDocClick, true); } catch (e) {}
+    }
+    function finishNow() {
+        element._typeToken = (element._typeToken || 0) + 1;   // 收掉已排程的旧链
+        detach();
+        element.textContent = text;
+        if (callback) callback();
+    }
+    function onDocClick(ev) {
+        if (token !== element._typeToken) { detach(); return; }   // 链已失效：顺手摘掉监听
+        // 点在按钮（继续/选项/关闭）上不抢行为——按钮自己的逻辑照走，令牌机制管并发
+        try {
+            var t = ev && ev.target;
+            if (t && t.closest && t.closest('button')) return;
+        } catch (e) {}
+        finishNow();
+    }
+    try { document.addEventListener('click', onDocClick, true); } catch (e) {}
+
     function type() {
-        if (token !== element._typeToken) return; // 已被新链/关闭取消
+        if (token !== element._typeToken) { detach(); return; } // 已被新链/关闭/跳过取消
         if (index < text.length) {
             element.textContent += text[index];
             index++;
             // 标点符号停顿
             const delay = '，。！？；：、……'.includes(text[index - 1]) ? speed * 4 : speed;
             setTimeout(type, delay);
-        } else if (callback) {
-            callback();
+        } else {
+            detach();
+            if (callback) callback();
         }
     }
     type();

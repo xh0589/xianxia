@@ -505,7 +505,10 @@
             // 列表展示用摘要（完整 state 在同槽）
             mainAttributes: fullState.mainAttributes,
             karma: fullState.karma,
-            order: fullState.order
+            order: fullState.order,
+            // 第一百一十波 · NEW-107：灵根摘要进本体——此前只有手动侧在 app.js 单独打补丁，
+            // 自动档直接拿 buildSaveMeta 建条目，设置页自动档列表灵根恒显「金-% 木-% …」
+            roots: fullState.roots || fullState.spiritualRoots || {}
         };
     }
 
@@ -516,6 +519,16 @@
         clearCharacterStorage({ alsoAccount: false });
         if (global.StateRegistry && typeof global.StateRegistry.resetAll === 'function') {
             try { global.StateRegistry.resetAll(); } catch (e) { console.warn('[GameState] 模块状态重置失败:', e); }
+        }
+        // 第八十二波·SAVE-01b：任务账内存态也随新角色清零（clearCharacterStorage 只清键，
+        // quest-system 的内存 playerQuestProgress 会把上个角色的 activeQuests 再写回去）
+        if (typeof global.resetQuestProgressForNewCharacter === 'function') {
+            try { global.resetQuestProgressForNewCharacter(); } catch (e) { console.warn('[GameState] 任务账重置失败:', e); }
+        }
+        // 第一百一十一波：世界事件/城市残留的内存态也随新局清零——此前只清 localStorage 键，
+        // 旧档的「灵气潮汐×2 修炼」等修正会原样套在新角色身上，第一个 newDay 还把脏账写回键里
+        if (typeof global.resetWorldEventsState === 'function') {
+            try { global.resetWorldEventsState(); } catch (e) { console.warn('[GameState] 世界事件重置失败:', e); }
         }
 
         // 背包
@@ -729,6 +742,8 @@
             global.setCurrentCharData(loadedChar);
         } else {
             global.currentCharData = loadedChar;
+            // 第九十五波·NEW-36：兜底路径也装钱包访问器（背包钱包是唯一权威）
+            if (typeof global.installWalletMirror === 'function') global.installWalletMirror(loadedChar);
             if (typeof global.syncCharAttrsFromMain === 'function') {
                 global.syncCharAttrsFromMain(loadedChar);
             }
@@ -783,6 +798,13 @@
             Object.keys(saveData.equipment).forEach(function (slot) {
                 if (saveData.equipment[slot]) global.currentEquipment[slot] = saveData.equipment[slot];
             });
+            // v20.91 九品制：旧存档装备克隆体上的旧品质串折算到新档
+            if (typeof global.normalizeQuality === 'function') {
+                Object.keys(global.currentEquipment).forEach(function (slot) {
+                    var it = global.currentEquipment[slot];
+                    if (it && it.quality) it.quality = global.normalizeQuality(it.quality);
+                });
+            }
             if (typeof global.updateEquippedStats === 'function') global.updateEquippedStats();
         }
 
@@ -819,7 +841,9 @@
         if (global.currentSkills && global.KnowledgeSystem) {
             Object.keys(global.currentSkills).forEach(function (slot) {
                 var sk = global.currentSkills[slot];
-                if (sk && sk.id && !global.KnowledgeSystem.canEquip(sk.id)) {
+                // 第十五波：门派功法是例外——此刻弟子掌握度账还没恢复，凭结构查表放行（装备当时已验过掌握度）
+                var isSectArt = (typeof global.sectArtAsSkill === 'function' && global.sectArtAsSkill(sk && sk.id));
+                if (sk && sk.id && !isSectArt && !global.KnowledgeSystem.canEquip(sk.id)) {
                     global.currentSkills[slot] = null;
                 }
             });
@@ -957,10 +981,10 @@
 
         // 其余子系统：写回 localStorage 再 init，或 import
         function writeKey(key, val) {
-            if (val == null) {
-                try { localStorage.removeItem(key); } catch (e) {}
-                return;
-            }
+            // 第一百一十波 · NEW-104：槽里缺这格（null/undefined）就跳过——绝不能删键。
+            // 旧版 null 走 removeItem：载入一份老档/别的角色的档，会当场把现行角色的
+            // 声望、地标、每日事件等真数据键从浏览器里删掉（现场 7 份档 6 份带删键效果）。
+            if (val == null) return;
             try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
         }
 
@@ -970,6 +994,10 @@
         writeKey('xianxia_travel_data', saveData.travelData);
         writeKey('xianxia_world_events', saveData.worldEvents);
         writeKey('xianxia_city_temp', saveData.cityTemp);
+        // 第一百零九波：落盘之后立刻回灌内存——此前世界事件/城市残留只写 localStorage 不重载，
+        // 会话内读档后内存里还是读档前的旧账（旧兽潮事件照刷、面板与真源脱钩）
+        try { if (typeof window.loadWorldEvents === 'function') window.loadWorldEvents(); } catch (eWE) {}
+        try { if (typeof window.loadCityTempModifiers === 'function') window.loadCityTempModifiers(); } catch (eCT) {}
         writeKey('xianxia_factions', saveData.factions);
         writeKey('xianxia_landmarks', saveData.landmarks);
         writeKey('xianxia_enhancement_pity', saveData.enhancementPity);

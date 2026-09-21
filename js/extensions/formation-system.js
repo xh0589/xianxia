@@ -79,7 +79,7 @@
             var s = FORMATION_STONES[i];
             window.itemById[s.id] = {
                 id: s.id, name: s.name, type: 'consumable', subtype: 'formation_stone',
-                category: 'consumable', quality: s.tier === 3 ? 'EPIC' : (s.tier === 2 ? 'RARE' : 'UNCOMMON'),
+                category: 'consumable', quality: s.tier === 3 ? 'PIN5' : (s.tier === 2 ? 'PIN7' : 'PIN8'),
                 level: s.tier * 3, price: s.tier * 50, stackable: true, maxStack: 99,
                 desc: s.desc, icon: '🔯', implemented: true, _stoneType: s.type
             };
@@ -169,11 +169,13 @@
         // 材料
         var m = checkMaterials(f.materials);
         if (!m.ok) return { ok: false, reason: 'materials-missing', missing: m.missing };
-        // 灵石（首期 1 回合）
+        // 灵石（首期 1 回合）——第二十三波：账房对真钱包，首期阵费真金出库（两讫）
+        syncStonesFromWallet();
         if (_state.spiritStones < f.spiritStonesPerTurn) return { ok: false, reason: 'spiritStones-low', need: f.spiritStonesPerTurn, have: _state.spiritStones };
         // 消耗
         if (!consumeMaterials(f.materials)) return { ok: false, reason: 'consume-failed' };
         _state.spiritStones -= f.spiritStonesPerTurn;
+        payRealStones(f.spiritStonesPerTurn);
         var today = (window.WorldCalendar && window.WorldCalendar.day) || 0;
         slot.formationId = formationId;
         slot.deployedDay = today;
@@ -275,6 +277,91 @@
         } catch (e) {}
     }
 
+    // ============== 7.5 v23.0 战阵参战（此前阵法布了就躺在账上，战斗系统从不读它） ==============
+    // 随身战阵的战斗加成（buildPlayerBattleEntity 读取 → battle.js 三处乘区消费）
+    function getCombatBattleBonuses() {
+        var f = getActiveFormation('combat');
+        return (f && f.buff) ? f.buff : null;
+    }
+    // 战后磨损：每场仗耐久-1，磨尽阵散（closeBattle 调用）
+    function wearCombatFormation() {
+        var slot = getStateSlot('combat');
+        if (!slot || !slot.formationId) return null;
+        var fid = slot.formationId;
+        slot.durability -= 1;
+        if (slot.durability <= 0) {
+            slot.formationId = null;
+            slot.durability = 0;
+            if (window.EventBus) window.EventBus.emit('formation:collapse', { formationId: fid, type: 'combat', reason: 'durability-out' });
+            var fname = (getFormation(fid) || {}).name || '战阵';
+            if (window.showMessage) window.showMessage('🌀 连番恶战，阵旗灵光耗尽——「' + fname + '」散了。（回洞府深作可重新布阵）', 'warning');
+            return { collapsed: fid };
+        }
+        return { durability: slot.durability };
+    }
+
+    // ============== 7.6 第二十三波 · 宗门阵真管用 + 维持费真扣（此前是死账：布了就永远白挂着） ==============
+    // 护山阵在守山战里真折敌攻势、迷踪阵真压死仇寻山的骰子；阵费按日从真钱包扣，扣不起阵就散。
+    function realStones() {
+        try { if (window.DataManager && typeof window.DataManager.getSpiritStones === 'function') return Number(window.DataManager.getSpiritStones()) || 0; } catch (e) {}
+        try { return Number(((window.inventory || {}).currency || {}).spiritStones) || 0; } catch (e2) { return 0; }
+    }
+    // 有钱包才对账（真游戏走这里）；沙箱/旧档没有钱包源时缓存照旧，不拿 0 把人账清了
+    function hasWallet() {
+        try { if (window.DataManager && typeof window.DataManager.getSpiritStones === 'function') return true; } catch (e) {}
+        try { if (window.inventory && window.inventory.currency) return true; } catch (e2) {}
+        return false;
+    }
+    function payRealStones(n) {
+        try { if (window.DataManager && typeof window.DataManager.deductSpiritStones === 'function') return window.DataManager.deductSpiritStones(n); } catch (e) {}
+        try {
+            var c = (window.inventory || {}).currency;
+            if (c && (Number(c.spiritStones) || 0) >= n) { c.spiritStones = (Number(c.spiritStones) || 0) - n; return true; }
+        } catch (e2) {}
+        return false;
+    }
+    function syncStonesFromWallet() { if (hasWallet()) _state.spiritStones = realStones(); }
+    // 在位的宗门阵（战事线读它）：有阵、旗未磨尽，才算数
+    function getSectFormationActive() {
+        var slot = _state.sect;
+        if (!slot || !slot.formationId || (Number(slot.durability) || 0) <= 0) return null;
+        return getFormation(slot.formationId);
+    }
+    // 宗门阵磨损：护山阵每经一战阵旗受考验（耐久-2），磨尽阵散
+    function wearSectFormation(n) {
+        var slot = _state.sect;
+        if (!slot || !slot.formationId) return null;
+        var fid = slot.formationId;
+        slot.durability -= (n || 2);
+        if (slot.durability <= 0) {
+            slot.formationId = null;
+            slot.durability = 0;
+            if (window.EventBus) window.EventBus.emit('formation:collapse', { formationId: fid, type: 'sect', reason: 'war-wear' });
+            var fname = (getFormation(fid) || {}).name || '宗门阵';
+            if (window.showMessage) window.showMessage('🌀 恶战磨尽了阵旗灵光——「' + fname + '」散了。（回洞府深作可重新布阵）', 'warning');
+            return { collapsed: fid };
+        }
+        return { durability: slot.durability };
+    }
+    // 日结维持：账房先对真钱包，再按日扣阵费、老阵旗——扣不起的当场散阵（有名有姓报出来）
+    function dailyUpkeep() {
+        var before = {};
+        ['combat', 'field', 'sect'].forEach(function (t) { var s = getStateSlot(t); before[t] = (s && s.formationId) || null; });
+        syncStonesFromWallet();
+        var r = tickTurn();
+        if (r && r.consumed > 0) payRealStones(r.consumed);
+        if (r && r.collapsed && r.collapsed.length) {
+            var names = r.collapsed.map(function (fid) { return (getFormation(fid) || {}).name || fid; });
+            if (window.showMessage) window.showMessage('🌀 阵费断了/阵旗老了——「' + names.join('」「') + '」散了。（回洞府深作可重新布阵）', 'warning');
+        }
+        return r;
+    }
+    try {
+        var _upkeepHook = function () { try { dailyUpkeep(); } catch (e) {} };
+        if (window.EventBus && window.EventBus.on) window.EventBus.on('newDay', _upkeepHook);
+        else if (window.timeSystem && typeof window.timeSystem.onNewDaySubscribe === 'function') window.timeSystem.onNewDaySubscribe(_upkeepHook);
+    } catch (e) {}
+
     // ============== 8. 导出 ==============
     window.FormationSystem = {
         FORMATION_STONES: FORMATION_STONES,
@@ -285,11 +372,18 @@
         getActiveFormation: getActiveFormation,
         getBuff: getBuff,
         hasBuff: hasBuff,
+        getCombatBattleBonuses: getCombatBattleBonuses,
+        wearCombatFormation: wearCombatFormation,
+        // 第二十三波 · 宗门阵真管用
+        getSectFormationActive: getSectFormationActive,
+        wearSectFormation: wearSectFormation,
+        dailyUpkeep: dailyUpkeep,
+        syncStonesFromWallet: syncStonesFromWallet,
         getState: function () { return _state; },
         getFormation: getFormation,
         listFormations: function (type) { return type ? FORMATIONS.filter(function (f) { return f.type === type; }) : FORMATIONS.slice(); },
         setSpiritStones: function (n) { _state.spiritStones = n; }
     };
     if (window.XianXia) window.XianXia.FormationSystem = window.FormationSystem;
-    try { console.log('[FormationSystem] initialized v1 (' + FORMATION_STONES.length + ' stones, ' + FORMATIONS.length + ' formations)'); } catch (e) {}
+    try { console.log('[FormationSystem] initialized v1 (' + FORMATION_STONES.length + ' stones, ' + FORMATIONS.length + ' formations；第二十三波添宗门阵参战与日结维持真扣)'); } catch (e) {}
 })();

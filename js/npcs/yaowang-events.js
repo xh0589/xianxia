@@ -210,11 +210,93 @@ var SU_MAIN_EVENTS = {
             return { affection: aff, msg: msg };
         }
     },
+    'su_event_009': {
+        id: 'su_event_009', npcId: SU_NPC_ID, title: '尝毒之诺', icon: '🔗',
+        desc: '他要亲尝「同归」的最后一味，向你讨一个诺。',
+        minAffection: 68, trigger: { random: 0.3 }, cooldown: 0, flag: 'su_e009_done',
+        autoTrigger: { location: '药王谷', random: 0.4 },
+        scenes: [
+            { speaker: 'narrator', text: '药庐深夜。「同归」方改到第十八遍，只差最后一味——芩木把一盏暗红的药液搁在灯下，指腹在盏沿摩挲。', type: 'description' },
+            { speaker: 'npc', text: '「方子最后一味，得亲尝。尝出药性，才敢写进方里。」他温润地笑，「我师父当年也是这么尝的——他没尝完。」' },
+            { speaker: 'npc', text: '「我尝毒，可能一夜，可能三夜。」他看你，浅褐眼底灯花一映，「跟你讨个诺：我要是醒不过来，你把方子烧了。别让药王谷再走我师父的老路。」' },
+            { speaker: 'player_select', text: '你如何回应？', options: [
+                { text: '「我应你。但你得醒——方我烧，人我拽。」', effect: 'promise', affection: 14 },
+                { text: '「你尝毒，我守着你。」', effect: 'guard', affection: 9 },
+                { text: '「……这种话，不该对人说吗？」', effect: 'press', affection: 5 }
+            ]}
+        ],
+        effects: function(npc, choice) {
+            var aff = 0, msg = '';
+            switch (choice) {
+                case 'promise': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 6; msg = '你守到后半夜先撑不住歪了头。醒来时药盏空了，方子上多了一行小字的药性——他自己守完了全程。（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 14; msg = ('他怔了怔，忽然笑了，笑第一次到眼底：「……行。」他把方子推到你手边压着，「那你替我看火。我尝毒，你看我。」灯下那张方子，纸是温的。') + '（精力-15）'; break; }
+                case 'guard': aff = 9; msg = '他摇头：「烧方不行，那是我师父的。」但他把那盏药液分了一半到另一盏，「那你应我这个——我尝毒，你在。有人在，我少用三分解药。」'; break;
+                case 'press': aff = 5; msg = '他别开脸：「……不该。」半晌把药盏又摆正，「可我跟你说了。」他低头，「我师父走的时候，身边没人。我不想那样。」'; break;
+            }
+            return { affection: aff, msg: msg };
+        }
+    },
+    'su_event_010': {
+        id: 'su_event_010', npcId: SU_NPC_ID, title: '李时珍的考校', icon: '🐉',
+        desc: '李时珍拿绝症医案当面考你，芩木替你担。',
+        minAffection: 72, trigger: { random: 0.3 }, cooldown: 0, flag: 'su_e010_done',
+        autoTrigger: { location: '药王谷', random: 0.4 },
+        scenes: [
+            { speaker: 'narrator', text: '议事药堂。李时珍把一桩死症医案拍在案上：三毒同侵，谷中长老束手。「继承人身边这位，懂医？」他眼皮都不抬，「治。」', type: 'description' },
+            { speaker: 'narrator', text: '你刚翻开医案，一只温润的手按在案页上。芩木站到你身前半步。', type: 'description' },
+            { speaker: 'npc', text: '「李长老，此人，我担。」他笑还温润，眼底却没笑，「这案子若有差池，我署名。方我开，毒我尝。」' },
+            { speaker: 'npc', text: '李时珍盯了他半晌，又看你：「哦？你担？」他把医案推过来，「那老夫看你担不担得起。」' },
+            { speaker: 'player_select', text: '你如何回应？', options: [
+                { text: '对李时珍一礼：「绝不折谷主继承人的名。」', effect: 'respect', affection: 8 },
+                { text: '低声对芩木：「别拿你的名声担我。」', effect: 'stand', affection: 7 },
+                { text: '什么也不说，站到他身侧并肩看案', effect: 'side', affection: 11 }
+            ]}
+        ],
+        effects: function(npc, choice) {
+            var aff = 0, msg = '';
+            switch (choice) {
+                case 'respect': aff = 8; msg = '李时珍把医案翻回去，哼了一声：「……知礼的，未必是庸医。」散堂后芩木低声：「老头子最厌狂徒。你这一礼，比我十张方子管用。」'; break;
+                case 'stand': aff = 7; msg = '他侧头看你，浅褐眼底暖了一瞬：「……我的名声，本来就不值钱。」但他没从你身前半步挪开。'; break;
+                case 'side': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 4; msg = '论案论到后半夜，你靠着药柜先睡着了。醒来时案子定了，医案上并排署着两个名字。（精力不足，那一场你先撑不住了）'; break; }
+                    aff = 11; msg = ('他没让你退。两个人把那桩死症从午时论到亥时——散案时李时珍丢下一句：「方尚可。人尚可。」芩木这回的笑，到了眼底。') + '（精力-15）'; break; }
+            }
+            return { affection: aff, msg: msg };
+        }
+    },
+    'su_event_011': {
+        id: 'su_event_011', npcId: SU_NPC_ID, title: '毒反噬', icon: '☠️',
+        desc: '尝毒第三夜，毒攻了心。',
+        minAffection: 78, trigger: { random: 0.3 }, cooldown: 0, flag: 'su_e011_done',
+        autoTrigger: { location: '药王谷', random: 0.4 },
+        scenes: [
+            { speaker: 'narrator', text: '尝毒第三夜，药庐的灯忽然灭了。你冲进去——芩木倒在药柜前，唇色青黑，却还维持着那个温润的笑。', type: 'description' },
+            { speaker: 'npc', text: '「……没事。」他声音细得像线，「毒攻心。挺过去，方就成了；挺不过——」他没说下去。' },
+            { speaker: 'narrator', text: '他的手在袖里抖，另一只手却把那张「同归」方死死压在身下，像怕它被风吹走。', type: 'description' },
+            { speaker: 'player_select', text: '你必须立刻做点什么。', options: [
+                { text: '抱起他，以自身真气连夜替他压毒', effect: 'hold', affection: 14 },
+                { text: '喊他：「芩木！医者不带情绪——现在别笑，给我咬牙挺住！」', effect: 'shout', affection: 10 },
+                { text: '灌下半成品的解药，转身守炉把剩下三味熬完', effect: 'drug', affection: 11 }
+            ]}
+        ],
+        effects: function(npc, choice) {
+            var aff = 0, msg = '';
+            switch (choice) {
+                case 'hold': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 20) : { ok: true };
+                    if (!_py.ok) { aff = 6; msg = '丑时你的真气先竭了，后半夜是他反过来把你拽回榻边。毒压下去一半靠药，一半靠人。（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 14; msg = ('你把他抱进怀里，真气一缕一缕渡进他心脉。毒火与你的气缠斗一夜——天亮时他唇色终于回暖，睁眼第一件事是抬手碰了碰你的脸：「……你熬了一夜。」后来那张「同归」方的最后一味药性旁，多了四个小字：有人守夜。') + '（精力-20）'; break; }
+                case 'shout': aff = 10; msg = '他一怔，笑没了——随即咬住牙。你第一次见芩木不笑、不温润、狼狈地硬挺。毒过去时他满头汗：「……喊得好。我师父走的时候，没人这么喊他。」'; break;
+                case 'drug': aff = 11; msg = '你灌下解药，转身守炉，把剩下三味连夜熬完。天明药成，他已能坐起。他接过药碗，指尖在碗壁停了一下：「……温的。」他看你，「你连我喝药要温的都记得。」'; break;
+            }
+            return { affection: aff, msg: msg };
+        }
+    },
     'su_event_013': {
         id: 'su_event_013', npcId: SU_NPC_ID, title: '终章·一张为你开的方', icon: '💍',
         desc: '他把那张改了十七遍的方，递给你。',
         minAffection: 85, trigger: { random: 1.0 }, cooldown: 0, flag: 'su_e013_done',
-        endingMap: { '医毒同道': 'su_ending_医毒同道', '守药': 'su_ending_守药', '方友': 'su_ending_方友', '错过': 'su_ending_错过' },
+        endingMap: { '医毒同道': 'su_ending_医毒同道', '守药': 'su_ending_守药', '方友': 'su_ending_方友', '茶客': 'su_ending_茶客', '焚方': 'su_ending_焚方', '错过': 'su_ending_错过' },
         scenes: [
             { speaker: 'narrator', text: '药庐。芩木把一张方子摊在你面前——发黄的那张，最后「无效」二字，被他改成「有效」。', type: 'description' },
             { speaker: 'npc', text: '「改到第十八遍了。」他温润地笑，到眼底，「我师父没改成的方，我改成了——因为等的人，来了。」' },
@@ -223,19 +305,22 @@ var SU_MAIN_EVENTS = {
                 { text: '「要。我带你和这张方下山——医毒济世，哪里有病就去哪里。」', effect: 'lover_travel', affection: 30 },
                 { text: '「要。但哪儿也不去。我留在药王谷，陪你守每一炉药。」', effect: 'lover_stay', affection: 28 },
                 { text: '「方我接。人就算了——我做你药理的对手，年年药王谷论方。」', effect: 'friend', affection: 20 },
+                { text: '「方我接。药庐给我留个茶位——年年尝新方我来试药，不谈风月，只谈药性。」', effect: 'friend_stay', affection: 18 },
                 { text: '「我都不要。我只是个路过的病人。」', effect: 'none', affection: 0 }
             ]}
         ],
         effects: function(npc, choice) {
             // v20.25 门槛 5→3：三度伤透即寒心（旧 5 门槛对本线数学不可达，坏结局形同虚设）
+            // v20.71 辜负独立成结局「焚方」：伤透的心与单纯的错过分开记账
             var negCount = (window._negativeChoiceCount && window._negativeChoiceCount[SU_NPC_ID]) || 0;
             if (negCount >= 3 && (choice === 'lover_travel' || choice === 'lover_stay')) {
-                return { affection: 0, msg: '他看着你，温润的笑没变，但眼底什么都没了：「……改了十八遍，等的是这么一句。」他把方子收回，那「有效」二字被他亲手划掉。「你走吧。这方，我留着自己看。」', ending: '错过' };
+                return { affection: 0, msg: '他看着你，温润的笑没变，但眼底什么都没了：「……改了十八遍，等的是这么一句。」他把方子凑近药炉的火——纸卷起来，「有效」二字先烧没了。「你走吧。这方，我焚了。」', ending: '焚方' };
             }
             switch (choice) {
                 case 'lover_travel': return { affection: 30, msg: '他怔了半晌，温润地笑出声，眼底全亮：「……好。下山。我把药圃托付给师兄了。」他把那张方子折好，塞进你袖里，「师父没改成的，我替他改成了——替他，也替我。」', ending: '医毒同道' };
                 case 'lover_stay': return { affection: 28, msg: '他点头，把方子和药篓一起拢进你怀里：「……行。药王谷的炉，往后有两盏火。」他声音温润，「你陪我守——医和毒，我都不必一个人分。」', ending: '守药' };
                 case 'friend': return { affection: 20, msg: '他笑了一下，虎牙没有，温润到底：「论方对手？行。」他把方子塞你手里，「那你接得住我一炉新方再说。」', ending: '方友' };
+                case 'friend_stay': return { affection: 18, msg: '「茶位？」他温润地笑了，「行。茶我温着，方你看着。」他把方子推过来，「往后每改一遍，你头一个看——试药的活，也归你。」', ending: '茶客' };
                 case 'none': return { affection: 0, msg: '他沉默了很久，把方子收回袖里。「……也好。」他声音恢复温润，「药庐的门，我照常落锁。路过的病人，药王谷不缺。」', ending: '错过' };
             }
             return { affection: 0, msg: '' };
@@ -273,6 +358,28 @@ var SU_ENDINGS = {
             { speaker: 'narrator', text: '有人问你们是什么关系。他答「对手」，{playerTa}答「对手」。说完两人对视，都先笑了——温润到底，眼底也到底。', type: 'description' }
         ],
         finalText: '——— 结局·方友（挚友·同行）———'
+    },
+    'su_ending_茶客': {
+        id: 'su_ending_茶客', npcId: SU_NPC_ID, title: '结局·茶客', icon: '🍵',
+        route: '茶客',
+        scenes: [
+            { speaker: 'narrator', text: '{playerTa}成了药庐的常客。案头那只杯子，茶永远是温的——温的，是芩木的规矩。', type: 'description' },
+            { speaker: 'narrator', text: '每改一遍方，{playerTa}头一个看；每出一炉新药，{playerTa}头一个试。两个人不谈风月，只谈药性。', type: 'description' },
+            { speaker: 'npc', text: '「这一遍改的是君药。」他把方子推过来，指尖点了点，「……你试出来是什么，我写什么。」' },
+            { speaker: 'narrator', text: '李时珍偶尔路过药庐，看见一个试药、一个记方，嘀咕一句「毒草圃倒旺了」，走了。但走时步子慢了些。', type: 'description' }
+        ],
+        finalText: '——— 结局·茶客（挚友·归隐）———'
+    },
+    'su_ending_焚方': {
+        id: 'su_ending_焚方', npcId: SU_NPC_ID, title: '结局·焚方', icon: '🔥',
+        route: '焚方',
+        scenes: [
+            { speaker: 'narrator', text: '那张改了十八遍的方，被他亲手凑到药炉火上。「有效」二字先卷了边，然后是他的十七遍心血，最后是师父那一笔。', type: 'description' },
+            { speaker: 'narrator', text: '第二日，药庐换了新锁。毒草圃的篱笆加高了一尺，那片半夏，再没让任何人看过。', type: 'description' },
+            { speaker: 'narrator', text: '药王谷谷主医术愈发精深，温润愈发周全——谷里人说，谷主的笑从没出过错。', type: 'description' },
+            { speaker: 'narrator', text: '只有李时珍知道，那年继承人改方到天明，改到第十八遍。焚方那夜，药庐的灯亮了一整夜——第二天，谷主的茶，再没温给过谁。', type: 'description' }
+        ],
+        finalText: '——— 结局·焚方（辜负）———'
     },
     'su_ending_错过': {
         id: 'su_ending_错过', npcId: SU_NPC_ID, title: '结局·错过', icon: '🏔️', route: '错过',
@@ -349,9 +456,11 @@ if (typeof registerEndingCallback === 'function') {
         if (endingName === '医毒同道' || endingName === '守药') {
             if (npc && typeof npc.setFlag === 'function') npc.setFlag('dao_companion');
             if (window.showMessage) window.showMessage('🌿 你与芩木结为道侣！医毒感悟大幅提升', 'success');
-        } else if (endingName === '方友') {
+        } else if (endingName === '方友' || endingName === '茶客') {
             if (npc && npc.relationship) npc.relationship.trust = Math.min(100, (npc.relationship.trust || 0) + 30);
             if (window.showMessage) window.showMessage('🌿 你与芩木成了彼此最信得过的论方搭档', 'success');
+        } else if (endingName === '焚方') {
+            if (window.showMessage) window.showMessage('🔥 芩木焚了那张改到第十八遍的方。有些温润，烧一次就凉透了', 'error');
         }
     });
 }

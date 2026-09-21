@@ -55,7 +55,8 @@
         if (!cd) { notify('请先创建角色', 'warning'); return false; }
         var c = cfg(), day = currentDay();
         if (cd._arenaDay !== day) { cd._arenaDay = day; cd._arenaDailyCount = 0; }
-        if ((Number(cd._arenaDailyCount) || 0) >= c.dailyLimit) { notify('今日竞技次数已达上限（' + c.dailyLimit + '次）', 'warning'); return false; }
+        // v23.3 竞技场的日限是「比试牌发完」的台规——缘由说在管事嘴里，不报裸次数（设计宪法）
+        if ((Number(cd._arenaDailyCount) || 0) >= c.dailyLimit) { notify('今日的比试牌已经发完了——台上几个好手都打得脱了力。管事拱手：「明日请早，头一炷香的签最抢手。」', 'info'); return false; }
         var energy = cd.energy != null ? Number(cd.energy) || 0 : 100;
         if (energy < c.energyCost) { notify('精力不足，无法竞技', 'warning'); return false; }
         cd.energy = energy - c.energyCost;
@@ -63,7 +64,10 @@
         if (global.timeSystem && typeof global.timeSystem.advanceTime === 'function') global.timeSystem.advanceTime(c.timeMinutes, '竞技场切磋');
         else if (typeof global.advanceTime === 'function') global.advanceTime(c.timeMinutes, '竞技场切磋');
 
-        var enemyLevel = (Number(cd.layer) || 1) + Math.floor(Math.random() * 3);
+        // v21.6：对手等级接回境界刻度（charData.level 恒为 1 不可信）
+        var _arenaBase = (typeof global.realmScaledEnemyLevel === 'function')
+            ? global.realmScaledEnemyLevel(cd) : (Number(cd.layer) || 1);
+        var enemyLevel = _arenaBase + Math.floor(Math.random() * 3);
         var enemy = typeof global.generateRandomEnemy === 'function' ? global.generateRandomEnemy(enemyLevel, 'enemy') : null;
         if (!enemy) return arenaFallbackFight();
         enemy.name = '竞技场对手·' + enemy.name;

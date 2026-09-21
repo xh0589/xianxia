@@ -253,7 +253,7 @@
         var ds = window.discipleState;
         var internal = _internal(sectName);
         var ownSect = ds && ds.isInSect && ds.sectId === sectName;
-        if (gains.contribution && ownSect) { ds.contribution = (ds.contribution || 0) + gains.contribution; msgs.push('贡献+' + gains.contribution); }
+        if (gains.contribution && ownSect) { ds.contribution = (ds.contribution || 0) + gains.contribution; try { window.sectLedgerNote && window.sectLedgerNote(gains.contribution, '门派危机·善后'); } catch (e) {} msgs.push('贡献+' + gains.contribution); }
         if (gains.points && ownSect) { ds.points = (ds.points || 0) + gains.points; msgs.push('积分+' + gains.points); }
         if (gains.morale && internal) { internal.morale = Math.max(0, Math.min(100, (internal.morale || 50) + gains.morale)); msgs.push('士气' + (gains.morale > 0 ? '+' : '') + gains.morale); }
         if (gains.resources && internal) { internal.resources = Math.max(0, (internal.resources || 0) + gains.resources); msgs.push('库存' + (gains.resources > 0 ? '+' : '') + gains.resources); }

@@ -6,10 +6,14 @@
 (function () {
 
 var AUTO_KEY = 'xianxia_auto_saves';
+var OFF_KEY = 'xianxia_autosave_off';   // v20.87 设置页开关的持久化键
 var INTERVAL_DAYS = 7;   // 每 7 天自动存一次
 var MAX_SLOTS = 5;        // 保留最近 5 个自动档
 
 var _lastAutoDay = 0;     // 上次按天自动存的绝对天数
+var _quotaWarned = false; // v20.87 存储写满只警告一次
+var _enabled = true;      // v20.87 定期自动存档开关（突破/飞升保底档不受此开关影响）
+try { _enabled = localStorage.getItem(OFF_KEY) !== '1'; } catch (e) {}
 
 function _currentDay() {
     try {
@@ -29,7 +33,24 @@ function _loadSlots() {
 }
 
 function _saveSlots(slots) {
-    try { localStorage.setItem(AUTO_KEY, JSON.stringify(slots)); } catch (e) {}
+    try {
+        localStorage.setItem(AUTO_KEY, JSON.stringify(slots));
+    } catch (e) {
+        // v20.87 自动档写失败不再静默——玩家以为存上了实际丢了是最坏情况
+        if (!_quotaWarned && window.showMessage) {
+            _quotaWarned = true;
+            window.showMessage('⚠️ 自动存档写入失败：浏览器存储空间可能已满，建议删掉旧存档', 'error');
+        }
+    }
+}
+
+// v20.87 设置页开关：只管「每 7 游戏日」的定期档；突破/飞升/转世的保底档始终执行
+function toggleAutoSave(on) {
+    _enabled = !!on;
+    try { localStorage.setItem(OFF_KEY, _enabled ? '0' : '1'); } catch (e) {}
+    if (window.showMessage) {
+        window.showMessage(_enabled ? '已开启定期自动存档（每 7 游戏日）' : '已关闭定期自动存档（突破/飞升时仍会保底存档）', 'info');
+    }
 }
 
 // 触发自动存档：trigger = 'day' | 'breakthrough' | 'ascension' | 'reincarnation'
@@ -80,6 +101,7 @@ function doAutoSave(trigger) {
 // 每日检查：逢 INTERVAL_DAYS 倍数的天数触发
 function tickAutoSaveDay() {
     try {
+        if (!_enabled) return;                       // v20.87 设置页关了定期档就不存
         var day = _currentDay();
         if (day <= 0) return;
         if (day === _lastAutoDay) return;          // 同一天内不重复
@@ -145,5 +167,12 @@ window.doAutoSave = doAutoSave;
 window.getAutoSaveSlots = getAutoSaveSlots;
 window.refreshAutoSaveSlots = refreshAutoSaveSlots;
 window.loadAutoSaveSlot = loadAutoSaveSlot;
+window.toggleAutoSave = toggleAutoSave;
+
+// v20.87 设置页复选框回显真实开关状态（此前那个「每5分钟」勾选框是死的，没有任何代码读它）
+try {
+    var _cb = document.getElementById('auto-save');
+    if (_cb) _cb.checked = _enabled;
+} catch (e) {}
 
 })();

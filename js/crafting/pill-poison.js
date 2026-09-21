@@ -31,6 +31,13 @@ function addPillPoison(itemId, count) {
     if (!cd) return;
     var tox = getPillToxicity(itemId);
     var add = tox * (count || 1);
+    // 第十二波 · 百工秘艺第二面：知药者丹毒轻——丹道/毒经掌握度折成丹毒减免（至多三成）
+    try {
+        if (typeof window.sectSignaturePoisonEase === 'function') {
+            var ease = window.sectSignaturePoisonEase() || 0;
+            if (ease > 0) add = Math.max(0, add * (1 - ease));
+        }
+    } catch (e) {}
     var before = cd.pillPoison || 0;
     cd.pillPoison = Math.max(0, Math.min(100, before + add));
     // v20.41 分档警示：50 毒滞、80 毒入经脉——恶化时重报，好转后清旗（再恶化再报）

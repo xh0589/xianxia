@@ -100,7 +100,7 @@ function allInts(roots) {
 
 // ============ A: 物品注册 ============
 var tpl = mockWindow.itemById['pill_root_refine'];
-assert(!!tpl && tpl.subtype === 'pill' && tpl.effect && tpl.effect.root_refine === 6 && tpl.quality === 'LEGENDARY',
+assert(!!tpl && tpl.subtype === 'pill' && tpl.effect && tpl.effect.root_refine === 6 && tpl.quality === 'PIN3',
     'A1 重塑灵根丹模板入物品库（丹子类=自动累丹毒，主效=挪饼 +6）');
 assert(mockWindow.allItems.indexOf(tpl) >= 0 && mockWindow.consumables.indexOf(tpl) >= 0,
     'A2 全物品表与消耗品表均已收录');

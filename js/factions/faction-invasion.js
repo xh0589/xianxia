@@ -24,7 +24,10 @@ function checkEnemyInvasion() {
                     `⚠️ ${f.name}的势力成员发现了你的行踪，向你发起攻击！`;
                 if (window.showMessage) window.showMessage(msg, 'warning');
                 if (typeof window.openBattleWithEntity === 'function') {
-                    var level = window.currentCharData.level || 10;
+                    // v21.6：刺客等级接回境界刻度（level 字段恒为 1 不可信）
+                    var level = typeof window.realmScaledEnemyLevel === 'function'
+                        ? window.realmScaledEnemyLevel(window.currentCharData)
+                        : (Number(window.currentCharData.level) || 10);
                     window.openBattleWithEntity({ type: 'enemy', name: f.name + '刺客', level: level + 5 });
                 }
                 return;

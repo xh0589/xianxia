@@ -85,7 +85,10 @@ const scenarioEngine = {
                     qi: '真气不足', energy: '精力不足', health: '生命不足',
                     transaction_unavailable: '经济事务模块未加载',
                     no_character: '角色状态未初始化',
-                    missing_item: '行囊里没有要交割的物件'
+                    missing_item: '行囊里没有要交割的物件',
+                    peddler: '商行那边没成交',
+                    facility: '设施那边行不通',
+                    facility_unavailable: '设施系统未加载'
                 };
                 return { error: '结算失败：' + (reasonMap[applied && applied.reason] || '资源或背包状态异常') };
             }
@@ -174,6 +177,11 @@ const scenarioEngine = {
             var s = (inv.currency?.spiritStones) || 0;
             if (s < req.stones) return { ok: false, msg: '需要' + req.stones + '灵石' };
         }
+        // 第六十六波：req.copper——铜钱注单的前置门（赌盘押注要先验本金，杜绝"赢了净入账、输了才扣本"的空手套）
+        if (req.copper) {
+            var cp = (inv.currency && typeof inv.currency.copper === 'number') ? inv.currency.copper : ((p && typeof p.copper === 'number') ? p.copper : 0);
+            if (cp < req.copper) return { ok: false, msg: '铜钱不足' };
+        }
         if (req.qi) {
             var q = p.qi || 0;
             if (q < req.qi) return { ok: false, msg: '真气不足' };
@@ -181,6 +189,16 @@ const scenarioEngine = {
         if (req.energy) {
             var e = p.energy || 0;
             if (e < req.energy) return { ok: false, msg: '精力不足' };
+        }
+        // v21.3：req.health——淬体类险事的门槛（气血不够，选项直接不亮，而不是点了才报结算失败）
+        if (req.health) {
+            var h = p.health || 0;
+            if (h < req.health) return { ok: false, msg: '气血不足' };
+        }
+        // v20.86：req.contribution——门派设施剧本的前置门（贡献不够，选项直接不亮）
+        if (req.contribution) {
+            var c = (window.discipleState || {}).contribution || 0;
+            if (c < req.contribution) return { ok: false, msg: '需' + req.contribution + '门派贡献' };
         }
         // v20.8：req.items = { itemId, count }——当铺/抵押等"交货换钱"选项的前置门（与 removeByTemplate 同一套数法）
         if (req.items && req.items.itemId) {
@@ -217,6 +235,12 @@ const scenarioEngine = {
                 var b = {};
                 for (var bk in v) b[bk] = (typeof v[bk] === 'function') ? v[bk]() : v[bk];
                 out.bank = b;
+            }
+            // v20.90：lifeSkill = {name, exp} 内层也支持现算函数（练习长进随状态浮动）
+            // v20.94：也收数组（一个动作长多门），逐项现算
+            else if (k === 'lifeSkill' && v && typeof v === 'object') {
+                var _lsOne = function (o) { var r = {}; for (var lk in o) r[lk] = (typeof o[lk] === 'function') ? o[lk]() : o[lk]; return r; };
+                out.lifeSkill = Array.isArray(v) ? v.map(_lsOne) : _lsOne(v);
             }
             else if (typeof v === 'function') out[k] = v();
             else out[k] = v;
@@ -275,7 +299,11 @@ const scenarioEngine = {
             if (!isFinite(prob)) prob = 0.5;
             prob = Math.max(0, Math.min(1, prob));
             var branch = this._rng() < prob ? (roll.win || {}) : (roll.lose || {});
+            // 第九十五波·NEW-28：先把选项级键（roll/cost 除外）并入，再用命中分支的键覆盖（分支优先）。
+            // 旧版只装分支里的键，选项层平级的 time 被静默丢弃（71 处设施「耗时」牌面成了装饰）；
+            // cost 不在此列——_foldCost 已把它折进两个分支，重复并入会二次扣本。
             var merged = {};
+            for (var ek in eff) { if (ek !== 'roll' && ek !== 'cost') merged[ek] = eff[ek]; }
             for (var bk in branch) { if (bk !== 'roll') merged[bk] = branch[bk]; }
             return this._apply(merged);
         }
@@ -316,6 +344,21 @@ const scenarioEngine = {
             var pawnResult = null;
             if (eff.pawn.op === 'pawn') pawnResult = PS.pawnItem(eff.pawn.itemId, eff.pawn.count, eff.pawn.base);
             else if (eff.pawn.op === 'redeem') pawnResult = PS.redeem();
+            else if (eff.pawn.op === 'pick') {
+                // 第八十二波·当铺-01：自选典当清单窗——纯 UI 入口，不涉交割；
+                // 清单上点「当一件」仍走 PawnService.pawnItem 的统一结算事务
+                if (typeof PS.openPicker !== 'function') return { success: false, reason: 'pawn', error: '柜上没有开清单的窗' };
+                // 第九十五波·NEW-04 同类：清单窗每开必新建同 id 节点——开窗前先收掉残留的旧窗，
+                // 免得连点两次「自选典当」叠出两层 pawn-picker-modal（当铺清单窗本体不在本批改动清单，调用侧去重）
+                try {
+                    var _pkOld = (document.querySelectorAll && document.querySelectorAll('#pawn-picker-modal')) || [];
+                    for (var _pkI = _pkOld.length - 1; _pkI >= 0; _pkI--) { if (_pkOld[_pkI] && _pkOld[_pkI].remove) _pkOld[_pkI].remove(); }
+                } catch (ePk) {}
+                PS.openPicker();
+                if (eff.msg) log.add(eff.msg, eff.msgType || 'info');
+                if (eff.time && window.advanceTime) window.advanceTime(eff.time, '设施交互');
+                return { success: true, messages: [] };
+            }
             else return { success: false, reason: 'reward_service_unavailable' };
             if (!pawnResult || pawnResult.success === false || pawnResult.error) {
                 return { success: false, reason: 'pawn', error: (pawnResult && pawnResult.error) || '当铺交割未成' };
@@ -352,12 +395,53 @@ const scenarioEngine = {
             }
         }
 
+        // 第六十九波：eff.peddler = {op:'buy'|'sell', idx}——商行贩货契柜台操作。
+        // 货与银钱本就同笔交割（统一结算事务），柜台拦下则整笔不成交、缘由文案原样上屏。
+        if (eff.peddler && typeof eff.peddler === 'object') {
+            var PD = window.PeddlerService;
+            if (!PD) return { success: false, reason: 'reward_service_unavailable' };
+            var pedResult = null;
+            if (eff.peddler.op === 'buy') pedResult = PD.buy(eff.peddler.idx);
+            else if (eff.peddler.op === 'sell') pedResult = PD.sell(eff.peddler.idx);
+            else return { success: false, reason: 'peddler', error: '商行柜上没有这种单子' };
+            if (!pedResult || pedResult.success === false) {
+                return { success: false, reason: 'peddler', error: (pedResult && pedResult.error) || '商行那边没成交' };
+            }
+            (pedResult.messages || []).forEach(function (m) { log.add(m, 'info'); });
+            var drest = [];
+            for (var dk in eff) { if (dk !== 'peddler' && dk !== 'msg' && dk !== 'msgType' && dk !== 'time') drest.push(dk); }
+            if (drest.length === 0) {
+                if (eff.msg) log.add(eff.msg, eff.msgType || 'info');
+                if (eff.time && window.advanceTime) window.advanceTime(eff.time, '设施交互');
+                return { success: true, messages: pedResult.messages || [] };
+            }
+        }
+
+        // v20.86：eff.facility = {id}——门派设施结算钩子：真设施管道原样走一遍
+        // （门禁/真气/贡献成本/每日份例/冷却全由设施系统自理，剧本层不另立账）。
+        // 设施结算失败则整笔不成交——与钱庄账本同一条纪律，拦下的缘由原样上屏。
+        if (eff.facility && typeof eff.facility === 'object' && eff.facility.id) {
+            if (typeof window.useFacility !== 'function') return { success: false, reason: 'facility_unavailable' };
+            var fRes = window.useFacility(eff.facility.id, { fromScenario: true, quiet: true });
+            if (!fRes || fRes.ok !== true) {
+                return { success: false, reason: 'facility', error: (fRes && fRes.reason) || '设施此刻用不得' };
+            }
+            String(fRes.text || '').split('\n').forEach(function (fl) { if (fl.trim()) log.add(fl.trim(), 'info'); });
+            var fRest = [];
+            for (var fkk in eff) { if (fkk !== 'facility' && fkk !== 'msg' && fkk !== 'msgType' && fkk !== 'time') fRest.push(fkk); }
+            if (fRest.length === 0) {
+                if (eff.msg) log.add(eff.msg, eff.msgType || 'info');
+                if (eff.time && window.advanceTime) window.advanceTime(eff.time, '设施交互');
+                return { success: true, messages: [] };
+            }
+        }
+
         var result;
-        // 账本键（bank/pawn/fence）已在上方钩子成交，不得再随 eff 进统一结算
+        // 账本键（bank/pawn/fence/peddler）已在上方钩子成交，不得再随 eff 进统一结算
         //（RewardService 认不得这些键会整笔失败）——剥掉后传净表。
         var plain = {};
         for (var qk in eff) {
-            if (qk === 'bank' || qk === 'pawn' || qk === 'fence') continue;
+            if (qk === 'bank' || qk === 'pawn' || qk === 'fence' || qk === 'facility' || qk === 'peddler') continue;
             plain[qk] = eff[qk];
         }
         if (window.RewardService) {
@@ -419,6 +503,15 @@ function openFacilityScenario(facilityId) {
     createScenarioModal();
     var m = document.getElementById('scenario-modal');
     if (!m) return;
+    // v21.2 修复：先显形再分支——此前「单出戏直开」路径渲染完就 return，弹窗永远带着 hidden，
+    // 玩家点「使用/前往」看到的就是毫无反应（勾栏瓦舍等所有单出戏设施全中招）
+    m.classList.remove('hidden');
+
+    // v20.86：只有一出戏的设施不再多摆一层菜单——点「进入」直接开戏
+    if (info.scenarios.length === 1) {
+        startScenario(facilityId, info.scenarios[0].id);
+        return;
+    }
 
     document.getElementById('sm-title').textContent = info.name;
     document.getElementById('sm-sub').textContent = '选择一个事件';
@@ -442,7 +535,6 @@ function openFacilityScenario(facilityId) {
     });
 
     document.getElementById('sm-foot').textContent = '';
-    m.classList.remove('hidden');
 }
 
 // 开始情境
@@ -452,6 +544,18 @@ function startScenario(facilityId, scenarioId) {
     renderScenario(state);
 }
 
+// 第九十五波·NEW-13：终态自动软收——单步情境（税课司查账这类）成交后窗停在「事件已结束」，
+// 玩家还得再点一次关闭。延迟 1500ms 收窗（留足读完结算文案的时间），多步流程的中间步不收。
+// 测试环境 setTimeout 被桩掉，不影响断言。
+function _scheduleScenarioAutoClose() {
+    try {
+        setTimeout(function () {
+            try { closeScenarioModal(); } catch (e1) {}
+            try { if (typeof window.closeModalSoft === 'function') window.closeModalSoft(); } catch (e2) {}
+        }, 1500);
+    } catch (e) {}
+}
+
 // 渲染情境节点
 function renderScenario(state) {
     if (!state || state.done) {
@@ -459,6 +563,7 @@ function renderScenario(state) {
         document.getElementById('sm-desc').textContent = state?.message || '事件已结束';
         document.getElementById('sm-choices').innerHTML = '<button onclick="closeScenarioModal()" class="w-full p-3 bg-gray-800 rounded border border-gray-700 hover:border-amber-600 text-center text-amber-400 font-bold">关闭</button>';
         document.getElementById('sm-foot').textContent = '';
+        _scheduleScenarioAutoClose();
         return;
     }
 
@@ -471,6 +576,8 @@ function renderScenario(state) {
 
     if (state.choices.length === 0) {
         choicesDiv.innerHTML = '<button onclick="closeScenarioModal()" class="w-full p-3 bg-gray-800 rounded border border-gray-700 hover:border-amber-600 text-center text-amber-400 font-bold">关闭</button>';
+        // 无后续选项的节点同样是流程终点——照「事件已结束」终态一并软收
+        _scheduleScenarioAutoClose();
     } else {
         state.choices.forEach(function(c) {
             var btn = document.createElement('button');

@@ -23,7 +23,10 @@
 
     var FEST_SYSTEM = 'dao_companion_festival';
     var LEAD_DAYS = 2;      // 节前两天发帖
-    var ACCEPT_TIME = 60;   // 时辰——一整日（唯一的真代价：一夜只有这一夜）
+    // 第一百一十一波：文案写「占一整天」，账上却只收 60 分钟——advanceTime 的单位是分钟，
+    // 一日=1440（1 时辰=120）。旧口径陪道侣过节只花一小时、同日还能再干 23 小时的事，
+    // 「一夜只有一夜、时间挤不出双倍」的核心设计被单位错误整个架空。
+    var ACCEPT_TIME = 1440;
 
     // 世界历：每 30 天一月，12 月一年。month/day 折成岁内日序。
     var FESTIVALS = [
@@ -109,6 +112,14 @@
                 var ent = fes[k];
                 if (!ent || ent.status !== 'invited') continue;
                 if (!(ent.dueDay > 0 && ent.dueDay < today)) continue;
+                // 第一百一十一波：闭关的人不判罪——长期闭关的日结是同步循环，节帖弹了也物理上点不到；
+                // 不豁免的话闭关跨节必吃罚（每位道侣各扣 5 好感），出关只见一堆「装死不回」的罪名
+                if (global._isInLongRetreat) {
+                    ent.status = 'retreat';
+                    var rn = (_npcOf(ids[i]) || {}).name || '你的道侣';
+                    _log('你在闭关。' + rn + ' 替你守了山门的灯，把节帖收了回去——节错过了，人明白。（闭关不误责）', 'info');
+                    continue;
+                }
                 var npc = _npcOf(ids[i]);
                 var fname = ent.fname || '那个节';
                 if (npc && typeof npc.changeAffection === 'function') npc.changeAffection(-5);

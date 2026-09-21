@@ -30,7 +30,7 @@ var wrapped = '(function(window){' + src + '})(mockWindow);';
 eval(wrapped);
 var B = mockWindow.BeastEcosystem;
 assert(!!B, 'BeastEcosystem 已注册');
-assert(B.BEAST_DISTRIBUTION.length === 10, '10 灵兽 (got ' + B.BEAST_DISTRIBUTION.length + ')');
+assert(B.BEAST_DISTRIBUTION.length === 19, '19 灵兽 (got ' + B.BEAST_DISTRIBUTION.length + ')');   // v20.95 补三只传说级；第八十五波补位面四兽；第八十六波补火焰虎/影豹（坊市独苗野外入表）
 assert(Object.keys(B.BEAST_BUFFS).length === 6, '6 buff');
 
 // ---- 1. 灵兽按地区 ----
@@ -38,13 +38,15 @@ section('1) 灵兽按地区');
 var lingfox = B.BEAST_DISTRIBUTION.find(function (b) { return b.id === 'beast_lingfox'; });
 assert(lingfox.regions.indexOf('中州') >= 0, '灵狐含中州');
 var thundereagle = B.BEAST_DISTRIBUTION.find(function (b) { return b.id === 'beast_thundereagle'; });
-assert(thundereagle.regions.indexOf('天空') >= 0, '雷鹰含天空');
+assert(thundereagle.regions.indexOf('东荒') >= 0, '雷鹰含东荒');   // 第八十六波：「天空」不是舆图域名（死账），改认真实地区
+assert(thundereagle.regions.indexOf('天空') < 0, '死地区名「天空」清出分布表');
 var icesnake = B.BEAST_DISTRIBUTION.find(function (b) { return b.id === 'beast_icesnake'; });
 assert(icesnake.regions.indexOf('北冥') >= 0, '冰蛇含北冥');
 var firephoenix = B.BEAST_DISTRIBUTION.find(function (b) { return b.id === 'beast_firephoenix'; });
 assert(firephoenix.regions.indexOf('南疆') >= 0, '火凤含南疆');
 var xuangui = B.BEAST_DISTRIBUTION.find(function (b) { return b.id === 'beast_xuangui'; });
-assert(xuangui.regions.indexOf('东海') >= 0, '玄龟含东海');
+assert(xuangui.regions.indexOf('东南海域') >= 0, '玄龟含东南海域');   // 第八十六波：「东海」是城不是域，玄龟此前无铺无野等于绝户
+assert(xuangui.regions.indexOf('东海') < 0, '死地区名「东海」清出分布表');
 
 // ---- 2. 灵兽按地形 ----
 section('2) 灵兽按地形');

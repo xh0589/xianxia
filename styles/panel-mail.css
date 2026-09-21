@@ -1,0 +1,418 @@
+/* 仙路长青 · mail 面板专属样式（v21.x 界面整改）
+   只允许出现 #panel-mail / 本面板相关选择器，跨面板的规则请放进 ui-tokens.css
+
+   「飞鸽传书」收件箱弹窗：根节点 #mailInboxPanel（js/mail-system-ui.js 的 ensureInboxPanel 造），
+   遮罩 #mailInboxScrim（同文件 ensureScrim 造，与面板分家、每次打开现补）。
+
+   本面板的旧骨架 CSS 由 js/mail-system-styles.js 在运行时注入到 <head> 末尾——同特异度会盖过本文件，
+   所以这里一律用 #mailInboxPanel / #mailInboxScrim 起头提权（id 压过那边全部 .mail-* 类选择器），
+   不去改那个注入文件，也不需要 !important。 */
+
+/* ---------- 遮罩：打开时背景既暗下去也点不动（层级走 var(--x-z-modal)，面板本体在它之上） ---------- */
+
+#mailInboxScrim {
+    position: fixed;
+    inset: 0;
+    z-index: var(--x-z-modal);
+    display: none;
+    background: rgba(2, 6, 23, .72);
+    cursor: default;
+    animation: x-mail-scrim-in .18s ease-out;
+}
+#mailInboxScrim.open { display: block; }
+
+@keyframes x-mail-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- 面板：高度随内容收，但留最小尺寸、上限 85vh 且只允许内部滚 ---------- */
+
+#mailInboxPanel {
+    width: min(760px, 92vw);
+    min-height: 15rem;
+    max-height: 85vh;
+    display: none;
+    flex-direction: column;
+    overflow: hidden;
+}
+#mailInboxPanel.open { display: flex; }
+
+/* ---------- 抬头 ---------- */
+
+#mailInboxPanel .mail-inbox-header {
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(2, 6, 23, .45);
+    border-bottom-color: var(--x-gold-deep);
+}
+
+#mailInboxPanel .mail-inbox-title {
+    font-size: 17px;
+    color: var(--x-gold);
+}
+
+/* 右上角那枚关闭钮：原来是无边框感的黑圆点，玩家只当它是装饰 */
+#mailInboxPanel .mail-inbox-close {
+    width: auto;
+    height: auto;
+    min-width: 32px;
+    padding: 5px 10px;
+    border: 1px solid #6b7280;
+    border-radius: 6px;
+    background: rgba(55, 65, 81, .6);
+    color: var(--x-text);
+    font-family: inherit;
+    font-size: var(--x-fs-sm);
+    line-height: 1.25;
+}
+#mailInboxPanel .mail-inbox-close:hover {
+    border-color: #b91c1c;
+    background: rgba(185, 28, 28, .45);
+    color: #fff;
+}
+
+/* ---------- 标签条：选中态一眼可辨，并与内容区之间落下真分隔 ---------- */
+
+#mailInboxPanel .mail-inbox-tabs {
+    gap: 4px;
+    padding: 0 10px;
+    background: rgba(0, 0, 0, .42);
+    border-bottom: 1px solid #3f4b5c;
+}
+
+#mailInboxPanel .mail-tab {
+    appearance: none;
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 9px 8px;
+    border: 0;
+    border-bottom: 3px solid transparent;
+    border-radius: 6px 6px 0 0;
+    background: none;
+    color: #b8c1cd;                 /* 深底 6.9:1，旧值 #aaa 压在近黑条上不到 4.5 */
+    font-family: inherit;
+    font-size: var(--x-fs-sm);
+    line-height: 1.4;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+#mailInboxPanel .mail-tab:hover {
+    color: #fde68a;
+    background: rgba(251, 191, 36, .08);
+}
+#mailInboxPanel .mail-tab.active {
+    color: var(--x-gold);
+    background: rgba(251, 191, 36, .16);
+    border-bottom-color: var(--x-gold);
+    font-weight: 700;
+}
+
+/* ---------- 内容区（列表 + 摊开的单封信共用这一格） ---------- */
+
+#mailInboxPanel .mail-inbox-body {
+    position: relative;
+    display: flex;
+    flex: 1 1 auto;
+    min-height: 0;                  /* 不给这行，嵌套 flex 里的 overflow 永远不生效 */
+}
+
+#mailInboxPanel .mail-inbox-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 10px 12px;
+}
+
+/* 每页顶上那句「这一页装的是什么」——顺带当当前标签的状态强调 */
+#mailInboxPanel .mail-list-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 4px 10px;
+    margin: 0 0 10px;
+    padding: 7px 10px;
+    border: 1px solid #374151;
+    border-left: 3px solid var(--x-gold-deep);
+    border-radius: 6px;
+    background: rgba(31, 41, 55, .55);
+    color: var(--x-muted);
+    font-size: var(--x-fs-xs);
+    line-height: var(--x-lh-tight);
+}
+#mailInboxPanel .mail-list-note__n {
+    margin-left: auto;
+    color: var(--x-gold);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+/* ---------- 信件条目：字号抬到 13px 起，灰字全换成 token ---------- */
+
+#mailInboxPanel .mail-item {
+    align-items: center;
+    padding: 11px 14px;
+}
+#mailInboxPanel .mail-item-from {
+    font-size: var(--x-fs-sm);
+    color: var(--x-text);
+}
+#mailInboxPanel .mail-item-subject {
+    margin-top: 3px;
+    font-size: var(--x-fs-xs);
+    color: #dcb871;
+}
+#mailInboxPanel .mail-item-preview {
+    margin-top: 3px;
+    font-size: var(--x-fs-xs);
+    line-height: var(--x-lh-tight);
+    color: var(--x-muted);
+}
+#mailInboxPanel .mail-item-time {
+    font-size: var(--x-fs-xs);
+    color: var(--x-dim);
+}
+#mailInboxPanel .mail-item.mail-unread .mail-item-from { color: var(--x-gold); }
+#mailInboxPanel .mail-item.mail-unread .mail-item-subject { font-weight: 700; }
+
+/* 写信名录那批条目：人名 + 说明是上下叠的，别照信件条目那样整行居中 */
+#mailInboxPanel .mail-item--person { align-items: flex-start; padding-top: 12px; padding-bottom: 12px; }
+#mailInboxPanel .mail-item--person .mail-item-icon { padding-top: 1px; }
+
+#mailInboxPanel .mail-badge {
+    font-size: var(--x-fs-xs);
+    line-height: 1.35;
+    padding: 1px 6px;
+}
+/* 白字压在这两色上原本只有 3.8 / 2.3:1，压深底色把对比度抬过 4.5 */
+#mailInboxPanel .mail-badge-urgent { background: #b91c1c; }
+#mailInboxPanel .mail-badge-important { background: #b45309; }
+/* 「道侣」标记原来挂在内联样式上，撤内联后由这里给色（白字 6.3:1） */
+#mailInboxPanel .mail-badge-dao { background: #a21caf; color: #fff; }
+
+/* ---------- 空态 / 未加载态 ---------- */
+
+#mailInboxPanel .mail-empty {
+    margin-top: 4px;
+    padding: 22px 18px 24px;
+    border: 1px dashed #4b5563;
+    border-radius: 10px;
+    background: rgba(31, 41, 55, .5);
+    text-align: center;
+}
+#mailInboxPanel .mail-empty__icon { font-size: 30px; line-height: 1.2; }
+#mailInboxPanel .mail-empty__title {
+    margin: 8px 0 6px;
+    font-size: var(--x-fs-base);
+    font-weight: 700;
+    color: var(--x-text);
+}
+#mailInboxPanel .mail-empty__hint {
+    margin: 0 auto 14px;
+    max-width: 52ch;
+    font-size: var(--x-fs-sm);
+    line-height: 1.7;
+    color: var(--x-muted);
+    text-align: left;
+}
+#mailInboxPanel .mail-empty__pending {
+    margin: 0 auto 14px;
+    font-size: var(--x-fs-xs);
+    color: var(--x-gold);
+}
+#mailInboxPanel .mail-empty__btn {
+    appearance: none;
+    padding: 7px 16px;
+    border: 1px solid var(--x-gold-deep);
+    border-radius: 6px;
+    background: rgba(251, 191, 36, .14);
+    color: var(--x-gold);
+    font-family: inherit;
+    font-size: var(--x-fs-sm);
+    font-weight: 700;
+    cursor: pointer;
+}
+#mailInboxPanel .mail-empty__btn:hover { background: var(--x-gold); color: #111827; }
+
+/* ---------- 写信名录 ---------- */
+
+#mailInboxPanel .mail-person-name {
+    font-size: var(--x-fs-sm);
+    font-weight: 700;
+    color: var(--x-text);
+}
+#mailInboxPanel .mail-person-meta {
+    margin-top: 3px;
+    font-size: var(--x-fs-xs);
+    color: var(--x-muted);
+}
+#mailInboxPanel .mail-person-go {
+    align-self: center;
+    font-size: var(--x-fs-xs);
+    color: var(--x-gold);
+    white-space: nowrap;
+}
+
+/* ---------- 翻页 ---------- */
+
+#mailInboxPanel .mail-pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-top: 6px;
+    padding: 8px 2px 2px;
+    border-top: 1px dashed #374151;
+    color: var(--x-muted);
+    font-size: var(--x-fs-xs);
+}
+#mailInboxPanel .mail-page-btn {
+    appearance: none;
+    padding: 6px 12px;
+    border: 1px solid #4b5563;
+    border-radius: 6px;
+    background: #2b3441;
+    color: var(--x-text);
+    font-family: inherit;
+    font-size: var(--x-fs-xs);
+    cursor: pointer;
+}
+#mailInboxPanel .mail-page-btn:hover:not(:disabled) {
+    border-color: var(--x-gold);
+    color: var(--x-gold);
+}
+#mailInboxPanel .mail-page-btn:disabled { opacity: .45; cursor: not-allowed; }
+#mailInboxPanel .mail-page-count { white-space: nowrap; }
+
+/* ---------- 单封信详情：只盖内容格，抬头/标签/页脚一直看得见 ---------- */
+
+#mailInboxPanel .mail-detail-panel {
+    position: absolute;
+    inset: 0;                       /* 只铺满 .mail-inbox-body 这一格 */
+}
+#mailInboxPanel .mail-detail-header {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px 16px;
+    background: rgba(2, 6, 23, .45);
+    border-bottom-color: var(--x-gold-deep);
+}
+#mailInboxPanel .mail-back {
+    position: static;
+    align-self: flex-start;
+    padding: 4px 10px;
+    border: 1px solid #6b7280;
+    border-radius: 6px;
+    background: rgba(55, 65, 81, .55);
+    color: var(--x-text);
+    font-family: inherit;
+    font-size: var(--x-fs-xs);
+    line-height: 1.4;
+    cursor: pointer;
+}
+#mailInboxPanel .mail-back:hover { border-color: var(--x-gold); color: var(--x-gold); }
+#mailInboxPanel .mail-detail-title {
+    margin: 0;
+    font-size: 17px;
+    color: var(--x-gold);
+}
+#mailInboxPanel .mail-detail-from {
+    margin: 0;
+    font-size: var(--x-fs-xs);
+    line-height: var(--x-lh-tight);
+    color: var(--x-muted);
+}
+#mailInboxPanel .mail-detail-from > b { color: var(--x-text); }
+#mailInboxPanel .mail-detail-body {
+    padding: 18px 20px;
+    font-size: 15px;
+    line-height: 1.75;
+    color: var(--x-text);
+}
+#mailInboxPanel .mail-attachments {
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px dashed var(--x-gold-deep);
+    border-radius: 6px;
+    background: rgba(251, 191, 36, .08);
+    font-size: var(--x-fs-sm);
+    color: var(--x-text);
+}
+#mailInboxPanel .mail-detail-actions {
+    gap: 10px;
+    padding: 12px 16px;
+    border-top: 1px solid #3f4b5c;
+    background: rgba(0, 0, 0, .3);
+}
+#mailInboxPanel .mail-detail-actions button {
+    padding: 9px 12px;
+    border: 1px solid #4b5563;
+    border-radius: 6px;
+    background: #2b3441;
+    color: var(--x-text);
+    font-family: inherit;
+    font-size: var(--x-fs-sm);
+    cursor: pointer;
+}
+#mailInboxPanel .mail-detail-actions button:hover {
+    background: #374151;
+    border-color: #6b7280;
+}
+/* 红色只留给真破坏动作（删信），不跟金色的主行动抢视线 */
+#mailInboxPanel .mail-act-del { border-color: #7f1d1d; color: #fca5a5; }
+#mailInboxPanel .mail-act-del:hover {
+    background: rgba(185, 28, 28, .35);
+    border-color: #b91c1c;
+    color: #fff;
+}
+#mailInboxPanel .mail-detail-actions button.primary {
+    background: var(--x-gold);
+    border-color: var(--x-gold-deep);
+    color: #111827;                 /* 亮金底配白字只有 2.2:1，这里给深字 */
+    font-weight: 700;
+}
+#mailInboxPanel .mail-detail-actions button.primary:hover { background: #fcd34d; border-color: #fcd34d; }
+
+/* ---------- 页脚：带字的出口 + 一句路数说明 ---------- */
+
+#mailInboxPanel .mail-inbox-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-top: 1px solid #3f4b5c;
+    background: rgba(0, 0, 0, .34);
+}
+#mailInboxPanel .mail-foot-note {
+    flex: 1 1 240px;
+    min-width: 0;
+    font-size: var(--x-fs-xs);
+    line-height: var(--x-lh-tight);
+    color: var(--x-muted);
+}
+#mailInboxPanel .mail-close-btn {
+    appearance: none;
+    margin-left: auto;
+    padding: 7px 16px;
+    border: 1px solid var(--x-gold-deep);
+    border-radius: 6px;
+    background: rgba(251, 191, 36, .14);
+    color: var(--x-gold);
+    font-family: inherit;
+    font-size: var(--x-fs-sm);
+    font-weight: 700;
+    cursor: pointer;
+}
+#mailInboxPanel .mail-close-btn:hover { background: var(--x-gold); color: #111827; }
+
+/* ---------- 窄屏：四枚标签挤一行也要认得出，信息一律不藏 ---------- */
+
+@media (max-width: 640px) {
+    #mailInboxPanel { width: 96vw; }
+    #mailInboxPanel .mail-inbox-tabs { padding: 0 6px; }
+    #mailInboxPanel .mail-tab { flex: 1 1 auto; padding: 8px 6px; }
+    #mailInboxPanel .mail-item { align-items: flex-start; }
+    #mailInboxPanel .mail-item-time { margin-left: auto; }
+}

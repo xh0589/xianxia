@@ -25,7 +25,7 @@
     var COMBAT_SKILLS = ['内功', '轻功', '绝技', '拳掌', '剑法', '刀法', '长兵', '奇门', '射术'];
 
     // ===== 生活技能列表（与 data.js 保持一致） =====
-    var LIFE_SKILLS = ['医术', '毒术', '学识', '口才', '采伐', '种植', '锻造', '炼制', '烹饪'];
+    var LIFE_SKILLS = ['医术', '毒术', '学识', '口才', '采伐', '种植', '锻造', '炼制', '烹饪', '音律'];
 
     // ===== 灵根列表 =====
     var ROOTS = [
@@ -767,26 +767,27 @@
     }
 
     // 解锁全地图
+    // v21.9 修复：此前这个按钮三层皆死——首选的两个 API 全库不存在，
+    // 兜底写的 discovered 字段也无人消费（真实存档结构是 {progress, hiddenFound}）。
+    // 现在直接按 landmark-explore 的存档口径写真实结构：每个地标进度拉满 + 隐藏点标记。
     function unlockAllMap() {
-        // 尝试通过地图标记系统解锁
-        if (typeof window.unlockAllLandmarks === 'function') {
-            window.unlockAllLandmarks();
-            _showMsg('已解锁所有地标', 'success');
-        } else if (window.landmarkSystem && typeof window.landmarkSystem.unlockAll === 'function') {
-            window.landmarkSystem.unlockAll();
-            _showMsg('已解锁所有地标', 'success');
-        } else {
-            // 备用方案：设置访问标记
-            try {
-                var landmarks = JSON.parse(localStorage.getItem('xianxia_landmarks') || '{}');
-                Object.keys(landmarks).forEach(function (k) {
-                    if (typeof landmarks[k] === 'object') landmarks[k].discovered = true;
+        try {
+            var data = (typeof LANDMARK_EXPLORE_DATA !== 'undefined') ? LANDMARK_EXPLORE_DATA : null;
+            var save = {};
+            if (data) {
+                Object.keys(data).forEach(function (key) {
+                    data[key].exploreProgress = data[key].maxProgress || 100;
+                    data[key]._hiddenFound = true;
+                    save[key] = { progress: data[key].maxProgress || 100, hiddenFound: true };
                 });
-                localStorage.setItem('xianxia_landmarks', JSON.stringify(landmarks));
-                _showMsg('已尝试解锁地图标记', 'success');
-            } catch (e) {
-                _showMsg('解锁地图功能暂不可用', 'warning');
+            } else {
+                var old = JSON.parse(localStorage.getItem('xianxia_landmarks') || '{}');
+                Object.keys(old).forEach(function (k) { save[k] = { progress: 100, hiddenFound: true }; });
             }
+            localStorage.setItem('xianxia_landmarks', JSON.stringify(save));
+            _showMsg('已解锁全部地标（探索进度拉满，隐藏点全标记）', 'success');
+        } catch (e) {
+            _showMsg('解锁地图失败：' + (e && e.message ? e.message : e), 'warning');
         }
         _refreshUI();
     }

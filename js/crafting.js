@@ -209,49 +209,9 @@ const pilferRecipes = [
     },
 
     // ---- 临时增益 ----
-    {
-        id: 'recipe_diamond',
-        name: '金刚丹',
-        category: CRAFTING_CATEGORIES.PILFAR,
-        requiredSkills: { 炼制: 20 },
-        materials: [
-            { itemId: 'mat_lingzhi', count: 3 },
-            { itemId: 'mat_demon_beast_core', count: 1 },
-            { itemId: 'mat_iron_ore', count: 5 }
-        ],
-        result: { itemId: 'pill_diamond', count: 1 },
-        qiCost: 30, timeCost: 10,
-        desc: '防御+20%持续3回合'
-    },
-    {
-        id: 'recipe_tiger_power',
-        name: '虎力丹',
-        category: CRAFTING_CATEGORIES.PILFAR,
-        requiredSkills: { 炼制: 20 },
-        materials: [
-            { itemId: 'mat_ginseng', count: 2 },
-            { itemId: 'mat_demon_beast_fang', count: 2 },
-            { itemId: 'mat_demon_beast_core', count: 1 }
-        ],
-        result: { itemId: 'pill_tiger_power', count: 1 },
-        qiCost: 30, timeCost: 10,
-        desc: '攻击+20%持续3回合'
-    },
-    {
-        id: 'recipe_dragon_tiger',
-        name: '龙虎丹',
-        category: CRAFTING_CATEGORIES.PILFAR,
-        requiredSkills: { 炼制: 50 },
-        materials: [
-            { itemId: 'mat_dragon_scale', count: 2 },
-            { itemId: 'mat_demon_beast_core', count: 3 },
-            { itemId: 'mat_thousand_lingzhi', count: 3 },
-            { itemId: 'mat_five_element_essence', count: 2 }
-        ],
-        result: { itemId: 'pill_dragon_tiger', count: 1 },
-        qiCost: 80, timeCost: 25,
-        desc: '全属性+30%持续5回合'
-    },
+    // v20.85 清理：金刚丹/虎力丹/龙虎丹三张配方移除。产物是「回合制临时增益」一族——
+    // 与 01-pills.js 同一判断：系统无回合制 buff 机制，该族丹药当年已整体删除，
+    // 这三张死配方靠 isRecipeContentReady 门禁一直不可见，留着只会误导审计与后续开发。
 
     // ---- 医疗物品 ----
     {
@@ -770,7 +730,18 @@ function getCraftCostMul() {
     try {
         var until = window._craftDiscountUntil || 0;
         var now = (window.timeSystem && window.timeSystem.gameTime) ? (window.timeSystem.gameTime.totalMinutes || 0) : 0;
-        return (until > now) ? 0.6 : 1;
+        var mul = (until > now) ? 0.6 : 1;
+        // 第十二波 · 百工秘艺第二面：锻冶域炉工熟络——制作强化费用小折（与工坊折扣叠乘，封底读力度总表）
+        try {
+            if (typeof window.sectSignatureForgeDiscount === 'function') {
+                var fd = window.sectSignatureForgeDiscount() || 0;
+                if (fd > 0) {
+                    var _floor = (window.SECT_SIG_TUNING && window.SECT_SIG_TUNING.forgeFloor) || 0.45;
+                    mul = Math.max(_floor, Math.round(mul * (1 - fd) * 100) / 100);
+                }
+            }
+        } catch (e2) {}
+        return mul;
     } catch (e) { return 1; }
 }
 // ============ 计算成功率 ============
@@ -806,12 +777,38 @@ function calculateSuccessRate(recipe) {
             if (recipe.category === 'forging') baseRate += ((window.getHouseBonus('forging') || 1) - 1) * 0.5;
         } catch (e) {}
     }
+    // 第十二波 · 门中炉火：在门派炼丹房/锻造坊开过炉，窗内对应制作成功率+8%（场地加成有名有据）
+    try {
+        var _scb = window._sectCraftBuff;
+        if (_scb && _scb.until) {
+            var _nowMin = (window.timeSystem && window.timeSystem.gameTime) ? (window.timeSystem.gameTime.totalMinutes || 0) : 0;
+            if (_scb.until > _nowMin &&
+                ((_scb.kind === 'pilfer' && recipe.category === 'pilfer') || (_scb.kind === 'forging' && recipe.category === 'forging'))) {
+                baseRate += 0.08;
+            }
+        }
+    } catch (e) {}
+    // 第十二波 · 开山秘艺百工域：丹道/毒经助丹炉、锻冶助铁砧——掌握度折成成功率（本事加成，与炉火场地加成可叠加）
+    try {
+        if (typeof window.sectSignatureCraftBonus === 'function') baseRate += (window.sectSignatureCraftBonus(recipe.category) || 0);
+    } catch (e) {}
     
     return Math.min(0.95, Math.max(0.6, baseRate)); // v9.8
 }
 
+// v20.94 熟能生巧：合成结果被配方要求的生活技能影响，落地即反哺（锻造打铁长锻造、烹饪掌勺长烹饪）
+function growRecipeSkills(recipe, exp) {
+    if (typeof window.growLifeSkill !== 'function' || !recipe) return;
+    var names = {};
+    if (recipe.skill) names[recipe.skill] = true;
+    if (recipe.requiredSkill) names[recipe.requiredSkill] = true;
+    if (recipe.requiredSkills) { for (var rk in recipe.requiredSkills) names[rk] = true; }
+    Object.keys(names).forEach(function (n) { try { window.growLifeSkill(n, exp, { reason: '动手合成' }); } catch (e) {} });
+}
+
 // ============ 执行合成 ============
 function executeCrafting(recipeId) {
+    if (typeof window.codexHint === 'function') { try { window.codexHint('tut_first_craft'); } catch (e) {} }
     const recipe = recipeById[recipeId];
     if (!recipe) {
         console.error('[crafting] 配方不存在:', recipeId);
@@ -852,6 +849,13 @@ function executeCrafting(recipeId) {
         ? window.getCurrentCharData()
         : window.currentCharData;
     var qiCost = recipe.qiCost || 0;
+    // 第十六波 · 符造域第二面：符笔随心——凝符纹耗的真气打个折（封顶读秘艺总表；只吃折扣，不改配方标价）
+    try {
+        if (recipe.category === 'talismans' && typeof window.sectSignatureTalismanQiSave === 'function') {
+            var _tqSave = window.sectSignatureTalismanQiSave() || 0;
+            if (_tqSave > 0) qiCost = Math.max(1, Math.round(qiCost * (1 - _tqSave)));
+        }
+    } catch (e) {}
     var currentQi = (charData && charData.qi != null) ? charData.qi : 0;
     var maxQi = (charData && charData.maxQi != null) ? charData.maxQi : 100;
     if (currentQi < qiCost) {
@@ -905,6 +909,7 @@ function executeCrafting(recipeId) {
         if (typeof window.showMessage === 'function') {
             window.showMessage(`合成失败！失去了材料。`, 'error');
         }
+        growRecipeSkills(recipe, 1); // v20.94 熟能生巧：失败也长记性
         // 推进时间
         if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
             window.timeSystem.advanceTime(recipe.timeCost || 10, 'crafting');
@@ -950,6 +955,12 @@ function executeCrafting(recipeId) {
         return false;
     }
     
+    // 第九十五波·NEW-42：丹方图鉴此前零生产者——炼成一炉也从没往 codex_recipe 写过一条
+    try {
+        if (window.Codex && typeof window.Codex.discover === 'function') {
+            window.Codex.discover('codex_recipe', recipeId, { name: recipe.name, quality: qualityName });
+        }
+    } catch (eCodexR) {}
     // P1：如果合成成功且物品已加入背包，发射 item:crafted 事件
     if (addedOk && typeof window.EventBus !== 'undefined') {
         window.EventBus.emit('item:crafted', {
@@ -965,6 +976,7 @@ function executeCrafting(recipeId) {
     if (typeof window.showMessage === 'function') {
         window.showMessage('合成成功！获得 ' + recipe.name + ' x' + resultCount + ' (' + qualityName + ')', 'success');
     }
+    growRecipeSkills(recipe, 2); // v20.94 熟能生巧：炉子越热手越熟
     
     // 推进时间（职业加速）
     if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
@@ -1005,17 +1017,17 @@ function renderCraftingUI(category) {
         }
         const canDo = hasMaterials && profOk;
         return `
-            <div class="bg-gray-700 rounded p-3 mb-2 ${canDo ? 'hover:bg-gray-600 cursor-pointer' : 'opacity-50'}">
+            <div class="bg-gray-700 rounded p-3 mb-2 border ${canDo ? 'border-transparent hover:bg-gray-600 cursor-pointer' : 'border-gray-600'}">
                 <div class="flex justify-between items-center">
                     <span class="font-bold text-sm">${recipe.name}</span>
-                    <button class="text-xs px-3 py-1 rounded ${canDo ? 'bg-blue-600 hover:bg-blue-500' : 'bg-gray-500'}"
+                    <button class="text-xs px-3 py-1 rounded ${canDo ? 'bg-blue-600 hover:bg-blue-500 text-white' : 'bg-gray-800 text-gray-300 border border-gray-600'}"
                         ${canDo ? `onclick="executeCrafting('${recipe.id}')"` : 'disabled'}>
                         ${!profOk ? '职业不足' : (hasMaterials ? '合成' : '材料不足')}
                     </button>
                 </div>
                 <div class="text-xs text-gray-400 mt-1">${recipe.desc}</div>
                 <div class="text-xs text-gray-500 mt-1">
-                    材料: ${(recipe.materials || []).map(m => `${m.itemId} x${m.count}`).join(', ')}${recipe.currency?.spiritStones ? ` | 灵石: ${recipe.currency.spiritStones}` : ''} | 
+                    材料: ${(recipe.materials || []).map(m => { const tpl = window.itemById && window.itemById[m.itemId]; return `${tpl ? (tpl.icon ? tpl.icon + ' ' : '') + tpl.name : m.itemId} ×${m.count}`; }).join(', ')}${recipe.currency?.spiritStones ? ` | 灵石: ${recipe.currency.spiritStones}` : ''} | 
                     真气: ${recipe.qiCost} | 耗时: ${recipe.timeCost}分钟
                 </div>
             </div>
@@ -1024,12 +1036,67 @@ function renderCraftingUI(category) {
 }
 
 // ============ 打开合成UI ============
-function openCraftingUI(category) {
-    const panel = document.getElementById('panel-crafting');
-    if (panel) {
-        panel.classList.remove('hidden');
-        renderCraftingUI(category);
+// v23.0 面板宿主补建：panel-crafting 此前只存在于想象中（HTML 里没有、也没人动态建）——
+// 「物品合成」按钮、铁匠「锻造」、炼丹师「炼丹」全是有头无身的空挥。现在动态建整块面板，
+// 带分类页签（炼丹/锻造/符箓/烹饪/草药）——制符入口（talismanRecipes）从此可达。
+const CRAFTING_TAB_LABELS = {
+    pilfer: '⚗️ 炼丹', forging: '⚒️ 锻造', talismans: '📜 符箓', food: '🍲 烹饪', herb: '🌿 草药加工'
+};
+function ensureCraftingPanel() {
+    var panel = document.getElementById('panel-crafting');
+    if (panel) return panel;
+    panel = document.createElement('div');
+    panel.id = 'panel-crafting';
+    panel.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4';
+    panel.onclick = function (e) { if (e.target === panel) closeCraftingUI(); };
+    var box = document.createElement('div');
+    box.className = 'bg-gray-800 border-2 border-orange-600/50 rounded-xl p-4 max-w-2xl w-full max-h-[85vh] overflow-y-auto';
+    box.innerHTML = '<div class="flex justify-between items-center mb-3">' +
+        '<h2 class="text-xl font-bold text-orange-400">⚒️ 物品合成</h2>' +
+        '<button onclick="closeCraftingUI()" class="text-gray-400 hover:text-white text-2xl leading-none">&times;</button></div>' +
+        '<div class="flex flex-wrap gap-2 mb-3" id="crafting-tabs"></div>' +
+        '<div id="crafting-deep-entry" class="mb-3"></div>' +
+        '<div id="crafting-recipes"></div>';
+    panel.appendChild(box);
+    document.body.appendChild(panel);
+    return panel;
+}
+function renderCraftingTabs(activeCat) {
+    var tabsEl = document.getElementById('crafting-tabs');
+    if (!tabsEl) return;
+    var html = '';
+    for (var cat in CRAFTING_TAB_LABELS) {
+        var count = getRecipesByCategory(cat).length;
+        if (!count) continue;
+        var active = cat === activeCat;
+        html += '<button onclick="openCraftingUI(\'' + cat + '\')" class="px-3 py-1 rounded text-xs font-bold ' +
+            (active ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600') + '">' +
+            CRAFTING_TAB_LABELS[cat] + '（' + count + '）</button>';
     }
+    tabsEl.innerHTML = html;
+    // v23.0 深水区入口：炼丹页签挂「开放丹方·药性四维」，锻造页签挂「词缀炼器」——
+    // 两套写好却无门可入的深水系统从此接线（火候QTE得分也在开放丹方里消费）
+    var deepEl = document.getElementById('crafting-deep-entry');
+    if (deepEl) {
+        if (activeCat === 'pilfer' && window.AlchemyCompound) {
+            deepEl.innerHTML = '<button onclick="openCompoundPilfarUI()" class="w-full px-3 py-2 rounded text-sm font-bold bg-purple-700 hover:bg-purple-600 text-white mb-2">🌌 开放丹方 · 药性四维自炼（主辅调三槽 + 火候试炼定品质）</button>';
+        } else if (activeCat === 'forging' && window.ForgingCompound) {
+            deepEl.innerHTML = '<button onclick="openCompoundForgingUI()" class="w-full px-3 py-2 rounded text-sm font-bold bg-purple-700 hover:bg-purple-600 text-white mb-2">🗡️ 词缀炼器 · 器胚选材自由锻（材料标签决定词缀池）</button>';
+        } else {
+            deepEl.innerHTML = '';
+        }
+    }
+}
+function closeCraftingUI() {
+    var panel = document.getElementById('panel-crafting');
+    if (panel) panel.remove();
+}
+function openCraftingUI(category) {
+    category = category || 'pilfer';
+    var panel = ensureCraftingPanel();
+    panel.classList.remove('hidden');
+    renderCraftingTabs(category);
+    renderCraftingUI(category);
 }
 
 // ============ 导出 ============
@@ -1050,7 +1117,28 @@ window.finishCrafting = finishCrafting;
 window.getRecipesByCategory = getRecipesByCategory;
 window.renderCraftingUI = renderCraftingUI;
 window.openCraftingUI = openCraftingUI;
+window.closeCraftingUI = closeCraftingUI;
 window._openCraftingUIImpl = openCraftingUI;
 if (window.XianXia) window.XianXia.openCraftingUI = openCraftingUI;;
 
 window.getCraftCostMul = getCraftCostMul;
+
+// 第一百一十波 · NEW-103/52：canCraftWithProfession 补真身——此前这颗名字全库无定义：
+// executeCrafting 的「副职业门槛」形同虚设（好在 requiredSkills 另有真闸），
+// renderCraftingUI 的置灰永不生效——玩家看到「可合成」，点下去才吃「需要炼制≥50」。
+// 门槛读角色身上的生活技能真账（与 executeCrafting 的 requiredSkills 同一口径）。
+window.canCraftWithProfession = function (recipe) {
+    try {
+        var req = (recipe && recipe.requiredSkills) || null;
+        if (!req) return { ok: true };
+        for (var skill in req) {
+            var have = (typeof window.getLifeSkill === 'function')
+                ? window.getLifeSkill(skill)
+                : ((window.currentCharData && window.currentCharData.lifeSkills && window.currentCharData.lifeSkills[skill]) || 0);
+            if ((have || 0) < req[skill]) {
+                return { ok: false, reason: '需要' + skill + '≥' + req[skill] + '（当前' + (have || 0) + '）' };
+            }
+        }
+    } catch (e) {}
+    return { ok: true };
+};

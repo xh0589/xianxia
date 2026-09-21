@@ -212,14 +212,24 @@ console.log('\n[P5] 迷雾三态');
     // 视野内 fog=2
     assert(MAP[py][px].fog === 2, '脚下为可见');
     // 走远几格（超出视野半径），原格应退为「已见」而不是「未知」
-    var tx = Math.min(25, px + 5);
-    var res = WT.findPath(MAP.map(function (r) { return r.map(function (c) { return { t: c.terrainKey }; }); }), { x: px, y: py }, { x: tx, y: py });
+    // v20.89 起初次进域落在真出生点（不再是角落 (0,0)），「向右五格」未必通——改挑一个真能走到的远格
+    var grid = MAP.map(function (r) { return r.map(function (c) { return { t: c.terrainKey }; }); });
+    var res = null;
+    for (var dy = -6; dy <= 6 && !(res && res.path.length); dy++) {
+        for (var dx = -6; dx <= 6; dx++) {
+            if (Math.abs(dx) + Math.abs(dy) < 5) continue;   // 必须走出视野半径
+            var tx2 = px + dx, ty2 = py + dy;
+            if (!MAP[ty2] || !MAP[ty2][tx2] || !WT.passable({ t: MAP[ty2][tx2].terrainKey })) continue;
+            res = WT.findPath(grid, { x: px, y: py }, { x: tx2, y: ty2 });
+            if (res && res.path.length) break;
+        }
+    }
     if (res && res.path.length) {
         res.path.forEach(function (p) { global.wildMapApi.stepTo(p.x, p.y); });
         var left = MAP[py][px];
         assert(left.fog === 1, '离开后的原格应退为「已见」（实得 ' + left.fog + '）');
     } else {
-        assert(false, '向右两格应有路可走');
+        assert(false, '出生点周围应有走出视野的通路');
     }
     // 从未踏足的远处仍是未知
     var unknown = 0;

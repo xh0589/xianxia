@@ -210,15 +210,15 @@ function checkSocialConditions(npc, actionName, options) {
         return { pass: false, msg: '精力不足' };
     }
 
-    // 4. 每日次数限制（每个动作每天最多3次）
+    // 4. 同一动作反复缠人——对方会腻、会乏（现实式后果链，不弹「次数已用完」；v23.3 宪法清账）
     if (!window._socialDailyCounts) window._socialDailyCounts = {};
     var currentDay = window.timeSystem?.gameTime?.currentDay || 0;
     var dailyKey = 'daily_' + actionName + '_' + (npc ? npc.id : 'all') + '_' + currentDay;
     if (!window._socialDailyCounts[dailyKey]) window._socialDailyCounts[dailyKey] = 0;
     var dailyLimit = window.BALANCE_CONFIG?.social?.dailyLimitPerNpcAction ?? 3;
     if (window._socialDailyCounts[dailyKey] >= dailyLimit) {
-        if (window.showMessage) window.showMessage('你今天已经做了太多次' + actionName + '，让' + npc.name + '休息一下吧。', 'warning');
-        return { pass: false, msg: '每日次数已达上限' };
+        if (window.showMessage) window.showMessage(npc.name + ' 被你闹得没了脾气，连连摆手：「今日饶了我吧——再这般，我可要躲着你了。明日再说，明日再说。」', 'info');
+        return { pass: false, msg: '对方乏了' };
     }
 
     // 5. 冷却检查（同一动作对同一NPC的冷却）
@@ -362,6 +362,11 @@ function accompanyNPC(npcId) {
 function executeEmotionAction(npc) {
     if (!npc || !npc.state) return;
 
+    // v22.2 情绪主动行为全是「当面」戏：走过来打招呼、寻求安慰、当面送礼、拒绝对话——
+    // 都得人在你眼前才成立。旧版没有同地校验，野外赶路每跨一个 6 小时档，
+    // 天下任何角落一个心情低落的 NPC 都能隔空把你的社交面板顶开（小概率走一格弹一次面板的根因）。
+    if (typeof npcNotCoLocated === 'function' && npcNotCoLocated(npc)) return;
+
     const mood = npc.state.mood || 50;
     const emotion = getEmotionState(mood);
 
@@ -390,9 +395,10 @@ function executeEmotionAction(npc) {
 
 // ============ 情绪状态UI渲染 ============
 function getEmotionBadgeHTML(npc) {
-    const mood = npc.state?.mood || 50;
+    // NEW-17 修：心情/压力是自然波动算出的浮点，读数处取整，不再打出「心情 46.362351…」
+    const mood = Math.round(npc.state?.mood || 50);
     const emotion = getEmotionState(mood);
-    const stress = npc.state?.stress || 0;
+    const stress = Math.round(npc.state?.stress || 0);
 
     let stressColor = 'text-green-400';
     if (stress > 60) stressColor = 'text-yellow-400';
@@ -455,9 +461,10 @@ function injectEmotionToDialog(npcId) {
     const npc = window.npcManager?.getNPC(npcId);
     if (!npc) return '';
 
-    const mood = npc.state?.mood || 50;
+    // NEW-17 修：读数取整（与 getEmotionBadgeHTML 同口径），进度条 width 用整数值不受影响
+    const mood = Math.round(npc.state?.mood || 50);
     const emotion = getEmotionState(mood);
-    const stress = npc.state?.stress || 0;
+    const stress = Math.round(npc.state?.stress || 0);
 
     let stressBarColor = 'bg-green-500';
     if (stress > 60) stressBarColor = 'bg-yellow-500';

@@ -1,6 +1,9 @@
 // ==================== forging-compound.js - 炼器·材料词缀 (v19.5 P1-2) ====================
 // 对标 v18.8 路线图 §4 P1-2：法器 = 器胚 + 主材 + 辅材 + 铭纹/阵纹，材料标签决定 1~3 词缀。
 // 不动 crafting.js 旧 fixed 路径；新走 executeCompoundForging。
+// 第二十六波 · 锻器品质段：器有品相——炉火（锻造技能±20）六成 + 工法（词缀/铭纹）四成，评出五档；
+//   品相真动数值（劣质七折、极品翻倍），极品出炉成双（同款多一件），名品定模（同款器的模子按最精的一件记）；
+//   洞府炼器台的「品质+1段」从此有处兑现。
 
 (function () {
     'use strict';
@@ -180,6 +183,43 @@
         return _rng() < keepProb;
     }
 
+    // ============== 5.5 第二十六波 · 锻器品质段（器有品相——同料同火，出炉有高下；炼器台「品质+1段」从此有处兑现） ==============
+    var QUALITY_LADDER = [
+        { id: 'poor', name: '劣质', mult: 0.7, color: 'gray' },
+        { id: 'normal', name: '普通', mult: 1.0, color: 'white' },
+        { id: 'good', name: '优良', mult: 1.2, color: 'blue' },
+        { id: 'excellent', name: '杰出', mult: 1.5, color: 'gold' },
+        { id: 'imperial', name: '极品', mult: 2.0, color: 'purple' }
+    ];
+    function qualityIndex(id) {
+        for (var i = 0; i < QUALITY_LADDER.length; i++) if (QUALITY_LADDER[i].id === id) return i;
+        return 1;
+    }
+    // 炉火＝锻造技能±20（与炼丹火候同一把尺）；工法＝词缀与铭纹定底。
+    // 评分 0.6×炉火 + 0.4×工法 → 品质五段；炼器台的 qualityBoost 每点抬一段（封顶极品）。
+    // 第二十九波 · 锻火试炼：玩家亲自控火的得分替代随机炉火（fire-qte 写 _forgingFireBonus，消费即清）；
+    // 受锻造手艺封顶（不超过 手艺+20，与原随机上限同一口径）——低手艺绕不过去，高手艺控火才出极品。
+    function rollQuality(skill, affixCount, isImprint) {
+        var sk = Number(skill) || 0;
+        var fire;
+        if (typeof window._forgingFireBonus === 'number' && window._forgingFireBonus >= 0) {
+            fire = Math.max(0, Math.min(100, Math.min(window._forgingFireBonus, sk + 20)));
+            window._forgingFireBonus = null; // 消费即清——一炉火只管一炉
+        } else {
+            fire = Math.max(0, Math.min(100, sk + (_rng() * 40 - 20)));
+        }
+        var craft = Math.min(100, Math.round((Number(affixCount) || 0) / 3 * 70) + (isImprint ? 30 : 0));
+        var score = Math.round(fire * 0.6 + craft * 0.4);
+        var qi = score >= 85 ? 4 : score >= 70 ? 3 : score >= 50 ? 2 : score >= 30 ? 1 : 0;
+        try {
+            if (window.CaveFacilities && typeof window.CaveFacilities.getBuff === 'function') {
+                var qb = Math.floor(Number(window.CaveFacilities.getBuff('player', 'qualityBoost')) || 0);
+                if (qb > 0) qi = Math.min(QUALITY_LADDER.length - 1, qi + qb);
+            }
+        } catch (e) {}
+        return { quality: QUALITY_LADDER[qi], score: score };
+    }
+
     // ============== 6. executeCompoundForging ==============
 
     function executeCompoundForging(recipeId, slotPick, options) {
@@ -216,6 +256,12 @@
         // 真气
         var cd = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
         if (cd && recipe.qiCost && (cd.qi || 0) < recipe.qiCost) return { ok: false, reason: 'qi-low' };
+        // v23.0 材料实扣：旧版器胚与材标签全白嫖（只扣真气）——现在主材/辅材/铭纹照单入账，
+        // 扣不起整炉不开（真气分文不动）；器胚是形制不是实物，不入账。
+        var _forgMats = slotPick.main.concat(slotPick.assist).concat(slotPick.rune || []);
+        if (window.compoundMat && typeof window.compoundMat.consume === 'function') {
+            if (!window.compoundMat.consume(_forgMats)) return { ok: false, reason: 'material-short' };
+        }
         // 抽词缀
         var allAffixes = [];
         for (var m = 0; m < slotPick.main.length; m++) {
@@ -249,6 +295,9 @@
         }
         // 限制最多 3 个词缀（路线图）
         if (finalAffixes.length > 3) finalAffixes = finalAffixes.slice(0, 3);
+        // 第二十六波：出炉的器有品相——炉火看手艺，工法看词缀铭纹
+        var qr = rollQuality(skill, finalAffixes.length, isImprint);
+        var quality = qr.quality;
         // 计算最终 attrs / combatBonus
         var finalAttrs = Object.assign({}, embryo.baseAttrs);
         var finalCombatBonus = {};
@@ -262,42 +311,53 @@
                 }
             }
         }
-        // 命名
+        // 品相真动数值：劣质是糟蹋料，极品是绝世兵（重量不动——铁有多沉就是多沉）
+        if (quality.mult !== 1) {
+            for (var qk in finalCombatBonus) finalCombatBonus[qk] = Math.max(1, Math.round(finalCombatBonus[qk] * quality.mult));
+            for (var qa in finalAttrs) { if (qa !== 'weight') finalAttrs[qa] = Math.max(1, Math.round((Number(finalAttrs[qa]) || 0) * quality.mult)); }
+        }
+        // 命名（劣/优/杰/极带品相字头，普通不加——中不溜才是常态）
         var prefix = finalAffixes.length > 0 ? finalAffixes.map(function (a) { return a.name; }).join('·') + '·' : '';
-        var finalName = prefix + embryo.name;
+        var qTag = quality.id === 'normal' ? '' : quality.name + '·';
+        var finalName = qTag + prefix + embryo.name;
         // 扣真气
         if (cd && recipe.qiCost) cd.qi = (cd.qi || 0) - recipe.qiCost;
-        // 落物品：构造 item instance（itemById 模板若不存在则临时构造）
+        // 落物品：构造 item instance——第二十六波改「名品定模」：同款器的模子按最精的一件记（旧规矩是头一炉定模，往后再精也白炼）
         var templateId = recipe.result.itemId;
         var template = window.itemById && window.itemById[templateId];
-        if (!template) {
-            // 临时构造最小模板并加入 itemById
-            if (window.itemById) {
-                window.itemById[templateId] = {
-                    id: templateId,
-                    name: finalName,
-                    type: embryo.slot === 'armor' ? 'equipment' : 'equipment',
-                    subtype: embryo.subtype,
-                    slot: embryo.slot,
-                    category: 'equipment',
-                    quality: 'COMMON',
-                    level: 1,
-                    price: 100,
-                    attrs: finalAttrs,
-                    combatBonus: finalCombatBonus,
-                    damageType: embryo.baseDamage || 'slash',
-                    weight: finalAttrs.weight || 1.5,
-                    desc: '由' + slotPick.main.concat(slotPick.assist).join('/') + '炼成的' + finalName
-                };
-            }
+        var oldQ = (template && template._forgeQuality != null) ? qualityIndex(template._forgeQuality) : -1;
+        if (window.itemById && (!template || qualityIndex(quality.id) >= oldQ)) {
+            window.itemById[templateId] = {
+                id: templateId,
+                name: finalName,
+                type: 'equipment',
+                subtype: embryo.subtype,
+                slot: embryo.slot,
+                category: 'equipment',
+                quality: 'PIN9',
+                level: 1,
+                price: Math.round(100 * quality.mult),
+                attrs: finalAttrs,
+                combatBonus: finalCombatBonus,
+                damageType: embryo.baseDamage || 'slash',
+                weight: finalAttrs.weight || 1.5,
+                _forgeQuality: quality.id,
+                desc: '由' + slotPick.main.concat(slotPick.assist).join('/') + '炼成的' + finalName + '（' + quality.name + '·工评' + qr.score + '）'
+            };
         }
+        // 极品出炉成双：同款多一件（可赠可卖）
+        var outCount = Math.max(1, recipe.result.count || 1) + (quality.id === 'imperial' ? 1 : 0);
         // 落物品到背包
         var addedOk = true;
         if (typeof window.addResultItem === 'function') {
-            addedOk = window.addResultItem(templateId, recipe.result.count);
+            addedOk = window.addResultItem(templateId, outCount);
         }
         if (!addedOk) {
             if (cd && recipe.qiCost) cd.qi = (cd.qi || 0) + recipe.qiCost;
+            // v23.0 炉没开成，材料原路退回
+            if (window.compoundMat && typeof window.compoundMat.refund === 'function') {
+                try { window.compoundMat.refund(_forgMats); } catch (eRf) {}
+            }
             return { ok: false, reason: 'inventory-full' };
         }
         // 时间推进
@@ -307,11 +367,15 @@
         // 事件总线
         if (typeof window.EventBus !== 'undefined') {
             var evtName = isImprint ? 'forging:compound:imprint' : 'forging:compound:success';
-            window.EventBus.emit(evtName, { recipeId: recipeId, itemId: templateId, name: finalName, affixes: finalAffixes.map(function (a) { return a.key; }), imprint: isImprint });
+            window.EventBus.emit(evtName, { recipeId: recipeId, itemId: templateId, name: finalName, affixes: finalAffixes.map(function (a) { return a.key; }), imprint: isImprint, quality: quality.id, score: qr.score });
+        }
+        // v20.94 熟能生巧：锻兵落地长锻造（铭纹是大活，长得多）
+        if (typeof window.growLifeSkill === 'function') {
+            window.growLifeSkill('锻造', isImprint ? 3 : 2, { reason: isImprint ? '铭纹锻兵' : '复合锻造' });
         }
         // StateRegistry
         try {
-            _moduleState.lastWeapons.unshift({ recipeId: recipeId, name: finalName, affixes: finalAffixes.map(function (a) { return a.key; }), imprint: isImprint, day: (window.WorldCalendar ? window.WorldCalendar.day : 0) });
+            _moduleState.lastWeapons.unshift({ recipeId: recipeId, name: finalName, affixes: finalAffixes.map(function (a) { return a.key; }), imprint: isImprint, quality: quality.id, day: (window.WorldCalendar ? window.WorldCalendar.day : 0) });
             if (_moduleState.lastWeapons.length > 20) _moduleState.lastWeapons.pop();
             if (isImprint) _moduleState.imprintCount++;
             for (var fa2 = 0; fa2 < finalAffixes.length; fa2++) {
@@ -319,7 +383,7 @@
                 _moduleState.preferTags[tagAff] = (_moduleState.preferTags[tagAff] || 0) + 1;
             }
         } catch (e) {}
-        return { ok: true, itemId: templateId, name: finalName, affixes: finalAffixes, combatBonus: finalCombatBonus, imprint: isImprint };
+        return { ok: true, itemId: templateId, name: finalName, affixes: finalAffixes, combatBonus: finalCombatBonus, imprint: isImprint, quality: quality, score: qr.score, count: outCount };
     }
 
     // ============== 7. 模块级状态（StateRegistry 兼容） ==============
@@ -355,12 +419,15 @@
         AFFIX_BY_TAG: AFFIX_BY_TAG,
         EMBRYOS: EMBRYOS,
         COMPOUND_FORGING_RECIPES: COMPOUND_FORGING_RECIPES,
+        QUALITY_LADDER: QUALITY_LADDER,
         getMaterialTags: getMaterialTags,
         pickAffixesForMat: pickAffixesForMat,
         keepAffixBySkill: keepAffixBySkill,
+        rollQuality: rollQuality,
+        qualityIndex: qualityIndex,
         executeCompoundForging: executeCompoundForging,
         getState: function () { return _moduleState; }
     };
     if (window.XianXia) window.XianXia.ForgingCompound = window.ForgingCompound;
-    try { console.log('[ForgingCompound] initialized v1 (' + Object.keys(MATERIAL_TAGS).length + ' tagged mats, ' + AFFIX_POOL.length + ' affixes, ' + Object.keys(EMBRYOS).length + ' embryos, ' + COMPOUND_FORGING_RECIPES.length + ' open recipes)'); } catch (e) {}
+    try { console.log('[ForgingCompound] initialized v1 (' + Object.keys(MATERIAL_TAGS).length + ' tagged mats, ' + AFFIX_POOL.length + ' affixes, ' + Object.keys(EMBRYOS).length + ' embryos, ' + COMPOUND_FORGING_RECIPES.length + ' open recipes；第二十六波添锻器品质段：炉火工法定五档·名品定模·极品成双·炼器台抬段)'); } catch (e) {}
 })();

@@ -55,6 +55,7 @@ function processAllSectDailyEconomy(day) {
     Object.keys(SECT_INTERNAL).forEach(function(sectName) {
         var internal = SECT_INTERNAL[sectName];
         if (!internal || internal.lastEconomyDay === day) return;
+        try { if (window.PSBoot && window.PSBoot.isPlayerSect && window.PSBoot.isPlayerSect(sectName)) return; } catch (e) {} // 第九波：玩家自建宗门的户部镜像由白手起家月结专管——日结不再凭空代发"香火产业"
         var snap = getSectEconomySnapshot(sectName);
         if (!snap) return;
         internal.resources = Math.max(0, snap.stock + snap.net);
@@ -83,7 +84,9 @@ function processAllSectDailyEconomy(day) {
         });
     }
     // v19.1 P0-4：每季小比 / 每年大比周期调度
-    if (window.Tournament && typeof window.Tournament.tickDay === 'function' && (day % 90 === 0 || day % 360 === 0)) {
+    // 批五：改为每日过一遍——开比节令仍由 tickDay 内部 day%90/%360 管，
+    // 但「截止即开打」必须天天检查（旧版每90日才跑一次，7日报名期的赛事要拖83天才结算）。
+    if (window.Tournament && typeof window.Tournament.tickDay === 'function') {
         Object.keys(SECT_INTERNAL).forEach(function (sectName) {
             try { window.Tournament.tickDay(sectName, day); } catch (e) { /* 不阻塞 */ }
         });
@@ -258,6 +261,10 @@ function registerSectNPCs(sectName) {
         leaderNPC.relationship.respect = (fixedDef.relationship && fixedDef.relationship.respect != null) ? fixedDef.relationship.respect : 0;
         leaderNPC.relationship.favor = (fixedDef.relationship && fixedDef.relationship.favor != null) ? fixedDef.relationship.favor : 0;
         leaderNPC._isFixedDefinition = true;
+        // v20.88 固定人设顶层 skills 此前被整个丢弃——现在并入门派功法持有网（请教功法才教得出真东西）
+        if (Array.isArray(fixedDef.skills) && fixedDef.skills.length) {
+            leaderNPC.combat.skills = (leaderNPC.combat.skills || []).concat(fixedDef.skills);
+        }
         window.npcManager.addNPC(leaderNPC);
         console.log('[固定NPC] 已注册固定定义:', leaderId, fixedDef.name);
     } else {
@@ -292,7 +299,7 @@ function registerSectNPCs(sectName) {
         window.npcManager.addNPC(elderNPC);
     }
     
-    var discipleCount = 3 + Math.floor(Math.random() * 3);
+    var discipleCount = 5 + Math.floor(Math.random() * 4); // 批四·弟子有脸：每派5-8名具名同门（切磋陪练/收徒候选/事件真名都从这批真档案里出）
     var usedNames = [];
     function getDiscipleName() {
         if (typeof window.nameGenerator?.generateName === 'function') {
@@ -321,24 +328,41 @@ function registerAllSectNPCs() {
     var sects = window.sectsData || {};
     for (var name in sects) registerSectNPCs(name);
     var total = Object.keys(sects).length;
+    // v20.88 注册完毕即铺功法持有网（幂等；打开请教/传授面板时还会懒补一次，覆盖读档世界）
+    try { if (window.SkillTransmission && typeof window.SkillTransmission.ensureHolders === 'function') window.SkillTransmission.ensureHolders(); } catch (e) { console.warn('[传功] 持有网铺设失败:', e); }
     // 静默注册，不打扰玩家
     console.log('🏛️ 已为' + total + '个门派注册NPC');
 }
 
+// NEW-43④：名册归属改按「id 前缀 / 家锚点」判定，不再按 location 精确等值——
+// 旧口径是「谁站在这儿谁是我门的人」：串门的外派混进名册、自家弟子出门就除名，
+// 下游十一处读端（比武选人/护法差事/门内治理/弟子籍册…）一起歪。
+function getSectOfNpcId(id) {
+    if (typeof id !== 'string') return null;
+    // sect_leader_华山派 / sect_elder_华山派_1 / sect_disciple_华山派_3 ……门派名写死在 id 里
+    var m = /^sect_[A-Za-z]+_(.+?)(?:_\d+)?$/.exec(id);
+    return m ? m[1] : null;
+}
+
 function getSectNPCs(sectName) {
     if (!window.npcManager) return [];
-    return window.npcManager.getAllNPCs().filter(function(n) { return n.location === sectName; });
+    return window.npcManager.getAllNPCs().filter(function(n) {
+        if (!n) return false;
+        if (getSectOfNpcId(n.id) === sectName) return true;
+        // 家锚点兜底：不循 sect_* 命名的驻派人物（如特殊定义的破戒僧）以注册地为归属
+        return !!n.homeLocation && n.homeLocation === sectName;
+    });
 }
 
 // ============ 门派专属装备与功法（P3） ============
 var SECT_SPECIFIC_EQUIPMENT = {
-    '少林寺': { weapon: { id: 'wpn_shaolin_staff', name: '少林棍', quality: 'RARE', level: 10, attrs: { strength: 8, constitution: 5 }, combatBonus: { attack: 25, block: 10 }, icon: '⚔️' }, armor: { id: 'arm_shaolin_robe', name: '少林袈裟', quality: 'RARE', level: 10, defense: 20, attrs: { constitution: 6, willpower: 4 }, icon: '👘' } },
-    '武当派': { weapon: { id: 'wpn_wudang_sword', name: '真武剑', quality: 'RARE', level: 10, attrs: { strength: 6, dexterity: 8, intelligence: 4 }, combatBonus: { attack: 28, hit: 5 }, icon: '⚔️' } },
-    '峨眉派': { weapon: { id: 'wpn_emei_sword', name: '倚天剑', quality: 'EPIC', level: 18, attrs: { strength: 12, dexterity: 10, intelligence: 8 }, combatBonus: { attack: 45, crit: 8, hit: 5 }, icon: '⚔️' } },
-    '丐帮': { weapon: { id: 'wpn_gaibang_staff', name: '打狗棒', quality: 'RARE', level: 12, attrs: { strength: 9, dexterity: 7 }, combatBonus: { attack: 30, crit: 5, block: 5 }, icon: '🔱' } },
-    '铸剑山庄': { weapon: { id: 'wpn_zhujian_sword', name: '铸剑', quality: 'EPIC', level: 16, attrs: { strength: 15, dexterity: 8 }, combatBonus: { attack: 40, crit: 10 }, icon: '⚔️' } },
-    '唐门': { weapon: { id: 'wpn_tangmen_dart', name: '唐门暗器', quality: 'RARE', level: 10, attrs: { dexterity: 12 }, combatBonus: { attack: 28, hit: 8, crit: 5 }, icon: '🗡️' } },
-    '茅山派': { weapon: { id: 'wpn_maoshan_sword', name: '桃木剑', quality: 'UNCOMMON', level: 6, attrs: { intelligence: 8, willpower: 4 }, combatBonus: { attack: 18, hit: 3 }, icon: '⚔️' } }
+    '少林寺': { weapon: { id: 'wpn_shaolin_staff', name: '少林棍', quality: 'PIN7', level: 10, attrs: { strength: 8, constitution: 5 }, combatBonus: { attack: 25, block: 10 }, icon: '⚔️' }, armor: { id: 'arm_shaolin_robe', name: '少林袈裟', quality: 'PIN7', level: 10, defense: 20, attrs: { constitution: 6, willpower: 4 }, icon: '👘' } },
+    '武当派': { weapon: { id: 'wpn_wudang_sword', name: '真武剑', quality: 'PIN7', level: 10, attrs: { strength: 6, dexterity: 8, intelligence: 4 }, combatBonus: { attack: 28, hit: 5 }, icon: '⚔️' } },
+    '峨眉派': { weapon: { id: 'wpn_emei_sword', name: '倚天剑', quality: 'PIN5', level: 18, attrs: { strength: 12, dexterity: 10, intelligence: 8 }, combatBonus: { attack: 45, crit: 8, hit: 5 }, icon: '⚔️' } },
+    '丐帮': { weapon: { id: 'wpn_gaibang_staff', name: '打狗棒', quality: 'PIN7', level: 12, attrs: { strength: 9, dexterity: 7 }, combatBonus: { attack: 30, crit: 5, block: 5 }, icon: '🔱' } },
+    '铸剑山庄': { weapon: { id: 'wpn_zhujian_sword', name: '铸剑', quality: 'PIN5', level: 16, attrs: { strength: 15, dexterity: 8 }, combatBonus: { attack: 40, crit: 10 }, icon: '⚔️' } },
+    '唐门': { weapon: { id: 'wpn_tangmen_dart', name: '唐门暗器', quality: 'PIN7', level: 10, attrs: { dexterity: 12 }, combatBonus: { attack: 28, hit: 8, crit: 5 }, icon: '🗡️' } },
+    '茅山派': { weapon: { id: 'wpn_maoshan_sword', name: '桃木剑', quality: 'PIN8', level: 6, attrs: { intelligence: 8, willpower: 4 }, combatBonus: { attack: 18, hit: 3 }, icon: '⚔️' } }
 };
 
 // v15.4 藏经阁分层阅览体系：tier=楼层准入（1外门阁rank≤7 / 2内门阁rank≤5 / 3核心阁rank≤4 / 4镇派阁rank≤3）
@@ -346,184 +370,185 @@ var SECT_SPECIFIC_EQUIPMENT = {
 // 批次一16派；其余20派待批次二补全
 var SECT_SPECIFIC_ARTS = {
     '少林寺': [
-        { id: 'art_shaolin_quan', name: '少林长拳', type: '拳掌', grade: '良品', tier: 1, bonus: { strength: 5 }, copyPrice: 300, desc: '少林入门拳法，刚猛朴实' },
-        { id: 'art_sl_luohan', name: '罗汉伏魔功', type: '内功', grade: '上品', tier: 2, bonus: { constitution: 8, willpower: 3 }, copyPrice: 800, desc: '十八罗汉桩合炼的内壮功法' },
-        { id: 'art_yi_jin_jing', name: '易筋经', type: '内功', grade: '仙品', tier: 4, wuxingReq: 28, bonus: { constitution: 15, willpower: 8 }, copyPrice: 3000, desc: '少林无上内功，脱胎换骨' }
+        { id: 'art_shaolin_quan', name: '少林长拳', type: '拳掌', grade: '八品', tier: 1, bonus: { strength: 5 }, copyPrice: 300, desc: '少林入门拳法，刚猛朴实' },
+        { id: 'art_sl_luohan', name: '罗汉伏魔功', type: '内功', grade: '七品', tier: 2, bonus: { constitution: 8, willpower: 3 }, copyPrice: 800, desc: '十八罗汉桩合炼的内壮功法' },
+        { id: 'art_yi_jin_jing', name: '易筋经', type: '内功', grade: '三品', tier: 4, wuxingReq: 28, bonus: { constitution: 15, willpower: 8 }, copyPrice: 3000, desc: '少林无上内功，脱胎换骨' }
     ],
     '武当派': [
-        { id: 'art_taiji_quan', name: '太极拳', type: '拳掌', grade: '良品', tier: 1, bonus: { willpower: 5 }, copyPrice: 300, desc: '以柔克刚的入门拳法' },
-        { id: 'art_wd_chunyang', name: '纯阳无极功', type: '内功', grade: '珍品', tier: 2, bonus: { meridian: 9 }, copyPrice: 800, desc: '武当内丹正宗' },
-        { id: 'art_wd_taiji_jian', name: '太极剑意', type: '剑法', grade: '仙品', tier: 4, wuxingReq: 26, bonus: { dexterity: 14, intelligence: 8 }, copyPrice: 3000, desc: '以意驭剑，绵绵不绝' }
+        { id: 'art_taiji_quan', name: '太极拳', type: '拳掌', grade: '八品', tier: 1, bonus: { willpower: 5 }, copyPrice: 300, desc: '以柔克刚的入门拳法' },
+        { id: 'art_wd_chunyang', name: '纯阳无极功', type: '内功', grade: '七品', tier: 2, bonus: { meridian: 9 }, copyPrice: 800, desc: '武当内丹正宗' },
+        { id: 'art_wd_taiji_jian', name: '太极剑意', type: '剑法', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 26, bonus: { dexterity: 14, intelligence: 8 }, copyPrice: 3000, desc: '以意驭剑，绵绵不绝' }
     ],
     '峨眉派': [
-        { id: 'art_em_jiuyang', name: '峨眉九阳功', type: '内功', grade: '良品', tier: 1, bonus: { constitution: 5 }, copyPrice: 300, desc: '脱胎于九阳神文的入门内功' },
-        { id: 'art_em_piaoxue', name: '飘雪穿云掌', type: '拳掌', grade: '珍品', tier: 2, bonus: { dexterity: 9 }, copyPrice: 800, desc: '掌如飞雪，绵里藏针' },
-        { id: 'art_em_yitian', name: '倚天屠龙功', type: '剑法', grade: '仙品', tier: 4, wuxingReq: 28, bonus: { strength: 13, dexterity: 10 }, copyPrice: 3000, desc: '峨眉立派的至高剑学' }
+        { id: 'art_em_jiuyang', name: '峨眉九阳功', type: '内功', grade: '八品', tier: 1, bonus: { constitution: 5 }, copyPrice: 300, desc: '脱胎于九阳神文的入门内功' },
+        { id: 'art_em_piaoxue', name: '飘雪穿云掌', type: '拳掌', grade: '七品', tier: 2, bonus: { dexterity: 9 }, copyPrice: 800, desc: '掌如飞雪，绵里藏针' },
+        { id: 'art_em_yitian', name: '倚天屠龙功', type: '剑法', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 28, bonus: { strength: 13, dexterity: 10 }, copyPrice: 3000, desc: '峨眉立派的至高剑学' }
     ],
     '丐帮': [
-        { id: 'art_gb_tongbei', name: '丐帮通背拳', type: '拳掌', grade: '良品', tier: 1, bonus: { strength: 5 }, copyPrice: 300, desc: '叫花子们赖以防身的粗浅拳脚' },
-        { id: 'art_gaibang_staff', name: '打狗棒法', type: '长兵', grade: '珍品', tier: 2, bonus: { strength: 9, dexterity: 5 }, copyPrice: 800, desc: '丐帮帮主嫡传棒法' },
-        { id: 'art_gb_xianglong', name: '降龙十八掌·残篇', type: '拳掌', grade: '仙品', tier: 4, wuxingReq: 25, bonus: { strength: 18, constitution: 6 }, copyPrice: 3000, desc: '天下第一刚猛掌力（仅存十五式）' }
+        { id: 'art_gb_tongbei', name: '丐帮通背拳', type: '拳掌', grade: '八品', tier: 1, bonus: { strength: 5 }, copyPrice: 300, desc: '叫花子们赖以防身的粗浅拳脚' },
+        { id: 'art_gb_huntian', name: '混天功', type: '内功', grade: '七品', tier: 2, bonus: { constitution: 8, strength: 4 }, copyPrice: 800, desc: '丐帮内壮根基功，熬得住风霜才练得出' },
+        { id: 'art_gaibang_staff', name: '打狗棒法', type: '长兵', grade: '三品', tier: 4, transmit: 'leader', wuxingReq: 25, bonus: { strength: 17, dexterity: 10 }, copyPrice: 3000, desc: '丐帮镇帮神技——棒在人在，历代只传帮主一人，阁中无册' },
+        { id: 'art_gb_xianglong', name: '降龙十八掌·残篇', type: '拳掌', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 25, bonus: { strength: 18, constitution: 6 }, copyPrice: 3000, desc: '天下第一刚猛掌力（仅存十五式）' }
     ],
     '唐门': [
-        { id: 'art_tm_cuidu', name: '淬毒手法', type: '奇门', grade: '良品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '蜀中暗器手的必修基本功' },
-        { id: 'art_tangmen_hidden', name: '唐门暗器术', type: '奇门', grade: '珍品', tier: 2, bonus: { dexterity: 10 }, copyPrice: 800, desc: '唐门不传之秘' },
-        { id: 'art_tm_wangu', name: '万蛊噬心术', type: '奇门', grade: '仙品', tier: 4, wuxingReq: 27, bonus: { intelligence: 12, dexterity: 10 }, copyPrice: 3000, desc: '蛊毒暗器合一的禁术' }
+        { id: 'art_tm_cuidu', name: '淬毒手法', type: '奇门', grade: '八品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '蜀中暗器手的必修基本功' },
+        { id: 'art_tangmen_hidden', name: '唐门暗器术', type: '奇门', grade: '七品', tier: 2, bonus: { dexterity: 10 }, copyPrice: 800, desc: '唐门不传之秘' },
+        { id: 'art_tm_wangu', name: '万蛊噬心术', type: '奇门', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 27, bonus: { intelligence: 12, dexterity: 10 }, copyPrice: 3000, desc: '蛊毒暗器合一的禁术' }
     ],
     '逍遥派': [
-        { id: 'art_xy_yufeng', name: '逍遥御风诀', type: '轻功', grade: '良品', tier: 1, bonus: { meridian: 5 }, copyPrice: 300, desc: '缥缈峰入门身法' },
-        { id: 'art_xiaoyao_zhang', name: '逍遥掌法', type: '拳掌', grade: '珍品', tier: 2, bonus: { intelligence: 6, dexterity: 6 }, copyPrice: 800, desc: '潇洒写意的掌中雅趣' },
-        { id: 'art_xy_xiaowuxiang', name: '小无相功', type: '内功', grade: '仙品', tier: 4, wuxingReq: 30, bonus: { intelligence: 15, meridian: 8 }, copyPrice: 3000, desc: '道家清静无为的至高内功' }
+        { id: 'art_xy_yufeng', name: '逍遥御风诀', type: '轻功', grade: '八品', tier: 1, bonus: { meridian: 5 }, copyPrice: 300, desc: '缥缈峰入门身法' },
+        { id: 'art_xiaoyao_zhang', name: '逍遥掌法', type: '拳掌', grade: '七品', tier: 2, bonus: { intelligence: 6, dexterity: 6 }, copyPrice: 800, desc: '潇洒写意的掌中雅趣' },
+        { id: 'art_xy_xiaowuxiang', name: '小无相功', type: '内功', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 30, bonus: { intelligence: 15, meridian: 8 }, copyPrice: 3000, desc: '道家清静无为的至高内功' }
     ],
     '修罗宫': [
-        { id: 'art_xlg_xuesha', name: '修罗血煞劲', type: '内功', grade: '良品', tier: 1, bonus: { constitution: 5 }, copyPrice: 300, desc: '以痛楚淬炼体魄的入门功' },
-        { id: 'art_xiuluo_dao', name: '修罗刀法', type: '刀法', grade: '珍品', tier: 2, bonus: { strength: 11 }, copyPrice: 800, desc: '修罗宫杀戮刀法' },
-        { id: 'art_xlg_tianmo', name: '天魔解体大法', type: '内功', grade: '仙品', tier: 4, wuxingReq: 25, bonus: { strength: 16, willpower: 8 }, copyPrice: 3000, desc: '燃血催力的搏命绝学' }
+        { id: 'art_xlg_xuesha', name: '修罗血煞劲', type: '内功', grade: '八品', tier: 1, bonus: { constitution: 5 }, copyPrice: 300, desc: '以痛楚淬炼体魄的入门功' },
+        { id: 'art_xiuluo_dao', name: '修罗刀法', type: '刀法', grade: '七品', tier: 2, bonus: { strength: 11 }, copyPrice: 800, desc: '修罗宫杀戮刀法' },
+        { id: 'art_xlg_tianmo', name: '天魔解体大法', type: '内功', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 25, bonus: { strength: 16, willpower: 8 }, copyPrice: 3000, desc: '燃血催力的搏命绝学' }
     ],
     '铸剑山庄': [
-        { id: 'art_zj_duanti', name: '锻体锤法', type: '拳掌', grade: '良品', tier: 1, bonus: { strength: 5, constitution: 3 }, copyPrice: 300, desc: '打铁先打身的庄内基本功' },
-        { id: 'art_zj_xinfa', name: '铸剑心法', type: '内功', grade: '珍品', tier: 2, bonus: { willpower: 9 }, copyPrice: 800, desc: '观炉火三千日方得的心法' },
-        { id: 'art_zj_wanjian', name: '万剑归宗诀', type: '剑法', grade: '仙品', tier: 4, wuxingReq: 27, bonus: { strength: 12, dexterity: 12 }, copyPrice: 3000, desc: '剑冢千柄同鸣的传说剑诀' }
+        { id: 'art_zj_duanti', name: '锻体锤法', type: '拳掌', grade: '八品', tier: 1, bonus: { strength: 5, constitution: 3 }, copyPrice: 300, desc: '打铁先打身的庄内基本功' },
+        { id: 'art_zj_xinfa', name: '铸剑心法', type: '内功', grade: '七品', tier: 2, bonus: { willpower: 9 }, copyPrice: 800, desc: '观炉火三千日方得的心法' },
+        { id: 'art_zj_wanjian', name: '万剑归宗诀', type: '剑法', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 27, bonus: { strength: 12, dexterity: 12 }, copyPrice: 3000, desc: '剑冢千柄同鸣的传说剑诀' }
     ],
     '茅山派': [
-        { id: 'art_ms_jingshen', name: '净身咒', type: '符箓', grade: '良品', tier: 1, bonus: { willpower: 5 }, copyPrice: 300, desc: '茅山弟子的第一道符课' },
-        { id: 'art_ms_wulei', name: '五雷符法', type: '符箓', grade: '珍品', tier: 2, bonus: { intelligence: 9 }, copyPrice: 800, desc: '召雷敕鬼的正统符术' },
-        { id: 'art_ms_tianshi', name: '天师正印', type: '符箓', grade: '仙品', tier: 4, wuxingReq: 26, bonus: { intelligence: 14, willpower: 10 }, copyPrice: 3000, desc: '茅山历代天师印信之学' }
+        { id: 'art_ms_jingshen', name: '净身咒', type: '符箓', grade: '八品', tier: 1, bonus: { willpower: 5 }, copyPrice: 300, desc: '茅山弟子的第一道符课' },
+        { id: 'art_ms_wulei', name: '五雷符法', type: '符箓', grade: '七品', tier: 2, bonus: { intelligence: 9 }, copyPrice: 800, desc: '召雷敕鬼的正统符术' },
+        { id: 'art_ms_tianshi', name: '天师正印', type: '符箓', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 26, bonus: { intelligence: 14, willpower: 10 }, copyPrice: 3000, desc: '茅山历代天师印信之学' }
     ],
     '全真教': [
-        { id: 'art_qz_tuna', name: '全真吐纳术', type: '内功', grade: '良品', tier: 1, bonus: { meridian: 5 }, copyPrice: 300, desc: '终南山入门调息之法' },
-        { id: 'art_qz_xiantian', name: '先天功', type: '内功', grade: '珍品', tier: 2, bonus: { intelligence: 10 }, copyPrice: 800, desc: '返本归元的道门玄功' },
-        { id: 'art_qz_yiqi', name: '一气化三清', type: '内功', grade: '仙品', tier: 4, wuxingReq: 29, bonus: { meridian: 14, intelligence: 9 }, copyPrice: 3000, desc: '全真玄门最高绝学' }
+        { id: 'art_qz_tuna', name: '全真吐纳术', type: '内功', grade: '八品', tier: 1, bonus: { meridian: 5 }, copyPrice: 300, desc: '终南山入门调息之法' },
+        { id: 'art_qz_xiantian', name: '先天功', type: '内功', grade: '七品', tier: 2, bonus: { intelligence: 10 }, copyPrice: 800, desc: '返本归元的道门玄功' },
+        { id: 'art_qz_yiqi', name: '一气化三清', type: '内功', grade: '三品', tier: 4, wuxingReq: 29, bonus: { meridian: 14, intelligence: 9 }, copyPrice: 3000, desc: '全真玄门最高绝学' }
     ],
     '天山派': [
-        { id: 'art_ts_zhemei', name: '天山折梅手·基础', type: '拳掌', grade: '良品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '三路折梅手的基础三十六式' },
-        { id: 'art_ts_shengsi', name: '生死符秘要', type: '奇门', grade: '珍品', tier: 2, bonus: { intelligence: 9 }, copyPrice: 800, desc: '寒冰薄片的制御之要' },
-        { id: 'art_ts_liuyang', name: '天山六阳掌', type: '拳掌', grade: '仙品', tier: 4, wuxingReq: 27, bonus: { dexterity: 13, intelligence: 10 }, copyPrice: 3000, desc: '阳春白雪与雷霆并蓄' }
+        { id: 'art_ts_zhemei', name: '天山折梅手·基础', type: '拳掌', grade: '八品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '三路折梅手的基础三十六式' },
+        { id: 'art_ts_shengsi', name: '生死符秘要', type: '奇门', grade: '七品', tier: 2, bonus: { intelligence: 9 }, copyPrice: 800, desc: '寒冰薄片的制御之要' },
+        { id: 'art_ts_liuyang', name: '天山六阳掌', type: '拳掌', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 27, bonus: { dexterity: 13, intelligence: 10 }, copyPrice: 3000, desc: '阳春白雪与雷霆并蓄' }
     ],
     '金刚宗': [
-        { id: 'art_jgz_zhuang', name: '金刚桩功', type: '炼体', grade: '良品', tier: 1, bonus: { constitution: 6 }, copyPrice: 300, desc: '密宗苦行的第一桩' },
-        { id: 'art_jgz_longxiang_c', name: '龙象般若功·初卷', type: '炼体', grade: '珍品', tier: 2, bonus: { strength: 10 }, copyPrice: 800, desc: '十三层龙象的前七层' },
-        { id: 'art_jgz_longxiang', name: '龙象般若功·圆满', type: '炼体', grade: '仙品', tier: 4, wuxingReq: 24, bonus: { strength: 17, constitution: 10 }, copyPrice: 3000, desc: '十龙十象之力，密宗炼体极诣' }
+        { id: 'art_jgz_zhuang', name: '金刚桩功', type: '炼体', grade: '八品', tier: 1, bonus: { constitution: 6 }, copyPrice: 300, desc: '密宗苦行的第一桩' },
+        { id: 'art_jgz_longxiang_c', name: '龙象般若功·初卷', type: '炼体', grade: '七品', tier: 2, bonus: { strength: 10 }, copyPrice: 800, desc: '十三层龙象的前七层' },
+        { id: 'art_jgz_longxiang', name: '龙象般若功·圆满', type: '炼体', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 24, bonus: { strength: 17, constitution: 10 }, copyPrice: 3000, desc: '十龙十象之力，密宗炼体极诣' }
     ],
     '蓬莱派': [
-        { id: 'art_pl_guanlan', name: '观澜心法', type: '内功', grade: '良品', tier: 1, bonus: { meridian: 5 }, copyPrice: 300, desc: '观海听涛而悟的入门心法' },
-        { id: 'art_pl_canglang', name: '沧浪水诀', type: '法术', grade: '珍品', tier: 2, bonus: { intelligence: 9, meridian: 4 }, copyPrice: 800, desc: '驭水行舟的岛居秘传' },
-        { id: 'art_pl_haishi', name: '海市蜃楼幻术', type: '法术', grade: '仙品', tier: 4, wuxingReq: 28, bonus: { intelligence: 13, willpower: 9 }, copyPrice: 3000, desc: '虚实颠倒的海上大幻' }
+        { id: 'art_pl_guanlan', name: '观澜心法', type: '内功', grade: '八品', tier: 1, bonus: { meridian: 5 }, copyPrice: 300, desc: '观海听涛而悟的入门心法' },
+        { id: 'art_pl_canglang', name: '沧浪水诀', type: '法术', grade: '七品', tier: 2, bonus: { intelligence: 9, meridian: 4 }, copyPrice: 800, desc: '驭水行舟的岛居秘传' },
+        { id: 'art_pl_haishi', name: '海市蜃楼幻术', type: '法术', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 28, bonus: { intelligence: 13, willpower: 9 }, copyPrice: 3000, desc: '虚实颠倒的海上大幻' }
     ],
     '药王谷': [
-        { id: 'art_yw_baicao', name: '百草辨识', type: '医道', grade: '良品', tier: 1, bonus: { constitution: 5 }, copyPrice: 300, desc: '尝百草识药性的谷中童子功课' },
-        { id: 'art_yw_qihuang', name: '岐黄之术', type: '医道', grade: '珍品', tier: 2, bonus: { intelligence: 10 }, copyPrice: 800, desc: '医武同源的谷主亲传' },
-        { id: 'art_yw_taisu', name: '太素神针', type: '医道', grade: '仙品', tier: 4, wuxingReq: 26, bonus: { intelligence: 12, constitution: 11 }, copyPrice: 3000, desc: '一针定生死的谷中圣手之学' }
+        { id: 'art_yw_baicao', name: '百草辨识', type: '医道', grade: '八品', tier: 1, bonus: { constitution: 5 }, copyPrice: 300, desc: '尝百草识药性的谷中童子功课' },
+        { id: 'art_yw_qihuang', name: '岐黄之术', type: '医道', grade: '七品', tier: 2, bonus: { intelligence: 10 }, copyPrice: 800, desc: '医武同源的谷主亲传' },
+        { id: 'art_yw_taisu', name: '太素神针', type: '医道', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 26, bonus: { intelligence: 12, constitution: 11 }, copyPrice: 3000, desc: '一针定生死的谷中圣手之学' }
     ],
     '华山派': [
-        { id: 'art_hs_jianchu', name: '华山剑法·基础', type: '剑法', grade: '良品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '五岳剑派的正统入门剑' },
-        { id: 'art_hs_zixia', name: '紫霞神功', type: '内功', grade: '珍品', tier: 2, bonus: { willpower: 10 }, copyPrice: 800, desc: '华山气宗立派之本' },
-        { id: 'art_hs_dugu', name: '独孤九剑·总诀式', type: '剑法', grade: '仙品', tier: 4, wuxingReq: 30, bonus: { dexterity: 16, intelligence: 8 }, copyPrice: 3000, desc: '无招胜有招的剑道至理' }
+        { id: 'art_hs_jianchu', name: '华山剑法·基础', type: '剑法', grade: '八品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '五岳剑派的正统入门剑' },
+        { id: 'art_hs_zixia', name: '紫霞神功', type: '内功', grade: '七品', tier: 2, bonus: { willpower: 10 }, copyPrice: 800, desc: '华山气宗立派之本' },
+        { id: 'art_hs_dugu', name: '独孤九剑·总诀式', type: '剑法', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 30, bonus: { dexterity: 16, intelligence: 8 }, copyPrice: 3000, desc: '无招胜有招的剑道至理' }
     ],
     '昆仑派': [
-        { id: 'art_kl_liangyi_c', name: '昆仑两仪剑·基础', type: '剑法', grade: '良品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '西域玄门的阴阳初剑' },
-        { id: 'art_kl_xiangji', name: '两仪相济诀', type: '内功', grade: '珍品', tier: 2, bonus: { willpower: 9, dexterity: 4 }, copyPrice: 800, desc: '阴阳互济的调和之道' },
-        { id: 'art_kl_tianqing', name: '天清诀', type: '内功', grade: '仙品', tier: 4, wuxingReq: 28, bonus: { meridian: 13, intelligence: 10 }, copyPrice: 3000, desc: '昆仑镇山的清微玄功' }
+        { id: 'art_kl_liangyi_c', name: '昆仑两仪剑·基础', type: '剑法', grade: '八品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '西域玄门的阴阳初剑' },
+        { id: 'art_kl_xiangji', name: '两仪相济诀', type: '内功', grade: '七品', tier: 2, bonus: { willpower: 9, dexterity: 4 }, copyPrice: 800, desc: '阴阳互济的调和之道' },
+        { id: 'art_kl_tianqing', name: '天清诀', type: '内功', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 28, bonus: { meridian: 13, intelligence: 10 }, copyPrice: 3000, desc: '昆仑镇山的清微玄功' }
     ],
     '嵩山派': [
-        { id: 'art_ss_jianchu', name: '嵩山剑法·基础', type: '剑法', grade: '良品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '十七路嵩山剑，长枪大戟般堂皇' },
-        { id: 'art_ss_dasongyang', name: '大嵩阳神掌', type: '拳掌', grade: '珍品', tier: 2, bonus: { strength: 9, willpower: 4 }, copyPrice: 800, desc: '五岳盟主威震群雄的掌力' },
-        { id: 'art_ss_hanbing', name: '寒冰真气', type: '内功', grade: '仙品', tier: 4, wuxingReq: 27, bonus: { intelligence: 13, willpower: 10 }, copyPrice: 3000, desc: '真气所至，寒霜凝结的左氏秘传' }
+        { id: 'art_ss_jianchu', name: '嵩山剑法·基础', type: '剑法', grade: '八品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '十七路嵩山剑，长枪大戟般堂皇' },
+        { id: 'art_ss_dasongyang', name: '大嵩阳神掌', type: '拳掌', grade: '七品', tier: 2, bonus: { strength: 9, willpower: 4 }, copyPrice: 800, desc: '五岳盟主威震群雄的掌力' },
+        { id: 'art_ss_hanbing', name: '寒冰真气', type: '内功', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 27, bonus: { intelligence: 13, willpower: 10 }, copyPrice: 3000, desc: '真气所至，寒霜凝结的左氏秘传' }
     ],
     '泰山派': [
-        { id: 'art_ta_jianchu', name: '泰山剑法·基础', type: '剑法', grade: '良品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '五岳剑派的厚重入门剑' },
-        { id: 'art_ta_shibapan', name: '泰山十八盘', type: '剑法', grade: '珍品', tier: 2, bonus: { dexterity: 8, strength: 4 }, copyPrice: 800, desc: '越盘越高，越行越险' },
-        { id: 'art_ta_daizong', name: '岱宗如何', type: '剑法', grade: '仙品', tier: 4, wuxingReq: 30, bonus: { intelligence: 14, dexterity: 11 }, copyPrice: 3000, desc: '算尽敌我方位方能出手——难学无比' }
+        { id: 'art_ta_jianchu', name: '泰山剑法·基础', type: '剑法', grade: '八品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '五岳剑派的厚重入门剑' },
+        { id: 'art_ta_shibapan', name: '泰山十八盘', type: '剑法', grade: '七品', tier: 2, bonus: { dexterity: 8, strength: 4 }, copyPrice: 800, desc: '越盘越高，越行越险' },
+        { id: 'art_ta_daizong', name: '岱宗如何', type: '剑法', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 30, bonus: { intelligence: 14, dexterity: 11 }, copyPrice: 3000, desc: '算尽敌我方位方能出手——难学无比' }
     ],
     '恒山派': [
-        { id: 'art_heng_jianchu', name: '恒山剑法·基础', type: '剑法', grade: '良品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '绵密严谨，以守代攻' },
-        { id: 'art_heng_mianlizhen', name: '绵里藏针', type: '剑法', grade: '珍品', tier: 2, bonus: { dexterity: 7, willpower: 4 }, copyPrice: 800, desc: '棉里裹针，后发制人' },
-        { id: 'art_heng_wanhua', name: '万花剑法', type: '剑法', grade: '仙品', tier: 4, wuxingReq: 26, bonus: { dexterity: 12, willpower: 10 }, copyPrice: 3000, desc: '恒山诸尼镇寺之宝' }
+        { id: 'art_heng_jianchu', name: '恒山剑法·基础', type: '剑法', grade: '八品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '绵密严谨，以守代攻' },
+        { id: 'art_heng_mianlizhen', name: '绵里藏针', type: '剑法', grade: '七品', tier: 2, bonus: { dexterity: 7, willpower: 4 }, copyPrice: 800, desc: '棉里裹针，后发制人' },
+        { id: 'art_heng_wanhua', name: '万花剑法', type: '剑法', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 26, bonus: { dexterity: 12, willpower: 10 }, copyPrice: 3000, desc: '恒山诸尼镇寺之宝' }
     ],
     '衡山派': [
-        { id: 'art_hy_jianchu', name: '衡山剑法·基础', type: '剑法', grade: '良品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '潇湘夜雨的前三十六路' },
-        { id: 'art_hy_huifeng', name: '回风落雁剑', type: '剑法', grade: '珍品', tier: 2, bonus: { dexterity: 9, intelligence: 4 }, copyPrice: 800, desc: '一剑落九雁' },
-        { id: 'art_hy_wushen', name: '衡山五神剑', type: '剑法', grade: '仙品', tier: 4, wuxingReq: 29, bonus: { dexterity: 13, intelligence: 10 }, copyPrice: 3000, desc: '天柱紫盖芙蓉石廪祝融，五剑相辅，森罗万象' }
+        { id: 'art_hy_jianchu', name: '衡山剑法·基础', type: '剑法', grade: '八品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '潇湘夜雨的前三十六路' },
+        { id: 'art_hy_huifeng', name: '回风落雁剑', type: '剑法', grade: '七品', tier: 2, bonus: { dexterity: 9, intelligence: 4 }, copyPrice: 800, desc: '一剑落九雁' },
+        { id: 'art_hy_wushen', name: '衡山五神剑', type: '剑法', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 29, bonus: { dexterity: 13, intelligence: 10 }, copyPrice: 3000, desc: '天柱紫盖芙蓉石廪祝融，五剑相辅，森罗万象' }
     ],
     '大旗门': [
-        { id: 'art_dq_changquan', name: '大旗门长拳', type: '拳掌', grade: '良品', tier: 1, bonus: { strength: 5, constitution: 3 }, copyPrice: 300, desc: '旗门子弟白日扛旗、夜里练拳' },
-        { id: 'art_dq_tiexue', name: '铁血旗功', type: '内功', grade: '珍品', tier: 2, bonus: { strength: 10 }, copyPrice: 800, desc: '霸烈刚猛的旗门内功' },
-        { id: 'art_dq_fengyun', name: '大旗风云掌', type: '拳掌', grade: '仙品', tier: 4, wuxingReq: 25, bonus: { strength: 16, constitution: 8 }, copyPrice: 3000, desc: '掌出如旗卷风雷' }
+        { id: 'art_dq_changquan', name: '大旗门长拳', type: '拳掌', grade: '八品', tier: 1, bonus: { strength: 5, constitution: 3 }, copyPrice: 300, desc: '旗门子弟白日扛旗、夜里练拳' },
+        { id: 'art_dq_tiexue', name: '铁血旗功', type: '内功', grade: '七品', tier: 2, bonus: { strength: 10 }, copyPrice: 800, desc: '霸烈刚猛的旗门内功' },
+        { id: 'art_dq_fengyun', name: '大旗风云掌', type: '拳掌', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 25, bonus: { strength: 16, constitution: 8 }, copyPrice: 3000, desc: '掌出如旗卷风雷' }
     ],
     '侠隐阁': [
-        { id: 'art_xia_zhengqi', name: '侠隐正气功', type: '内功', grade: '良品', tier: 1, bonus: { willpower: 5 }, copyPrice: 300, desc: '书院弟子晨课必修' },
-        { id: 'art_xia_jianfa', name: '侠隐剑法', type: '剑法', grade: '珍品', tier: 2, bonus: { dexterity: 8, willpower: 3 }, copyPrice: 800, desc: '阁中所授的江湖实用剑技' },
-        { id: 'art_xia_zhida', name: '侠之大者诀', type: '内功', grade: '仙品', tier: 4, wuxingReq: 28, bonus: { willpower: 14, constitution: 9 }, copyPrice: 3000, desc: '侠之大者，为国为民' }
+        { id: 'art_xia_zhengqi', name: '侠隐正气功', type: '内功', grade: '八品', tier: 1, bonus: { willpower: 5 }, copyPrice: 300, desc: '书院弟子晨课必修' },
+        { id: 'art_xia_jianfa', name: '侠隐剑法', type: '剑法', grade: '七品', tier: 2, bonus: { dexterity: 8, willpower: 3 }, copyPrice: 800, desc: '阁中所授的江湖实用剑技' },
+        { id: 'art_xia_zhida', name: '侠之大者诀', type: '内功', grade: '三品', tier: 4, wuxingReq: 28, bonus: { willpower: 14, constitution: 9 }, copyPrice: 3000, desc: '侠之大者，为国为民' }
     ],
     '天涯海阁': [
-        { id: 'art_ty_xianyin', name: '弦音入定', type: '音律', grade: '良品', tier: 1, bonus: { intelligence: 5 }, copyPrice: 300, desc: '以琴音凝神的雅乐入门' },
-        { id: 'art_ty_luoxia', name: '落霞笔法', type: '奇门', grade: '珍品', tier: 2, bonus: { dexterity: 9 }, copyPrice: 800, desc: '笔走龙蛇，点石成锋' },
-        { id: 'art_ty_gaoshan', name: '高山流水曲', type: '音律', grade: '仙品', tier: 4, wuxingReq: 28, bonus: { intelligence: 13, meridian: 9 }, copyPrice: 3000, desc: '一曲既罢，敌胆自寒' }
+        { id: 'art_ty_xianyin', name: '弦音入定', type: '音律', grade: '八品', tier: 1, bonus: { intelligence: 5 }, copyPrice: 300, desc: '以琴音凝神的雅乐入门' },
+        { id: 'art_ty_luoxia', name: '落霞笔法', type: '奇门', grade: '七品', tier: 2, bonus: { dexterity: 9 }, copyPrice: 800, desc: '笔走龙蛇，点石成锋' },
+        { id: 'art_ty_gaoshan', name: '高山流水曲', type: '音律', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 28, bonus: { intelligence: 13, meridian: 9 }, copyPrice: 3000, desc: '一曲既罢，敌胆自寒' }
     ],
     '神机门': [
-        { id: 'art_sj_qianji', name: '千机匣·初制', type: '奇门', grade: '良品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '机关弟子的第一具暗匣' },
-        { id: 'art_sj_kuilei', name: '傀儡线操控术', type: '奇门', grade: '珍品', tier: 2, bonus: { intelligence: 9, dexterity: 4 }, copyPrice: 800, desc: '十指悬丝，傀儡如生' },
-        { id: 'art_sj_wanji', name: '万机归一术', type: '奇门', grade: '仙品', tier: 4, wuxingReq: 28, bonus: { intelligence: 15, dexterity: 9 }, copyPrice: 3000, desc: '百械同鸣的机关至境' }
+        { id: 'art_sj_qianji', name: '千机匣·初制', type: '奇门', grade: '八品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '机关弟子的第一具暗匣' },
+        { id: 'art_sj_kuilei', name: '傀儡线操控术', type: '奇门', grade: '七品', tier: 2, bonus: { intelligence: 9, dexterity: 4 }, copyPrice: 800, desc: '十指悬丝，傀儡如生' },
+        { id: 'art_sj_wanji', name: '万机归一术', type: '奇门', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 28, bonus: { intelligence: 15, dexterity: 9 }, copyPrice: 3000, desc: '百械同鸣的机关至境' }
     ],
     '霹雳堂': [
-        { id: 'art_pili_tiaoyao', name: '调药引火术', type: '奇门', grade: '良品', tier: 1, bonus: { intelligence: 5 }, copyPrice: 300, desc: '硝硫配比的看家本事' },
-        { id: 'art_pili_leihuo', name: '雷火掌', type: '拳掌', grade: '珍品', tier: 2, bonus: { strength: 9 }, copyPrice: 800, desc: '掌中蕴火，触之即燃' },
-        { id: 'art_pili_jiuxiao', name: '九霄霹雳诀', type: '奇门', grade: '仙品', tier: 4, wuxingReq: 26, bonus: { intelligence: 12, strength: 10 }, copyPrice: 3000, desc: '雷火倾天的堂中至宝' }
+        { id: 'art_pili_tiaoyao', name: '调药引火术', type: '奇门', grade: '八品', tier: 1, bonus: { intelligence: 5 }, copyPrice: 300, desc: '硝硫配比的看家本事' },
+        { id: 'art_pili_leihuo', name: '雷火掌', type: '拳掌', grade: '七品', tier: 2, bonus: { strength: 9 }, copyPrice: 800, desc: '掌中蕴火，触之即燃' },
+        { id: 'art_pili_jiuxiao', name: '九霄霹雳诀', type: '奇门', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 26, bonus: { intelligence: 12, strength: 10 }, copyPrice: 3000, desc: '雷火倾天的堂中至宝' }
     ],
     '大隐阁': [
-        { id: 'art_dy_cangfeng', name: '藏锋养气功', type: '内功', grade: '良品', tier: 1, bonus: { willpower: 5 }, copyPrice: 300, desc: '大隐隐于市的养气之道' },
-        { id: 'art_dy_wuhen', name: '无痕剑意', type: '剑法', grade: '珍品', tier: 2, bonus: { dexterity: 9 }, copyPrice: 800, desc: '出剑无痕，收剑无迹' },
-        { id: 'art_dy_chaoshi', name: '大隐朝市诀', type: '内功', grade: '仙品', tier: 4, wuxingReq: 29, bonus: { intelligence: 13, willpower: 10 }, copyPrice: 3000, desc: '隐于朝市而天下知' }
+        { id: 'art_dy_cangfeng', name: '藏锋养气功', type: '内功', grade: '八品', tier: 1, bonus: { willpower: 5 }, copyPrice: 300, desc: '大隐隐于市的养气之道' },
+        { id: 'art_dy_wuhen', name: '无痕剑意', type: '剑法', grade: '七品', tier: 2, bonus: { dexterity: 9 }, copyPrice: 800, desc: '出剑无痕，收剑无迹' },
+        { id: 'art_dy_chaoshi', name: '大隐朝市诀', type: '内功', grade: '三品', tier: 4, wuxingReq: 29, bonus: { intelligence: 13, willpower: 10 }, copyPrice: 3000, desc: '隐于朝市而天下知' }
     ],
     '天书阁': [
-        { id: 'art_tsg_qimeng', name: '天书启蒙录', type: '文道', grade: '良品', tier: 1, bonus: { intelligence: 5 }, copyPrice: 300, desc: '万卷楼童子的开蒙课本' },
-        { id: 'art_tsg_baijia', name: '百家杂学', type: '文道', grade: '珍品', tier: 2, bonus: { intelligence: 10 }, copyPrice: 800, desc: '医卜星相，无一不窥' },
-        { id: 'art_tsg_canjuan', name: '天书残卷·总纲', type: '文道', grade: '仙品', tier: 4, wuxingReq: 30, bonus: { intelligence: 16, willpower: 8 }, copyPrice: 3000, desc: '传说中失落的天书总纲' }
+        { id: 'art_tsg_qimeng', name: '天书启蒙录', type: '文道', grade: '八品', tier: 1, bonus: { intelligence: 5 }, copyPrice: 300, desc: '万卷楼童子的开蒙课本' },
+        { id: 'art_tsg_baijia', name: '百家杂学', type: '文道', grade: '七品', tier: 2, bonus: { intelligence: 10 }, copyPrice: 800, desc: '医卜星相，无一不窥' },
+        { id: 'art_tsg_canjuan', name: '天书残卷·总纲', type: '文道', grade: '三品', tier: 4, wuxingReq: 30, bonus: { intelligence: 16, willpower: 8 }, copyPrice: 3000, desc: '传说中失落的天书总纲' }
     ],
     '铁掌帮': [
-        { id: 'art_tz_tiesha_c', name: '铁砂掌·粗功', type: '拳掌', grade: '良品', tier: 1, bonus: { strength: 6 }, copyPrice: 300, desc: '插沙三百日的帮众底子' },
-        { id: 'art_tz_tiezhang', name: '铁掌功', type: '拳掌', grade: '珍品', tier: 2, bonus: { strength: 10 }, copyPrice: 800, desc: '裘氏一门立帮之技' },
-        { id: 'art_tz_heisha', name: '黑煞掌', type: '拳掌', grade: '仙品', tier: 4, wuxingReq: 25, bonus: { strength: 17, constitution: 7 }, copyPrice: 3000, desc: '掌风过处，金石俱裂' }
+        { id: 'art_tz_tiesha_c', name: '铁砂掌·粗功', type: '拳掌', grade: '八品', tier: 1, bonus: { strength: 6 }, copyPrice: 300, desc: '插沙三百日的帮众底子' },
+        { id: 'art_tz_tiezhang', name: '铁掌功', type: '拳掌', grade: '七品', tier: 2, bonus: { strength: 10 }, copyPrice: 800, desc: '裘氏一门立帮之技' },
+        { id: 'art_tz_heisha', name: '黑煞掌', type: '拳掌', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 25, bonus: { strength: 17, constitution: 7 }, copyPrice: 3000, desc: '掌风过处，金石俱裂' }
     ],
     '百花谷': [
-        { id: 'art_bh_tuna', name: '花间吐纳', type: '内功', grade: '良品', tier: 1, bonus: { constitution: 5 }, copyPrice: 300, desc: '伴花而息的谷中功课' },
-        { id: 'art_bh_chunni', name: '春泥护元术', type: '医道', grade: '珍品', tier: 2, bonus: { intelligence: 9, constitution: 4 }, copyPrice: 800, desc: '落红化春泥的疗愈之学' },
-        { id: 'art_bh_wenhua', name: '百花缭乱剑', type: '剑法', grade: '仙品', tier: 4, wuxingReq: 27, bonus: { dexterity: 13, intelligence: 10 }, copyPrice: 3000, desc: '万花丛中过，片叶不沾身' }
+        { id: 'art_bh_tuna', name: '花间吐纳', type: '内功', grade: '八品', tier: 1, bonus: { constitution: 5 }, copyPrice: 300, desc: '伴花而息的谷中功课' },
+        { id: 'art_bh_chunni', name: '春泥护元术', type: '医道', grade: '七品', tier: 2, bonus: { intelligence: 9, constitution: 4 }, copyPrice: 800, desc: '落红化春泥的疗愈之学' },
+        { id: 'art_bh_wenhua', name: '百花缭乱剑', type: '剑法', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 27, bonus: { dexterity: 13, intelligence: 10 }, copyPrice: 3000, desc: '万花丛中过，片叶不沾身' }
     ],
     '五仙教': [
-        { id: 'art_wxj_yuchong', name: '驭虫小术', type: '奇门', grade: '良品', tier: 1, bonus: { intelligence: 5 }, copyPrice: 300, desc: '苗疆孩童也会的两手驱虫咒' },
-        { id: 'art_wxj_gujing', name: '五仙蛊经', type: '奇门', grade: '珍品', tier: 2, bonus: { intelligence: 10 }, copyPrice: 800, desc: '南疆巫蛊正统的蛊经' },
-        { id: 'art_wxj_wanshi', name: '千蛊万噬天', type: '奇门', grade: '仙品', tier: 4, wuxingReq: 27, bonus: { intelligence: 14, willpower: 9 }, copyPrice: 3000, desc: '放蛊成云，遮天蔽日' }
+        { id: 'art_wxj_yuchong', name: '驭虫小术', type: '奇门', grade: '八品', tier: 1, bonus: { intelligence: 5 }, copyPrice: 300, desc: '苗疆孩童也会的两手驱虫咒' },
+        { id: 'art_wxj_gujing', name: '五仙蛊经', type: '奇门', grade: '七品', tier: 2, bonus: { intelligence: 10 }, copyPrice: 800, desc: '南疆巫蛊正统的蛊经' },
+        { id: 'art_wxj_wanshi', name: '千蛊万噬天', type: '奇门', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 27, bonus: { intelligence: 14, willpower: 9 }, copyPrice: 3000, desc: '放蛊成云，遮天蔽日' }
     ],
     '阎罗殿': [
-        { id: 'art_yl_kaishan', name: '开山路刀法', type: '刀法', grade: '良品', tier: 1, bonus: { strength: 5 }, copyPrice: 300, desc: '殿前开路弟子的劈山刀' },
-        { id: 'art_yl_shengsi', name: '生死判', type: '刀法', grade: '珍品', tier: 2, bonus: { strength: 11 }, copyPrice: 800, desc: '一笔判生死的大殿刑刀' },
-        { id: 'art_yl_shidian', name: '十殿阎罗刀', type: '刀法', grade: '仙品', tier: 4, wuxingReq: 24, bonus: { strength: 18, willpower: 7 }, copyPrice: 3000, desc: '十殿齐开，恶鬼让路' }
+        { id: 'art_yl_kaishan', name: '开山路刀法', type: '刀法', grade: '八品', tier: 1, bonus: { strength: 5 }, copyPrice: 300, desc: '殿前开路弟子的劈山刀' },
+        { id: 'art_yl_shengsi', name: '生死判', type: '刀法', grade: '七品', tier: 2, bonus: { strength: 11 }, copyPrice: 800, desc: '一笔判生死的大殿刑刀' },
+        { id: 'art_yl_shidian', name: '十殿阎罗刀', type: '刀法', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 24, bonus: { strength: 18, willpower: 7 }, copyPrice: 3000, desc: '十殿齐开，恶鬼让路' }
     ],
     '天龙教': [
-        { id: 'art_tl_mizhou', name: '天龙密咒', type: '内功', grade: '良品', tier: 1, bonus: { willpower: 5 }, copyPrice: 300, desc: '西域魔教的持咒功夫' },
-        { id: 'art_tl_dashouyin', name: '天龙大手印', type: '拳掌', grade: '珍品', tier: 2, bonus: { strength: 10, willpower: 4 }, copyPrice: 800, desc: '一印压一城' },
-        { id: 'art_tl_huaxue', name: '化血魔功', type: '内功', grade: '仙品', tier: 4, wuxingReq: 26, bonus: { strength: 14, constitution: 9 }, copyPrice: 3000, desc: '饮血催功的魔教禁术' }
+        { id: 'art_tl_mizhou', name: '天龙密咒', type: '内功', grade: '八品', tier: 1, bonus: { willpower: 5 }, copyPrice: 300, desc: '西域魔教的持咒功夫' },
+        { id: 'art_tl_dashouyin', name: '天龙大手印', type: '拳掌', grade: '七品', tier: 2, bonus: { strength: 10, willpower: 4 }, copyPrice: 800, desc: '一印压一城' },
+        { id: 'art_tl_huaxue', name: '化血魔功', type: '内功', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 26, bonus: { strength: 14, constitution: 9 }, copyPrice: 3000, desc: '饮血催功的魔教禁术' }
     ],
     '烈日教': [
-        { id: 'art_lj_puri', name: '曝日桩', type: '炼体', grade: '良品', tier: 1, bonus: { constitution: 6 }, copyPrice: 300, desc: '烈日下站桩的教中苦行' },
-        { id: 'art_lj_zhenyan', name: '烈日真焰', type: '法术', grade: '珍品', tier: 2, bonus: { intelligence: 9, strength: 4 }, copyPrice: 800, desc: '掌心凝出一簇不灭日光' },
-        { id: 'art_lj_fentian', name: '大日焚天功', type: '内功', grade: '仙品', tier: 4, wuxingReq: 25, bonus: { intelligence: 13, strength: 12 }, copyPrice: 3000, desc: '焚天之焰，教主亲传' }
+        { id: 'art_lj_puri', name: '曝日桩', type: '炼体', grade: '八品', tier: 1, bonus: { constitution: 6 }, copyPrice: 300, desc: '烈日下站桩的教中苦行' },
+        { id: 'art_lj_zhenyan', name: '烈日真焰', type: '法术', grade: '七品', tier: 2, bonus: { intelligence: 9, strength: 4 }, copyPrice: 800, desc: '掌心凝出一簇不灭日光' },
+        { id: 'art_lj_fentian', name: '大日焚天功', type: '内功', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 25, bonus: { intelligence: 13, strength: 12 }, copyPrice: 3000, desc: '焚天之焰，教主亲传' }
     ],
     '血手门': [
-        { id: 'art_xsm_fugu_c', name: '腐骨掌·粗功', type: '拳掌', grade: '良品', tier: 1, bonus: { strength: 5 }, copyPrice: 300, desc: '浸药水泡出的第一层阴劲' },
-        { id: 'art_xsm_xuesha', name: '血煞爪', type: '拳掌', grade: '珍品', tier: 2, bonus: { strength: 9, dexterity: 4 }, copyPrice: 800, desc: '五指见血，创口难愈' },
-        { id: 'art_xsm_xuehai', name: '万劫血海功', type: '内功', grade: '仙品', tier: 4, wuxingReq: 24, bonus: { strength: 15, constitution: 9 }, copyPrice: 3000, desc: '血海翻涌，生生不息的邪功' }
+        { id: 'art_xsm_fugu_c', name: '腐骨掌·粗功', type: '拳掌', grade: '八品', tier: 1, bonus: { strength: 5 }, copyPrice: 300, desc: '浸药水泡出的第一层阴劲' },
+        { id: 'art_xsm_xuesha', name: '血煞爪', type: '拳掌', grade: '七品', tier: 2, bonus: { strength: 9, dexterity: 4 }, copyPrice: 800, desc: '五指见血，创口难愈' },
+        { id: 'art_xsm_xuehai', name: '万劫血海功', type: '内功', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 24, bonus: { strength: 15, constitution: 9 }, copyPrice: 3000, desc: '血海翻涌，生生不息的邪功' }
     ],
     '青城派': [
-        { id: 'art_qc_jianchu', name: '青城剑法·基础', type: '剑法', grade: '良品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '蜀中剑派的看门剑' },
-        { id: 'art_qc_songfeng', name: '松风剑法', type: '剑法', grade: '珍品', tier: 2, bonus: { dexterity: 9, willpower: 4 }, copyPrice: 800, desc: '如松之劲，如风之迅' },
-        { id: 'art_qc_cuixin', name: '摧心掌', type: '拳掌', grade: '仙品', tier: 4, wuxingReq: 26, bonus: { strength: 13, intelligence: 10 }, copyPrice: 3000, desc: '震碎人心，不露痕迹' }
+        { id: 'art_qc_jianchu', name: '青城剑法·基础', type: '剑法', grade: '八品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '蜀中剑派的看门剑' },
+        { id: 'art_qc_songfeng', name: '松风剑法', type: '剑法', grade: '七品', tier: 2, bonus: { dexterity: 9, willpower: 4 }, copyPrice: 800, desc: '如松之劲，如风之迅' },
+        { id: 'art_qc_cuixin', name: '摧心掌', type: '拳掌', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 26, bonus: { strength: 13, intelligence: 10 }, copyPrice: 3000, desc: '震碎人心，不露痕迹' }
     ],
     '飞蝎坞': [
-        { id: 'art_fx_fushui', name: '水乡凫水诀', type: '轻功', grade: '良品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '江南水网里的保命泳技' },
-        { id: 'art_fx_xiewei', name: '蝎尾针法', type: '奇门', grade: '珍品', tier: 2, bonus: { dexterity: 10 }, copyPrice: 800, desc: '针出如蝎尾摆尾，专挑筋缝' },
-        { id: 'art_fx_xiewang', name: '蝎王噬心刺', type: '奇门', grade: '仙品', tier: 4, wuxingReq: 27, bonus: { dexterity: 13, intelligence: 10 }, copyPrice: 3000, desc: '坞主亲传的一刺封喉' }
+        { id: 'art_fx_fushui', name: '水乡凫水诀', type: '轻功', grade: '八品', tier: 1, bonus: { dexterity: 5 }, copyPrice: 300, desc: '江南水网里的保命泳技' },
+        { id: 'art_fx_xiewei', name: '蝎尾针法', type: '奇门', grade: '七品', tier: 2, bonus: { dexterity: 10 }, copyPrice: 800, desc: '针出如蝎尾摆尾，专挑筋缝' },
+        { id: 'art_fx_xiewang', name: '蝎王噬心刺', type: '奇门', grade: '三品', tier: 4, transmit: 'direct', wuxingReq: 27, bonus: { dexterity: 13, intelligence: 10 }, copyPrice: 3000, desc: '坞主亲传的一刺封喉' }
     ]
 };
 
@@ -553,7 +578,7 @@ var SECT_SPECIFIC_ARTS = {
             id: 'art_core_' + seq,
             name: sectName + '·承脉要诀',
             type: (t4 && t4.type) || (t2 && t2.type) || '内功',
-            grade: '珍品',
+            grade: '七品',
             tier: 3,
             bonus: bonus,
             copyPrice: 1500,
@@ -573,7 +598,9 @@ function getReadableSectArts(sectName) {
     if (!Array.isArray(arts) || !arts.length) return [];
     var can = window.canAccessScriptureTier;
     if (typeof can !== 'function') return arts; // 守卫：v19.0 工具函数未加载时退化为全部可见
-    return arts.filter(function (art) { return can(Number(art.tier) || 1); });
+    // v20.93 镇派亲传：楼层门之外再过一道传人门——未受亲传的镇派神功不算「可阅览」
+    var tok = window.sectArtTransmitOK;
+    return arts.filter(function (art) { return can(Number(art.tier) || 1) && (typeof tok !== 'function' || tok(art)); });
 }
 
 function registerSectSpecificItems(sectName) {
@@ -589,7 +616,7 @@ function registerSectSpecificItems(sectName) {
     }
     arts.forEach(function(art) {
         if (!window.itemById[art.id]) {
-            var artItem = { id: art.id, name: art.name, type: 'secret_art', subtype: 'sect_art', category: 'secret_art', quality: art.grade === '仙品' ? 'LEGENDARY' : 'RARE', level: art.tier || 1, price: art.copyPrice || 300, effect: {}, desc: art.desc, icon: '📖' };
+            var artItem = { id: art.id, name: art.name, type: 'secret_art', subtype: 'sect_art', category: 'secret_art', quality: art.grade === '三品' ? 'PIN3' : 'PIN7', level: art.tier || 1, price: art.copyPrice || 300, effect: {}, desc: art.desc, icon: '📖' };
             window.allItems.push(artItem);
             window.itemById[art.id] = artItem;
         }

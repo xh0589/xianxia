@@ -41,6 +41,37 @@ const TRAVEL_METHODS = {
         cost: 100,            // 100灵石
         risk: 0.02,
         desc: '最快速的方式，需要找到传送阵'
+    },
+    // ===== v21.9 高境界专属移动：此前移动方式表 minRealm 封顶筑基——大能们只能像凡人一样赶路 =====
+    VOID_STEP: {
+        id: 'void_step',
+        name: '撕裂虚空',
+        icon: '🌌',
+        timeCost: 3,          // 3分钟
+        energyCost: 80,       // 消耗80真气
+        minRealm: '化神',
+        risk: 0.01,
+        desc: '一步踏进天地缝隙，再落足已在千里之外'
+    },
+    RAINBOW_LIGHT: {
+        id: 'rainbow_light',
+        name: '化虹遁空',
+        icon: '🌈',
+        timeCost: 2,          // 2分钟
+        energyCost: 200,      // 消耗200真气
+        minRealm: '炼虚',
+        risk: 0,
+        desc: '身与虹光同化，一息横跨山河'
+    },
+    LAW_TELEPORT: {
+        id: 'law_teleport',
+        name: '挪移法界',
+        icon: '✨',
+        timeCost: 1,          // 1分钟
+        energyCost: 400,      // 消耗400真气
+        minRealm: '大乘',
+        risk: 0,
+        desc: '念至即身至——摸到空间法则的人才有的手段'
     }
 };
 
@@ -201,6 +232,22 @@ function _travelNowMinute() {
 
 // ============ 已解锁传送阵 ============
 let unlockedTeleports = new Set();
+
+// 第九十五波·NEW-38：城名归一——传送阵解锁名单只存去空格形式（「帝都 · 长安」→「帝都·长安」）。
+// 抵达/查询两侧都过这道归一，带不带空格的拼写都认得同一座城。
+function _teleportKey(city) { return String(city || '').replace(/\s+/g, ''); }
+
+// 第九十五波·NEW-38：「抵达即解锁」的对外写入口——此前全代码库唯一能写入 unlockedTeleports 的
+// 只有被这份名单把守的 startTeleport→completeTravel 一条路，形成自锁死环。进城处（location-system）
+// 调它把当前城写进名单，传送阵这条快速通道才真能开起来。
+function unlockTeleport(city) {
+    var key = _teleportKey(city);
+    if (!key) return false;
+    var added = !unlockedTeleports.has(key);
+    unlockedTeleports.add(key);
+    if (added) { try { saveTravelData(); } catch (e) {} }
+    return true;
+}
 
 // ============ 初始化旅行系统 ============
 function initTravelSystem() {
@@ -448,7 +495,10 @@ function completeTravel(risk = 0.1) {
     finalRisk = Math.min(0.85, Math.max(0.02, finalRisk));
 
     var hadEvent = false;
-    if (Math.random() < finalRisk) {
+    // 第九十五波·NEW-38：途中遭遇判定不再裸掷 Math.random——有引擎随机源（__scenarioRng）就走它
+    //（本仓「零直掷骰」纪律，测试可注入复现），没有才回落 Math.random
+    var _riskRoll = (typeof window.__scenarioRng === 'function') ? window.__scenarioRng() : Math.random();
+    if (_riskRoll < finalRisk) {
         hadEvent = true;
         try { triggerTravelEvent(); } catch (e) {}
     }
@@ -463,10 +513,9 @@ function completeTravel(risk = 0.1) {
                 window.enterCity(toCity);
             }
         }
-        // 抵达即解锁传送阵
+        // 抵达即解锁传送阵（NEW-38：归一落键，带空格拼写也认）
         try {
-            unlockedTeleports.add(toCity);
-            saveTravelData();
+            unlockTeleport(toCity);
         } catch (e) {}
     }
 
@@ -573,11 +622,8 @@ function triggerEventEvent(eventId) {
         event.onTrigger();
     }
     
-    // 关闭模态框
-    const modal = document.querySelector('.fixed.inset-0');
-    if (modal) {
-        modal.remove();
-    }
+    // 关闭模态框（第一百一十波 · NEW-49：只收运行时弹窗，静态面板不动）
+    if (typeof window.closeRuntimeModals === 'function') window.closeRuntimeModals();
 }
 
 // ============ 显示旅行方式选择 ============
@@ -666,7 +712,9 @@ function startTravelBattleFallback(type) {
     }
     var cd = window.currentCharData;
     var ma = cd.mainAttributes || {};
-    var level = cd.level || cd.layer || 1;
+    // v21.6：charData.level 恒为 1（创角写死），敌人等级改走境界刻度
+    var level = (Number(cd.level) > 1) ? Number(cd.level)
+        : (typeof window.realmScaledEnemyLevel === 'function' ? window.realmScaledEnemyLevel(cd) : (cd.layer || 1));
     var enemyType = (type === 'beast' || type === 'beast_tide') ? 'beast' : 'enemy';
     var playerEntity = new window.Entity({
         name: cd.name || '玩家',
@@ -742,6 +790,7 @@ window.travelSystem = {
     triggerEventAction,
     unlockBanditDenQuest,
     openBanditDen,
+    unlockTeleport,   // 第九十五波·NEW-38：进城处调它解锁传送阵（抵达即解锁的对外写入口）
     TRAVEL_METHODS,
     travelEvents,
     travelState,

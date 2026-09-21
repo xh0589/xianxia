@@ -1,0 +1,363 @@
+/* 仙路长青 · equipment 面板专属样式（v21.x 界面整改 P1）
+   只允许出现 #panel-equipment / 本面板相关选择器，跨面板的规则请放进 ui-tokens.css。
+
+   结构由 js/equipment.js 的 _ensureEquipmentChrome() 首帧重排（渲染函数在 app.js 里，本面板不搬它，只搬节点）：
+     标题 .x-eq__title = 「⚔️ 装备与运功」（导航叫「装备」、另有「功法」页，三个名字不再撞车）
+     第 1 列 .x-eq__col--gear   = 装备栏卡（标题行右端挂着唯一的金色按钮「⚒️ 强化装备」）+ 槽位网格 #equipment-slots
+     第 2 列 .x-eq__col--skill  = 运功栏卡（3 槽 + 指路一句话）+ 战斗概览卡（原顶部 4 张属性卡压成读数条）
+   槽位卡 .x-slot 每次渲染由 _decorateEquipmentSlots() 重新打标：.x-slot--empty / --filled / --open。
+   配色分级：整屏只有「强化装备」一个金色实心按钮，槽位里的「选择／装备／卸下」全是灰底描边；
+   空槽改虚线框 + 占位文案「未穿戴／未运功」，不再是一个孤零零的「空」字像没渲染出来。
+   选择器一律带 #panel-equipment 前缀——Tailwind 运行时注入的样式排在 head 末尾，同特异度会盖过来。 */
+
+/* ---------- 面板骨架：标题 / 两列 / 卡片 ---------- */
+
+#panel-equipment .x-eq__title {
+    margin: 0 0 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #374151;
+    font-size: 20px;
+    line-height: 1.3;
+    font-weight: 700;
+    color: var(--x-gold);
+}
+
+/* 窄屏先堆叠，宽屏才分栏；左列（12 个槽）比右列（3 个槽 + 读数）宽 */
+#panel-equipment .x-eq__row {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+@media (min-width: 1024px) {
+    #panel-equipment .x-eq__row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+        gap: 18px;
+        align-items: start;
+    }
+}
+
+#panel-equipment .x-eq__col {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+}
+
+#panel-equipment .x-eq__card {
+    padding: 14px 16px 16px;
+    border: 1px solid #3b4655;
+    border-radius: 10px;
+    background: #232c39;
+}
+
+#panel-equipment .x-eq__card-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin: 0 0 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #374151;
+    font-size: 15px;
+    line-height: 1.4;
+    font-weight: 700;
+    color: var(--x-gold);
+}
+#panel-equipment .x-eq__card-title--art { color: #a5b4fc; }
+#panel-equipment .x-eq__card-title--plain { color: var(--x-text); }
+
+#panel-equipment .x-eq__card-hint {
+    margin: 0 0 10px;
+    font-size: var(--x-fs-xs);
+    line-height: var(--x-lh-tight);
+    color: var(--x-muted);
+}
+#panel-equipment #skill-page-indicator { color: var(--x-text); font-weight: 700; }
+
+#panel-equipment .x-eq__card-note {
+    margin: 10px 0 0;
+    font-size: var(--x-fs-xs);
+    line-height: var(--x-lh-tight);
+    color: var(--x-dim);
+}
+
+/* ---------- 整屏唯一的主行动按钮：搬进装备栏标题行，作用对象就是下面这些槽位 ---------- */
+
+#panel-equipment .x-eq__enhance {
+    flex: none;
+    padding: 5px 12px;
+    border: 1px solid var(--x-gold-deep);
+    border-radius: 6px;
+    background: var(--x-gold);
+    color: #111827;
+    font-size: var(--x-fs-sm);
+    line-height: 1.4;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color .15s, border-color .15s;
+}
+#panel-equipment .x-eq__enhance:hover { background: #fcd34d; border-color: #fcd34d; }
+
+/* ---------- 槽位网格：按容器实际宽度铺列，12 个槽一屏看全 ---------- */
+
+#panel-equipment #equipment-slots {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 8px;
+}
+
+#panel-equipment #skill-slots-container {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+}
+
+/* 间距只由 gap 管：中和 space-y-* 残留的外边距 */
+#panel-equipment #equipment-slots > *,
+#panel-equipment #skill-slots-container > * { margin: 0; }
+
+/* 展开的候选列表横向铺满，别挤在半列里 */
+#panel-equipment #equipment-slots > .x-slot--open { grid-column: 1 / -1; }
+
+/* ---------- 槽位卡：一行读数（图标 · 槽名 · 当前穿戴 · 动作） ---------- */
+
+#panel-equipment .x-slot {
+    border: 1px solid #3b4655;
+    border-radius: 8px;
+    background: #1b2431;
+    overflow: hidden;
+    transition: border-color .15s, background-color .15s;
+}
+
+#panel-equipment .x-slot__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 10px;
+}
+
+#panel-equipment .x-slot__info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+#panel-equipment .x-slot__icon { flex: none; font-size: 18px; line-height: 1.1; }
+
+#panel-equipment .x-slot__text {
+    display: flex;
+    align-items: baseline;
+    gap: 7px;
+    min-width: 0;
+}
+#panel-equipment .x-slot__label { flex: none; font-size: var(--x-fs-xs); color: var(--x-muted); }
+/* 名称的颜色留给 app.js 的 text-yellow-400 / text-purple-400（穿戴中才有），这里只排版 */
+#panel-equipment .x-slot__name {
+    min-width: 0;
+    margin: 0;
+    font-size: var(--x-fs-sm);
+    line-height: 1.45;
+}
+#panel-equipment .x-slot__acts { display: flex; align-items: center; gap: 4px; flex: none; }
+
+/* 空槽：虚线框 + 占位文案，明摆着「这里还能放东西」 */
+#panel-equipment .x-slot--empty {
+    border-style: dashed;
+    border-color: #4d5b6e;
+    background: rgba(27, 36, 49, .55);
+}
+#panel-equipment .x-slot--empty .x-slot__name { color: var(--x-dim); font-weight: 400; }
+#panel-equipment .x-slot--empty:hover { border-color: #6b7280; background: #212c3b; }
+
+/* ---------- 槽位里的按钮：一律灰底描边，把金色留给「强化装备」 ---------- */
+
+#panel-equipment .x-slot__btn {
+    flex: none;
+    padding: 4px 9px;
+    border: 1px solid #55627a;
+    border-radius: 6px;
+    background: #2b3441;
+    color: var(--x-text);
+    font-size: var(--x-fs-xs);
+    line-height: 1.4;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background-color .15s, border-color .15s, color .15s;
+}
+#panel-equipment .x-slot__btn:hover { background: #374151; border-color: #7c8aa0; }
+
+#panel-equipment .x-slot--empty .x-slot__pick { border-style: dashed; border-color: #7c8aa0; }
+#panel-equipment .x-slot--empty .x-slot__pick:hover {
+    border-style: solid;
+    border-color: var(--x-gold);
+    color: var(--x-gold);
+    background: rgba(251, 191, 36, .10);
+}
+
+/* 展开态的「收起」：淡金描边，表示这一格正在被操作，不是第二个主按钮 */
+#panel-equipment .x-slot--open .x-slot__pick {
+    border-color: var(--x-gold);
+    background: rgba(251, 191, 36, .16);
+    color: var(--x-gold);
+}
+
+#panel-equipment .x-slot__off {
+    border-color: transparent;
+    background: transparent;
+    color: var(--x-muted);
+    font-weight: 400;
+}
+#panel-equipment .x-slot__off:hover { border-color: transparent; background: rgba(239, 68, 68, .14); color: #fca5a5; }
+
+#panel-equipment .x-slot__use {
+    border-color: rgba(34, 197, 94, .55);
+    background: rgba(34, 197, 94, .14);
+    color: #86efac;
+}
+#panel-equipment .x-slot__use:hover { border-color: rgba(34, 197, 94, .9); background: rgba(34, 197, 94, .24); color: #bbf7d0; }
+
+/* ---------- 槽位内展开的候选列表 ---------- */
+
+#panel-equipment .x-slot__list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 296px;         /* 候选再多也不把整个面板顶出两屏 */
+    padding: 8px 10px 10px;
+    border-top: 1px solid #3b4655;
+    background: #161d28;
+    overflow-y: auto;
+}
+
+#panel-equipment .x-slot__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 9px;
+    border: 1px solid #374151;
+    border-radius: 7px;
+    background: #1f2937;
+    transition: border-color .15s;
+}
+#panel-equipment .x-slot__row:hover { border-color: #7c8aa0; }
+/* 已上阵那一门：app.js 原本只靠 border-purple-500 说，接管排版后由这条继续说 */
+#panel-equipment .x-slot__row--on { border-color: #a5b4fc; background: rgba(129, 140, 248, .13); }
+
+#panel-equipment .x-slot__rowname {
+    margin: 0;
+    font-size: var(--x-fs-sm);
+    line-height: 1.45;
+    font-weight: 700;
+    color: var(--x-text);
+}
+#panel-equipment .x-slot__meta {
+    margin: 0;
+    font-size: var(--x-fs-xs);
+    line-height: var(--x-lh-tight);
+}
+/* 品阶色（三品金黄 / 五品紫 / 八品蓝）由 app.js 的颜色类带着；没有颜色类时才弱化 */
+#panel-equipment .x-slot__meta--dim { color: var(--x-muted); }
+#panel-equipment .x-slot__none {
+    margin: 0;
+    padding: 6px 0;
+    font-size: var(--x-fs-xs);
+    color: var(--x-muted);
+    text-align: center;
+}
+
+/* ---------- 战斗概览：原顶部 4 张 1/4 屏宽属性卡压成一行读数，填右列空白 ---------- */
+
+#panel-equipment .x-eq__stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+}
+
+#panel-equipment .x-eq__stat {
+    display: flex;
+    flex: 1 1 96px;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 6px;
+    min-width: 0;
+    padding: 5px 9px;
+    border: 1px solid #3b4655;
+    border-radius: 7px;
+    background: #1b2431;
+}
+
+/* 负荷要同时说清「档位 / 读数 / 问号」，独占一行 */
+#panel-equipment .x-eq__stat--load {
+    flex: 1 1 100%;
+    align-items: flex-start;
+}
+
+#panel-equipment .x-eq__stat-label { flex: none; font-size: var(--x-fs-xs); color: var(--x-muted); }
+/* 攻红／防蓝／速绿是 app.js 给的颜色类，这里只排版不抢颜色 */
+#panel-equipment .x-eq__stat-value {
+    font-size: 16px;
+    line-height: 1.3;
+    font-weight: 700;
+}
+
+#panel-equipment .x-eq__loadrow {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 6px;
+    min-width: 0;
+}
+
+/* app.js 每帧重写 #equip-stat-load 的 class（含颜色），所以这里按 id 定尺寸、不靠 class */
+#panel-equipment #equip-stat-load { font-size: var(--x-fs-sm); line-height: 1.4; font-weight: 700; }
+
+#panel-equipment .x-eq__stat-sub {
+    order: 2;                  /* 问号紧跟档位，读数另起一行 */
+    flex: 1 0 100%;
+    font-size: var(--x-fs-xs);
+    line-height: var(--x-lh-tight);
+    color: var(--x-muted);
+}
+
+#panel-equipment .x-eq__loadhelp {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    padding: 0;
+    border: 1px solid #5b7ba6;
+    border-radius: 50%;
+    background: #22303f;
+    color: #93c5fd;
+    font-size: var(--x-fs-xs);
+    font-weight: 700;
+    cursor: help;
+}
+#panel-equipment .x-eq__loadhelp:hover { border-color: #93c5fd; background: #2b3f56; }
+
+/* 套装回响行：没凑成套时是空节点，别占一行空白 */
+#panel-equipment .x-eq__set {
+    margin-top: 8px;
+    font-size: var(--x-fs-xs);
+    line-height: var(--x-lh-tight);
+    color: var(--x-gold);
+    text-align: center;
+}
+#panel-equipment .x-eq__set:empty { display: none; }
+
+/* ---------- 窄屏：槽位单列，按钮别挤 ---------- */
+
+@media (max-width: 639px) {
+    #panel-equipment #equipment-slots { grid-template-columns: minmax(0, 1fr); }
+    #panel-equipment .x-slot__text { gap: 5px; }
+    #panel-equipment .x-slot__btn { padding: 5px 8px; }
+    #panel-equipment .x-eq__stat { flex-basis: 84px; }
+}

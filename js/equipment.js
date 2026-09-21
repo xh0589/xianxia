@@ -221,83 +221,95 @@ window.getActiveAttackMoves = getActiveAttackMoves;
 const skillPages = [
     // 第1页：基础功法
     [
-        { id: 'skill_01', name: '吐纳术', icon: '🌬️', type: '内功', grade: '凡品', desc: '基础呼吸法门，缓慢恢复真气', effect: '真气恢复+5%', qiCost: 0 },
-        { id: 'skill_02', name: '铁布衫', icon: '🛡️', type: '防御', grade: '凡品', desc: '硬化肌肤，提升防御力', effect: '防御+10%', qiCost: 5 },
-        { id: 'skill_03', name: '疾风步', icon: '💨', type: '轻功', grade: '凡品', desc: '身法轻灵，提升闪避', effect: '闪避+8%', qiCost: 5 },
-        { id: 'skill_04', name: '金刚掌', icon: '✋', type: '拳掌', grade: '凡品', desc: '刚猛掌法，力道惊人', effect: '拳掌伤害+15%', qiCost: 8 },
-        { id: 'skill_05', name: '清风剑法', icon: '🗡️', type: '剑法', grade: '凡品', desc: '剑走轻灵，快如清风', effect: '剑法伤害+12%', qiCost: 8 },
+        { id: 'skill_01', name: '吐纳术', icon: '🌬️', type: '内功', grade: '九品', desc: '基础呼吸法门，缓慢恢复真气', effect: '真气恢复+5%', element: 'neutral', qiCost: 0 },
+        { id: 'skill_02', name: '铁布衫', icon: '🛡️', type: '防御', grade: '九品', desc: '硬化肌肤，提升防御力', effect: '防御+10%', element: 'neutral', qiCost: 5 },
+        { id: 'skill_03', name: '疾风步', icon: '💨', type: '轻功', grade: '九品', desc: '身法轻灵，提升闪避', effect: '闪避+8%', element: 'wood', qiCost: 5 },
+        { id: 'skill_04', name: '金刚掌', icon: '✋', type: '拳掌', grade: '九品', desc: '刚猛掌法，力道惊人', effect: '拳掌伤害+15%', element: 'metal', qiCost: 8 },
+        { id: 'skill_05', name: '清风剑法', icon: '🗡️', type: '剑法', grade: '九品', desc: '剑走轻灵，快如清风', effect: '剑法伤害+12%', element: 'wood', qiCost: 8 },
     ],
     // 第2页：进阶功法
     [
-        { id: 'skill_06', name: '混元功', icon: '🌀', type: '内功', grade: '良品', desc: '混元一气，内力绵长', effect: '真气上限+20%', qiCost: 0 },
-        { id: 'skill_07', name: '金钟罩', icon: '🔔', type: '防御', grade: '良品', desc: '周身如钟，刀枪不入', effect: '防御+20%', qiCost: 10 },
-        { id: 'skill_08', name: '凌波微步', icon: '🌊', type: '轻功', grade: '良品', desc: '踏水而行，身法飘逸', effect: '闪避+15%', qiCost: 10 },
-        { id: 'skill_09', name: '烈焰刀', icon: '🔥', type: '刀法', grade: '良品', desc: '刀气如火，焚尽万物', effect: '刀法伤害+25%', qiCost: 12 },
-        { id: 'skill_10', name: '寒冰诀', icon: '❄️', type: '内功', grade: '良品', desc: '寒气内敛，凝水成冰', effect: '冰系伤害+20%', qiCost: 0 },
+        { id: 'skill_06', name: '混元功', icon: '🌀', type: '内功', grade: '八品', desc: '混元一气，内力绵长', effect: '真气上限+20%', element: 'neutral', qiCost: 0 },
+        { id: 'skill_07', name: '金钟罩', icon: '🔔', type: '防御', grade: '八品', desc: '周身如钟，刀枪不入', effect: '防御+20%', element: 'metal', qiCost: 10 },
+        { id: 'skill_08', name: '凌波微步', icon: '🌊', type: '轻功', grade: '八品', desc: '踏水而行，身法飘逸', effect: '闪避+15%', element: 'water', qiCost: 10 },
+        { id: 'skill_09', name: '烈焰刀', icon: '🔥', type: '刀法', grade: '八品', desc: '刀气如火，焚尽万物', effect: '刀法伤害+25%', element: 'fire', qiCost: 12 },
+        { id: 'skill_10', name: '寒冰诀', icon: '❄️', type: '内功', grade: '八品', desc: '寒气内敛，凝水成冰', effect: '冰系伤害+20%', element: 'water', qiCost: 0 },
     ],
     // 第3页：五行功法
     [
-        { id: 'skill_11', name: '金锋诀', icon: '⚜️', type: '内功', grade: '良品', desc: '金气锋锐，无坚不摧', effect: '金系伤害+25%', qiCost: 0 },
-        { id: 'skill_12', name: '青木长生功', icon: '🌳', type: '内功', grade: '良品', desc: '木气滋养，生生不息', effect: '生命恢复+15%', qiCost: 0 },
-        { id: 'skill_13', name: '玄水真经', icon: '💧', type: '内功', grade: '良品', desc: '水柔克刚，以柔制胜', effect: '水系伤害+25%', qiCost: 0 },
-        { id: 'skill_14', name: '离火心法', icon: '🔥', type: '内功', grade: '良品', desc: '心火熊熊，焚天灭地', effect: '火系伤害+25%', qiCost: 0 },
-        { id: 'skill_15', name: '厚土诀', icon: '⛰️', type: '内功', grade: '良品', desc: '土德厚重，稳如泰山', effect: '土系伤害+25%', qiCost: 0 },
+        { id: 'skill_11', name: '金锋诀', icon: '⚜️', type: '内功', grade: '八品', desc: '金气锋锐，无坚不摧', effect: '金系伤害+25%', element: 'metal', qiCost: 0 },
+        { id: 'skill_12', name: '青木长生功', icon: '🌳', type: '内功', grade: '八品', desc: '木气滋养，生生不息', effect: '生命恢复+15%', element: 'wood', qiCost: 0 },
+        { id: 'skill_13', name: '玄水真经', icon: '💧', type: '内功', grade: '八品', desc: '水柔克刚，以柔制胜', effect: '水系伤害+25%', element: 'water', qiCost: 0 },
+        { id: 'skill_14', name: '离火心法', icon: '🔥', type: '内功', grade: '八品', desc: '心火熊熊，焚天灭地', effect: '火系伤害+25%', element: 'fire', qiCost: 0 },
+        { id: 'skill_15', name: '厚土诀', icon: '⛰️', type: '内功', grade: '八品', desc: '土德厚重，稳如泰山', effect: '土系伤害+25%', element: 'earth', qiCost: 0 },
     ],
     // 第4页：奇门功法
     [
-        { id: 'skill_16', name: '天雷引', icon: '⚡', type: '绝技', grade: '优品', desc: '引天雷之力，一击破敌', effect: '雷系伤害+35%', qiCost: 20 },
-        { id: 'skill_17', name: '风卷残云', icon: '🌪️', type: '绝技', grade: '优品', desc: '狂风席卷，范围攻击', effect: '风系伤害+30%', qiCost: 18 },
-        { id: 'skill_18', name: '万剑归宗', icon: '⚔️', type: '剑法', grade: '优品', desc: '万剑齐发，剑道极致', effect: '剑法伤害+40%', qiCost: 25 },
-        { id: 'skill_19', name: '破天一击', icon: '💥', type: '长兵', grade: '优品', desc: '枪出如龙，破天裂地', effect: '长兵伤害+35%', qiCost: 22 },
-        { id: 'skill_20', name: '暗影步', icon: '🌑', type: '轻功', grade: '优品', desc: '融入暗影，来去无踪', effect: '闪避+25%', qiCost: 15 },
+        { id: 'skill_16', name: '天雷引', icon: '⚡', type: '绝技', grade: '五品', desc: '引天雷之力，一击破敌', effect: '雷系伤害+35%', element: 'neutral', qiCost: 20 },
+        { id: 'skill_17', name: '风卷残云', icon: '🌪️', type: '绝技', grade: '五品', desc: '狂风席卷，范围攻击', effect: '风系伤害+30%', element: 'wood', qiCost: 18 },
+        { id: 'skill_18', name: '万剑归宗', icon: '⚔️', type: '剑法', grade: '五品', desc: '万剑齐发，剑道极致', effect: '剑法伤害+40%', element: 'metal', qiCost: 25 },
+        { id: 'skill_19', name: '破天一击', icon: '💥', type: '长兵', grade: '五品', desc: '枪出如龙，破天裂地', effect: '长兵伤害+35%', element: 'neutral', qiCost: 22 },
+        { id: 'skill_20', name: '暗影步', icon: '🌑', type: '轻功', grade: '五品', desc: '融入暗影，来去无踪', effect: '闪避+25%', element: 'neutral', qiCost: 15 },
     ],
-    // 第5页：仙品功法
+    // 第5页：三品功法
     [
-        { id: 'skill_21', name: '太虚真经', icon: '✨', type: '内功', grade: '仙品', desc: '太虚之境，真气无穷', effect: '真气上限+50%', qiCost: 0 },
-        { id: 'skill_22', name: '不灭金身', icon: '🟡', type: '防御', grade: '仙品', desc: '金身不灭，万法不侵', effect: '防御+40%', qiCost: 20 },
-        { id: 'skill_23', name: '九天玄步', icon: '☁️', type: '轻功', grade: '仙品', desc: '踏云而行，瞬息千里', effect: '闪避+35%', qiCost: 20 },
-        { id: 'skill_24', name: '星辰剑诀', icon: '⭐', type: '剑法', grade: '仙品', desc: '引星辰之力入剑', effect: '剑法伤害+50%', qiCost: 30 },
-        { id: 'skill_25', name: '混沌开天', icon: '🌌', type: '绝技', grade: '仙品', desc: '混沌之力，开天辟地', effect: '全系伤害+45%', qiCost: 35 },
+        { id: 'skill_21', name: '太虚真经', icon: '✨', type: '内功', grade: '三品', desc: '太虚之境，真气无穷', effect: '真气上限+50%', element: 'neutral', qiCost: 0 },
+        { id: 'skill_22', name: '不灭金身', icon: '🟡', type: '防御', grade: '三品', desc: '金身不灭，万法不侵', effect: '防御+40%', element: 'metal', qiCost: 20 },
+        { id: 'skill_23', name: '九天玄步', icon: '☁️', type: '轻功', grade: '三品', desc: '踏云而行，瞬息千里', effect: '闪避+35%', element: 'neutral', qiCost: 20 },
+        { id: 'skill_24', name: '星辰剑诀', icon: '⭐', type: '剑法', grade: '三品', desc: '引星辰之力入剑', effect: '剑法伤害+50%', element: 'neutral', qiCost: 30 },
+        { id: 'skill_25', name: '混沌开天', icon: '🌌', type: '绝技', grade: '三品', desc: '混沌之力，开天辟地', effect: '全系伤害+45%', element: 'neutral', qiCost: 35 },
     ],
     // 第6页：毒术功法
     [
-        { id: 'skill_26', name: '五毒经', icon: '🕷️', type: '毒术', grade: '良品', desc: '五毒之力，蚀骨腐心', effect: '毒系伤害+20%', qiCost: 10 },
-        { id: 'skill_27', name: '万蛊噬心', icon: '🐛', type: '毒术', grade: '优品', desc: '蛊虫噬心，防不胜防', effect: '毒系伤害+30%', qiCost: 18 },
-        { id: 'skill_28', name: '化血神功', icon: '🩸', type: '内功', grade: '优品', desc: '化血为气，以战养战', effect: '吸血+15%', qiCost: 0 },
-        { id: 'skill_29', name: '幽冥鬼爪', icon: '👻', type: '拳掌', grade: '优品', desc: '鬼爪索命，阴毒无比', effect: '拳掌伤害+30%', qiCost: 15 },
-        { id: 'skill_30', name: '噬魂术', icon: '💀', type: '奇门', grade: '仙品', desc: '吞噬魂魄，壮大己身', effect: '击杀恢复+25%', qiCost: 25 },
+        { id: 'skill_26', name: '五毒经', icon: '🕷️', type: '毒术', grade: '八品', desc: '五毒之力，蚀骨腐心', effect: '毒系伤害+20%', element: 'wood', qiCost: 10 },
+        { id: 'skill_27', name: '万蛊噬心', icon: '🐛', type: '毒术', grade: '五品', desc: '蛊虫噬心，防不胜防', effect: '毒系伤害+30%', element: 'wood', qiCost: 18 },
+        { id: 'skill_28', name: '化血神功', icon: '🩸', type: '内功', grade: '五品', desc: '化血为气，以战养战', effect: '吸血+15%', element: 'neutral', qiCost: 0 },
+        { id: 'skill_29', name: '幽冥鬼爪', icon: '👻', type: '拳掌', grade: '五品', desc: '鬼爪索命，阴毒无比', effect: '拳掌伤害+30%', element: 'neutral', qiCost: 15 },
+        { id: 'skill_30', name: '噬魂术', icon: '💀', type: '奇门', grade: '三品', desc: '吞噬魂魄，壮大己身', effect: '击杀恢复+25%', element: 'neutral', qiCost: 25 },
     ],
     // 第7页：医术功法
     [
-        { id: 'skill_31', name: '回春术', icon: '🌸', type: '医术', grade: '凡品', desc: '春风化雨，愈合伤口', effect: '治疗+20%', qiCost: 8 },
-        { id: 'skill_32', name: '金针渡穴', icon: '📌', type: '医术', grade: '良品', desc: '金针刺穴，疏通经脉', effect: '治疗+30%', qiCost: 12 },
-        { id: 'skill_33', name: '九转还魂', icon: '💚', type: '医术', grade: '优品', desc: '九转回天，起死回生', effect: '治疗+50%', qiCost: 25 },
-        { id: 'skill_34', name: '清心咒', icon: '🧘', type: '医术', grade: '良品', desc: '清心寡欲，驱除心魔', effect: '意志+15%', qiCost: 10 },
-        { id: 'skill_35', name: '金刚伏魔', icon: '🔱', type: '防御', grade: '优品', desc: '佛门护法，降妖伏魔', effect: '防御+30%', qiCost: 15 },
+        { id: 'skill_31', name: '回春术', icon: '🌸', type: '医术', grade: '九品', desc: '春风化雨，愈合伤口', effect: '治疗+20%', element: 'wood', qiCost: 8 },
+        { id: 'skill_32', name: '金针渡穴', icon: '📌', type: '医术', grade: '八品', desc: '金针刺穴，疏通经脉', effect: '治疗+30%', element: 'wood', qiCost: 12 },
+        { id: 'skill_33', name: '九转还魂', icon: '💚', type: '医术', grade: '五品', desc: '九转回天，起死回生', effect: '治疗+50%', element: 'wood', qiCost: 25 },
+        { id: 'skill_34', name: '清心咒', icon: '🧘', type: '医术', grade: '八品', desc: '清心寡欲，驱除心魔', effect: '意志+15%', element: 'wood', qiCost: 10 },
+        { id: 'skill_35', name: '金刚伏魔', icon: '🔱', type: '防御', grade: '五品', desc: '佛门护法，降妖伏魔', effect: '防御+30%', element: 'metal', qiCost: 15 },
     ],
     // 第8页：锻造炼制
     [
-        { id: 'skill_36', name: '炼器入门', icon: '🔧', type: '锻造', grade: '凡品', desc: '基础炼器之法', effect: '锻造成功率+10%', qiCost: 0 },
-        { id: 'skill_37', name: '神匠心得', icon: '⚒️', type: '锻造', grade: '优品', desc: '神匠毕生经验', effect: '锻造成功率+30%', qiCost: 0 },
-        { id: 'skill_38', name: '丹道初解', icon: '💊', type: '炼制', grade: '凡品', desc: '炼丹入门基础', effect: '炼制成功率+10%', qiCost: 0 },
-        { id: 'skill_39', name: '九转丹诀', icon: '🏺', type: '炼制', grade: '优品', desc: '九转炼丹秘法', effect: '炼制成功率+30%', qiCost: 0 },
-        { id: 'skill_40', name: '符箓大全', icon: '📜', type: '奇门', grade: '良品', desc: '符箓制作之法', effect: '符箓伤害+20%', qiCost: 10 },
+        { id: 'skill_36', name: '炼器入门', icon: '🔧', type: '锻造', grade: '九品', desc: '基础炼器之法', effect: '锻造成功率+10%', element: 'fire', qiCost: 0 },
+        { id: 'skill_37', name: '神匠心得', icon: '⚒️', type: '锻造', grade: '五品', desc: '神匠毕生经验', effect: '锻造成功率+30%', element: 'fire', qiCost: 0 },
+        { id: 'skill_38', name: '丹道初解', icon: '💊', type: '炼制', grade: '九品', desc: '炼丹入门基础', effect: '炼制成功率+10%', element: 'fire', qiCost: 0 },
+        { id: 'skill_39', name: '九转丹诀', icon: '🏺', type: '炼制', grade: '五品', desc: '九转炼丹秘法', effect: '炼制成功率+30%', element: 'fire', qiCost: 0 },
+        { id: 'skill_40', name: '符箓大全', icon: '📜', type: '奇门', grade: '八品', desc: '符箓制作之法', effect: '符箓伤害+20%', element: 'fire', qiCost: 10 },
     ],
     // 第9页：射术奇门
     [
-        { id: 'skill_41', name: '穿云箭', icon: '🏹', type: '射术', grade: '良品', desc: '箭穿云霄，百发百中', effect: '射术伤害+25%', qiCost: 10 },
-        { id: 'skill_42', name: '流星赶月', icon: '☄️', type: '射术', grade: '优品', desc: '箭如流星，追风赶月', effect: '射术伤害+35%', qiCost: 18 },
-        { id: 'skill_43', name: '八卦阵', icon: '☯️', type: '奇门', grade: '良品', desc: '八卦迷踪，困敌无形', effect: '控制+20%', qiCost: 15 },
-        { id: 'skill_44', name: '天罗地网', icon: '🕸️', type: '奇门', grade: '优品', desc: '天罗地网，无处可逃', effect: '控制+30%', qiCost: 20 },
-        { id: 'skill_45', name: '追魂夺命', icon: '🎯', type: '射术', grade: '仙品', desc: '一箭追魂，例不虚发', effect: '射术伤害+50%', qiCost: 30 },
+        { id: 'skill_41', name: '穿云箭', icon: '🏹', type: '射术', grade: '八品', desc: '箭穿云霄，百发百中', effect: '射术伤害+25%', element: 'metal', qiCost: 10 },
+        { id: 'skill_42', name: '流星赶月', icon: '☄️', type: '射术', grade: '五品', desc: '箭如流星，追风赶月', effect: '射术伤害+35%', element: 'metal', qiCost: 18 },
+        { id: 'skill_43', name: '八卦阵', icon: '☯️', type: '奇门', grade: '八品', desc: '八卦迷踪，困敌无形', effect: '控制+20%', element: 'metal', qiCost: 15 },
+        { id: 'skill_44', name: '天罗地网', icon: '🕸️', type: '奇门', grade: '五品', desc: '天罗地网，无处可逃', effect: '控制+30%', element: 'metal', qiCost: 20 },
+        { id: 'skill_45', name: '追魂夺命', icon: '🎯', type: '射术', grade: '三品', desc: '一箭追魂，例不虚发', effect: '射术伤害+50%', element: 'metal', qiCost: 30 },
     ],
     // 第10页：终极功法
     [
-        { id: 'skill_46', name: '太极无极', icon: '☯️', type: '内功', grade: '仙品', desc: '太极生两仪，无极生太极', effect: '全属性+20%', qiCost: 0 },
-        { id: 'skill_47', name: '诛仙剑阵', icon: '⚔️', type: '剑法', grade: '仙品', desc: '上古诛仙剑阵', effect: '剑法伤害+60%', qiCost: 40 },
-        { id: 'skill_48', name: '盘古开天斧', icon: '🪓', type: '长兵', grade: '仙品', desc: '盘古之力，开天辟地', effect: '长兵伤害+55%', qiCost: 40 },
-        { id: 'skill_49', name: '女娲补天诀', icon: '🌈', type: '医术', grade: '仙品', desc: '女娲神力，补天再造', effect: '治疗+80%', qiCost: 50 },
-        { id: 'skill_50', name: '鸿蒙至尊功', icon: '👑', type: '内功', grade: '仙品', desc: '鸿蒙未判，至尊无敌', effect: '全属性+35%', qiCost: 0 },
+        { id: 'skill_46', name: '太极无极', icon: '☯️', type: '内功', grade: '三品', desc: '太极生两仪，无极生太极', effect: '全属性+20%', element: 'neutral', qiCost: 0 },
+        { id: 'skill_47', name: '诛仙剑阵', icon: '⚔️', type: '剑法', grade: '三品', desc: '上古诛仙剑阵', effect: '剑法伤害+60%', element: 'metal', qiCost: 40 },
+        { id: 'skill_48', name: '盘古开天斧', icon: '🪓', type: '长兵', grade: '三品', desc: '盘古之力，开天辟地', effect: '长兵伤害+55%', element: 'earth', qiCost: 40 },
+        { id: 'skill_49', name: '女娲补天诀', icon: '🌈', type: '医术', grade: '三品', desc: '女娲神力，补天再造', effect: '治疗+80%', element: 'earth', qiCost: 50 },
+        { id: 'skill_50', name: '鸿蒙至尊功', icon: '👑', type: '内功', grade: '三品', desc: '鸿蒙未判，至尊无敌', effect: '全属性+35%', element: 'neutral', qiCost: 0 },
+    ],
+    // 第11页：方向秘艺（第八十一波——毒/灼/反击/吸血/闪避九门，与秘籍同名同账）
+    [
+        { id: 'skill_51', name: '五毒功', icon: '📖', type: '内功', grade: '七品', desc: '五毒淬体，毒随掌发', effect: '毒入经脉，真气恢复+5%', element: 'wood', qiCost: 0 },
+        { id: 'skill_52', name: '万毒归元诀', icon: '📖', type: '内功', grade: '三品', desc: '万毒拜主，化毒归元', effect: '万毒归元，属性底蕴大涨', element: 'wood', qiCost: 0 },
+        { id: 'skill_53', name: '焚天诀', icon: '☀️', type: '内功', grade: '五品', desc: '焚天煮海，火浪焚身', effect: '火系伤害+30%', element: 'fire', qiCost: 0 },
+        { id: 'skill_54', name: '金乌诀', icon: '☀️', type: '内功', grade: '三品', desc: '金乌栖日，真火焚世', effect: '火系伤害+50%', element: 'fire', qiCost: 0 },
+        { id: 'skill_55', name: '噬血功', icon: '📖', type: '内功', grade: '五品', desc: '噬敌精血以养己身，邪功也', effect: '击伤吸血，属性底蕴小涨', element: 'neutral', qiCost: 0 },
+        { id: 'skill_56', name: '断肠毒掌', icon: '👊', type: '拳掌', grade: '五品', desc: '掌风过处，断肠蚀骨', effect: '拳掌伤害+60%', element: 'wood', qiCost: 8 },
+        { id: 'skill_57', name: '烈焰掌', icon: '👊', type: '拳掌', grade: '七品', desc: '掌心蕴真火，触之即灼', effect: '拳掌伤害+45%', element: 'fire', qiCost: 8 },
+        { id: 'skill_58', name: '沾手功', icon: '💨', type: '轻功', grade: '七品', desc: '沾连粘随，借力打力', effect: '借力回力，反击+20', element: 'earth', qiCost: 5 },
+        { id: 'skill_59', name: '幽影步', icon: '💨', type: '轻功', grade: '五品', desc: '身若幽影，缥缈难捉', effect: '身若幽影，闪避+45', element: 'neutral', qiCost: 5 },
     ],
 ];
 
@@ -383,6 +395,26 @@ function getAllLearnedMoves() {
                 });
             });
         }
+    }
+    // 第十五波：参悟过的门派功法，招式一并列入常用栏候选
+    if (typeof window.sectArtChannelList === 'function') {
+        try {
+            window.sectArtChannelList().forEach(function (sk) {
+                getSkillAttackMoves(sk.id).forEach(function (m) {
+                    moves.push({
+                        skillId: sk.id,
+                        skillName: sk.name,
+                        skillType: sk.type || '未知',
+                        moveId: m.id,
+                        name: m.name,
+                        icon: m.icon || '⚔️',
+                        qiCost: m.qiCost || 0,
+                        staminaCost: m.staminaCost || 0,
+                        desc: m.desc || ''
+                    });
+                });
+            });
+        } catch (e) {}
     }
     return moves;
 }
@@ -517,12 +549,15 @@ function equipItem(slot, item) {
     if (typeof _eqClone.refineLevel !== 'number') _eqClone.refineLevel = 0;
     if (!_eqClone.enchantType) _eqClone.enchantType = null;
     currentEquipment[slot] = _eqClone;
+    // 第七十七波·套装回响：穿脱都对一次账（成套提点/散套静音都在这一口里，缺模块静默）
+    try { if (window.EquipmentSets && typeof window.EquipmentSets.noteChange === 'function') window.EquipmentSets.noteChange(); } catch (eSetN) {}
     return true;
 }
 
 function unequipItem(slot) {
     const item = currentEquipment[slot];
     currentEquipment[slot] = null;
+    try { if (window.EquipmentSets && typeof window.EquipmentSets.noteChange === 'function') window.EquipmentSets.noteChange(); } catch (eSetN) {}
     return item;
 }
 
@@ -536,8 +571,12 @@ function getAllEquippedItems() {
 
 // ---------- 技能函数 ----------
 function equipSkill(skillId, slot) {
+    // 第十五波：门派功法走掌握度账（参悟过 m>0 即可运功），不进知识册
+    var isSectArt = (typeof window.sectArtChannelable === 'function' && window.sectArtChannelable(skillId));
     // v9.2：必须已学会（learned/mastered）才能装备运功
-    if (window.KnowledgeSystem && typeof window.KnowledgeSystem.canEquip === 'function') {
+    if (isSectArt) {
+        // 凭据已在 sectArtChannelable 里验过
+    } else if (window.KnowledgeSystem && typeof window.KnowledgeSystem.canEquip === 'function') {
         if (!window.KnowledgeSystem.canEquip(skillId)) {
             return false;
         }
@@ -578,6 +617,11 @@ function findSkillById(skillId) {
             if (skill.id === skillId) return skill;
         }
     }
+    // 第十五波：门派功法表兜底（参悟过的门派功法折成运功栏认得的形）
+    if (typeof window.sectArtAsSkill === 'function') {
+        var sectDef = window.sectArtAsSkill(skillId);
+        if (sectDef) return sectDef;
+    }
     return null;
 }
 
@@ -601,7 +645,9 @@ function migrateSkillsToThreeSlots(skillsObj) {
         // 同槽只保留第一个（或已有则跳过）
         if (!currentSkills[slot]) {
             // 知识检查：未学会则跳过
-            if (window.KnowledgeSystem && window.KnowledgeSystem.canEquip) {
+            // 第十五波：门派功法是例外——读档此刻掌握度账还没恢复，凭结构查表放行（装备当时已验过掌握度）
+            var isSectArt = (typeof window.sectArtAsSkill === 'function' && window.sectArtAsSkill(sk.id));
+            if (!isSectArt && window.KnowledgeSystem && window.KnowledgeSystem.canEquip) {
                 if (!window.KnowledgeSystem.canEquip(sk.id)) return;
             }
             currentSkills[slot] = sk;
@@ -658,4 +704,278 @@ if (window.StateRegistry) {
         }
     });
 }
+
+// ==================== 装备面板 · 呈现层重排（v21.x 界面整改 P1） ====================
+// 只改排版与文案：12 个槽位排成两列网格、四张属性读数压成一行搬去右列填空、空槽给出「可放入」暗示。
+// 槽位规则 / 装备数值 / 负重算法 / 事件名一概不动——onclick 里的函数名与参数只读来认按钮职责，一个字符都不写回。
+// 为什么要 MutationObserver：#equipment-slots 与 #skill-slots-container 每次渲染都被 app.js 整块 innerHTML 重建，
+// 而本文件先于 app.js 加载（1969 行 vs 2216 行），包不住它的渲染函数，只能跟着渲染补做美化。
+
+// 槽位内的按钮：抹掉 Tailwind 底色与字号，配色分级统一交给 styles/panel-equipment.css
+var _EQUIP_BTN_NOISE = ['text-xs', 'px-1', 'px-2', 'py-1', 'rounded', 'font-bold', 'whitespace-nowrap',
+    'bg-gray-600', 'hover:bg-gray-500', 'text-gray-200', 'bg-amber-700', 'hover:bg-amber-600', 'text-white',
+    'bg-green-700', 'hover:bg-green-600', 'bg-purple-700', 'hover:bg-purple-600',
+    'text-gray-500', 'text-gray-400',
+    'text-red-400', 'hover:text-red-300', 'hover:text-red-400'];
+
+function _equipEl(tag, cls, text) {
+    var el = document.createElement(tag);
+    if (cls) el.className = cls;
+    if (text != null) el.textContent = text;
+    return el;
+}
+
+function _equipHollow(el) {
+    // 静态标记里壳与按钮之间有换行空白，只能按「有没有元素孩子」判空
+    if (el && el.parentNode && !el.firstElementChild) el.parentNode.removeChild(el);
+}
+
+// 认出槽位卡：卡里必有一个「选择/收起」开关（只凭 onclick 认，绝不改写它）
+function _equipPickBtn(card) {
+    return card.querySelector
+        ? card.querySelector('button[onclick*="toggleEquipSelect"],button[onclick*="toggleSkillSelect"]')
+        : null;
+}
+
+// ---------- 一次性静态重排：把「一列到底 + 右列空白」改成两列配平 ----------
+function _ensureEquipmentChrome() {
+    var panel = document.getElementById('panel-equipment');
+    if (!panel || panel.getAttribute('data-x-eq-chrome') === '1') return;
+
+    var slotsBox = document.getElementById('equipment-slots');
+    var skillsBox = document.getElementById('skill-slots-container');
+    if (!slotsBox || !skillsBox) return;
+
+    var gearCard = slotsBox.parentNode;
+    var gearCol = gearCard ? gearCard.parentNode : null;
+    var skillCard = skillsBox.parentNode;
+    var skillCol = skillCard ? skillCard.parentNode : null;
+    var row = gearCol ? gearCol.parentNode : null;
+    // 左右两列必须同父、那一行必须挂在本面板下；静态结构对不上就整块不动，别把面板拆坏
+    if (!gearCard || !skillCard || !gearCol || gearCol !== skillCol) return;
+    if (!row || row === panel || row !== skillCol.parentNode || !panel.contains(row)) return;
+
+    panel.setAttribute('data-x-eq-chrome', '1');   // 先占坑：中途抛错也不许下次再搬一半
+
+    // 命名撞车：导航叫「装备」、导航另有一项叫「功法」，本页却叫「装备与功法」——
+    // 这一页实际只管「穿戴」与「上阵」，改名把「功法」这个词让给功法页
+    var title = panel.querySelector('h2');
+    if (title) {
+        title.className = 'x-eq__title';
+        title.textContent = '⚔️ 装备与运功';
+    }
+
+    row.className = 'x-eq__row';
+    gearCol.className = 'x-eq__col x-eq__col--gear';
+    skillCol.className = 'x-eq__col x-eq__col--skill';
+    gearCard.className = 'x-eq__card';
+    skillCard.className = 'x-eq__card';
+
+    var gearTitle = gearCard.querySelector('h3');
+    var skillTitle = skillCard.querySelector('h3');
+    if (gearTitle) gearTitle.className = 'x-eq__card-title';
+    if (skillTitle) skillTitle.className = 'x-eq__card-title x-eq__card-title--art';
+    var gearHint = gearCard.querySelector('p');
+    if (gearHint) {
+        gearHint.className = 'x-eq__card-hint';
+        gearHint.textContent = '点槽位右侧的「选择」，从背包里挑一件穿上';
+    }
+    var skillHint = skillCard.querySelector('p');
+    if (skillHint) {
+        var indicator = document.getElementById('skill-page-indicator');
+        skillHint.className = 'x-eq__card-hint';   // 只换皮：#skill-page-indicator 那个 span 原样搬回，app.js 还往里写「已学 N 门」
+        skillHint.textContent = '点槽位右侧的「选择」，让已学功法上阵 · ';
+        if (indicator) skillHint.appendChild(indicator);
+    }
+
+    // 「装备强化」原来孤零零悬在标题下方——挪进装备栏标题行右端，作用对象一眼看得见
+    var enhanceBtn = panel.querySelector('button[onclick*="openEnhancementUI"]');
+    if (enhanceBtn && gearTitle) {
+        var ctaHost = enhanceBtn.parentNode;   // 搬走前先记下旧壳，搬完再拆
+        enhanceBtn.className = 'x-eq__enhance';
+        enhanceBtn.textContent = '⚒️ 强化装备';
+        enhanceBtn.setAttribute('title', '铁匠铺：强化／精炼／附魔／突破下面这些已穿戴的装备');
+        gearTitle.appendChild(enhanceBtn);
+        _equipHollow(ctaHost);
+    }
+
+    // 功法页的指路：这一页只决定哪三门上阵，修习去别处
+    skillCard.appendChild(_equipEl('p', 'x-eq__card-note', '功法本身在「功法」页修习，这里只决定哪三门上阵。'));
+
+    // 四张属性卡：从顶部横排挪进右列空白，压成一行紧凑读数（负荷另起一行，问号贴着档位）
+    var summary = document.getElementById('equip-combat-summary');
+    if (summary && skillCol) {
+        summary.className = 'x-eq__stats';
+        var cells = summary.children;
+        for (var i = 0; i < cells.length; i++) {
+            var cell = cells[i];
+            var isLoad = !!cell.querySelector('#equip-stat-load');
+            cell.className = isLoad ? 'x-eq__stat x-eq__stat--load' : 'x-eq__stat';
+            var cellKids = cell.children;
+            if (cellKids[0] && cellKids[0].tagName === 'DIV') cellKids[0].className = 'x-eq__stat-label';
+            if (isLoad) {
+                var loadRow = document.getElementById('equip-stat-load').parentNode;
+                loadRow.className = 'x-eq__loadrow';
+            } else if (cellKids[1]) {
+                cellKids[1].className = 'x-eq__stat-value ' + _equipKeepColor(cellKids[1]);
+            }
+        }
+        var statsCard = _equipEl('div', 'x-eq__card x-eq__card--stats');
+        statsCard.appendChild(_equipEl('h3', 'x-eq__card-title x-eq__card-title--plain', '⚔️ 战斗概览'));
+        skillCol.appendChild(statsCard);
+        statsCard.appendChild(summary);
+        var setLine = document.getElementById('equip-set-line');
+        if (setLine) {
+            setLine.className = 'x-eq__set';
+            statsCard.appendChild(setLine);
+        }
+    }
+}
+
+// 只留数值原有的颜色类，其余排版类交给 CSS
+function _equipKeepColor(el) {
+    var keep = [];
+    var cl = el.classList;
+    for (var i = 0; i < cl.length; i++) {
+        if (/^text-[a-z]+-\d{3}$/.test(cl[i])) keep.push(cl[i]);
+    }
+    return keep.join(' ');
+}
+
+// 「这一门已上阵」app.js 用 border-purple-500 说，接管排版后得自己留个标记。
+// 判定只认第一次（彼时原始类还在），结果挂在元素上——美化会被反复补跑，第二轮类已换，不缓存就闪掉。
+function _isOnSlotRow(row) {
+    if (typeof row._xOnSlot === 'undefined') {
+        row._xOnSlot = /(^| )border-purple-500( |$)/.test(row.className);
+    }
+    return row._xOnSlot;
+}
+
+// ---------- 跟随渲染补做的美化：槽位卡分类打标 + 空槽占位文案 ----------
+function _decorateEquipmentSlots() {
+    if (typeof document === 'undefined' || !document.getElementById) return;
+    try {
+        _ensureEquipmentChrome();
+        _decorateSlotBox('equipment-slots', '未穿戴');
+        _decorateSlotBox('skill-slots-container', '未运功');
+        _decorateLoadHint();
+    } catch (e) {
+        if (window.console && console.warn) console.warn('[equipment] 槽位美化跳过：' + (e && e.message));
+    }
+}
+
+function _decorateSlotBox(boxId, emptyText) {
+    var box = document.getElementById(boxId);
+    if (!box || !box.children) return;
+    for (var i = 0; i < box.children.length; i++) {
+        var card = box.children[i];
+        if (!card.classList || !card.querySelector) continue;
+        var pick = _equipPickBtn(card);
+        if (!pick) continue;           // 功法通电/组合技那类提示行，不是槽位
+        _decorateSlotCard(card, emptyText);
+    }
+}
+
+function _decorateSlotCard(card, emptyText) {
+    var head = card.firstElementChild;
+    head.className = 'x-slot__head';
+    var name = head.querySelector('p');
+    var textBox = name ? name.parentNode : null;
+    var info = textBox ? textBox.parentNode : null;
+    var empty = !name || name.classList.contains('text-gray-600') || name.textContent.replace(/\s+/g, '') === '空';
+    var open = card.children.length > 1;
+
+    card.classList.add('x-slot');
+    card.classList.toggle('x-slot--empty', empty);
+    card.classList.toggle('x-slot--filled', !empty);
+    card.classList.toggle('x-slot--open', open);
+
+    if (info && info !== head) {
+        info.className = 'x-slot__info';
+        if (info.firstElementChild) info.firstElementChild.className = 'x-slot__icon';
+    }
+    if (textBox) textBox.className = 'x-slot__text';
+    if (head.lastElementChild && head.lastElementChild !== info) head.lastElementChild.className = 'x-slot__acts';
+    var label = textBox ? textBox.firstElementChild : null;
+    if (label && label !== name) label.className = 'x-slot__label';
+    if (name) {
+        name.classList.add('x-slot__name');
+        name.setAttribute('title', name.textContent);
+        if (empty && name.textContent !== emptyText) name.textContent = emptyText;   // 「空」孤零零一个字，像没渲染出来
+    }
+
+    var btns = card.querySelectorAll('button');
+    for (var b = 0; b < btns.length; b++) {
+        var cl = btns[b].classList;
+        for (var k = 0; k < _EQUIP_BTN_NOISE.length; k++) cl.remove(_EQUIP_BTN_NOISE[k]);
+        cl.add('x-slot__btn');
+        var oc = btns[b].getAttribute('onclick') || '';   // 只读不改：靠它认出按钮职责
+        if (oc.indexOf('toggleEquipSelect') >= 0 || oc.indexOf('toggleSkillSelect') >= 0) cl.add('x-slot__pick');
+        else if (oc.indexOf('unequip') >= 0) cl.add('x-slot__off');
+        else if (oc.indexOf('equipItemFromInventory') >= 0 || oc.indexOf('equipSkillToSlot') >= 0) cl.add('x-slot__use');
+    }
+
+    if (!open) return;
+    var list = card.children[1];
+    list.className = 'x-slot__list';
+    for (var j = 0; j < list.children.length; j++) {
+        var rowItem = list.children[j];
+        if (!rowItem.classList) continue;
+        if (rowItem.tagName === 'P') {
+            rowItem.className = 'x-slot__none';
+            continue;
+        }
+        rowItem.className = 'x-slot__row' + (_isOnSlotRow(rowItem) ? ' x-slot__row--on' : '');
+        var ps = rowItem.querySelectorAll('p');
+        if (ps[0]) { ps[0].className = 'x-slot__rowname'; ps[0].setAttribute('title', ps[0].textContent); }
+        if (ps[1]) {
+            var metaColor = _equipKeepColor(ps[1]);   // 品阶色（三品金黄／五品紫／八品蓝）是信息，留着
+            ps[1].className = 'x-slot__meta' + (metaColor ? ' ' + metaColor : ' x-slot__meta--dim');
+        }
+    }
+}
+
+// 负荷那一格：档位与问号是一组，读数另起一行；app.js 塞进来的 9px 内联字号交给 CSS 统管
+function _decorateLoadHint() {
+    var detail = document.getElementById('equip-stat-load-detail');
+    if (!detail || !detail.classList) return;
+    detail.classList.add('x-eq__stat-sub');
+    var help = detail.parentNode ? detail.parentNode.querySelector('.load-tooltip-trigger') : null;
+    if (!help) return;
+    var cl = help.classList;
+    cl.add('x-eq__loadhelp');
+    var noise = ['w-3.5', 'h-3.5', 'ml-1', 'bg-blue-500', 'hover:bg-blue-400', 'text-white', 'flex', 'rounded-full'];
+    for (var i = 0; i < noise.length; i++) cl.remove(noise[i]);
+    if (help.style && help.style.fontSize) help.style.fontSize = '';
+    if (!help.getAttribute('title')) {
+        help.setAttribute('title', '查看负荷对速度／闪避／格挡的影响');
+        help.setAttribute('aria-label', '负荷说明');
+    }
+}
+
+// ---------- 装配入口：先跑一次，再挂在渲染节奏上补跑 ----------
+(function _installEquipmentChrome() {
+    // 多个 node 测试用很薄的 document 桩直接 load 本文件，装配只活在浏览器里：出错就降级成不美化
+    try {
+        if (typeof document === 'undefined' || !document.getElementById) return;   // 无 DOM 的测试沙箱直接跳过
+
+        function run() { _decorateEquipmentSlots(); }
+        run();
+        if (document.readyState === 'loading' && document.addEventListener) {
+            document.addEventListener('DOMContentLoaded', run);
+        }
+
+        var panel = document.getElementById('panel-equipment');
+        if (!panel || typeof MutationObserver !== 'function') return;
+        var queued = false;
+        var frame = window.requestAnimationFrame || function (f) { return setTimeout(f, 16); };
+        new MutationObserver(function () {
+            if (queued) return;
+            queued = true;
+            frame(function () { queued = false; run(); });
+        }).observe(panel, { childList: true, subtree: true });   // 只补呈现，不做数据活；自身写入都有比对前置，跑一遍即收敛
+    } catch (e) {
+        if (window.console && console.warn) console.warn('[equipment] 面板美化装配跳过：' + (e && e.message));
+    }
+})();
 

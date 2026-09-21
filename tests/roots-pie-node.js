@@ -159,7 +159,7 @@ var src = fs.readFileSync(path.resolve(__dirname, '..', 'js', 'npcs', 'npc-linea
 assert(src.indexOf('total > 200') < 0 && src.indexOf('200 / total') < 0, 'G1 削峰旧算法清除');
 assert(src.indexOf('总和恒 100') >= 0 || src.indexOf('总和精确 100') >= 0, 'G2 饼图口径有注释锚点');
 var appSrc = fs.readFileSync(path.resolve(__dirname, '..', 'js', 'app.js'), 'utf8');
-assert(appSrc.indexOf("匹配灵根+' + Math.round(val / 2)") >= 0, 'G3 匹配灵根文案如实换算加成');
+assert(appSrc.indexOf("匹配灵根+' + val + '% '") >= 0, 'G3 匹配灵根文案如实报占比即加成（第八十波拉直：1+灵根/100）');
 
 console.log('roots-pie v20.10: ' + passed + ' passed, ' + failed + ' failed');
 if (failed > 0) process.exit(1);

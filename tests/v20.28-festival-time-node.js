@@ -104,8 +104,8 @@ assert(W.modal[0].body.indexOf('谁也不陪') >= 0, 'B5 两人以上时给"这�
 
 // ============ C 陪一推余 ============
 assert(W.w.festivalAcceptBy('sect_leader_百花谷', 'qixi_0') === true, 'C1 陪温蘅过节，落笔即定');
-assert(W.w.currentCharData.energy === 100 && W.advanced.length === 1 && W.advanced[0] === 60,
-    'C2 赴节的代价是日子本身：占一整日时辰（60），比平日湖上一约（30）重；精力纹丝不动——去玩不榨精力，赶路的累让赶路自己去收（v20.29 现实化）');
+assert(W.w.currentCharData.energy === 100 && W.advanced.length === 1 && W.advanced[0] === 1440,
+    'C2 赴节的代价是日子本身：占一整日（1440 分钟——第一百一十一波把单位账对齐，旧版收 60 分钟只是半个时辰），比平日湖上一约（半日 720）重；精力纹丝不动——去玩不榨精力，赶路的累让赶路自己去收（v20.29 现实化）');
 assert(W.w.npcManager.getNPC('sect_leader_百花谷').affDelta === 8,
     'C3 陪到的那位好感+8——比平日一约（+5）重，这一整天是你的');
 assert((W.w.npcManager.getNPC('sect_leader_百花谷').relationship.trust || 0) === 2,

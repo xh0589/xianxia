@@ -13,6 +13,38 @@ function hasSectDeepData(sectName) {
 }
 
 // ============ 拜师面板 ============
+// v21.9 天赋口径：玩家属性里没有「天赋」字段——用 悟性四成 + 意志三成 + 气运三成 折算成 0-100，
+// 拜师门槛与面板展示同用一个函数，不再「数据写了要求、代码硬编码放行」。
+function getPlayerTalent(player) {
+    player = player || window.currentCharData || {};
+    var a = player.attrs || {};
+    var luck = 50;
+    try { if (typeof window.getLuck === 'function') { var l = window.getLuck(); if (typeof l === 'number' && isFinite(l)) luck = l; } } catch (e) {}
+    var t = Math.round((Number(a.intelligence) || 10) * 0.4 + (Number(a.willpower) || 10) * 0.3 + luck * 0.3);
+    return Math.max(0, Math.min(100, t));
+}
+window.getPlayerTalent = getPlayerTalent;
+
+// v21.9 拜师条件统一核对（面板展示与 sectBecomeStudent 复核共用同一把尺）
+function checkMasterRequirement(player, req, contribution) {
+    req = req || {};
+    var missing = [];
+    if (req.realm) {
+        var meetRealm = (typeof window.getRealmTier === 'function')
+            ? window.getRealmTier(player.realm) >= window.getRealmTier(req.realm) && (player.layer || 1) >= (req.layer || 1)
+            : true;
+        if (!meetRealm) missing.push(req.realm + (req.layer || 1) + '层');
+    }
+    if (req.contribution && !(contribution >= req.contribution)) missing.push('贡献' + req.contribution);
+    if (req.medicine && !((player.lifeSkills && player.lifeSkills['医术']) >= req.medicine)) missing.push('医术' + req.medicine);
+    if (req.forging && !((player.lifeSkills && player.lifeSkills['锻造']) >= req.forging)) missing.push('锻造' + req.forging);
+    if (req.constitution && !(((player.attrs && player.attrs.constitution) || 0) >= req.constitution)) missing.push('体质' + req.constitution);
+    if (req.talent && !(getPlayerTalent(player) >= req.talent)) missing.push('天赋' + req.talent);
+    if (req.waterRoot && !((player.spiritualRoots && Number(player.spiritualRoots.water) > 0))) missing.push('水灵根');
+    return { ok: missing.length === 0, missing: missing };
+}
+window.checkMasterRequirement = checkMasterRequirement;
+
 function showSectMasters(sectName) {
     var data = getSectDeepData(sectName);
     if (!data || !data.masters) {
@@ -34,20 +66,10 @@ function showSectMasters(sectName) {
         var reqText = '';
         
         if (m.acceptStudent) {
-            // 检查条件
-            var meetRealm = true;
-            if (req.realm) {
-                meetRealm = (typeof window.getRealmTier === 'function') 
-                    ? window.getRealmTier(player.realm) >= window.getRealmTier(req.realm) && (player.layer || 1) >= (req.layer || 1)
-                    : true;
-            }
-            var meetContribution = playerContribution >= (req.contribution || 0);
-            var meetMedicine = !req.medicine || (player.lifeSkills && player.lifeSkills['医术'] >= req.medicine);
-            var meetForging = !req.forging || (player.lifeSkills && player.lifeSkills['锻造'] >= req.forging);
-            var meetConstitution = !req.constitution || (player.attrs?.constitution || 0) >= req.constitution;
-            var meetTalent = !req.talent || true; // 天赋暂不检查
-            var meetWaterRoot = !req.waterRoot || true; // 水灵根暂不检查
-            canLearn = meetRealm && meetContribution && meetMedicine && meetForging && meetConstitution;
+            // v21.9：条件核对统一走 checkMasterRequirement——此前天赋/水灵根被「|| true」
+            // 硬编码放行，逍遥派「惊才绝艳」、天山派「只收水灵根」的门派人设拜师无门槛。
+            var chk = checkMasterRequirement(player, req, playerContribution);
+            canLearn = chk.ok;
             
             var reqParts = [];
             if (req.realm) reqParts.push(req.realm + (req.layer || 1) + '层');
@@ -55,6 +77,8 @@ function showSectMasters(sectName) {
             if (req.medicine) reqParts.push('医术' + req.medicine);
             if (req.forging) reqParts.push('锻造' + req.forging);
             if (req.constitution) reqParts.push('体质' + req.constitution);
+            if (req.talent) reqParts.push('天赋' + req.talent + '（你：' + getPlayerTalent(player) + '）');
+            if (req.waterRoot) reqParts.push('水灵根' + ((player.spiritualRoots && Number(player.spiritualRoots.water) > 0) ? '（你：✅）' : '（你：无）'));
             reqText = '需要：' + reqParts.join('、');
         }
         
@@ -123,12 +147,22 @@ function sectBecomeStudent(sectName, masterId) {
         if (window.showMessage) window.showMessage(master.name + '淡淡看你一眼："当年你执意离去，如今何必再来。"此人不会再收你为徒了。', 'error');
         return;
     }
+    // v21.9：落拜前复核条件——此前面板展示是唯一闸口，绕过面板即可拜入任何名师门下
+    var chk2 = checkMasterRequirement(window.currentCharData || {}, master.requirement || {}, ds.contribution || 0);
+    if (!chk2.ok) {
+        if (window.showMessage) window.showMessage(master.name + '上下打量你一眼，摇了摇头：「还差些——' + chk2.missing.join('、') + '。」', 'warning');
+        return;
+    }
     
     ds._masterId = masterId;
     ds._masterName = master.name;
     ds._masterSect = sectName;
     
-    if (window.showMessage) window.showMessage('你正式拜入' + master.name + '门下！', 'success');
+    // v23.2 拜师有礼：敬茶、聆训、录入门墙——旧版点一下「拜师」就算师徒了
+    if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
+        try { window.timeSystem.advanceTime(90, '行拜师礼'); } catch (e) {}
+    }
+    if (window.showMessage) window.showMessage('🍵 你奉上拜师茶，' + master.name + ' 受了你三拜，授你门规一册：「入了我门下，勤字当头。」——你正式拜入' + master.name + '门下！', 'success');
     // v15.4 裁决：拜师不送功法——功法须经本派藏经阁参悟获得
     showSectMasters(sectName);
 }
@@ -180,6 +214,7 @@ function chushiFromMaster(sectName) {
     if (!confirm('学艺已成，就此出师？\n\n师父将赠行礼（贡献+200、声望+10），此后你仍是' + sectName + '弟子，只是不再受其亲传。')) return;
     var reward = 200;
     ds.contribution = (ds.contribution || 0) + reward;
+    try { window.sectLedgerNote && window.sectLedgerNote(reward, '出师行礼·师父所赠'); } catch (e) {}
     if (typeof window.addFame === 'function') window.addFame(10);
     delete ds._masterId; delete ds._masterName; delete ds._masterSect; delete ds._masterBlessDay;
     ds._chushiDone = true;
@@ -192,11 +227,11 @@ function sectEventToday() {
     return (typeof window.getAbsoluteDay === 'function') ? window.getAbsoluteDay()
         : ((window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') ? window.timeSystem.getAbsoluteDay() : 1);
 }
-function applySectEventEffects(eff, sectName) {
+function applySectEventEffects(eff, sectName, evtName) {
     var msgs = [];
     var ds = window.discipleState || {};
     if (!eff) return msgs;
-    if (eff.contribution) { ds.contribution = Math.max(0, (ds.contribution || 0) + eff.contribution); msgs.push('贡献' + (eff.contribution > 0 ? '+' : '') + eff.contribution); }
+    if (eff.contribution) { ds.contribution = Math.max(0, (ds.contribution || 0) + eff.contribution); try { window.sectLedgerNote && window.sectLedgerNote(eff.contribution, '门派事件·' + (evtName || '门中一事')); } catch (e) {} msgs.push('贡献' + (eff.contribution > 0 ? '+' : '') + eff.contribution); }
     if (eff.points) { ds.points = Math.max(0, (ds.points || 0) + eff.points); msgs.push('积分' + (eff.points > 0 ? '+' : '') + eff.points); }
     if (eff.fame && typeof window.addFame === 'function') { window.addFame(eff.fame); msgs.push('声望' + (eff.fame > 0 ? '+' : '') + eff.fame); }
     if (eff.item && eff.item.id && typeof window.addItem === 'function') {
@@ -217,7 +252,15 @@ function applySectEventEffects(eff, sectName) {
     return msgs;
 }
 function renderSectEventCard(sectName, ev) {
-    var html = '<p class="text-gray-300 mb-3">' + (ev.text || '') + '</p><div class="space-y-2">';
+    // 批四 · 弟子有脸：事件文本里的泛称（弟子/同门/师兄…）换成本派真名同门——
+    // 你在事件里读到的名字，就是演武场能切磋、亲传能收徒的那批真档案（sect-kin 注入）。
+    var evText = ev.text || '';
+    try {
+        var dsK = window.discipleState || {};
+        var kin = (dsK._pendingSectEvent && dsK._pendingSectEvent.eventId === ev.id && dsK._pendingSectEvent.kin) || null;
+        if (typeof window.sectKinify === 'function') evText = window.sectKinify(evText, sectName, kin);
+    } catch (eKin) {}
+    var html = '<p class="text-gray-300 mb-3">' + evText + '</p><div class="space-y-2">';
     (ev.choices || []).forEach(function (c, idx) {
         html += '<button onclick="chooseSectEvent(\'' + sectName + '\', \'' + ev.id + '\', ' + idx + ')" class="w-full text-left bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded text-sm">' + c.label + '</button>';
     });
@@ -250,7 +293,10 @@ window.maybeSectDailyEvent = function () {
     var candidates = pool.filter(function (e) { return !e.minRank || rank <= e.minRank; });
     if (!candidates.length) return;
     var ev = candidates[Math.floor(Math.random() * candidates.length)];
-    ds._pendingSectEvent = { day: today, sect: ds.sectId, eventId: ev.id };
+    // 批四：抽事件时就把「涉及谁」定死（真名同门，按日+事件稳定取，卡片与回复同一个人）
+    var kinName = null;
+    try { if (typeof window.sectKinPick === 'function') kinName = window.sectKinPick(ds.sectId, today + ':' + ev.id); } catch (eKin) {}
+    ds._pendingSectEvent = { day: today, sect: ds.sectId, eventId: ev.id, kin: kinName };
     renderSectEventCard(ds.sectId, ev);
 };
 window.chooseSectEvent = function (sectName, eventId, idx) {
@@ -259,10 +305,21 @@ window.chooseSectEvent = function (sectName, eventId, idx) {
     if (!ev) return;
     var c = ev.choices[idx];
     if (!c) return;
-    var msgs = applySectEventEffects(c.effects, sectName);
+    var msgs = applySectEventEffects(c.effects, sectName, ev.name || ev.id);
     var ds = window.discipleState || {};
+    // 批四：真名要在清空挂起事件之前抓住——卡片与回复必须是同一个人
+    var kinR = (ds._pendingSectEvent && ds._pendingSectEvent.eventId === eventId && ds._pendingSectEvent.kin) || null;
     ds._pendingSectEvent = null;
+    // v21.3 抉择即收场：先把弹窗关掉再报结果。此前弹窗不关、结果 toast 又被同层遮罩盖住，
+    // 玩家点完选项看起来"毫无反应"，还能对着残留弹窗反复点同一选项刷奖励
+    try {
+        var evtOverlay = document.getElementById('xianxia-modal-overlay');
+        if (evtOverlay) evtOverlay.remove();
+    } catch (eClose) {}
     var reply = c.reply || '……';
+    try {
+        if (typeof window.sectKinify === 'function') reply = window.sectKinify(reply, sectName, kinR);
+    } catch (eKinR) {}
     if (msgs.length) reply += '（' + msgs.join('，') + '）';
     if (window.showMessage) window.showMessage(reply, 'info');
 };
@@ -300,24 +357,33 @@ function showSectRanks(sectName) {
     var html = '<div class="space-y-3">';
     html += '<h3 class="text-lg font-bold text-yellow-400">🏛️ ' + sectName + '·职务体系</h3>';
     html += '<p class="text-sm text-gray-400">当前职位：<span class="text-yellow-300 font-bold">' + (ranks.find(function(r) { return r.id === currentRank; })?.name || '杂役弟子') + '</span></p>';
-    html += '<p class="text-sm text-gray-400">贡献：<span class="text-yellow-300">' + contribution + '</span></p>';
+    html += '<p class="text-sm text-gray-400">贡献：<span class="text-yellow-300">' + contribution + '</span>';
+    try {
+        var _nxr = window.sectNextRankInfo ? window.sectNextRankInfo(ds) : null;
+        if (_nxr && _nxr.gap != null) html += '　<span class="text-xs text-gray-500">距 ' + _nxr.name + ' 还差 ' + _nxr.gap + (_nxr.gap === 0 ? '（可晋升）' : '') + '</span>';
+    } catch (e) {}
+    html += '　<button onclick="window.openSectLedger()" class="text-xs text-green-300 hover:text-green-200 underline">📊 看账本</button></p>';
     html += '<hr class="border-gray-600">';
     
     ranks.forEach(function(r) {
         var isCurrent = r.id === currentRank;
-        var isLocked = r.id < currentRank;
+        // 第一百一十波 · NEW-53：品阶是反向梯度（7=杂役…0=掌门）——旧 isLocked = r.id < currentRank
+        // 把「更高的位分」全锁死，与渲染条件 canPromote && r.id < currentRank 互斥，
+        // 晋升按钮在任何数据下都永不出现，sectPromote 整条线不可达。
+        var isPast = r.id > currentRank;         // 已经在身后的（更低位分）
+        var isNext = r.id === currentRank - 1;   // 够得着的下一步
         var canPromote = false;
         var promoteReq = '';
-        
-        if (!isCurrent && !isLocked && r.promoteCondition) {
+
+        if (r.id < currentRank && r.promoteCondition) {
             var cond = r.promoteCondition;
-            // 仅检查贡献（按新方案：仅贡献晋升）
+            // 仅检查贡献（按新方案：仅贡献晋升）；一级一级来，只有「下一步」亮按钮
             var meetContribution = contribution >= (cond.contribution || 999999);
-            canPromote = meetContribution;
-            promoteReq = '需要贡献' + (cond.contribution || 0);
+            promoteReq = '需要贡献' + (cond.contribution || 0) + (isNext ? '' : '（须逐级晋升）');
+            canPromote = isNext && meetContribution;
         }
-        
-        var bgColor = isCurrent ? 'bg-yellow-800 border-yellow-500' : (isLocked ? 'bg-gray-800 border-gray-600 opacity-50' : 'bg-gray-800 border-gray-600');
+
+        var bgColor = isCurrent ? 'bg-yellow-800 border-yellow-500' : (isPast ? 'bg-gray-800 border-gray-600 opacity-50' : 'bg-gray-800 border-gray-600');
         html += '<div class="' + bgColor + ' rounded-lg p-3 border">';
         html += '<div class="flex justify-between items-start">';
         html += '<div>';
@@ -325,13 +391,13 @@ function showSectRanks(sectName) {
         html += '<p class="text-xs text-gray-400">' + r.desc + '</p>';
         html += '<p class="text-xs text-gray-500 mt-1">特权：' + r.privileges.join('、') + '</p>';
         html += '<p class="text-xs text-gray-500">俸禄：' + r.salary.copper + '铜钱 ' + r.salary.spiritStones + '灵石/日</p>';
-        if (r.id < currentRank && !isCurrent) {
+        if (r.id < currentRank && !isCurrent && promoteReq) {
             html += '<p class="text-xs text-red-400 mt-1">' + promoteReq + '</p>';
         }
         html += '</div>';
         if (isCurrent) {
             html += '<span class="text-xs text-yellow-400">当前</span>';
-        } else if (canPromote && r.id < currentRank) {
+        } else if (canPromote) {
             html += '<button onclick="sectPromote(\'' + sectName + '\', ' + r.id + ')" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-xs">晋升</button>';
         } else if (r.id < currentRank) {
             html += '<span class="text-xs text-gray-500">条件不足</span>';
@@ -384,7 +450,12 @@ function sectPromote(sectName, targetRank) {
     ds.rankName = rankDef.name;
     // 防御性 clamp：极端情况下也不退化为负数
     ds.contribution = Math.max(0, (Number(ds.contribution) || 0) - reqAmt);
-    if (window.showMessage) window.showMessage('🎉 晋升为' + rankDef.name + '！', 'success');
+    try { window.sectLedgerNote && window.sectLedgerNote(-reqAmt, '晋升答礼·' + rankDef.name); } catch (e) {}
+    // v23.2 晋升有仪程：执事唱名、堂上见礼、同门道贺——旧版点一下数字就变了
+    if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
+        try { window.timeSystem.advanceTime(60, '晋升答礼'); } catch (e) {}
+    }
+    if (window.showMessage) window.showMessage('🎉 堂上执事展开名册唱名，你上前见礼受职——自今日起，你是' + sectName + '的「' + rankDef.name + '」了。同门纷纷道贺。（晋升答礼耗时一个时辰）', 'success');
     showSectRanks(sectName);
     if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
     // v19.0 批次 B 钩子：玩家职位变化时通知
@@ -414,7 +485,7 @@ function showSectDeepTasks(sectName) {
     
     var html = '<div class="space-y-3">';
     html += '<h3 class="text-lg font-bold text-yellow-400">📋 ' + sectName + '·日常任务</h3>';
-    html += '<p class="text-sm text-gray-400">今日可完成：' + remaining + '/' + maxTasks + ' 个任务</p>';
+    html += '<p class="text-sm text-gray-400">今日还能搭把手的差事都在这儿了</p>';
     html += '<hr class="border-gray-600">';
     
     var shown = 0;
@@ -445,7 +516,7 @@ function showSectDeepTasks(sectName) {
     });
     
     if (completed >= maxTasks) {
-        html += '<p class="text-sm text-green-400">今日任务已全部完成！</p>';
+        html += '<p class="text-sm text-green-400">今日的差事都办完了。</p>';
     }
     html += '</div>';
     
@@ -479,6 +550,13 @@ function sectCompleteTask(sectName, taskId) {
         return false;
     }
     if (cd && need > 0) cd.energy = (Number(cd.energy) || 0) - need;
+
+    // v23.2 差事也会出岔子：一成概率办砸（精力照耗、差事保留可再办）——旧版点「执行」百分百成功，
+    // 差事成了按一下就到账的工分
+    if (Math.random() < 0.1) {
+        if (window.showMessage) window.showMessage('❌ 办到一半出了岔子——「' + task.name + '」这次没办成。（精力耗了，差事还在，可再试）', 'warning');
+        return false;
+    }
 
     if (!window.RewardService) {
         // 结算服务缺失时把已扣的精力退回，不做半截账
@@ -672,6 +750,7 @@ window.convertGbContribution = function () {
     var amt = Math.min(capLeft, wallet);
     if (!gbWalletPay(amt)) return;
     ds.contribution = (ds.contribution || 0) + amt;
+    try { window.sectLedgerNote && window.sectLedgerNote(amt, '丐帮·灵石折抵'); } catch (e) {}
     gb.convertPeriod = p; gb.converted = used + amt;
     if (window.showMessage) window.showMessage('以灵石' + amt + '折抵贡献' + amt + '（本期上限' + GB_CONVERT_CAP + '）', 'success');
     openGbFactionPanel();
@@ -803,7 +882,7 @@ function showSectDeepOverview(sectName) {
     // 弟子状态
     html += '<div class="grid grid-cols-2 gap-2">';
     html += '<div class="bg-gray-800 p-2 rounded text-center"><p class="text-xs text-gray-400">职位</p><p class="text-purple-400 font-bold text-sm">' + rankName + '</p></div>';
-    html += '<div class="bg-gray-800 p-2 rounded text-center"><p class="text-xs text-gray-400">贡献</p><p class="text-green-400 font-bold text-sm">' + (ds.contribution || 0) + '</p></div>';
+    html += '<div class="bg-gray-800 p-2 rounded text-center cursor-pointer hover:bg-gray-700" onclick="window.openSectLedger()" title="点开看贡献账本"><p class="text-xs text-gray-400">贡献 📊</p><p class="text-green-400 font-bold text-sm">' + (ds.contribution || 0) + '</p><p class="text-[10px] text-gray-500">点开看账本</p></div>';
     html += '</div>';
 
     var economy = typeof window.getSectEconomySnapshot === 'function' ? window.getSectEconomySnapshot(sectName) : null;
@@ -843,10 +922,8 @@ function showSectDeepOverview(sectName) {
     if (window.SectYearGoal && typeof window.SectYearGoal.renderProgressCard === 'function') {
         html += window.SectYearGoal.renderProgressCard(sectName);
         var st = window.SectYearGoal._getStore && window.SectYearGoal._getStore()[sectName];
-        // v20.x：仅掌门(rank 0)/副掌门(rank 1)可见"选本年宗门目标"按钮
-        var _ds = (typeof window.discipleState === 'object') ? window.discipleState : {};
-        var _canSetGoal = (_ds.rank === 0 || _ds.rank === 1);
-        if ((!st || !st.goalId) && _canSetGoal) {
+        // 批五：按钮不再按职位藏起来——人人看得见，点进去由 promptChooseYearGoal 给资格叙事（死键变活口）
+        if (!st || !st.goalId) {
             html += '<button onclick="SectYearGoal.promptChooseYearGoal(\'' + sectName + '\')" class="w-full bg-amber-700 hover:bg-amber-600 p-2 rounded text-sm mb-3">📜 选本年宗门目标</button>';
         }
     }
@@ -854,6 +931,16 @@ function showSectDeepOverview(sectName) {
     // v19.1 P0-4：🏆 大比按钮
     if (window.Tournament && typeof window.Tournament.showTournamentPanel === 'function') {
         html += '<button onclick="Tournament.showTournamentPanel(\'' + sectName + '\')" class="w-full bg-yellow-700 hover:bg-yellow-600 p-2 rounded text-sm mb-3">🏆 宗门大比</button>';
+    }
+
+    // 批六 · 活门派：门中政事（库存四栏 / 管理者编年 / 捐献进言支取）
+    if (window.SectGov && typeof window.SectGov.openPanel === 'function') {
+        html += '<button onclick="window.SectGov.openPanel(\'' + sectName + '\')" class="w-full bg-teal-800 hover:bg-teal-700 p-2 rounded text-sm mb-3">🏯 门中政事 · 库存与编年</button>';
+    }
+
+    // 批五 · 宗门战争殿议：死仇会自动兵临山门（因果触发），长老以上也可主动兴兵（只对宿怨之门）
+    if (window.initiateSectWarPrompt) {
+        html += '<button onclick="window.initiateSectWarPrompt()" class="w-full bg-red-800 hover:bg-red-700 p-2 rounded text-sm mb-3">⚔️ 宗门战争 · 殿议</button>';
     }
 
     // v19.2 P0-5：📜 江湖传闻按钮

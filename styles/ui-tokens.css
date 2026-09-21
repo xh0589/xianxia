@@ -1,0 +1,153 @@
+/* ==================== 仙路长青 · UI 基线（v21.x 界面整改 P0） ====================
+   本文件只做一件事：把「全站共用的视觉常量」收口到一处，并就地修掉
+   可读性/层级/焦点三类系统性缺陷。不改任何玩法逻辑、不覆盖单个面板的排版。
+   选择器一律以 html 前缀提权——Tailwind 运行时注入的 <style> 排在 head 末尾，
+   同特异度会盖过本文件，提权后可免用 !important。
+   ============================================================================ */
+
+:root {
+    /* 表面 */
+    --x-bg: #111827;
+    --x-surface: #1f2937;
+    --x-surface-2: rgba(55, 65, 81, .3);
+    --x-border: #4b5563;
+
+    /* 文字（全部按 WCAG AA 在 --x-surface 上算过：正文 ≥7:1，次级 ≥4.8:1） */
+    --x-text: #e5e7eb;
+    --x-text-2: #b0b9c6;
+    --x-muted: #a3adbc;
+    --x-dim: #98a2b3;
+
+    /* 主色 */
+    --x-gold: #fbbf24;
+    --x-gold-deep: #ca8a04;
+    --x-ok: #22c55e;
+    --x-bad: #ef4444;
+    --x-info: #3b82f6;
+
+    /* 字号阶：最小正文字 13px（原 12px 的 text-xs 在宋体下几乎读不动） */
+    --x-fs-xs: 13px;
+    --x-fs-sm: 14px;
+    --x-fs-base: 16px;
+    --x-lh-tight: 1.45;
+
+    /* 层级阶：此前全站 z-50 一统，弹窗与 toast 同层互相压 */
+    --x-z-hud: 40;
+    --x-z-toast: 90;
+    --x-z-modal: 50;
+    --x-z-modal-top: 80;
+}
+
+/* ---------- 可读性基线 ---------- */
+
+html .text-xs {
+    font-size: var(--x-fs-xs);
+    line-height: var(--x-lh-tight);
+}
+
+/* 任意值小字（全库 86 处 text-[9px]/[10px]/[11px]/[12px]）一并抬到可读下限，逐处改类名不如收口一处 */
+html .text-\[9px\], html .text-\[10px\], html .text-\[11px\], html .text-\[12px\] {
+    font-size: var(--x-fs-xs);
+    line-height: var(--x-lh-tight);
+}
+
+/* 深底上的灰字：text-gray-500/600 原值只有 2.13:1 / 1.36:1，实测 680 个文本节点里 35.6% 不达标 */
+html .text-gray-500 { color: var(--x-muted); }
+html .text-gray-600 { color: var(--x-dim); }
+html .text-gray-400 { color: var(--x-text-2); }
+
+/* 深底上的紫色分节标题（灵根资质/运功栏）实测 2.61:1，收口成浅靛紫 */
+html .text-purple-500 { color: #a5b4fc; }
+
+/* 亮底按钮配白字实测 1.7~3.7:1，换成深字。整词匹配（~=）：子串会把 hover:bg-x-500 一起捞走，误伤本就达标的深底白字钮 */
+html [class~="bg-yellow-600"][class~="text-white"],
+html [class~="bg-yellow-500"][class~="text-white"],
+html [class~="bg-amber-600"][class~="text-white"],
+html [class~="bg-amber-500"][class~="text-white"],
+html [class~="bg-lime-600"][class~="text-white"],
+html [class~="bg-orange-600"][class~="text-white"],
+html [class~="bg-green-600"][class~="text-white"],
+html [class~="bg-emerald-600"][class~="text-white"],
+html [class~="bg-cyan-600"][class~="text-white"],
+html [class~="bg-teal-600"][class~="text-white"],
+html [class~="bg-blue-500"][class~="text-white"],
+html [class~="bg-yellow-600"] [class~="text-white"],
+html [class~="bg-amber-600"] [class~="text-white"] {
+    color: #111827;
+}
+
+/* ---------- 层级与遮挡 ---------- */
+
+/* toast 容器原先 pointer-events 默认可见即吃点击，且与右上角天气牌同角互相盖 */
+#game-message {
+    pointer-events: none;
+    top: 44px !important;
+    z-index: var(--x-z-toast);
+}
+/* 气泡本体也必须穿透：内容只有 textContent（无按钮无链接），而它叠到第三条时正好压住
+   舆图右上角的开关组，实测真实点击落在气泡上、开关不响应。通知不该挡在控件前面。 */
+#game-message > div { pointer-events: none; }
+
+#weather-display-float { z-index: var(--x-z-hud); }
+
+/* ---------- 键盘可达性 ---------- */
+
+html :focus-visible {
+    outline: 2px solid var(--x-gold);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+
+/* ---------- 滚动条：6px 在 Windows 上基本抓不住 ---------- */
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #1f2937; }
+::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 5px; border: 2px solid #1f2937; }
+::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+/* ---------- 窄屏骨架（≤767px）---------- */
+/* 横排的侧栏在手机上吃掉近半屏，内容列被挤到 180px（实测 66 个元素被裁）——整框转纵向，导航改横向滑条 */
+@media (max-width: 767px) {
+    html #game-world {
+        flex-direction: column;
+        height: auto;
+        min-height: calc(100vh - 1rem);
+    }
+    html #game-world > div[class~="w-48"] {
+        width: 100%;
+        border-right: 0;
+        border-bottom: 1px solid var(--x-border);
+    }
+    html #game-world > div[class~="w-48"] > nav {
+        display: flex;
+        flex-direction: row;
+        gap: 6px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 6px 8px;
+    }
+    html #game-world .nav-item {
+        flex: 0 0 auto;
+        white-space: nowrap;
+        border-left: 0;
+        border-bottom: 4px solid transparent;
+        padding: 6px 10px;
+    }
+    html #game-world .nav-item.active { border-bottom-color: var(--x-gold); }
+    html #game-world .nav-item:hover { border-bottom-color: var(--x-gold-deep); }
+    html #game-world > div[class~="flex-1"][class~="overflow-y-auto"] {
+        width: 100%;
+        padding: 12px;
+        overflow: visible;
+    }
+}
+
+/* ---------- 动效可关 ---------- */
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+    }
+}

@@ -138,10 +138,12 @@ function detoxify(entity) {
         // v13.0 注：phys.poisonLoad 现由 battle.js 战斗侧真实读写（poisoner命中累积+回合tick衰减），完全解毒时归零即生效
         if (phys && phys.poisonLoad != null) phys.poisonLoad = 0;
         if (window.showMessage) window.showMessage('毒素已完全清除！', 'success');
+        if (typeof window.growLifeSkill === 'function') window.growLifeSkill('毒术', 2, { reason: '拔毒干净' }); // v20.94 熟能生巧
     } else {
         poisonEffect.stacks = newStacks;
         if (poisonEffect.duration != null) poisonEffect.duration = newStacks;
         if (window.showMessage) window.showMessage('毒素减轻，剩余' + newStacks + '层', 'info');
+        if (typeof window.growLifeSkill === 'function') window.growLifeSkill('毒术', 1, { reason: '拔毒未净，也是手艺' }); // v20.94 熟能生巧
     }
     return true;
 }
@@ -186,6 +188,7 @@ function craftPoison(poisonType) {
     }
 
     if (window.showMessage) window.showMessage('成功制作' + poison.name + '！', 'success');
+    if (typeof window.growLifeSkill === 'function') window.growLifeSkill('毒术', 2, { reason: '亲手调毒' }); // v20.94 熟能生巧
     if (window.updateInventoryUI) window.updateInventoryUI();
     return true;
 }

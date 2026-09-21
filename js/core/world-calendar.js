@@ -219,8 +219,9 @@
                 var logEntry = { atDay: currentAbsoluteDay, category: e.category, title: e.title, summary: '如期' };
                 pushLog(logEntry);
                 fired.push({ event: clone(e), logEntry: logEntry });
-                // oneShot=true 时不进入 remaining（自动移除）
-                if (!e.oneShot) remaining.push(e);
+                // 第一百一十一波：如期触发过就不再留在事件表里——旧版非 oneShot 触发后原地保留，
+                // 次日必落进「已过期」分支再记一笔：同一事件双记账，闭关摘要与 30 日分类汇总全虚高。
+                // 「已过期」那本账只留给真正没人消费过的（注册晚了/跨日没跑到）。
             } else if (e.dueAbsoluteDay < currentAbsoluteDay) {
                 // 过期未消费：归档为"已过期"，不移除（保持可追溯）
                 pushLog({ atDay: currentAbsoluteDay, category: e.category, title: e.title, summary: '已过期' });
@@ -336,7 +337,9 @@
 
     function reset() {
         state = freshState();
-        subscribers = [];
+        // 第一百一十一波：订阅不清——festival/dao-bridge 的到期裁决订阅是模块加载时一次性注册的，
+        // 新局 resetAll 把它们清空后无人重建：同一页面会话里开新局，节帖照发、裁决弹窗永远不来，
+        // 帖子悬空到次日被判「装死不回」白扣好感。事件账清了，听账的人得还在。
     }
 
     // ============ init() ============
@@ -413,6 +416,28 @@
         // 内部用：safeNow / isValidCategory 不导出
         _state: function () { return { events: state.events.length, log: state.log.length, lastAdvancedDay: state.lastAdvancedDay }; }
     };
+
+    // 第六十七波·时钟根治（第二十四波口径）：全库读 WorldCalendar.day 的地方
+    //（行情事件过期、图鉴初见日、兽潮与叙事日戳……）从上线起就没人给过值——「今天」恒为 0。
+    // 这里补一个现算 getter：有真钟报真天数；没钟照旧 undefined——
+    // 老读者的 `|| 0` 与 `if (day)` 兜底路径全部原样有效，不殃及没钟的测试世界。
+    Object.defineProperty(api, 'day', {
+        enumerable: false,
+        get: function () {
+            try {
+                if (typeof global.getAbsoluteDay === 'function') {
+                    var g = global.getAbsoluteDay();
+                    if (g) return Math.floor(g);
+                }
+                var t = global.timeSystem;
+                if (t && typeof t.getAbsoluteDay === 'function') {
+                    var g2 = t.getAbsoluteDay();
+                    if (g2) return Math.floor(g2);
+                }
+            } catch (e) {}
+            return undefined;
+        }
+    });
 
     global.WorldCalendar = api;
     global.XianXia = global.XianXia || {};

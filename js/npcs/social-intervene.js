@@ -115,6 +115,7 @@
                 } catch (e) {}
             }
             msg('🕊️ 一杯酒说尽两家事，「' + a.name + '」与「' + b.name + '」终于握手言和，江湖上记你一记调停之名。', 'success');
+            if (typeof global.growLifeSkill === 'function') global.growLifeSkill('口才', 2, { reason: '调停成功' }); // v20.94 熟能生巧
             log('你居中调停了「' + a.name + '」与「' + b.name + '」的恩怨，成。', 'info');
             return { success: true, prob: prob };
         }
@@ -132,6 +133,7 @@
             } catch (e) {}
         }
         msg('🍷 酒过三巡不欢而散——「' + a.name + '」与「' + b.name + '」各瞪你一眼，把这趟糗账记在你头上。', 'warning');
+        if (typeof global.growLifeSkill === 'function') global.growLifeSkill('口才', 1, { reason: '话说砸了，也是练嘴' }); // v20.94 熟能生巧
         return { success: false, prob: prob };
     }
 
@@ -194,9 +196,11 @@
                     try { global.driftPersonality(subject, 'identity', 4, '暗箭难防，心思重了'); } catch (e) {}
                 }
                 msg('🐍 话是递过去了，可「' + subject.name + '」不知从哪儿听说是你在中间搬弄——名声有了裂纹。', 'danger');
+                if (typeof global.growLifeSkill === 'function') global.growLifeSkill('口才', 1, { reason: '递话败露，长了记性' }); // v20.94 熟能生巧
                 log('你向「' + listener.name + '」添油加醋说了「' + subject.name + '」的坏话，败露。', 'warning');
             } else {
                 msg('🐍 几杯茶下肚，「' + listener.name + '」记下了你转述的那番话，看「' + subject.name + '」的眼神已经变了。', 'info');
+                if (typeof global.growLifeSkill === 'function') global.growLifeSkill('口才', 2, { reason: '话递得天衣无缝' }); // v20.94 熟能生巧
                 log('你向「' + listener.name + '」添油加醋说了「' + subject.name + '」的坏话，无人察觉。', 'info');
             }
             return { success: true, exposed: exposed };
@@ -211,10 +215,12 @@
             if (typeof subject.changeAffection === 'function') subject.changeAffection(8);
             if (typeof listener.changeAffection === 'function') listener.changeAffection(3);
             msg('🍵 你把前因后果掰开揉碎讲清，「' + listener.name + '」长出一口气：「原是我错怪了他。」', 'success');
+            if (typeof global.growLifeSkill === 'function') global.growLifeSkill('口才', 2, { reason: '澄清有功' }); // v20.94 熟能生巧
             return { success: true, exposed: false };
         }
         if (typeof subject.changeAffection === 'function') subject.changeAffection(-3);
         msg('🍵 话到一半被顶回来，「' + subject.name + '」冷笑：「他亲口来说我都不信，何况借你的嘴。」', 'warning');
+        if (typeof global.growLifeSkill === 'function') global.growLifeSkill('口才', 1, { reason: '话没递圆，长了记性' }); // v20.94 熟能生巧
         return { success: false, exposed: false };
     }
 

@@ -88,7 +88,7 @@ for f in js:
     text=f.read_text(encoding='utf-8',errors='ignore')
     if re.search(r'currentCharData\.reputation\s*=', text) and f.name != 'reward-service.js':
         errors.append(f'ambiguous currentCharData.reputation assignment: {f.relative_to(root)}')
-for rel in ['js/sects/sects-deep-ui.js','js/sects/sect-wudang-deep.js']:
+for rel in ['js/sects/sects-deep-ui.js']:
     text=(root/rel).read_text(encoding='utf-8',errors='ignore')
     if re.search(r'dailyTaskCount\s*\|\|\s*1', text):
         errors.append(f'{rel} converts explicit dailyTaskCount=0 into 1')

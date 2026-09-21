@@ -1,7 +1,7 @@
 // ==================== art-effects.js - v20.48 功法掌握通电 ====================
 // 此前两层功法数据全是死账：
 //   ① items-extended/06-arts.js 秘籍的结构化 effect（qi_regen_boost / all_attr_boost / fire_damage_boost…）
-//      —— 全库零消费点，学到仙品功法毫无变化；
+//      —— 全库零消费点，学到三品功法毫无变化；
 //   ② equipment.js skillPages 的 effect 字符串（「剑法伤害+12%」「火系伤害+25%」…53 门）
 //      —— 只有「真气上限/防御/闪避」三种字样被解析，其余全忽略。
 // 本模块做单一真源汇总器 ArtEffects：
@@ -187,6 +187,10 @@
             take(g, g.elem, 'demon', ef.demon_damage_boost);
             // 吸血功：血饮刀法 lifesteal_boost ≥ 10 → 战斗实体获 lifesteal 能力（battle.js 既有钩子）
             if ((ef.lifesteal_boost || 0) >= 10) g.flat._lifesteal = 1;
+            // 第八十波·毒灼通道：poison_boost/burn_boost ≥ 10 → 战斗实体获 venom施毒/burn灼烧 能力
+            //（吸血同款先例——能力是有无账，数值高低不再另算；战斗端 COMBAT_ABILITIES 是现成的）
+            if ((ef.poison_boost || 0) >= 10) g.flat._venom = 1;
+            if ((ef.burn_boost || 0) >= 10) g.flat._burn = 1;
         }
 
         var pages = _skillPageArts();
@@ -223,6 +227,8 @@
             ['flat', 'pct'].forEach(function (layer) {
                 for (var k in g[layer]) {
                     if (k === '_lifesteal') { if (g[layer][k]) flat._lifesteal = 1; continue; }
+                    if (k === '_venom') { if (g[layer][k]) flat._venom = 1; continue; }
+                    if (k === '_burn') { if (g[layer][k]) flat._burn = 1; continue; }
                     take(null, layer === 'flat' ? flat : pct, k, g[layer][k]);
                 }
             });
@@ -298,6 +304,14 @@
         return !!summarize().flat._lifesteal;
     }
 
+    // 第八十波·施毒/灼烧掌握（毒系/火系功法练上身——战斗能力表里的 venom/burn 现成钩子）
+    function hasVenom() {
+        return !!summarize().flat._venom;
+    }
+    function hasBurn() {
+        return !!summarize().flat._burn;
+    }
+
     // 面板文案
     function describe() {
         var s = summarize();
@@ -325,6 +339,8 @@
         for (var ek in e) { if (e[ek] && ELEM_NAMES[ek]) elemText.push(ELEM_NAMES[ek] + '伤+' + e[ek] + '%'); }
         if (elemText.length) parts.push(elemText.join(' '));
         if (f._lifesteal) parts.push('吸血');
+        if (f._venom) parts.push('施毒');
+        if (f._burn) parts.push('灼烧');
         return parts.length ? ('功法加成（' + s.learned.length + '门）：' + parts.join('，')) : '';
     }
 
@@ -359,6 +375,8 @@
         regenPct: regenPct,
         maxQiBonus: maxQiBonus,
         hasLifesteal: hasLifesteal,
+        hasVenom: hasVenom,
+        hasBurn: hasBurn,
         describe: describe,
         learnedCount: learnedCount,
         effMax: effMax

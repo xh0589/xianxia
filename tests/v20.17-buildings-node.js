@@ -103,6 +103,8 @@ var mockWindow = {
     openSaltIronOffice: capture('openSaltIronOffice')
 };
 SCENARIO_IDS.forEach(function (id) { mockWindow.scenarioEngine.facilities[id] = { name: id, scenarios: [] }; });
+// v21.4 税课司/司法堂由 facility-offices.js 注册进情境引擎——路由该先于 officialOffices 命中
+['tax_bureau', 'court'].forEach(function (id) { mockWindow.scenarioEngine.facilities[id] = { name: id, scenarios: [] }; });
 mockWindow.window = mockWindow;
 mockWindow.global = mockWindow;
 // 防双击护栏用 Date.now：测试连点要拨过 600ms 护栏窗口。
@@ -153,7 +155,8 @@ assert(calls.openFacilityScenario === 1 && calls['openFacilityScenario:lastArg']
 calls = {}; unbypassGuard(); LS.useBuilding('salt_iron_office');
 assert(calls.openSaltIronOffice === 1, 'B3 七衙门点击直达府衙实现（盐铁局）');
 calls = {}; unbypassGuard(); LS.useBuilding('tax_bureau');
-assert(calls.openTaxBureau === 1, 'B4 税课司点击直达');
+assert(calls.openFacilityScenario === 1 && calls['openFacilityScenario:lastArg'] === 'tax_bureau',
+    'B4 税课司点击直达情境公务剧本（v21.4：引擎注册先于衙门兜底）');
 calls = {}; unbypassGuard(); LS.useBuilding('shop');
 assert(calls.openCityShop === 1, 'B5 老坊市路由不回归');
 calls = {}; unbypassGuard(); LS.useBuilding('household_registry');
@@ -218,7 +221,10 @@ function gateTest(fnName, expectGain) {
     assert(rich.qi === 40 && rich.tempering >= expectGain[0] && rich.tempering <= expectGain[1],
         fnName + ' 动手必耗 10 真气，历练 +' + rich.tempering + ' 落在 [' + expectGain + '] 内');
 }
-gateTest('openTaxBureau', [5, 5]);
+// v21.4 税课司改走情境引擎公务剧本（facility-offices.js），app.js 只剩委托——
+// 旧「提取函数烧 10 真气」门禁随之改为委托源码断言，真气成本门禁移交给 v20.18 D 段
+assert(/function openTaxBureau\(\)\s*\{[\s\S]{0,200}openFacilityScenario\('tax_bureau'\)/.test(appSrc),
+    'openTaxBureau 已委托情境引擎（v21.4 三司做厚）');
 gateTest('openGranary', [3, 3]);
 gateTest('openExorcistBureau', [5, 10]);
 
@@ -259,10 +265,14 @@ assert(lsSrc.indexOf("officialOffices") >= 0 && lsSrc.indexOf('openFacilityScena
     'E4 七衙门路由表与情景设施动态路由双双在案');
 var descOk = NEW_IDS.every(function (id) { return lsSrc.indexOf("'" + id + "': '") >= 0; });
 assert(descOk, 'E5 新挂 19 种设施均有卡面描述（不做无名招牌）');
-var taxSrc = extractFn(appSrc, 'openTaxBureau') + extractFn(appSrc, 'openGranary') + extractFn(appSrc, 'openExorcistBureau');
-assert((taxSrc.match(/\(player\.qi \|\| 0\) < 10/g) || []).length === 3 &&
-    (taxSrc.match(/player\.qi -= 10/g) || []).length === 3,
-    'E6 三衙成本改动在案（气力门槛 + 扣减成对，杜绝只涨不回）');
+// v21.4 税课司移入 facility-offices.js 情境剧本，app.js 里只剩粮仓+镇邪司两衙旧门禁
+var taxSrc = extractFn(appSrc, 'openGranary') + extractFn(appSrc, 'openExorcistBureau');
+assert((taxSrc.match(/\(player\.qi \|\| 0\) < 10/g) || []).length === 2 &&
+    (taxSrc.match(/player\.qi -= 10/g) || []).length === 2,
+    'E6 两衙成本改动在案（气力门槛 + 扣减成对，杜绝只涨不回）');
+var foSrc = fs.readFileSync(path.resolve(__dirname, '..', 'js', 'city-facilities', 'facility-offices.js'), 'utf8');
+assert(/require: \{ qi: 10 \}/.test(foSrc) && /cost: \{ qi: 10 \}/.test(foSrc),
+    'E6b 税课司查账的 10 真气门槛与扣减在剧本里成对在案');
 
 console.log('v20.17 buildings: ' + passed + ' passed, ' + failed + ' failed');
 if (failed > 0) process.exit(1);

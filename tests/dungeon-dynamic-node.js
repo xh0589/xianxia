@@ -33,12 +33,12 @@ var wrapped = '(function(window){' + src + '})(mockWindow);';
 eval(wrapped);
 var D = mockWindow.DungeonDynamic;
 assert(!!D, 'DungeonDynamic 已注册');
-assert(D.DUNGEON_TEMPLATES.length === 8, '8 模板 (got ' + D.DUNGEON_TEMPLATES.length + ')');
+assert(D.DUNGEON_TEMPLATES.length === 12, '12 模板（v21.9 高境界 4 座）(got ' + D.DUNGEON_TEMPLATES.length + ')');
 assert(D.EVENT_TYPES.length === 6, '6 事件类型 (got ' + D.EVENT_TYPES.length + ')');
 assert(Object.keys(D.ROOM_TEMPLATES).length >= 8, '8 env 事件池 (got ' + Object.keys(D.ROOM_TEMPLATES).length + ')');
 
 // ---- 1. 模板按 env ----
-section('1) 8 模板按 env');
+section('1) 12 模板按 env');
 assert(D.getTemplate('dgn_thunder_cave').env === 'thunder', '雷泽洞天 thunder');
 assert(D.getTemplate('dgn_ancient_field').suggestedRealm === '元婴', '古战场 元婴');
 assert(D.getTemplate('dgn_yaowang_tomb').solutions.alchemy === 1.5, '药王遗府 alchemy 1.5');
@@ -47,6 +47,13 @@ assert(D.getTemplate('dgn_dry_bone').solutions.talisman === 1.3, '枯骨渊 tali
 assert(D.getTemplate('dgn_ghost_realm').solutions.formation === 1.5, '九幽幻境 formation 1.5');
 assert(D.getTemplate('dgn_cloud_palace').appearMonths.length === 3, '云海仙阙 7-9 月');
 assert(D.getTemplate('dgn_5e_forbidden').env === '5e', '五行禁地 5e');
+// v21.9 高境界专属秘境：化神/炼虚/合体/大乘各一座，此前池内封顶元婴
+assert(D.getTemplate('dgn_star_sea').suggestedRealm === '化神', '星陨古域 化神');
+assert(D.getTemplate('dgn_god_tomb').suggestedRealm === '炼虚', '古神葬地 炼虚');
+assert(D.getTemplate('dgn_heaven_ruin').suggestedRealm === '合体', '天墟遗宫 合体');
+assert(D.getTemplate('dgn_chaos_sea').suggestedRealm === '大乘' && D.getTemplate('dgn_chaos_sea').roomCount === 12, '混沌潮眼 大乘 12 房');
+var _highRealms = ['化神', '炼虚', '合体', '大乘'];
+assert(_highRealms.every(function (r) { return D.DUNGEON_TEMPLATES.some(function (t) { return t.suggestedRealm === r; }); }), '化神以上四档皆有秘境');
 
 // ---- 2. 事件池 ----
 section('2) 事件池');

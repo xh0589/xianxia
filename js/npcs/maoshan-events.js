@@ -211,11 +211,92 @@ var MS_MAIN_EVENTS = {
             return { affection: aff, msg: msg };
         }
     },
+    'ms_event_009': {
+        id: 'ms_event_009', npcId: MS_NPC_ID, title: '留灯之诺', icon: '🔗',
+        desc: '他要守七夜墓门，向你讨一个诺。',
+        minAffection: 68, trigger: { random: 0.3 }, cooldown: 0, flag: 'ms_e009_done',
+        autoTrigger: { location: '茅山派', random: 0.4 },
+        scenes: [
+            { speaker: 'narrator', text: '鬼夜。古墓群那头阴潮比往年凶，昴既明说，这一回要守七夜墓门。', type: 'description' },
+            { speaker: 'npc', text: '「守门的时候，我的阳神有一半跟着灯走。」他画着引魂符，声音清冷，「灯灭了，魂就找不回来。」' },
+            { speaker: 'npc', text: '「跟你讨个诺：这七夜，子时替我点一盏灯，喊一声我的名字。」他抬眼，左眼银光里映着你，「一声就够。听见了，我就回来。」' },
+            { speaker: 'player_select', text: '你如何回应？', options: [
+                { text: '「我应你。七夜灯不灭，一声都不少。」', effect: 'promise', affection: 14 },
+                { text: '「灯我点。门，我也替你守。」', effect: 'guard', affection: 9 },
+                { text: '「……这种话，不该对人说吗？」', effect: 'press', affection: 5 }
+            ]}
+        ],
+        effects: function(npc, choice) {
+            var aff = 0, msg = '';
+            switch (choice) {
+                case 'promise': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 6; msg = '第五夜你先睡沉了，灯灭了半个时辰。醒来时他坐在你门口，手里符纸烧了一半：「……没事。我认得回来的路。」（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 14; msg = ('他看了你很久，把那道引魂符塞进你手里：「……记住你说的。」七夜，你子时点灯。第七夜你喊他名字，墓门里那个满身霜的人影顿了顿——回身了。') + '（精力-15）'; break; }
+                case 'guard': aff = 9; msg = '他点头：「……行。」他把灯芯递你，「你守灯，我守门。」七夜里墓门的灯和你的灯，一明一暗，遥遥相对。'; break;
+                case 'press': aff = 5; msg = '他闭眼：「……不该。」半晌睁眼，「可我跟你说了。你的灯，我在阴间都看得见。」'; break;
+            }
+            return { affection: aff, msg: msg };
+        }
+    },
+    'ms_event_010': {
+        id: 'ms_event_010', npcId: MS_NPC_ID, title: '张天师的考校', icon: '🐉',
+        desc: '张天师以紫雷符考你，昴既明替你挡。',
+        minAffection: 72, trigger: { random: 0.3 }, cooldown: 0, flag: 'ms_e010_done',
+        autoTrigger: { location: '茅山派', random: 0.4 },
+        scenes: [
+            { speaker: 'narrator', text: '张天师不知何时立在符箓阁中，指间夹一道紫雷符，似笑非笑：「小既明身边留了个活人？让老夫瞧瞧，阳火够不够旺。」', type: 'description' },
+            { speaker: 'narrator', text: '紫雷符无风自燃，一线雷光直取你眉心——是考校，也是下马威。你正要闪，一道清冷身影挡在身前。', type: 'description' },
+            { speaker: 'npc', text: '昴既明抬手，把那道雷光收进掌心，左眼银光大盛：「师祖。此人，我担。」' },
+            { speaker: 'npc', text: '张天师挑眉，笑意更深：「哦？你担？」他拂尘一甩，「那老夫看你担不担得起。」' },
+            { speaker: 'player_select', text: '你如何回应？', options: [
+                { text: '对张天师一礼：「绝不折伏魔首席的道行。」', effect: 'respect', affection: 8 },
+                { text: '低声对昴既明：「雷是你替我收的，账算我头上。」', effect: 'stand', affection: 7 },
+                { text: '什么也不说，站到他身侧并肩', effect: 'side', affection: 11 }
+            ]}
+        ],
+        effects: function(npc, choice) {
+            var aff = 0, msg = '';
+            switch (choice) {
+                case 'respect': aff = 8; msg = '张天师收了拂尘，大笑：「知礼的小辈，阳火不弱。」他走后昴既明摊开手，掌心一道焦痕——那道雷他是徒手收的。他没说，你后来才知道。'; break;
+                case 'stand': aff = 7; msg = '他侧头看你，声音清冷：「……你不懂。这是考校。我不收，你阳火就散了。」但他挡在身前的手，没挪开。'; break;
+                case 'side': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 4; msg = '雷光余劲麻了你半条手臂，你靠住符柜先闭了眼。醒来时考校已散，张天师留了一句「护食倒快」。（精力不足，那一场你先撑不住了）'; break; }
+                    aff = 11; msg = ('他看了你一眼，没让你退。你上前与他并肩，张天师盯着你俩看了半晌，忽然抚须大笑：「小既明，二十年渡魂，学会护活人了——好。」那夜他掌心的焦痕，是你替他上的药。他没抽手。') + '（精力-15）'; break; }
+            }
+            return { affection: aff, msg: msg };
+        }
+    },
+    'ms_event_011': {
+        id: 'ms_event_011', npcId: MS_NPC_ID, title: '噬阴', icon: '🌀',
+        desc: '第七夜阴潮反噬，他半个人已在阴间。',
+        minAffection: 78, trigger: { random: 0.3 }, cooldown: 0, flag: 'ms_e011_done',
+        autoTrigger: { timeRange: [23, 4], location: '茅山派', random: 0.4 },
+        scenes: [
+            { speaker: 'narrator', text: '第七夜子时，古墓群阴风大作。你赶到墓门——昴既明还保持着守门的姿势，浑身结霜，左眼银光乱窜，半个人的气息已经不像活人。', type: 'description' },
+            { speaker: 'narrator', text: '阴潮反噬了他。他的嘴唇动了动，没有声音——阳神被吞了一半。', type: 'description' },
+            { speaker: 'player_select', text: '你必须立刻做点什么。', options: [
+                { text: '冲进阴风抱住他，以活人阳火替他引魂', effect: 'hold', affection: 14 },
+                { text: '大喊他的名字——像那七夜留灯时一样', effect: 'call', affection: 10 },
+                { text: '夺过桃木剑替他守门，让他安心回魂', effect: 'sword', affection: 11 }
+            ]}
+        ],
+        effects: function(npc, choice) {
+            var aff = 0, msg = '';
+            switch (choice) {
+                case 'hold': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 20) : { ok: true };
+                    if (!_py.ok) { aff = 6; msg = '阴风割得你站不住，你撑到半程倒了，后半程是他自己爬回来的。醒来时他靠着墓门坐着，霜化了，银光归了位。（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 14; msg = ('你冲进阴风抱住他，活人的阳火和阴间的寒对烧了一夜。鸡鸣时霜化了，他左眼的银光缓缓聚焦到你脸上，失声很久：「……我听见了。你喊的第一声，我就听见了。」') + '（精力-20）'; break; }
+                case 'call': aff = 10; msg = '你扯着嗓子喊他的名字，一声，两声，第三声——他左眼银光骤然一敛，整个人气息如潮水般砸回阳间。他扶着墓门喘，半晌说了一句：「……灯没灭。」'; break;
+                case 'sword': aff = 11; msg = '你夺过他的桃木剑，替他站到墓门前，硬扛阴风到天明。他回魂睁眼，先看见你执剑立在门前，再听见鸡鸣。「门没塌。」他接过剑，声音哑，「你也没。」'; break;
+            }
+            return { affection: aff, msg: msg };
+        }
+    },
     'ms_event_013': {
         id: 'ms_event_013', npcId: MS_NPC_ID, title: '终章·一道为你画的符', icon: '💍',
         desc: '他画了一道护身符，推向你。',
         minAffection: 85, trigger: { random: 1.0 }, cooldown: 0, flag: 'ms_e013_done',
-        endingMap: { '符箓同道': 'ms_ending_符箓同道', '守坛': 'ms_ending_守坛', '符友': 'ms_ending_符友', '错过': 'ms_ending_错过' },
+        endingMap: { '符箓同道': 'ms_ending_符箓同道', '守坛': 'ms_ending_守坛', '符友': 'ms_ending_符友', '灯客': 'ms_ending_灯客', '符灰': 'ms_ending_符灰', '错过': 'ms_ending_错过' },
         scenes: [
             { speaker: 'narrator', text: '符箓阁。昴既明把一道金边符推到你面前——不是渡魂符，是护身符，朱砂画成，比往日浓。', type: 'description' },
             { speaker: 'npc', text: '「画成了。」他声音清冷，但银光里映着你，「我渡了二十年魂。头一回，画一道护活人的符。」' },
@@ -224,19 +305,22 @@ var MS_MAIN_EVENTS = {
                 { text: '「要。我带你下山——伏魔渡魂，哪里有邪祟就去哪里。」', effect: 'lover_travel', affection: 30 },
                 { text: '「要。但哪儿也不去。我留在茅山，陪你守每一道符。」', effect: 'lover_stay', affection: 28 },
                 { text: '「符我接。人就算了——我做你伏魔的搭档，年年茅山论符。」', effect: 'friend', affection: 20 },
+                { text: '「符我接。符阁给我留盏灯——年年鬼夜我来陪你守门，不谈风月，只谈符胆。」', effect: 'friend_stay', affection: 18 },
                 { text: '「我都不要。我只是个路过的看客。」', effect: 'none', affection: 0 }
             ]}
         ],
         effects: function(npc, choice) {
             // v20.25 门槛 5→3：三度伤透即寒心（旧 5 门槛对本线数学不可达，坏结局形同虚设）
+            // v20.71 辜负独立成结局「符灰」：伤透的心与单纯的错过分开记账
             var negCount = (window._negativeChoiceCount && window._negativeChoiceCount[MS_NPC_ID]) || 0;
             if (negCount >= 3 && (choice === 'lover_travel' || choice === 'lover_stay')) {
-                return { affection: 0, msg: '他看着你，银光渐灭：「……我画了二十年，等的是这么一句。」他把那道护身符收回，朱砂被他亲手抹去。「你走吧。这道符，我留着自己画。」', ending: '错过' };
+                return { affection: 0, msg: '他看着你，银光渐灭：「……我画了二十年，等的是这么一句。」他把那道护身符凑近灯焰——朱砂先烧没了，然后是他的名讳。「你走吧。这道符，我烧了。」', ending: '符灰' };
             }
             switch (choice) {
                 case 'lover_travel': return { affection: 30, msg: '他怔了半晌，银光里有了暖：「……好。下山。」他把符塞进你袖里，「我渡魂的，头一回护个活人——你替我留灯，我替你画符。」', ending: '符箓同道' };
                 case 'lover_stay': return { affection: 28, msg: '他点头，把符和你一起拢进怀里：「……行。茅山派的符阁，往后有两盏灯。」他声音清冷，但没赶你，「你陪我守——鬼夜，我守你；平日，你守我。」', ending: '守坛' };
                 case 'friend': return { affection: 20, msg: '他罕见地笑了一下，清冷里裂一线暖：「论符对手？行。」他把符塞你手里，「那你接得住我一道天罡符再说。」', ending: '符友' };
+                case 'friend_stay': return { affection: 18, msg: '「留盏灯？」他顿了一下，银光里映着你，「行。灯我点，门你守。」他把符推过来，「往后鬼夜你来——我不渡你，我渡门。」', ending: '灯客' };
                 case 'none': return { affection: 0, msg: '他沉默了很久，把符收回袖里。「……也好。」他声音恢复清冷，「符阁的门，我照常落锁。路过的看客，茅山不缺。」', ending: '错过' };
             }
             return { affection: 0, msg: '' };
@@ -274,6 +358,28 @@ var MS_ENDINGS = {
             { speaker: 'narrator', text: '有人问你们是什么关系。他答「对手」，{playerTa}答「对手」。说完两人对视，都先笑了——清冷里裂一线暖。', type: 'description' }
         ],
         finalText: '——— 结局·符友（挚友·同行）———'
+    },
+    'ms_ending_灯客': {
+        id: 'ms_ending_灯客', npcId: MS_NPC_ID, title: '结局·灯客', icon: '🏮',
+        route: '灯客',
+        scenes: [
+            { speaker: 'narrator', text: '{playerTa}成了符箓阁的常客。灯架上永远有一盏为{playerTa}留的灯，灯油是他亲手添的。', type: 'description' },
+            { speaker: 'narrator', text: '每年鬼夜，两个人一灯一门：他守门，{playerTa}守灯。渡过的魂数不清，留下的灯也数不清。', type: 'description' },
+            { speaker: 'npc', text: '「今夜阴潮平。」他收符入袖，看了眼你手边的灯，「……灯芯剪短些。你守的灯，太亮，晃魂。」' },
+            { speaker: 'narrator', text: '张天师有回问{playerTa}：「你算他什么？」{playerTa}想了想：「灯客。」老道士笑出了声，拂尘都拿不稳。', type: 'description' }
+        ],
+        finalText: '——— 结局·灯客（挚友·归隐）———'
+    },
+    'ms_ending_符灰': {
+        id: 'ms_ending_符灰', npcId: MS_NPC_ID, title: '结局·符灰', icon: '🕯️',
+        route: '符灰',
+        scenes: [
+            { speaker: 'narrator', text: '那道护身符被他亲手凑到灯焰上。朱砂先卷了边，然后是符胆里押的名讳，最后一星火，烧尽了。', type: 'description' },
+            { speaker: 'narrator', text: '第二日，符箓阁封了。鬼夜他一个人守门，一个人点灯，一个人渡魂。', type: 'description' },
+            { speaker: 'narrator', text: '茅山伏魔首席道法愈发精深，左眼银光愈发冷——阁里人说，首席的符从没出过错。', type: 'description' },
+            { speaker: 'narrator', text: '只有诸葛青知道，那年首席画护身符到天明，画的是给活人的头一道。烧符那夜，符阁的灯亮了一整夜——第二天起，那盏灯再没为谁留过。', type: 'description' }
+        ],
+        finalText: '——— 结局·符灰（辜负）———'
     },
     'ms_ending_错过': {
         id: 'ms_ending_错过', npcId: MS_NPC_ID, title: '结局·错过', icon: '🏔️', route: '错过',
@@ -350,9 +456,11 @@ if (typeof registerEndingCallback === 'function') {
         if (endingName === '符箓同道' || endingName === '守坛') {
             if (npc && typeof npc.setFlag === 'function') npc.setFlag('dao_companion');
             if (window.showMessage) window.showMessage('🪔 你与昴既明结为道侣！符箓感悟大幅提升', 'success');
-        } else if (endingName === '符友') {
+        } else if (endingName === '符友' || endingName === '灯客') {
             if (npc && npc.relationship) npc.relationship.trust = Math.min(100, (npc.relationship.trust || 0) + 30);
             if (window.showMessage) window.showMessage('🪔 你与昴既明成了彼此最信得过的伏魔搭档', 'success');
+        } else if (endingName === '符灰') {
+            if (window.showMessage) window.showMessage('🕯️ 昴既明烧了那道护身符。有些灯一旦吹熄，就再没为谁亮过', 'error');
         }
     });
 }

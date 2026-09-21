@@ -188,10 +188,9 @@ lf.ensureLineage = function (n) { n.lineage = n.lineage || { daoCompanion: null 
 var mr2 = lf.__marry('npc_c', 'npc_d');
 assert(mr2.ok === false && mr2.reason === 'affection-low', 'F2 好感不足 80 照样不娶——门槛是真的');
 
-// ============ G 孤单提醒计时修活 ============
+// ============ G 道侣数据初始化与计时锚定（批四改版：需求增长/心情/孤单提醒移交 sect-kin.js 日钩单一真源） ============
 var dsrc = loadScript('js/sects/dao-companion-deep.js');
 var pn = makeNpc('sect_leader_金刚宗', '赫渊');
-pn._companionData = { lastInteraction: 0, mood: 70, needs: { talk: 0, accompany: 0, gift: 0 } };
 var dw = { window: { currentCharData: { bonds: { 'sect_leader_金刚宗': { type: 'dao_companion', name: '赫渊', day: 4, lastMetDay: 4 } } },
     npcManager: { getNPC: function () { return pn; } }, getAbsoluteDay: function () { return 10; },
     showMessage: function (m) { dw._msgs.push(m); } }, showMessage: null, Math: Math };
@@ -200,8 +199,10 @@ dw.Math = { random: function () { return 0.05; }, min: Math.min, max: Math.max, 
 var dc = vm.createContext(dw);
 vm.runInContext(extractFn(dsrc, 'updateDaoCompanionDeep') + ';window.updateDaoCompanionDeep=updateDaoCompanionDeep;', dc);
 dw.window.updateDaoCompanionDeep();
-assert(dw._msgs.join('|').indexOf('散步') >= 0 && dw._msgs.join('|').indexOf('孤单') >= 0,
-    'G1 结契六日未见（第 4 日结、今第 10 日）：散步邀约与孤单提醒真发了——此前永为 0 的计时基准修活');
+assert(pn._companionData && pn._companionData.needs.talk === 30 && pn._companionData.needs.accompany === 30 && pn._companionData.needs.gift === 30,
+    'G1 道侣数据初始化：需求初值 30/30/30（推导心情恰为 70，与旧默认一致）');
+assert(pn._companionData.lastInteraction === 4,
+    'G2 计时基准锚定结契之日（此前永为 0 的死线修复语义保留——增长与提醒由 sect-kin 日钩接管，见批四套件 B12-B14）');
 
 // ============ H 静态接线 ============
 assert(loadScript('仙侠.html').indexOf('js/core/dao-bridge.js') >= 0, 'H1 桥已挂上页面');

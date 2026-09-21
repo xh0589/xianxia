@@ -803,9 +803,22 @@
         return box;
     }
 
+    // NEW-19 修：wrapExecute 执行期 window.showMessage 已被换成本文件的 writeReply 代理，
+    // 回复框一旦不在（真实处理器先 closeNpcModal 再结算），回落若再调 window.showMessage
+    // 就是自己调自己——无限递归爆栈（RangeError），八项高级请求整类不可用。
+    // 这里存住包装前的原始提示函数，回落一律走它。
+    var _preWrapShowMessage = null;
+
     function writeReply(msg, type) {
         var box = ensureReplyBox();
-        if (!box) { if (typeof window.showMessage === 'function') window.showMessage(msg, type); return; }
+        if (!box) {
+            var fallback = _preWrapShowMessage;
+            if (!fallback && typeof window.showMessage === 'function' && !window.showMessage.__writeReplyProxy) {
+                fallback = window.showMessage;
+            }
+            if (typeof fallback === 'function') fallback(msg, type);
+            return;
+        }
         box.innerHTML += escapeHtml(msg) + '\n';
         box.style.display = 'block';
         try { box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) {}
@@ -818,14 +831,17 @@
         window.executeDeepTalkSubOption = function (npcId, categoryId, subOptionId) {
             var box = ensureReplyBox();
             var saved = window.showMessage;
+            _preWrapShowMessage = (typeof saved === 'function') ? saved : null;
             if (box) {
                 box.innerHTML = '';
                 box.style.display = 'none';
                 window.showMessage = function (msg, type) { writeReply(msg, type); };
+                window.showMessage.__writeReplyProxy = true;   // NEW-19：打标防自递归（回落只认原始函数）
             }
             try { return orig.apply(this, arguments); }
             finally {
                 if (saved) window.showMessage = saved;
+                _preWrapShowMessage = null;
             }
         };
         window.executeDeepTalkSubOption.__reply_wrapped = true;

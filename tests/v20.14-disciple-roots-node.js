@@ -85,21 +85,21 @@ assert(typeof mockWindow.teachDisciple === 'function' && typeof mockWindow.getDi
 var heaven = npcMap.d_heaven, dull = npcMap.d_dull;
 mockWindow.toasts.length = 0;
 assert(mockWindow.teachDisciple('d_heaven') === true, 'A1 传功天才成功');
-assert(Math.abs((heaven._cultivationProgress || 0) - 12.5) < 1e-9,
-    'A2 天灵根一次传功感悟 +12.5（基准 5 × 2.5 倍率）');
+assert(Math.abs((heaven._teachProgress || 0) - 12.5) < 1e-9,
+    'A2 天灵根一次传功感悟 +12.5（基准 5 × 2.5 倍率，记自有账 _teachProgress）');
 assert(mockWindow.teachDisciple('d_dull') === true, 'A3 传功庸才成功');
-assert(Math.abs((dull._cultivationProgress || 0) - 2.5) < 1e-9,
+assert(Math.abs((dull._teachProgress || 0) - 2.5) < 1e-9,
     'A4 杂灵根一次传功感悟 +2.5——同一次课，天才顶庸才五次');
 assert(mockWindow.toasts[0].indexOf('一点就透') >= 0, 'A5 天才传功反馈带"一点就透"（资质玩家看得见）');
 assert(mockWindow.toasts[1].indexOf('资质愚钝') >= 0, 'A6 庸才传功反馈带"需多讲几遍"');
 mockWindow.teachDisciple('d_heaven');
-assert(heaven._cultivationProgress >= 20 && mockWindow.toasts[2].indexOf('小成') >= 0,
+assert(heaven._teachProgress >= 20 && mockWindow.toasts[2].indexOf('小成') >= 0,
     'A7 天才两次传功即入"小成"（阶段推进如实提示）');
 var savedNpcLife = mockWindow.NPCLife;
 mockWindow.NPCLife = null;
 mockWindow.teachDisciple('d_mid');
 mockWindow.NPCLife = savedNpcLife;
-assert(Math.abs(npcMap.d_mid._cultivationProgress - 5) < 1e-9,
+assert(Math.abs(npcMap.d_mid._teachProgress - 5) < 1e-9,
     'A8 换算缺位时按常速 +5——不拿猜测当事实，也不惩罚玩家');
 
 // ============ B: 成本与资质无关 ============

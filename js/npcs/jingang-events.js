@@ -209,11 +209,92 @@ var JG_MAIN_EVENTS = {
             return { affection: aff, msg: msg };
         }
     },
+    'jg_event_009': {
+        id: 'jg_event_009', npcId: JG_NPC_ID, title: '身毁之诺', icon: '🔗',
+        desc: '他的金刚身已现毁相，向你讨一个诺。',
+        minAffection: 68, trigger: { random: 0.3 }, cooldown: 0, flag: 'jg_e009_done',
+        autoTrigger: { location: '金刚宗', random: 0.4 },
+        scenes: [
+            { speaker: 'narrator', text: '苦行崖深夜。赫渊赤背盘坐，月光下看得分明——他金刚不坏的身上裂了几道细纹，是连番破戒的代价。身毁，已有相了。', type: 'description' },
+            { speaker: 'npc', text: '「金刚身会毁，道心不悔。」他声音哑，「但身毁那日，我有一件事放不下。」' },
+            { speaker: 'npc', text: '「跟你讨个诺。」他转头看你，沉静的眼像一口深井，「身毁那日，别让我死在苦行崖。把我抬到金刚塔下——我守了二十年塔，想下去看看人间。」' },
+            { speaker: 'player_select', text: '你如何回应？', options: [
+                { text: '「我应你。身毁那日，我背你下崖，一步不停。」', effect: 'promise', affection: 14 },
+                { text: '「你不会身毁。你的命，我替你看着。」', effect: 'guard', affection: 9 },
+                { text: '「……这种话，不该对人说吗？」', effect: 'press', affection: 5 }
+            ]}
+        ],
+        effects: function(npc, choice) {
+            var aff = 0, msg = '';
+            switch (choice) {
+                case 'promise': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 6; msg = '崖上夜风硬，你靠着崖壁先睡沉了。醒来时肩上多了一件僧袍，他还面着壁，手里的念珠一颗一颗地捻。（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 14; msg = ('他看了你很久，忽然抬手，在你头顶虚按了一下——很轻，像按一座塔。「……记住你说的。」他收手，从颈间解下三颗旧木珠塞进你掌心：「到时候，捏着珠子喊我法名。我在哪，都听得见。」') + '（精力-15）'; break; }
+                case 'guard': aff = 9; msg = '他摇头：「……身会毁的。佛也有涅槃。」但他顿了顿，把臂上金刚线解下一圈，缠上你手腕，「那你应我这个——身毁那日，你留着线。线在，就等于我下了山。」'; break;
+                case 'press': aff = 5; msg = '他闭眼，良久，说了两个字：「……不该。」又睁眼看你，「可我说了。守戒二十年，妄语戒，我只对你想破。」'; break;
+            }
+            return { affection: aff, msg: msg };
+        }
+    },
+    'jg_event_010': {
+        id: 'jg_event_010', npcId: JG_NPC_ID, title: '鸠摩智的考校', icon: '🐉',
+        desc: '鸠摩智当面考你，赫渊替你接了一掌。',
+        minAffection: 72, trigger: { random: 0.3 }, cooldown: 0, flag: 'jg_e010_done',
+        autoTrigger: { location: '金刚宗', random: 0.4 },
+        scenes: [
+            { speaker: 'narrator', text: '金刚塔下，鸠摩智拦住你的去路，抬掌未落：「破戒的人，没资格护人。小辈——你凭什么站在他身边？」', type: 'description' },
+            { speaker: 'narrator', text: '掌风未至先压下来，像一座山。你正要硬接，一道灰衣身影挡在身前。', type: 'description' },
+            { speaker: 'npc', text: '赫渊赤手接了这一掌，金刚身嗡然如钟鸣。他一字一句，从牙关里挤出来——这是他二十年来说得最长的一段话：「师父。他的资格，我给。我身的戒，为他破；我身的债，为他还。这一掌要落，落我。」' },
+            { speaker: 'npc', text: '鸠摩智盯了他半晌，收了掌势：「哦？你给？」他绕着你俩走了半圈，「那老夫看你给不给得起。」' },
+            { speaker: 'player_select', text: '你如何回应？', options: [
+                { text: '对鸠摩智一礼：「凭不凭，弟子用往后日子证。」', effect: 'respect', affection: 8 },
+                { text: '低声对赫渊：「别替我接掌——我自己接一半。」', effect: 'stand', affection: 7 },
+                { text: '什么也不说，站到他身侧并肩', effect: 'side', affection: 11 }
+            ]}
+        ],
+        effects: function(npc, choice) {
+            var aff = 0, msg = '';
+            switch (choice) {
+                case 'respect': aff = 8; msg = '鸠摩智收了掌，盯着你看了很久，忽然笑了：「不讨饶的小辈，胆子不小。」他走后赫渊吐出一口气，背心全是汗，唇角却松了一线：「……你这一礼，替我接了半掌。」'; break;
+                case 'stand': aff = 7; msg = '他侧头看你，沉静眼底动了动：「……我的金刚身，不疼。」顿了顿，低声，「但你接一半——疼，就分一半。」他没把你往身后推。'; break;
+                case 'side': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 15) : { ok: true };
+                    if (!_py.ok) { aff = 4; msg = '掌风余劲掀得你退了几步，眼前发黑。醒来时考校已散，鸠摩智在塔门留了一句「护食护到破戒」。（精力不足，那一场你先撑不住了）'; break; }
+                    aff = 11; msg = ('他看了你一眼，没让你退。你上前与他并肩，迎着他没接完的那半掌风。鸠摩智看着你俩，忽然合十：「破戒破到这个份上——也罢，老夫替你们向祖宗禀。」那夜赫渊替你揉肩上掌风震出的淤青，指尖很轻：「……疼，说明身没毁。好。」') + '（精力-15）'; break; }
+            }
+            return { affection: aff, msg: msg };
+        }
+    },
+    'jg_event_011': {
+        id: 'jg_event_011', npcId: JG_NPC_ID, title: '魔反噬', icon: '🌑',
+        desc: '心口旧伤里的炼魔之种，反噬了。',
+        minAffection: 78, trigger: { random: 0.3 }, cooldown: 0, flag: 'jg_e011_done',
+        autoTrigger: { timeRange: [23, 4], location: '金刚宗', random: 0.4 },
+        scenes: [
+            { speaker: 'narrator', text: '丑时，赫渊心口那道旧疤突然爆出黑气——五岁那年有人种进他体内的炼魔之种，被金刚气压了二十年，终于在他身毁最甚的夜里反噬。', type: 'description' },
+            { speaker: 'narrator', text: '他盘坐在塔下，金刚气与魔气在体内相撕，额上青筋黑一道白一道，手里的念珠一颗一颗崩断。', type: 'description' },
+            { speaker: 'player_select', text: '你必须立刻做点什么。', options: [
+                { text: '从背后抱住他，以自身真气助金刚气压魔气', effect: 'hold', affection: 14 },
+                { text: '捏着那三颗旧木珠，大喊他的法名', effect: 'name', affection: 10 },
+                { text: '按住他心口旧疤，以掌心温度引魔气外泄', effect: 'press', affection: 11 }
+            ]}
+        ],
+        effects: function(npc, choice) {
+            var aff = 0, msg = '';
+            switch (choice) {
+                case 'hold': { var _py = (typeof window !== 'undefined' && window._payCost) ? window._payCost('energy', 20) : { ok: true };
+                    if (!_py.ok) { aff = 6; msg = '魔气燎得你经脉生疼，你撑到半程昏了过去，后半程是他自己熬到天明的。醒来时他还保持着盘坐的姿势，黑气散了，地上的断珠被他一颗一颗拾好了。（精力不足，那一夜你先撑不住了）'; break; }
+                    aff = 14; msg = ('你从背后抱住他，真气不要命地渡进他背脉。金刚气借了你的力，把黑气一寸一寸压回旧疤——鸡鸣时，黑气从他心口散尽，像二十年的陈雪化了。他反手把你紧紧攥住，声音哑得不像话：「……债还清了。这条命，往后是我自己的——也是你的。」') + '（精力-20）'; break; }
+                case 'name': aff = 10; msg = '你捏着三颗旧木珠，扯着嗓子喊他的法名，一声，两声，第三声——他睁开了眼，沉静的眼底没有魔，只有你。「……听见了。」他说。念珠没再断。'; break;
+                case 'press': aff = 11; msg = '你一掌按上他心口旧疤，以体温度引魔气外泄。黑气顺着你掌心退出去，你的手臂麻到肘弯——天亮时他抓过你的手腕把脉，指尖微颤：「……你把毒引了自己一半。我治。这条命往后用来治你。」'; break;
+            }
+            return { affection: aff, msg: msg };
+        }
+    },
     'jg_event_013': {
         id: 'jg_event_013', npcId: JG_NPC_ID, title: '终章·为你破最后一戒', icon: '💍',
         desc: '他取下金刚线，递给你。',
         minAffection: 85, trigger: { random: 1.0 }, cooldown: 0, flag: 'jg_e013_done',
-        endingMap: { '破戒同道': 'jg_ending_破戒同道', '守寺': 'jg_ending_守寺', '禅友': 'jg_ending_禅友', '错过': 'jg_ending_错过' },
+        endingMap: { '破戒同道': 'jg_ending_破戒同道', '守寺': 'jg_ending_守寺', '禅友': 'jg_ending_禅友', '塔客': 'jg_ending_塔客', '锁心': 'jg_ending_锁心', '错过': 'jg_ending_错过' },
         scenes: [
             { speaker: 'narrator', text: '金刚塔内。赫渊把右臂上缠了二十年的金刚线，一圈一圈解下，递到你面前。', type: 'description' },
             { speaker: 'npc', text: '「这是金刚宗守戒僧的线。」他声音哑，话多，「我缠了二十年——今日解了。戒，我破了最后一道。」' },
@@ -222,19 +303,22 @@ var JG_MAIN_EVENTS = {
                 { text: '「要。我带你下山——破戒证道，哪里有苦难就去哪里。」', effect: 'lover_travel', affection: 30 },
                 { text: '「要。但哪儿也不去。我留在金刚宗，陪你守每一座塔。」', effect: 'lover_stay', affection: 28 },
                 { text: '「线我接。人就算了——我做你炼体的对手，年年金刚宗论体。」', effect: 'friend', affection: 20 },
+                { text: '「线我接。塔门给我留道缝——年年扫塔我来搭手，不谈风月，只谈同修。」', effect: 'friend_stay', affection: 18 },
                 { text: '「我都不要。我只是个路过的香客。」', effect: 'none', affection: 0 }
             ]}
         ],
         effects: function(npc, choice) {
             // v20.25 门槛 5→3：三度伤透即寒心（旧 5 门槛对本线数学不可达，坏结局形同虚设）
+            // v20.71 辜负独立成结局「锁心」：伤透的心与单纯的错过分开记账
             var negCount = (window._negativeChoiceCount && window._negativeChoiceCount[JG_NPC_ID]) || 0;
             if (negCount >= 3 && (choice === 'lover_travel' || choice === 'lover_stay')) {
-                return { affection: 0, msg: '他看着你，把金刚线一圈一圈重新缠回右臂。「……我解了二十年，等的是这么一句。」他合十，「你走吧。这线，我留着自己缠。」', ending: '错过' };
+                return { affection: 0, msg: '他看着你，把金刚线一圈一圈重新缠回右臂——最后一圈，勒在心口的位置。「……我解了二十年，等的是这么一句。」他合十，眼里那点活气一寸一寸沉下去：「你走吧。线缠回来了，心，也锁了。」', ending: '锁心' };
             }
             switch (choice) {
                 case 'lover_travel': return { affection: 30, msg: '他怔了半晌，沉静的眼底全亮了：「……好。下山。」他把线塞进你掌心，「我守了二十年戒，头一回——为一个人破。」', ending: '破戒同道' };
                 case 'lover_stay': return { affection: 28, msg: '他点头，把线和你一起拢进怀里：「……行。金刚塔下，往后有两盏灯。」他声音哑，「你陪我守——我不守戒，守你。」', ending: '守寺' };
                 case 'friend': return { affection: 20, msg: '他罕见地笑了一下，沉静里裂一线暖：「论体对手？行。」他把线塞你手里，「那你接得住我一掌龙象般若再说。」', ending: '禅友' };
+                case 'friend_stay': return { affection: 18, msg: '「留道缝？」他顿了一下，合十，「行。门缝我留，扫帚你拿。」他把线绕上你手腕一圈，「论体的日子你记着——掌我出，药你上。」', ending: '塔客' };
                 case 'none': return { affection: 0, msg: '他沉默了很久，把线重新缠回臂上。「……也好。」他声音恢复哑，「金刚塔的门，我照常闭。路过的香客，金刚宗不缺。」', ending: '错过' };
             }
             return { affection: 0, msg: '' };
@@ -272,6 +356,28 @@ var JG_ENDINGS = {
             { speaker: 'narrator', text: '有人问你们是什么关系。他合十「同修」，{playerTa}答「同修」。说完两人对视，都先笑了——沉静里裂一线暖。', type: 'description' }
         ],
         finalText: '——— 结局·禅友（挚友·同行）———'
+    },
+    'jg_ending_塔客': {
+        id: 'jg_ending_塔客', npcId: JG_NPC_ID, title: '结局·塔客', icon: '🧹',
+        route: '塔客',
+        scenes: [
+            { speaker: 'narrator', text: '{playerTa}成了金刚塔下的常客。塔门永远留着一道缝——缝的大小，正好过一个人。', type: 'description' },
+            { speaker: 'narrator', text: '每年扫塔，两个人一帚一桶：他擦塔身，{playerTa}扫塔院。论体的日子，掌他出，药{playerTa}上。', type: 'description' },
+            { speaker: 'npc', text: '「今日这一掌，收了三成力。」他收掌，合十，「……你接得住五成的那天，塔门给你开整扇。」' },
+            { speaker: 'narrator', text: '鸠摩智有回问{playerTa}：「你算他什么？」{playerTa}想了想：「塔客。」老僧盯了{playerTa}半晌，忽然合十：「破戒的人肯为谁留门缝——施主，你赢了。」', type: 'description' }
+        ],
+        finalText: '——— 结局·塔客（挚友·归隐）———'
+    },
+    'jg_ending_锁心': {
+        id: 'jg_ending_锁心', npcId: JG_NPC_ID, title: '结局·锁心', icon: '🔒',
+        route: '锁心',
+        scenes: [
+            { speaker: 'narrator', text: '金刚线被他一圈一圈缠回右臂——最后一圈，勒在心口旧疤的位置。像锁一道门。', type: 'description' },
+            { speaker: 'narrator', text: '第二日，他入金刚塔底死关。塔门是他自己闭的，缝也没留。', type: 'description' },
+            { speaker: 'narrator', text: '三年后他出关，金刚不坏身圆满，话更少了——闭口禅，重新修起。', type: 'description' },
+            { speaker: 'narrator', text: '鸠摩智说，他那日入关前只留了一句话：「这一回，不是身毁，是心锁。」钥匙他丢在了塔底——没人再捡得起来。', type: 'description' }
+        ],
+        finalText: '——— 结局·锁心（辜负）———'
     },
     'jg_ending_错过': {
         id: 'jg_ending_错过', npcId: JG_NPC_ID, title: '结局·错过', icon: '🏔️', route: '错过',
@@ -348,9 +454,11 @@ if (typeof registerEndingCallback === 'function') {
         if (endingName === '破戒同道' || endingName === '守寺') {
             if (npc && typeof npc.setFlag === 'function') npc.setFlag('dao_companion');
             if (window.showMessage) window.showMessage('📿 你与赫渊结为道侣！炼体感悟大幅提升', 'success');
-        } else if (endingName === '禅友') {
+        } else if (endingName === '禅友' || endingName === '塔客') {
             if (npc && npc.relationship) npc.relationship.trust = Math.min(100, (npc.relationship.trust || 0) + 30);
             if (window.showMessage) window.showMessage('📿 你与赫渊成了彼此最信得过的炼体搭档', 'success');
+        } else if (endingName === '锁心') {
+            if (window.showMessage) window.showMessage('🔒 赫渊把金刚线缠回了心口。有些人锁了心，钥匙就再没人找得到', 'error');
         }
     });
 }

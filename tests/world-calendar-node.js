@@ -209,14 +209,18 @@ var sum9 = WorldCalendar.summarizeRange(0, 10);
 assert(sum9.items.some(function (it) { return it.title === 'C9b' && it.summary === '已过期'; }), 'due<current 应入"已过期"log');
 assert(sum9.items.some(function (it) { return it.title === 'C9' && it.summary === '如期'; }), 'due=current 应入"如期"log');
 
-// 10. oneShot 行为
+// 10. oneShot 行为（第一百一十一波改口径：如期触发过的事件一律出表——
+// 旧版非 oneShot 触发后原地保留，次日必落进「已过期」分支再记一笔，同一事件双记账、汇总虚高）
 resetCal();
 WorldCalendar.register({ id: 'os1', title: 'OS1', category: 'world_event', dueAbsoluteDay: 2, source: { system: 's' }, oneShot: true });
 WorldCalendar.register({ id: 'os2', title: 'OS2', category: 'world_event', dueAbsoluteDay: 2, source: { system: 's' }, oneShot: false });
 WorldCalendar.consumeDue(2);
 var remain10 = WorldCalendar.list();
 assert(remain10.every(function (e) { return e.id !== 'os1'; }), 'oneShot=true 触发后应被移除');
-assert(remain10.some(function (e) { return e.id === 'os2'; }), 'oneShot=false 触发后仍保留');
+assert(remain10.every(function (e) { return e.id !== 'os2'; }), 'oneShot=false 触发后同样出表（不再留到次日重复记账）');
+WorldCalendar.consumeDue(3);
+var os2Logs = (WorldCalendar.serialize().log || []).filter(function (l) { return l.title === 'OS2'; });
+assert(os2Logs.length === 1, '次日不再补记「已过期」——同一事件日志只有一笔');
 
 // 11. subscribe / unsubscribe
 resetCal();

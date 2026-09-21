@@ -113,7 +113,7 @@ assert(poorReal.affection === 5 && ctx3.window.currentCharData.energy === 5,
 // ============ D 零旁路与旧账防护 ============
 var six = ['jingang', 'maoshan', 'yaowang', 'zhujian', 'wuxian', 'tianshan'].map(function (f) { return loadScript('js/npcs/' + f + '-events.js'); }).join('\n');
 assert(six.indexOf('cd.stones') < 0 && six.indexOf('.stones -=') < 0, 'D1 六线内无灵石旁路写入');
-assert(six.indexOf('_payCost') >= 0 && (six.match(/_payCost\('energy'/g) || []).length === 18, 'D2 价签 18 处整点在案');
+assert(six.indexOf('_payCost') >= 0 && (six.match(/_payCost\('energy'/g) || []).length === 30, 'D2 价签 30 处整点在案（v20.71 男主四线各加厚 3 处：8→20，女主两线 10 不变）');
 var wx = loadScript('js/npcs/wuxian-events.js');
 var r005 = runEffects(wx, 'wx_event_005', 'let', {});
 assert(r005 && r005.affection === 6 && r005.item === 'mat_beast_fang', 'D3 上批信物旧账未动（试蛊毒牙照给）');

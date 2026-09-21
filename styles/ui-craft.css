@@ -1,0 +1,185 @@
+/* ==================== 仙路长青 · 版面精修（界面整改 P2）====================
+   这一档不管配色、不管材质，只管三件事：
+     1) 卡片被等高拉伸撑出来的空洞（1920×1080 实测：人物 803px、装备 456px、地图 475px、活动 220px）
+     2) 中文在窄容器里被腰斩（「下/颌」「丹/田」「受损影/响口才与进食」）
+     3) 1920 屏上整页只占 1280，左右各 320px 死黑
+   选择器一律带面板 id：Tailwind 运行时注入的 <style> 排在 head 末尾，同特异度会盖过来。 */
+
+/* ---------- 0. 宽屏：让页面吃满 16:9，而不是居中一条 1280 的窄带 ---------- */
+
+@media (min-width: 1536px) {
+    #game-world {
+        max-width: min(1460px, 100%);
+    }
+}
+
+/* ---------- 1. 人物 · 状态九宫格 ----------
+   九张卡挤在 grid-cols-4 里：境界卡带五个入口按钮，245px 宽排不下只能折两行，
+   于是整行被顶到 203px 高，精力/心情卡里各留 131px 空洞；第九张「日程」还孤零零占一列。
+   改成 12 栏按信息密度分宽窄：三条计量条各 2 栏，境界卡 6 栏（按钮排得下一行），
+   第二行五张快捷卡 3+2+3+2+2 凑满 12 栏，孤卡消失。 */
+
+@media (min-width: 768px) {
+    #panel-character #sub-status > .grid {
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+    }
+
+    #panel-character #sub-status > .grid > :nth-child(-n+3) { grid-column: span 2; }
+    #panel-character #sub-status > .grid > :nth-child(4) { grid-column: span 6; }
+    #panel-character #sub-status > .grid > :nth-child(5) { grid-column: span 3; }
+    #panel-character #sub-status > .grid > :nth-child(6) { grid-column: span 2; }
+    #panel-character #sub-status > .grid > :nth-child(7) { grid-column: span 3; }
+    #panel-character #sub-status > .grid > :nth-child(n+8) { grid-column: span 2; }
+}
+
+/* 卡片内容竖向居中：等高保留（底边齐），但内容不再顶着上沿、下面空一片。
+   align-items 必须显式居中——列向 flex 的交叉轴默认 stretch，
+   会把「前往城市」这类小按钮拉成整条通栏。 */
+#panel-character #sub-status > .grid > div {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+/* 九宫格里的按钮全是「打开某个面板」的快捷入口，彼此没有主次；
+   原来蓝/琥珀/紫/黄/玫瑰各占一块，满屏都是强调色。统一收成静默次级，颜色留给数值。 */
+#panel-character #sub-status > .grid button {
+    background: #2b3441;
+    border: 1px solid #4b5563;
+    color: var(--x-text);
+    transition: background-color .15s, border-color .15s;
+}
+#panel-character #sub-status > .grid button:hover,
+#panel-character #sub-status > .grid button:focus-visible {
+    background: #374151;
+    border-color: #6b7280;
+}
+
+/* ---------- 2. 中文断字：部位名不许被腰斩，说明文字让位 ---------- */
+
+#body-durability-list > div {
+    gap: 10px;
+}
+
+#body-durability-list > div > div:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* 部位名（脑/眼/下颌/丹田…）是标识，宁可挤掉说明也不能折字 */
+#body-durability-list > div > div:first-child > span:first-child {
+    flex: 0 0 auto;
+    white-space: nowrap;
+}
+
+#body-durability-list > div > div:first-child > span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 右侧「进度条 + 数值 + 完好」是读数的整体，永远不参与压缩 */
+#body-durability-list > div > div:last-child {
+    flex: 0 0 auto;
+}
+
+/* ---------- 3. 装备：四枚读数瓦片 + 左右两栏都不再撑高 ---------- */
+
+#panel-equipment #equip-combat-summary {
+    align-items: start;
+}
+
+/* 负荷卡有三行（简装 + 0/35），攻击/防御/速度只有一行数字，
+   等高会把三枚瓦片拉出 40px 空洞；两栏同理，运功栏三格被拉到 724px 高。 */
+@media (min-width: 1024px) {
+    #panel-equipment > .flex.gap-6 {
+        align-items: flex-start;
+    }
+}
+
+/* ---------- 4. 活动：同排卡片各自贴内容 ---------- */
+
+@media (min-width: 768px) {
+    #panel-activities .grid {
+        align-items: start;
+    }
+}
+
+/* ---------- 5. 强调色稀缺化 ----------
+   活动面板一屏数下来有 18 枚实心彩钮（绿蓝青橙黄紫红轮着上），功法三枚各一色，
+   设置四色并列。强调色一多就等于没有强调——满屏都在喊，等于都没在喊。
+   一律压成静默次级，只留两类语义色：金/黄底是该屏唯一主行动，红底是真破坏操作。
+   :is() 里带面板 id，特异度压得过 Tailwind 运行时注入的样式。 */
+
+:is(#panel-activities, #panel-skills, #panel-settings) button {
+    background: #2b3441;
+    border: 1px solid #4b5563;
+    color: var(--x-text);
+    transition: background-color .15s, border-color .15s;
+}
+
+:is(#panel-activities, #panel-skills, #panel-settings) button:hover,
+:is(#panel-activities, #panel-skills, #panel-settings) button:focus-visible {
+    background: #374151;
+    border-color: #6b7280;
+}
+
+/* 金底例外只给设置面板：那里「保存存档」确实是整屏唯一主行动。
+   （曾经对三个面板一起放开，结果活动页「采集」里的伐木被顶成主行动——
+     它和采矿、采药是同级动作，不该有谁是主。）功法页的主行动由下面 :first-child 单独指定。 */
+#panel-settings button[class~="bg-yellow-600"],
+#panel-settings button[class~="bg-yellow-500"],
+#panel-settings button[class~="bg-amber-600"] {
+    background: var(--x-gold);
+    border-color: #d99b16;
+    color: #111827;
+    font-weight: 700;
+}
+#panel-settings button[class~="bg-yellow-600"]:hover,
+#panel-settings button[class~="bg-yellow-500"]:hover,
+#panel-settings button[class~="bg-amber-600"]:hover {
+    background: #fcd34d;
+    border-color: #fcd34d;
+}
+
+:is(#panel-activities, #panel-skills, #panel-settings) button[class*="bg-red"],
+:is(#panel-activities, #panel-skills, #panel-settings) button[class*="bg-rose"] {
+    background: rgba(127, 29, 29, .34);
+    border-color: #b91c1c;
+    color: #fecaca;
+}
+:is(#panel-activities, #panel-skills, #panel-settings) button[class*="bg-red"]:hover,
+:is(#panel-activities, #panel-skills, #panel-settings) button[class*="bg-rose"]:hover {
+    background: rgba(153, 27, 27, .5);
+    border-color: #dc2626;
+}
+
+/* 功法三钮里「打坐修炼」才是这一屏的主行动，给它金底，其余两枚退回次级 */
+#panel-skills > .flex button:first-child {
+    background: var(--x-gold);
+    border-color: #d99b16;
+    color: #111827;
+    font-weight: 700;
+}
+#panel-skills > .flex button:first-child:hover { background: #fcd34d; }
+
+/* ---------- 6. 读数按位对齐 ----------
+   血量 100/100、灵石 100000、耐久 100 这类数字，比例宽度下每一位宽度不同，
+   数值一变就跳格。等宽数字让同一列的位数对齐，也是「精致」里最便宜的一条。 */
+
+#game-world {
+    font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 7. 走查漏网的对比度 ---------- */
+
+/* 设置页招募开关那句警告用琥珀 80%，压在深底上实测 4.17:1，差 0.33 就到线；提到不透明的 amber-500 */
+#panel-settings .text-amber-600\/80 { color: #f59e0b; }
+
+/* ---------- 8. 读数不许被折行拆开 ---------- */
+
+/* 洞府四列窄卡实测把「另享 灵植×1.2 · 炼器×1.1」断在词中，「×1.2」孤零零掉到下一行。
+   只包读数本体，「 · 」留在 span 外，所以照样能在分隔符处折行。 */
+.x-nb { white-space: nowrap; }

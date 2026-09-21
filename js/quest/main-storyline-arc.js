@@ -233,7 +233,10 @@ function openMainStoryPanel() {
             + (defeated
                 ? (ascended
                     ? (immortalDefeated
-                        ? '<button disabled class="bg-gray-700 text-gray-500 font-bold py-2 px-4 rounded cursor-not-allowed">🏆 魔仙玄冥子已灭，气运之争终结</button>'
+                        ? '<p class="text-green-400 text-sm py-1">🏆 魔仙玄冥子已灭，气运之争终结。</p>'
+                          + (typeof window.openQiEndgamePanel === 'function'
+                              ? '<button onclick="window.openQiEndgamePanel(); document.getElementById(\'main-story-modal\').remove();" class="bg-red-900 hover:bg-red-800 border border-red-600 text-red-200 font-bold py-2 px-4 rounded">📜 终局 · 灵气之尽（天地的气在变薄）</button>'
+                              : '')
                         : '<button onclick="window.startMainStoryBoss(\'xuanming_immortal\'); document.getElementById(\'main-story-modal\').remove();" class="bg-red-800 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">⚔️ 天界决战·魔仙玄冥子（三阶段）</button>')
                     : '<button disabled class="bg-gray-700 text-gray-500 font-bold py-2 px-4 rounded cursor-not-allowed">玄冥子已退，待飞升后追查天界魔气</button>')
                 : '<button onclick="window.startMainStoryBoss(\'xuanming\'); document.getElementById(\'main-story-modal\').remove();" class="bg-red-700 hover:bg-red-600 text-white font-bold py-2 px-4 rounded">⚔️ 决战玄冥子（三阶段）</button>')

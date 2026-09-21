@@ -11,6 +11,14 @@ if (typeof window !== 'undefined' && !window.gameLog) {
     };
 }
 
+// ==================== v20.91 品质档位工具（九品制，兼容旧串） ====================
+function _shopQRank(q) {
+    if (typeof window !== 'undefined' && typeof window.qualityOrder === 'function') return window.qualityOrder(q);
+    var m = { PIN9:1, PIN8:2, PIN7:3, PIN6:4, PIN5:5, PIN4:6, PIN3:7, PIN2:8, PIN1:9, UNIQUE:10,
+              COMMON:1, UNCOMMON:2, RARE:3, EPIC:5, LEGENDARY:7, MYTHIC:9 };
+    return m[q] || 0;
+}
+
 // ==================== 商店类 ====================
 class Shop {
     constructor(id, name, options = {}) {
@@ -95,13 +103,11 @@ class Shop {
         let basePrice = item.basePrice || 100;
         const fluctuation = 1 + (Math.random() * 2 - 1) * this.priceFluctuation;
         let price = Math.round(basePrice * fluctuation * this.priceMultiplier);
-        // 缓存当日价格
-        if (!this._priceCache) this._priceCache = {};
-        this._priceCache[cacheKey] = price;
+        // v42 店铺自己的城优先（野市的「城」是脚下地域）——不再拿玩家当前位置张冠李戴
+        var _city = this._cityName || (window.locationSystem && window.locationSystem.getCurrentLocation && window.locationSystem.getCurrentLocation()) || '';
         // v7.1: 世界事件坊市繁荣 + 城市声望折扣
         if (typeof window.getCombinedShopPriceMultiplier === 'function') {
             try {
-                var _city = (window.locationSystem && window.locationSystem.getCurrentLocation && window.locationSystem.getCurrentLocation()) || '';
                 // v20.0：传 itemId 让 MarketDynamic 能按物品分类算地区差价
                 price = Math.round(price * (window.getCombinedShopPriceMultiplier(_city, item.id || item.templateId) || 1));
             } catch (e) {}
@@ -113,15 +119,15 @@ class Shop {
         }
         if (typeof window.getReputationDiscount === 'function') {
             try {
-                var city = (window.locationSystem && window.locationSystem.getCurrentLocation && window.locationSystem.getCurrentLocation()) || (window.currentCharData && window.currentCharData.location) || '';
+                var city = _city || (window.currentCharData && window.currentCharData.location) || '';
                 var disc = window.getReputationDiscount(city) || 0;
                 if (disc > 0) price = Math.max(1, Math.round(price * (1 - disc)));
             } catch (e) {}
         }
-        
+
         // 商人折扣
         price = Math.round(price * (1 - this.merchant.discount));
-        
+
         // 玩家声望影响
         if (window.playerReputation) {
             const reputationDiscount = Math.min(0.2, window.playerReputation * 0.001);
@@ -138,8 +144,13 @@ class Shop {
             const discount = Math.floor(speech / 5); // 口才100→20
             price = Math.max(1, Math.round(price * (1 - discount / 100)));
         }
-        
-        return Math.max(1, price);
+
+        price = Math.max(1, price);
+        // v42 缓存挪到乘数之后：旧写法缓存的是裸价，命中缓存时城市/行情/折扣乘数全被跳过——
+        // 同一天里第一眼看一个价、第二眼又一个价。现在缓存最终价，当日一口价。
+        if (!this._priceCache) this._priceCache = {};
+        this._priceCache[cacheKey] = price;
+        return price;
     }
     
     // F-7 重构：删除死代码 sellItem（v10.5 起物品出售统一走 inventory.js sellItem → markForSale → TradeService.executeSell），
@@ -223,7 +234,10 @@ class Shop {
             return false;
         }
 
+        // 第八十二波·ECO-01：扣款走双写口径——旧版只改背包灵石不写角色镜像字段，
+        // 坊市买一次货两处钱包就分叉一回（卖出路径 :781-782 早就双写了，买入这条一直没跟上）
         window.inventory.currency.spiritStones = stones - total;
+        if (window.currentCharData) window.currentCharData.spiritStones = window.inventory.currency.spiritStones;
         if (item.stock != null) item.stock -= quantity;
         try {
             if (typeof window.addReputationFromTrade === 'function') {
@@ -234,6 +248,8 @@ class Shop {
 
         if (window.gameLog?.add) window.gameLog.add(`从${this.name}购买了 ${quantity}x ${item.name}，花费 ${total} 灵石`, 'info');
         showMessage(`购买成功：${item.name} ×${quantity}（-${total}灵石）`, 'success');
+        // v20.94 熟能生巧：成交价被口才折着，讨价还价偶尔长嘴皮子（四分之一机会，防站着刷技能）
+        if (typeof window.growLifeSkill === 'function' && Math.random() < 0.25) window.growLifeSkill('口才', 1, { reason: '买卖讲价' });
         if (window.updateInventoryUI) window.updateInventoryUI();
         if (window.updateCurrencyUI) window.updateCurrencyUI();
         if (window.updateCharacterStatus) window.updateCharacterStatus();
@@ -306,8 +322,25 @@ class Shop {
         this.inventory = this.inventory.concat(picks);
         this.specialGoods = picks;
 
+        // 第九十三波·黑货常备：黑市后巷的货架永远有脏活儿——暗器/毒药/迷烟散/机关件。
+        // 卑鄙流仪要能补货（此前暗器毒药只有门派特产发放，散修有钱也没处买）；黑价照旧走本店乘子。
+        if (this.type === 'special') {
+            const BLACK_GOODS = [
+                { id: 'special_hidden_weapon', name: '暗器', type: 'consumable', basePrice: 50, description: '袖箭——战斗中掷出 45 伤（⚡60）', icon: '🗡️', limited: true },
+                { id: 'special_poison', name: '毒药', type: 'consumable', basePrice: 70, description: '撒出去毒三回合（⚡80），或淬在刃上见血渗毒（⚡60）', icon: '☠️', limited: true },
+                { id: 'special_smoke', name: '迷烟散', type: 'consumable', basePrice: 40, description: '石灰掺松烟——扬进眼里，2 回合招式失准（⚡80）', icon: '💨', limited: true },
+                { id: 'special_caltrop', name: '铁蒺藜', type: 'consumable', basePrice: 45, description: '撒他脚下——性急的踩个正着：行动条 -40（⚡60）', icon: '🪤', limited: true },
+                { id: 'special_ash', name: '灶灰辣粉', type: 'consumable', basePrice: 25, description: '穷人的石灰——只糊得住性急的：瞎 1 回（⚡60）', icon: '🌶️', limited: true },
+                { id: 'special_mechanism', name: '机关件', type: 'material', basePrice: 60, description: '机关术零件——收服灵兽时也算一件趁手家什', icon: '⚙️', limited: true }
+            ];
+            BLACK_GOODS.forEach(g => {
+                if (this.inventory.some(i => i && i.id === g.id)) return;
+                this.inventory.push(Object.assign({}, g, { stock: 2 + Math.floor(Math.random() * 2) }));
+            });
+        }
+
         if (typeof gameLog !== 'undefined' && gameLog.add) {
-            gameLog.add(`${this.name} 刷新了库存（含${picks.length}件限时商品，季节系数x${seasonMul.toFixed(2)}）`, 'info');
+            gameLog.add(`${this.name} 刷新了库存（含${picks.length}件限时商品，季节系数 ×${seasonMul.toFixed(2)}）`, 'info');
         }
     }
     
@@ -498,13 +531,13 @@ const TradeService = {
         var type = template.type || '';
         var subtype = template.subtype || '';
         var category = template.category || '';
-        var quality = template.quality || 'COMMON';
+        var quality = template.quality || 'PIN9';
         var id = template.id || '';
         
         // 普通食物、木材、低阶矿石 → 铜钱
         if (subtype === 'food' || subtype === 'ingredient' || type === 'food') return 'copper';
         if (id === 'mat_iron_ore' || id === 'mat_copper_ore' || id === 'wood' || id === 'stone') return 'copper';
-        if (category === 'material' && quality === 'COMMON') return 'copper';
+        if (category === 'material' && _shopQRank(quality) <= 1) return 'copper';
         
         // 丹药、符箓、灵材、低阶法器 → 灵石
         if (subtype === 'pill' || subtype === 'talisman' || subtype === 'herb') return 'spiritStones';
@@ -512,7 +545,7 @@ const TradeService = {
         if (type === 'weapon' || type === 'armor' || type === 'accessory') return 'spiritStones';
         
         // 高阶法宝 → 灵石（未来可扩展为拍卖）
-        if (quality === 'EPIC' || quality === 'LEGENDARY' || quality === 'MYTHIC') return 'spiritStones';
+        if (_shopQRank(quality) >= 5) return 'spiritStones';
         
         // 默认灵石
         return 'spiritStones';
@@ -534,7 +567,15 @@ const TradeService = {
     
     // 获取地区倍率（v20.21 接城市行情真源：回购价随本城 sell 系数浮动，
     // 城市数据查不到才落回旧地区表兜底——单一真源，不再两套价各说各话）
-    getRegionMultiplier: function(location) {
+    getRegionMultiplier: function(location, opts) {
+        // v42 野市回购认行情：野外市集的回购价走六城行情真源（与时价标签、买价同一本账）
+        try {
+            if (opts && opts.wildMarket && window.MarketDynamic && typeof window.MarketDynamic.priceMul === 'function') {
+                var _mc = (window.WorldLoop && typeof window.WorldLoop.mapMarketCity === 'function') ? window.WorldLoop.mapMarketCity(location) : location;
+                var _pm = window.MarketDynamic.priceMul(_mc, opts.itemId || '');
+                if (typeof _pm === 'number' && _pm > 0) return _pm;
+            }
+        } catch (e) {}
         var m = null;
         if (location && window.locationSystem) {
             try {
@@ -579,7 +620,7 @@ const TradeService = {
             'armor': { type: ['armor'], subtype: ['robe', 'armor'], multiplier: 1.4 },
             'alchemy': { type: ['consumable'], subtype: ['pill', 'herb'], multiplier: 1.5 },
             'book': { type: ['secret_art'], multiplier: 1.3 },
-            'special': { quality: ['RARE', 'EPIC', 'LEGENDARY'], multiplier: 1.2 },
+            'special': { quality: ['PIN7', 'PIN6', 'PIN5', 'PIN4', 'PIN3', 'PIN2'], multiplier: 1.2 },
             'pawn': { multiplier: 0.8 }  // 当铺压价
         };
         
@@ -619,13 +660,18 @@ const TradeService = {
     },
     
     // 获取声望修正
+    // 第九十五波·NEW-33：旧版接到一个全仓库根本不存在的声望读取函数上，typeof 守卫静默走 rep=0，
+    // 卖出声望加成恒为 1.0（买入侧 getReputationDiscount 是真的，卖出侧从此接错线）。
+    // 改调真存在的 window.getReputationValue；传入城名先去空格归一——货架表可能用「帝都 · 长安」带空格拼写，
+    // 与声望账的无空格键是同一座城（reputation-system.js repKey 同口径）。
+    // 口径：声望每100点+1%卖价，封顶+10%（需声望1000）——公式 rep/100*0.01 数值行为维持原样。
     getReputationModifier: function(location) {
         if (!location) return 1.0;
         var rep = 0;
-        if (typeof window.getCityReputation === 'function') {
-            try { rep = window.getCityReputation(location) || 0; } catch (e) {}
+        var city = String(location).replace(/\s+/g, '');
+        if (typeof window.getReputationValue === 'function') {
+            try { rep = window.getReputationValue(city) || 0; } catch (e) {}
         }
-        // 声望每100点增加1%售价，最高+10%
         return 1.0 + Math.min(0.1, rep / 100 * 0.01);
     },
     
@@ -658,7 +704,7 @@ const TradeService = {
         // === 报价计算 ===
         var basePrice = template.price || template.basePrice || 0;
         var baseBuybackRate = this.getBaseBuybackRate(shop.type);
-        var regionMul = this.getRegionMultiplier(shop.location);
+        var regionMul = this.getRegionMultiplier(shop.location, shop._wildMarket ? { wildMarket: true, itemId: template.id } : null);
         var demandMul = this.getMerchantDemandModifier(shop.type, template);
         var durabilityMul = this.getDurabilityModifier(slot);
         var speechMul = this.getSpeechModifier();
@@ -762,6 +808,11 @@ const TradeService = {
             }
         }
         
+        // v23.2 卖出同样动行情：一城抛出一批货，该行当的价格就该松（供需模型接线）
+        if (window.MarketDynamic && typeof window.MarketDynamic.notePlayerTrade === 'function') {
+            window.MarketDynamic.notePlayerTrade(template.id || quote.itemId, quote.quantity, false);
+        }
+
         // 物品进入商店回购列表（用预扣减快照 + currency）
         this._addToBuyback(quote.shopId, itemSnapshot, template, quote.quantity, quote.totalPrice, buybackCurrency);
         
@@ -775,6 +826,8 @@ const TradeService = {
         if (window.showMessage) {
             var currencyName = currency === 'copper' ? '铜钱' : '灵石';
             window.showMessage('出售成功！获得 ' + quote.totalPrice + ' ' + currencyName, 'success');
+            // v20.94 熟能生巧：售价被口才抬着，成交偶尔长嘴皮子
+            if (typeof window.growLifeSkill === 'function' && Math.random() < 0.25) window.growLifeSkill('口才', 1, { reason: '货卖出去了' });
         }
         
         return true;
@@ -838,7 +891,7 @@ const TradeService = {
             return false;
         }
         
-        // 扣钱（P1-10: 使用对应货币）
+        // 扣钱（P1-10: 使用对应货币；第八十二波·ECO-01：扣款同步角色镜像字段，与卖出路径同口径）
         var currency = item.currencyType || 'spiritStones';
         if (currency === 'spiritStones') {
             if (window.inventory.currency.spiritStones < cost) {
@@ -847,6 +900,7 @@ const TradeService = {
                 return false;
             }
             window.inventory.currency.spiritStones -= cost;
+            if (window.currentCharData) window.currentCharData.spiritStones = window.inventory.currency.spiritStones;
         } else if (currency === 'copper') {
             if (window.inventory.currency.copper < cost) {
                 if (typeof window.removeItem === 'function') window.removeItem(item.templateId, item.quantity);
@@ -854,6 +908,7 @@ const TradeService = {
                 return false;
             }
             window.inventory.currency.copper -= cost;
+            if (window.currentCharData) window.currentCharData.copper = window.inventory.currency.copper;
         }
         
         // 从回购列表移除
@@ -933,6 +988,24 @@ function showQuoteDetail(quote) {
     document.body.appendChild(dlg);
 }
 
+// v42 称号称呼表：掌柜的是生意人，眼神跟着名分走——看的不是你报的名号，是你一身风尘气度。
+// 「初出茅庐」查无此表：刚走百里的新人，掌柜的懒得认（走出名堂再来）。
+var SHOP_TITLE_GREET = {
+    '行走山河': '掌柜的抬眼打量你靴上的风尘：「走过不少地方吧？里面请。」',
+    '见多识广': '掌柜的拱手：「见多识广的客官，小店这点货色，您多担待。」',
+    '万里独行': '掌柜的看你风尘满身，斟了杯热茶递来：「独行长路的客官，喝口茶暖暖，慢慢看。」',
+    '踏遍九州': '掌柜的一看你的气度便知不是寻常人，忙迎到门口：「客官走遍九州，小店蓬荜生辉，快请进！」'
+};
+
+// 第九十五波·NEW-25：店招上的「类型」不再直出内部字符串（玩家看到「类型: talisman」读不懂）——
+// 上屏前过这张中文名映射表；映射不到的类型整行隐藏，宁缺毋滥。
+var SHOP_TYPE_LABELS = {
+    general: '坊市杂货', weapon: '兵器', armor: '防具', alchemy: '丹药',
+    book: '丹书·秘籍', talisman: '符箓', special: '黑市珍货', pawn: '典当',
+    material: '材料', food: '食物', consumable: '丹药', secret_art: '秘籍', artifact: '法器'
+};
+function shopTypeLabel(type) { return SHOP_TYPE_LABELS[type] || ''; }
+
 function showShopDialog(shop) {
     if (!shop) return;
     closeShopModals();
@@ -980,7 +1053,7 @@ function showShopDialog(shop) {
         buybackHtml = buybackItems.map(function(item) {
             return `
                 <div class="flex items-center justify-between bg-gray-800/50 p-2 rounded border border-gray-700">
-                    <span class="text-sm text-gray-300">${item.icon || ''} ${item.name} x${item.quantity}</span>
+                    <span class="text-sm text-gray-300">${item.icon || ''} ${item.name} ×${item.quantity}</span>
                     <div class="flex items-center gap-2">
                         <span class="text-yellow-500 text-xs">${item.buybackPrice} 灵石</span>
                         <button onclick="TradeService.buybackItem('${shop.id}', '${item.uid}'); this.closest('.shop-modal-overlay').remove();"
@@ -996,7 +1069,7 @@ function showShopDialog(shop) {
             <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
                 <div class="flex justify-between items-center mb-2">
                     <h3 class="text-xl font-bold text-yellow-500">${shop.icon || '🏪'} ${shop.name}</h3>
-                    <span class="text-sm text-gray-400">类型: ${shop.type}</span>
+                    <span class="text-sm text-gray-400">${shopTypeLabel(shop.type) ? '类型: ' + shopTypeLabel(shop.type) : ''}</span>
                 </div>
                 <div class="grid grid-cols-3 gap-2 text-sm">
                     <div><span class="text-gray-400">灵石:</span> <span class="text-yellow-300 font-bold">💎 ${stones}</span></div>
@@ -1006,7 +1079,7 @@ function showShopDialog(shop) {
             </div>
 
             <!-- 剩余任务#3：药铺/坊市时价对照出关见闻 -->
-            ${window.__buildShopPriceTag && window.__buildShopPriceTag() || ''}
+            ${window.__buildShopPriceTag && window.__buildShopPriceTag(shop._cityName) || ''}
 
             <!-- Tab 导航 -->
             <div class="flex border-b border-gray-600 mb-2">
@@ -1064,12 +1137,21 @@ function showShopDialog(shop) {
     modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50 shop-modal-overlay';
     modal.id = 'shop-modal-overlay';
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    // v42 名分有出口：掌柜的照你的见闻称号变脸色——刚出门的新面孔懒得认，
+    // 走得越远、见得越多，招呼越热。称号是长出来的体面，不是逢人就拱手。
+    var _titleGreet = '';
+    try {
+        var _tt = (window.TravelJournal && typeof window.TravelJournal.travelTitle === 'function') ? window.TravelJournal.travelTitle() : '';
+        var _greetLine = SHOP_TITLE_GREET[_tt] || '';
+        if (_greetLine) _titleGreet = '<div class="text-xs text-gray-400 mb-3">' + _greetLine + '</div>';
+    } catch (e) {}
     modal.innerHTML = `
         <div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-bold text-yellow-500">${shop.name}</h3>
                 <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
             </div>
+            ${_titleGreet}
             ${content}
         </div>
     `;
@@ -1077,12 +1159,13 @@ function showShopDialog(shop) {
 }
 
 // 剩余任务#3：药铺/坊市时价标签 + 对照出关见闻快照（返回 HTML 或空串）
-window.__buildShopPriceTag = function () {
+// v42 cityOverride：野市传脚下地域——标签认店不认人，牌面显示的与柜台收的就是同一本账
+window.__buildShopPriceTag = function (cityOverride) {
     if (!window.MarketDynamic || typeof window.MarketDynamic.priceMul !== 'function') return '';
     try {
         var city = '中州';
         if (window.WorldLoop && typeof window.WorldLoop.mapMarketCity === 'function') {
-            var loc = (window.locationSystem && window.locationSystem.getCurrentLocation && window.locationSystem.getCurrentLocation()) || '';
+            var loc = cityOverride || (window.locationSystem && window.locationSystem.getCurrentLocation && window.locationSystem.getCurrentLocation()) || '';
             city = window.WorldLoop.mapMarketCity(loc);
         } else if (window.currentCharData && window.currentCharData.location) {
             city = window.currentCharData.location;
@@ -1140,6 +1223,10 @@ function buyFromEnhancedShop(shopId, itemId) {
     }
     const ok = shop.buyItem(itemId, 1);
     if (ok) {
+        // v23.2 买入推动本城行情（供需模型接线——扫空一城物价该涨）
+        if (window.MarketDynamic && typeof window.MarketDynamic.notePlayerTrade === 'function') {
+            window.MarketDynamic.notePlayerTrade(itemId, 1, true);
+        }
         showShopDialog(shop);
     }
     return ok;
@@ -1351,7 +1438,8 @@ var CITY_SHOP_TYPE_FILTERS = {
         return it.type === 'secret_art' || it.category === 'secret_art' || (it.id && String(it.id).indexOf('art_') === 0);
     },
     special: function(it) {
-        return it.quality === 'RARE' || it.quality === 'EPIC' || it.quality === 'LEGENDARY'
+        var r = _shopQRank(it.quality);
+        return (r >= 3 && r <= 8)
             || (it.id && String(it.id).indexOf('spec_') === 0);
     }
 };
@@ -1366,22 +1454,41 @@ var REGION_SHOP_BIAS = {
     '东南海域': ['consumable', 'material', 'special']
 };
 
+// ============ 第四十八波 · 野市地域特产：货架认脚下的地 ============
+// 此前野市把地域名当城名开店，城档查无此城 → 特产空、偏向空，哪个野市货架都一个样。
+// 现在：地域名店（城档缺位）按本表上特产（名字命中强上、库存加厚）+ 类目偏向填架。
+// 价格不另起账：买价卖价早已走行情真源（v42）——南疆药材 ×0.7、西漠矿材 ×0.7 都在
+// CITY_BASE_BIAS 里，货架一偏，「产地囤货贱、异地行货贵」自然成立，零新价格乘子。
+// 城铺老路径分毫不动：cityData 里有region 的城照旧走城档特产。
+var REGION_SPECIALTIES = {
+    '中州':   { names: ['聚气丹', '攻击符', '回灵丹'], cats: ['pill', 'talisman', 'secret_art', 'consumable'], blurb: '中州是九省通衢，野市上中原的丹火符窑货最全' },
+    '东荒':   { names: ['灵芝', '人参', '何首乌', '灵木'], cats: ['material', 'herb', 'consumable'], blurb: '东荒多林海，野市货架上草药灵木占了大半，炼丹的人来了不想走' },
+    '南疆':   { names: ['黄芩', '甘草', '血菩提', '龙涎草'], cats: ['material', 'herb', 'pill', 'consumable'], blurb: '南疆瘴地出好药，野市的药材天下最贱——趁贱囤货不亏' },
+    '西漠':   { names: ['玄铁', '铁矿', '铜矿', '陨铁', '紫金'], cats: ['material', 'weapon', 'sword', 'armor', 'equipment'], blurb: '西漠矿甲天下，野市里精铁成色足、兵刃也全' },
+    '北冥':   { names: ['寒铁', '雪莲', '兽皮', '兽骨'], cats: ['armor', 'equipment', 'material', 'consumable'], blurb: '北冥苦寒，野市上皮货寒铁最好——御寒的家什趁早备' },
+    '蜀地':   { names: ['青钢剑', '龙泉', '霜月', '赤霞'], cats: ['weapon', 'sword', 'secret_art', 'talisman'], blurb: '蜀地剑冢锻术名动九洲，野市上的剑都是上货，就看你识不识' },
+    '东南海域': { names: ['龙涎草', '凤血草', '灵源珠', '琼浆'], cats: ['material', 'consumable', 'special'], blurb: '东南的市面讲珠贝水产，龙涎草灵源珠是别处学不来的特产' },
+    '灵界':   { names: ['地灵根', '九叶灵芝', '天心花', '万年灵乳'], cats: ['material', 'pill', 'consumable'], blurb: '灵界灵气丰沛，野市货架上灵物成色惊人——搁凡间都是天价' },
+    '魔界':   { names: ['妖兽内丹', '妖兽皮', '妖兽骨', '妖兽牙'], cats: ['material', 'weapon', 'consumable'], blurb: '魔界野市收的都是魔货，内丹皮骨俱全——正道修士买之前掂量掂量' }
+};
+
 // ==================== v15.1 秘籍货架过滤：渠道分层 + 境界门 + 稀缺溢价 ====================
 // 背景（v13.1遗留待办）：秘籍自注册进全物品库后，general 滤网 `return true` 使其可随机上任何货架，
 // 练气号攒几百灵石即可白嫖绝技，架空了掉落12%/流浪修士传授两条主渠道。
 // 规则：功法阁(art)=秘籍正店——RARE保底1本 + 35%追加高阶，价×1.5；
 //       黑市(special)=稀罕货——仅EPIC以上、40%空手、至多1本，价×3；
 //       其余店型与城市特产匹配一律禁入（pushItem统一闸）。
-// 境界门：RARE需炼气(0)、EPIC需筑基(1)、LEGENDARY需金丹(2)，不足不上架（非灰锁，保持货架干净）。
+// 境界门：七品/六品需炼气(0)、五品/四品需筑基(1)、三品/二品需金丹(2)，不足不上架（非灰锁，保持货架干净）。
 // 掉落/传授/搜刮三条既有获取渠道不受影响；货架不入档，改动即时生效、零迁移。
 var MANUAL_SHELF_RULES = {
     art:     { mode: 'art', priceMul: 1.5, highChance: 0.35 },
     special: { mode: 'black', minRank: 1, emptyChance: 0.4, priceMul: 3.0 }
 };
-var MANUAL_QUALITY_REALM = { RARE: 0, EPIC: 1, LEGENDARY: 2 };
+var MANUAL_QUALITY_REALM = { PIN7: 0, PIN6: 0, PIN5: 1, PIN4: 1, PIN3: 2, PIN2: 2 };
 
 function qualityRank(q) {
-    return q === 'LEGENDARY' ? 2 : q === 'EPIC' ? 1 : 0;
+    var r = _shopQRank(q);
+    return r >= 7 ? 2 : r >= 5 ? 1 : 0;
 }
 
 function playerManualRealmIndex() {
@@ -1409,6 +1516,13 @@ function generateCityShopInventory(cityName, shopType) {
     var cityInfo = (window.locationSystem && window.locationSystem.cityData && window.locationSystem.cityData[cityName]) || {};
     var region = cityInfo.region || '';
     var specialties = cityInfo.specialties || [];
+    // v48 野市地域特产：城档查无此城、店名又恰是地域名——货架认脚下的地（城铺老路径不进这支）
+    var wildSpec = null;
+    if (!region && REGION_SPECIALTIES[cityName]) {
+        wildSpec = REGION_SPECIALTIES[cityName];
+        region = cityName;
+        specialties = wildSpec.names || [];
+    }
     // v20.53 去掉城市买价系数在这里的预烘：getItemPrice → getCombinedShopPriceMultiplier
     // 已乘过一次城市买价系数（world-events 商店管线），这里再乘就是双算——
     // 双算后金城实付 0.81 倍行价，而商会代售实收 1.02 倍行价，成了纯套利。
@@ -1421,13 +1535,15 @@ function generateCityShopInventory(cityName, shopType) {
     function pushItem(it, stockBonus) {
         if (!it || !it.id || seen[it.id]) return;
         if (it.subtype === 'manual') return; // v15.1：秘籍不走通用货架（含特产匹配段），仅下方专属投放段上架
+        if (it.qiyuOnly) return; // v20.94：奇遇奇物独一份，永远不上货架
+        if (it.implemented === false) return; // 第八十二波·MED-02：未实装的东西不上架——旧版避毒丹卖 79 灵石，买回来使用路径直接拦「尚未实装」，纯坑钱
         if (it.price == null && it.basePrice == null) return;
         // 跳过纯任务无价
         var price = it.price != null ? it.price : it.basePrice;
         if (price <= 0 && shopType !== 'special') return;
         seen[it.id] = true;
         var stock = 1 + Math.floor(Math.random() * 4);
-        if (it.quality === 'EPIC' || it.quality === 'LEGENDARY') stock = 1;
+        if (_shopQRank(it.quality) >= 5) stock = 1;
         if (stockBonus) stock += stockBonus;
         pool.push({
             id: it.id,
@@ -1460,12 +1576,24 @@ function generateCityShopInventory(cityName, shopType) {
         var tmp = candidates[i]; candidates[i] = candidates[j]; candidates[j] = tmp;
     }
     var target = shopType === 'general' ? 28 : 18;
-    for (var k = 0; k < candidates.length && pool.length < target; k++) {
-        // 一般店降低传说出现率
-        var it = candidates[k];
-        if (it.quality === 'LEGENDARY' && Math.random() > 0.08) continue;
-        if (it.quality === 'EPIC' && Math.random() > 0.25) continue;
-        pushItem(it, 0);
+    function fillFrom(list) {
+        for (var k = 0; k < list.length && pool.length < target; k++) {
+            // 一般店降低高档货出现率（三品及以上 8%，五品/四品 25%）
+            var it = list[k];
+            if (_shopQRank(it.quality) >= 7 && Math.random() > 0.08) continue;
+            if (_shopQRank(it.quality) >= 5 && _shopQRank(it.quality) <= 6 && Math.random() > 0.25) continue;
+            pushItem(it, 0);
+        }
+    }
+    var biasCats = wildSpec ? (wildSpec.cats || REGION_SHOP_BIAS[cityName] || []) : [];
+    if (biasCats.length) {
+        // v48 地域偏向：先上本地行当的货，装不满再拿别处的凑（死账 REGION_SHOP_BIAS 当类目兜底）
+        var preferred = [], others = [];
+        candidates.forEach(function (it) { (biasCats.indexOf(it.type) >= 0 ? preferred : others).push(it); });
+        fillFrom(preferred);
+        fillFrom(others);
+    } else {
+        fillFrom(candidates);
     }
 
     // 2.5) v15.1 秘籍专属投放（功法阁正店/黑市稀罕；其余店型已被 pushItem 闸拒之门外）
@@ -1479,9 +1607,9 @@ function generateCityShopInventory(cityName, shopType) {
         });
         var mPicks = [];
         if (mRule.mode === 'art') {
-            var rares = realmOK.filter(function (m) { return m.quality === 'RARE'; });
-            var highs = realmOK.filter(function (m) { return m.quality === 'EPIC' || m.quality === 'LEGENDARY'; });
-            if (rares.length) mPicks.push(rares[Math.floor(Math.random() * rares.length)]);           // RARE保底1本
+            var rares = realmOK.filter(function (m) { return _shopQRank(m.quality) >= 3 && _shopQRank(m.quality) <= 4; });
+            var highs = realmOK.filter(function (m) { return _shopQRank(m.quality) >= 5; });
+            if (rares.length) mPicks.push(rares[Math.floor(Math.random() * rares.length)]);           // 七品/六品保底1本
             if (highs.length && Math.random() < (mRule.highChance != null ? mRule.highChance : 0.35)) // 35%追加高阶
                 mPicks.push(highs[Math.floor(Math.random() * highs.length)]);
         } else if (realmOK.length) {
@@ -1518,7 +1646,7 @@ function generateCityShopInventory(cityName, shopType) {
     return pool;
 }
 
-function ensureCityShop(cityName, shopType) {
+function ensureCityShop(cityName, shopType, opts) {
     shopType = shopType || 'general';
     if (!window.shopManager) {
         if (typeof initShopSystem === 'function') initShopSystem();
@@ -1545,6 +1673,7 @@ function ensureCityShop(cityName, shopType) {
             existing.inventory = generateCityShopInventory(cityName, shopType);
             existing._genDay = day;
         }
+        if (opts && opts.wildMarket) existing._wildMarket = true;   // v42 野市旗（回购价认行情的凭据）
         return shopId;
     }
 
@@ -1562,6 +1691,7 @@ function ensureCityShop(cityName, shopType) {
     });
     shop._genDay = day;
     shop._cityName = cityName;
+    if (opts && opts.wildMarket) shop._wildMarket = true;   // v42 野外的市：买卖两价都认本地行情
     window.shopManager.addShop(shop);
     return shopId;
 }
@@ -1569,6 +1699,7 @@ function ensureCityShop(cityName, shopType) {
 window.generateCityShopInventory = generateCityShopInventory;
 window.ensureCityShop = ensureCityShop;
 window.CITY_SHOP_TYPE_FILTERS = CITY_SHOP_TYPE_FILTERS;
+window.REGION_SPECIALTIES = REGION_SPECIALTIES;   // v48 野市地域特产表（randomMap 逛市话术也用这本账）
 
 // ==================== 导出 ====================
 if (typeof window !== 'undefined') {

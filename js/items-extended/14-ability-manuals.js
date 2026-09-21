@@ -25,15 +25,15 @@
 
     window.extendedManuals = [
         // 效果一句话均取自 battle.js COMBAT_ABILITIES 注册表语义；escape 为玩家侧逃跑加成实现
-        manual('manual_venom',        '万毒真经',       'venom',       'EPIC',      4, 400, '习得【施毒】：命中附加毒素负荷'),
-        manual('manual_lifesteal',    '血煞魔功·残篇', 'lifesteal',   'RARE',      3, 350, '习得【吸血功】：实际伤害30%转化为自身气血'),
-        manual('manual_reflect',      '铁体功',         'reflect',     'RARE',      2, 300, '习得【铁体功】：受击反震20%钝伤（不连锁）'),
-        manual('manual_soundwave',    '摄魂音律',       'soundwave',   'EPIC',      4, 450, '习得【摄魂音】：神魂震荡+疼痛'),
-        manual('manual_illusion',     '迷魂宝录',       'illusion',    'EPIC',      5, 500, '习得【迷魂术】：叠加迷扰层，目标命中率-15/层'),
-        manual('manual_escape',       '遁术要诀',       'escape',      'RARE',      2, 280, '习得【遁术】：身法诡秘，逃跑成功率大幅提升（基础72%）'),
-        manual('manual_drain_qi',     '采补密录',       'drain_qi',    'EPIC',      5, 600, '习得【采补功】：摄取目标精气转化真气'),
-        manual('manual_gu_parasite',  '金蚕蛊经',       'gu_parasite', 'LEGENDARY', 6, 700, '习得【金蚕蛊】：上毒×1.5并种蛊啃噬筋骨'),
-        manual('manual_sword_burst',  '剑气纵横诀',     'sword_burst', 'RARE',      3, 380, '习得【剑气纵横】：暴击率+12%，第3有效击×1.25')
+        manual('manual_venom',        '万毒真经',       'venom',       'PIN5',      4, 400, '习得【施毒】：命中附加毒素负荷'),
+        manual('manual_lifesteal',    '血煞魔功·残篇', 'lifesteal',   'PIN7',      3, 350, '习得【吸血功】：实际伤害30%转化为自身气血'),
+        manual('manual_reflect',      '铁体功',         'reflect',     'PIN7',      2, 300, '习得【铁体功】：受击反震20%钝伤（不连锁）'),
+        manual('manual_soundwave',    '摄魂音律',       'soundwave',   'PIN5',      4, 450, '习得【摄魂音】：神魂震荡+疼痛'),
+        manual('manual_illusion',     '迷魂宝录',       'illusion',    'PIN5',      5, 500, '习得【迷魂术】：叠加迷扰层，目标命中率-15/层'),
+        manual('manual_escape',       '遁术要诀',       'escape',      'PIN7',      2, 280, '习得【遁术】：身法诡秘，逃跑成功率大幅提升（基础72%）'),
+        manual('manual_drain_qi',     '采补密录',       'drain_qi',    'PIN5',      5, 600, '习得【采补功】：摄取目标精气转化真气'),
+        manual('manual_gu_parasite',  '金蚕蛊经',       'gu_parasite', 'PIN3', 6, 700, '习得【金蚕蛊】：上毒×1.5并种蛊啃噬筋骨'),
+        manual('manual_sword_burst',  '剑气纵横诀',     'sword_burst', 'PIN7',      3, 380, '习得【剑气纵横】：暴击率+12%，第3有效击×1.25')
     ];
 
     // 本文件按浏览器脚本顺序排在 items-extended.js 聚合器之后（与 13-missing-ids.js 同策略）：

@@ -1,0 +1,245 @@
+/* 仙路长青 · house 面板专属样式（v21.x 界面整改）
+   只允许出现 #panel-house / 本面板相关选择器，跨面板的规则请放进 ui-tokens.css
+
+   本文件干三件事：
+   1) 给洞府面板一套自己的卡片/按钮/文字语汇（x-*），使同类卡片同间距同圆角同边框；
+   2) 兜住"别的文件"渲染进本面板的内容（阵工坊三间账目来自 js/crafting/compound-ui.js，
+      那边不许我改，故用属性选择器把 10/11px 小字与不达标配色在本面板内抬到基线）；
+   3) 一屏只留一枚金色主按钮（--x-gold），禁用态用 x-off 而不是 opacity-*
+      ——元素透明度会把整块文字连背景一起压掉，是对比度掉到 3:1 以下的主因。
+   ============================================================================ */
+
+/* ---------- 面板骨架 ---------- */
+
+#panel-house {
+    --xh-card: rgba(31, 41, 55, .72);
+    --xh-line: #3f4a5a;
+    --xh-radius: 12px;
+}
+
+/* 标题下方 mb-6 由 仙侠.html 写死，本面板卡片自带间距，这里收紧节奏 */
+#panel-house > h2 { margin-bottom: 16px; }
+#panel-house .x-root { margin-bottom: 0; }
+
+#panel-house .x-card {
+    background: var(--xh-card);
+    border: 1px solid var(--xh-line);
+    border-radius: var(--xh-radius);
+    padding: 12px 14px;
+    color: var(--x-text);
+}
+#panel-house .x-card--tight { padding: 8px 10px; }
+#panel-house .x-card--lock {
+    border-color: rgba(251, 191, 36, .45);
+    background: rgba(251, 191, 36, .07);
+}
+#panel-house .x-card--on { border-color: var(--x-gold); background: rgba(251, 191, 36, .06); }
+/* 你此刻所在的那一州（与「宅基在此」区分开：一个是眼下，一个是家） */
+#panel-house .x-card--here { border-color: #67e8f9; }
+
+/* ---------- 文字阶（最小 13px，最暗 --x-dim） ---------- */
+
+#panel-house .x-h { font-size: 16px; font-weight: 700; color: #ffffff; line-height: 1.4; }
+#panel-house .x-h2 { font-size: 15px; font-weight: 700; color: var(--x-text); line-height: 1.4; }
+#panel-house .x-meta { font-size: 13px; color: var(--x-muted); line-height: var(--x-lh-tight); }
+#panel-house .x-dim { font-size: 13px; color: var(--x-dim); line-height: var(--x-lh-tight); }
+/* 布局图里屋子的一行字：这是默认档，排在 .x-val 与语义色之前——头行数值与告警行要盖得过它 */
+#panel-house .x-pip { font-size: 13px; line-height: 1.5; color: var(--x-muted); margin-top: 2px; }
+#panel-house .x-val { font-size: 14px; font-weight: 700; color: var(--x-text); }
+#panel-house .x-num { font-size: 16px; font-weight: 700; color: var(--x-gold); }
+#panel-house .x-good { color: #4ade80; }
+#panel-house .x-bad { color: #f87171; }
+#panel-house .x-loc { color: #67e8f9; }
+#panel-house .x-warn { color: var(--x-gold); }
+#panel-house .x-ley { color: #5eead4; }
+/* 只定字号、不定颜色：危险度牌子（text-green-400 一类由数据给）得留住自己的色 */
+#panel-house .x-mini { font-size: 13px; line-height: var(--x-lh-tight); }
+
+#panel-house .x-chip {
+    display: inline-block;
+    font-size: 13px;
+    line-height: 1.4;
+    padding: 1px 7px;
+    border-radius: 6px;
+    background: rgba(49, 46, 129, .5);
+    border: 1px solid #4f46a5;
+    color: #c7d2fe;
+}
+#panel-house .x-chip--flat {
+    background: rgba(148, 163, 184, .12);
+    border-color: var(--xh-line);
+    color: var(--x-muted);
+}
+
+/* ---------- 按钮：一枚金主 + 中性次级 + 合规禁用态 ---------- */
+
+#panel-house .x-btn {
+    display: inline-block;
+    font-size: 13px;
+    line-height: 1.45;
+    padding: 7px 12px;
+    border-radius: 9px;
+    border: 1px solid #55637a;
+    background: #26313f;
+    color: var(--x-text);
+    text-align: center;
+    transition: background-color .15s ease, border-color .15s ease;
+}
+#panel-house .x-btn:hover { background: #2f3c4d; border-color: #94a3b8; }
+#panel-house .x-btn--sm { padding: 4px 9px; border-radius: 7px; }
+#panel-house .x-btn--wide { display: block; width: 100%; }
+#panel-house .x-btn--on { border-color: var(--x-gold); background: rgba(251, 191, 36, .12); color: #ffffff; }
+/* 退让一档的"取消/再想想"：平时只是字，悬停才成按钮 */
+#panel-house .x-btn--ghost { background: transparent; border-color: transparent; color: var(--x-muted); }
+#panel-house .x-btn--ghost:hover { background: #26313f; border-color: #55637a; color: #ffffff; }
+
+/* 主按钮：全屏幕只有一枚（由 house-panel.js 的 _cta() 发号） */
+#panel-house .x-cta {
+    background: var(--x-gold);
+    border-color: var(--x-gold);
+    color: #111827;
+    font-weight: 700;
+}
+#panel-house .x-cta:hover { background: #fcd34d; border-color: #fcd34d; }
+
+/* 禁用态：不再靠 opacity 压暗——#8b95a5 压在 --x-surface 上仍有 4.9:1 */
+#panel-house .x-btn.x-off,
+#panel-house .x-btn.x-off:hover {
+    background: var(--x-surface);
+    border-color: var(--xh-line);
+    color: var(--x-dim);
+    cursor: not-allowed;
+}
+/* 畦格不带 x-btn，禁用态得自己说清：只改指针、停呼吸光——熟没熟是真信息，不许因为人不在就抹色 */
+#panel-house .x-plot.x-off { cursor: not-allowed; animation: none; }
+
+/* 页签 / 布局图的房间卡也是"可点的卡片"，统一走同一套边框圆角 */
+#panel-house .x-tabbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--xh-line);
+}
+#panel-house .x-tab {
+    font-size: 14px;
+    padding: 7px 16px;
+    border-radius: 9px 9px 0 0;
+    border: 1px solid var(--xh-line);
+    border-bottom-width: 2px;
+    background: rgba(31, 41, 55, .55);
+    color: var(--x-muted);
+}
+#panel-house .x-tab:hover { color: #ffffff; }
+#panel-house .x-tab--on {
+    background: var(--xh-card);
+    border-color: var(--x-gold);
+    color: #ffffff;
+    font-weight: 700;
+}
+#panel-house .x-room {
+    display: block;
+    text-align: left;
+    padding: 10px 12px;
+    border-radius: var(--xh-radius);
+    border: 1px solid var(--xh-line);
+    background: var(--xh-card);
+    transition: border-color .15s ease, background-color .15s ease;
+}
+#panel-house .x-room:hover { border-color: #94a3b8; }
+#panel-house .x-room--on { border-color: var(--x-gold); background: rgba(251, 191, 36, .08); }
+#panel-house .x-room-t { font-size: 15px; font-weight: 700; color: #ffffff; line-height: 1.4; margin-bottom: 3px; }
+/* .x-pip 的字号与颜色在上面的文字阶区块里（要在 .x-val 之前才盖不住） */
+
+/* 灵田的一畦一格 */
+#panel-house .x-plot {
+    display: block;
+    min-height: 84px;
+    padding: 8px 6px;
+    border-radius: var(--xh-radius);
+    border: 1px solid var(--xh-line);
+    background: var(--xh-card);
+    text-align: center;
+    color: var(--x-text);
+}
+#panel-house .x-plot--ready { border: 2px solid var(--x-gold); background: rgba(251, 191, 36, .10); animation: xh-glow 2.2s ease-in-out infinite; }
+#panel-house .x-plot--open.x-plot--pick { border-color: var(--x-gold); background: rgba(251, 191, 36, .08); }
+#panel-house .x-plot--bad { border: 2px solid #b91c1c; background: rgba(127, 29, 29, .25); }
+#panel-house .x-plot--grow { border-color: #14532d; background: rgba(20, 83, 45, .25); }
+#panel-house .x-plot--open { border: 2px dashed #4ade80; background: rgba(31, 41, 55, .72); }
+#panel-house .x-plot--void { border-style: dashed; background: rgba(17, 24, 39, .5); }
+#panel-house .x-plot-n { font-size: 13px; font-weight: 700; line-height: 1.4; }
+#panel-house .x-plot-s { font-size: 13px; line-height: 1.4; color: var(--x-muted); }
+
+/* 成熟畦的呼吸光：只动 box-shadow，不动 opacity——
+   元素透明度会把整格连字一起压下去，正是本面板对比度不达标的老根子 */
+@keyframes xh-glow {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, .0); }
+    50% { box-shadow: 0 0 12px 2px rgba(251, 191, 36, .45); }
+}
+
+/* 储物进度条：满仓告警用金色，红色在本面板只留给破坏性操作 */
+#panel-house .x-bar { height: 10px; border-radius: 5px; background: var(--x-surface); border: 1px solid var(--xh-line); overflow: hidden; }
+#panel-house .x-bar-fill { height: 100%; background: #60a5fa; }
+#panel-house .x-bar-fill--warn { background: var(--x-gold); }
+
+/* 打坐时长格：一格一句话，标题走 x-h2 但字号由格子自己控制 */
+#panel-house .x-tile { display: block; width: 100%; text-align: left; padding: 10px 12px; }
+#panel-house .x-tile-t { font-size: 14px; font-weight: 700; color: #ffffff; line-height: 1.4; }
+#panel-house .x-tile .x-meta, #panel-house .x-tile .x-dim { display: block; margin-top: 2px; }
+#panel-house .x-btn.x-off .x-tile-t { color: var(--x-dim); }
+
+/* 小标题行的说明文字（跟在 x-h/x-h2 后面的括号账） */
+#panel-house .x-note { font-size: 13px; font-weight: 400; color: var(--x-dim); }
+
+/* ---------- 兜底：别的文件渲染进本面板的内容 ---------- */
+
+/* 阵工坊三间（compound-ui.js 出的账）里成片的 text-[10px]/[11px] —— 抬到 13px 基线 */
+#panel-house [class*="text-[9px]"],
+#panel-house [class*="text-[10px]"],
+#panel-house [class*="text-[11px]"],
+#panel-house [class*="text-[12px]"] { font-size: 13px; line-height: var(--x-lh-tight); }
+
+/* 同处的禁用钮（bg-gray-700 + text-gray-500 实测 2.13:1）：
+   光换字色不够——#8b95a5 压在 #374151 上只有 3.4:1，底色得一起抬到 --x-surface（4.9:1） */
+#panel-house [class*="bg-gray-700"][class*="text-gray-400"],
+#panel-house [class*="bg-gray-700"][class*="text-gray-500"],
+#panel-house [class*="bg-gray-800"][class*="text-gray-500"] {
+    color: var(--x-dim);
+    background-color: var(--x-surface);
+}
+
+/* 亮底白字（bg-amber-400/500 一类配 text-white 实测 1.7~2.2:1）换深字 */
+#panel-house [class*="bg-yellow-600"][class*="text-white"],
+#panel-house [class*="bg-amber-500"][class*="text-white"],
+#panel-house [class*="bg-amber-400"][class*="text-white"] { color: #111827; }
+
+/* 阵工坊三间的四色实心钮（紫=安置／青=布阵／绿=启用／黄=修缮）：
+   颜色各说各话，金色主按钮就没了唯一性。本面板里一律退成中性描边钮，
+   色相只留在原来的语义上（红仍只给破坏性操作），实心金全屏幕仅此一枚 */
+#panel-house button[class*="bg-purple-600"],
+#panel-house button[class*="bg-cyan-700"],
+#panel-house button[class*="bg-green-700"],
+#panel-house button[class*="bg-yellow-700"] {
+    background-color: #26313f;
+    color: var(--x-text);
+    border: 1px solid #55637a;
+    border-radius: 7px;
+}
+#panel-house button[class*="bg-purple-600"]:hover,
+#panel-house button[class*="bg-cyan-700"]:hover,
+#panel-house button[class*="bg-green-700"]:hover,
+#panel-house button[class*="bg-yellow-700"]:hover {
+    background-color: #2f3c4d;
+    border-color: #94a3b8;
+}
+
+/* 半透明字色（text-emerald-500/80、text-red-400/80 一类压到 3.9~4.2:1）
+   在本面板不淡出，直接换回同色相的实色档——语义色保留，对比度回到 4.5 以上 */
+#panel-house [class*="text-emerald-500/"] { color: #34d399; }
+#panel-house [class*="text-red-400/"] { color: #f87171; }
+#panel-house [class*="text-green-400/"] { color: #4ade80; }
+#panel-house [class*="text-amber-300/"] { color: #fcd34d; }
+#panel-house [class*="text-cyan-300/"] { color: #67e8f9; }
+#panel-house [class*="text-teal-300/"] { color: #5eead4; }

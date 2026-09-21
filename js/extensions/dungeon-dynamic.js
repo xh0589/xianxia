@@ -85,7 +85,13 @@
         { id:'dgn_dry_bone',      name:'枯骨渊',   env:'dark',    region:'极北', appearMonths:[10,11,12], appearChance:0.4, duration:30, suggestedRealm:'筑基', roomCount:7, solutions:{sword:0.6, formation:0.5, talisman:1.3, spiritRoot:0.9, alchemy:0.5, spiritBeast:0.6}, rewards:{materials:['mat_demon_beast_core']} },
         { id:'dgn_ghost_realm',   name:'九幽幻境', env:'illusion',region:'秘境虚空', appearMonths:[1,2,3,4,5,6,7,8,9,10,11,12], appearChance:0.02, duration:7, suggestedRealm:'元婴', roomCount:9, solutions:{sword:0.6, formation:1.5, talisman:0.7, spiritRoot:0.8, alchemy:0.4, spiritBeast:0.5}, rewards:{materials:['mat_chaos_stone']} },
         { id:'dgn_cloud_palace',  name:'云海仙阙', env:'cloud',   region:'天空', appearMonths:[7,8,9], appearChance:0.5, duration:14, suggestedRealm:'金丹', roomCount:8, solutions:{sword:1.0, formation:0.7, talisman:0.6, spiritRoot:1.0, alchemy:0.4, spiritBeast:0.6}, rewards:{materials:['mat_star_iron']} },
-        { id:'dgn_5e_forbidden',  name:'五行禁地', env:'5e',      region:'中原深处', appearMonths:[1,2,3,4,5,6,7,8,9,10,11,12], appearChance:0.1, duration:7, suggestedRealm:'金丹', roomCount:8, solutions:{sword:0.5, formation:1.5, talisman:0.7, spiritRoot:0.9, alchemy:0.6, spiritBeast:0.5}, rewards:{materials:['mat_five_element_essence']} }
+        { id:'dgn_5e_forbidden',  name:'五行禁地', env:'5e',      region:'中原深处', appearMonths:[1,2,3,4,5,6,7,8,9,10,11,12], appearChance:0.1, duration:7, suggestedRealm:'金丹', roomCount:8, solutions:{sword:0.5, formation:1.5, talisman:0.7, spiritRoot:0.9, alchemy:0.6, spiritBeast:0.5}, rewards:{materials:['mat_five_element_essence']} },
+        // ===== v21.9 高境界专属秘境：此前池内 suggestedRealm 封顶元婴——化神往后「无事可做」，
+        // 只有数值缩放没有新去处。四座高阶秘境按境界递进开放，产高阶材料。=====
+        { id:'dgn_star_sea',      name:'星陨古域', env:'thunder', region:'秘境虚空', appearMonths:[1,4,7,10], appearChance:0.35, duration:14, suggestedRealm:'化神', roomCount:10, solutions:{sword:1.3, formation:0.8, talisman:0.5, spiritRoot:1.2, alchemy:0.3, spiritBeast:0.5}, rewards:{materials:['mat_star_sand','mat_thunder_crystal']} },
+        { id:'dgn_god_tomb',      name:'古神葬地', env:'dark',    region:'极北',     appearMonths:[11,12],    appearChance:0.3,  duration:21, suggestedRealm:'炼虚', roomCount:10, solutions:{sword:0.8, formation:0.6, talisman:1.4, spiritRoot:1.0, alchemy:0.4, spiritBeast:0.6}, rewards:{materials:['mat_chaos_stone','mat_dragon_crystal']} },
+        { id:'dgn_heaven_ruin',   name:'天墟遗宫', env:'cloud',   region:'天空',     appearMonths:[2,8],      appearChance:0.25, duration:14, suggestedRealm:'合体', roomCount:11, solutions:{sword:1.2, formation:1.0, talisman:0.6, spiritRoot:1.1, alchemy:0.4, spiritBeast:0.6}, rewards:{materials:['mat_space_crystal','mat_star_iron']} },
+        { id:'dgn_chaos_sea',     name:'混沌潮眼', env:'5e',      region:'中原深处', appearMonths:[3,6,9,12], appearChance:0.2,  duration:30, suggestedRealm:'大乘', roomCount:12, solutions:{sword:0.7, formation:1.6, talisman:0.8, spiritRoot:1.2, alchemy:0.6, spiritBeast:0.5}, rewards:{materials:['mat_five_element_essence','mat_chaos_stone']} }
     ];
 
     // ============== 4. 模块级状态 ==============
@@ -113,6 +119,9 @@
         for (var i = _state.active.length - 1; i >= 0; i--) {
             if (_state.active[i].closeDay <= worldDay) {
                 if (window.EventBus) window.EventBus.emit('dungeon:dynamic:close', { id: _state.active[i].id, day: worldDay });
+                // 第一百零九波：窗口关了就收走走到一半的进度——此前孤儿进度随存档永续，
+                // 同模板秘境下次再开永远「already-in-progress」且无续玩入口，等于永久卡死
+                delete _state.progress[_state.active[i].id];
                 _state.active.splice(i, 1);
             }
         }
@@ -163,6 +172,13 @@
     function enter(dungeonId) {
         var a = getActive(dungeonId);
         if (!a) return { ok: false, reason: 'not-active' };
+        // 第一百零九波：一窗一走——history 里有本窗口期（openedDay 之后）的完成账，就不再放人进去刷材料
+        for (var hi = 0; hi < _state.history.length; hi++) {
+            var h = _state.history[hi];
+            if (h && h.dungeonId === dungeonId && (h.day || 0) >= (a.openedDay || 0)) {
+                return { ok: false, reason: 'already-completed', history: h };
+            }
+        }
         if (_state.progress[dungeonId]) return { ok: false, reason: 'already-in-progress', progress: _state.progress[dungeonId] };
         var today = (window.WorldCalendar && window.WorldCalendar.day) || 0;
         var firstRoom = pickRoomForDungeon(a.template, 0);

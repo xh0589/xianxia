@@ -122,10 +122,11 @@ assert(loadScript('js/sects/dao-companion-deep.js').indexOf('window.openDaoCompa
 
 // ============ B 八线坏结局：三度伤透即寒心 ============
 var LINES = [
-    { file: 'js/npcs/jingang-events.js', ev: 'jg_event_013', npc: 'sect_leader_金刚宗', bad: '错过', good: '破戒同道' },
-    { file: 'js/npcs/maoshan-events.js', ev: 'ms_event_013', npc: 'sect_leader_茅山派', bad: '错过', good: '符箓同道' },
-    { file: 'js/npcs/yaowang-events.js', ev: 'su_event_013', npc: 'sect_leader_药王谷', bad: '错过', good: '医毒同道' },
-    { file: 'js/npcs/zhujian-events.js', ev: 'lu_event_013', npc: 'sect_leader_铸剑山庄', bad: '错过', good: null },
+    // v20.71 男主四线加厚：伤透门槛改落独立辜负结局（锁心/符灰/焚方/冷炉），与女主线断鸣同构
+    { file: 'js/npcs/jingang-events.js', ev: 'jg_event_013', npc: 'sect_leader_金刚宗', bad: '锁心', good: '破戒同道' },
+    { file: 'js/npcs/maoshan-events.js', ev: 'ms_event_013', npc: 'sect_leader_茅山派', bad: '符灰', good: '符箓同道' },
+    { file: 'js/npcs/yaowang-events.js', ev: 'su_event_013', npc: 'sect_leader_药王谷', bad: '焚方', good: '医毒同道' },
+    { file: 'js/npcs/zhujian-events.js', ev: 'lu_event_013', npc: 'sect_leader_铸剑山庄', bad: '冷炉', good: null },
     { file: 'js/npcs/wuxian-events.js', ev: 'wx_event_013', npc: 'sect_leader_五仙教', bad: '蛊噬', good: '同蛊' },
     { file: 'js/npcs/tianshan-events.js', ev: 'ts_event_013', npc: 'sect_leader_天山派', bad: '断鸣', good: null },
     { file: 'js/npcs/baihua-events-main.js', ev: 'bh_event_014', npc: 'sect_leader_百花谷', bad: '花冢', good: null },
@@ -197,9 +198,10 @@ Wm2.w.daoDateStand({ npcId: 'sect_leader_金刚宗' });
 assert(Wm2.logs.join('|').indexOf('他在亭里坐到散灯') >= 0 && mN2.affDelta === 1,
     'D2b 爽约文案写"他"（人称仍随人走）、照扣好感——误帖只剩人没去这一条真原因');
 var dbSrc = loadScript('js/core/dao-bridge.js');
-assert(dbSrc.indexOf('耗时半日') >= 0 && dbSrc.indexOf('advanceTime(30') >= 0 &&
+// 第一百一十一波：半日=720 分钟（advanceTime 的单位账）——旧断言把「半日=30分钟」的单位错当成了基准
+assert(dbSrc.indexOf('耗时半日') >= 0 && dbSrc.indexOf('advanceTime(720') >= 0 &&
     dbSrc.indexOf('精力15') < 0 && dbSrc.indexOf('约40时辰') < 0,
-    'D3 约会帖标价与实际扣账一致（半日时辰、不标精力）——"约40"虚标与"精力15"假价签都清掉了');
+    'D3 约会帖标价与实际扣账一致（半日=720分钟、不标精力）——"约40"虚标与"精力15"假价签都清掉了');
 var W2 = makeDaoWorld({ npcs: { 'sect_leader_百花谷': makeNpc('sect_leader_百花谷', '温蘅'), 'sect_leader_金刚宗': makeNpc('sect_leader_金刚宗', '赫渊', { gender: 'male' }) },
     bonds: { 'sect_leader_百花谷': { type: 'dao_companion', name: '温蘅', day: 2 }, 'sect_leader_金刚宗': { type: 'dao_companion', name: '赫渊', day: 2 } },
     rng: 0.05, day: 10 });

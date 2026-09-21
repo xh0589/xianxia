@@ -748,7 +748,7 @@ function triggerEnlightenment() {
     if (success) {
         showMessage('你顿悟了！对修炼有了更深的理解。', 'success');
         gainCultivationBonus(200);
-        insightPoints += 1; // 增加领悟点数
+        window.insightPoints = (window.insightPoints || 0) + 1; // v36 走合账后的悟道点账口（真源在角色数据上）
     } else {
         showMessage('你试图顿悟，但未能进入状态。', 'info');
     }

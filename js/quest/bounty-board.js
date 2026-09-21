@@ -26,19 +26,34 @@ function _today() {
     return 0;
 }
 
+// v21.9 悬赏奖励随境界走：此前写死 200-1200 灵石——渡劫修士杀 20 只敌人换 1200 灵石是打发叫花子。
+// 倍率表与真元收益同口径（炼气×1 → 渡劫×256），按开榜时的境界定档，接取后不随突破变。
+var _BOUNTY_REALM_MUL = [1, 1, 2, 4, 8, 16, 32, 64, 128, 256];
+function bountyRealmMul() {
+    try {
+        if (typeof window.getRealmTier === 'function' && window.currentCharData) {
+            var tier = window.getRealmTier(window.currentCharData.realm);
+            if (typeof tier === 'number' && tier >= 0) return _BOUNTY_REALM_MUL[Math.min(9, tier)] || 1;
+        }
+    } catch (e) {}
+    return 1;
+}
+window.bountyRealmMul = bountyRealmMul;
+
 // 随机抽 3 个不同模板生成悬赏榜
 function generateBountyBoard() {
     var pool = BOUNTY_TEMPLATES.slice();
     var picked = [];
+    var mul = bountyRealmMul();
     for (var i = 0; i < 3 && pool.length; i++) {
         var idx = Math.floor(Math.random() * pool.length);
         var t = pool.splice(idx, 1)[0];
         picked.push({
             id: t.id + '_' + _today(), // 每日唯一
             title: t.title,
-            desc: t.desc,
+            desc: t.desc + (mul > 1 ? '（高阶悬赏，赏金随境界上浮）' : ''),
             count: t.count,
-            stones: t.stones,
+            stones: t.stones * mul,
             items: t.items,
             progress: 0,
             accepted: false,
@@ -64,6 +79,9 @@ function acceptBounty(idx) {
     b.accepted = true;
     if (window.gameLog && window.gameLog.add) window.gameLog.add('📜 接取悬赏「' + b.title + '」：' + b.desc, 'info');
     if (window.showMessage) window.showMessage('已接取悬赏「' + b.title + '」。', 'success');
+    // 第九十五波·NEW-05：接取成功即重绘榜单——旧版不重绘，按钮仍显示「接取」、
+    // 已接的两条也不见「进度 0/N」，玩家只能关掉重开悬赏榜才看得清
+    try { refreshBountyBoard(); } catch (e) {}
     return true;
 }
 
@@ -77,7 +95,7 @@ function claimBounty(idx) {
     if (cd) {
         if (window.DataManager && typeof window.DataManager.addSpiritStones === 'function') window.DataManager.addSpiritStones(b.stones);
         else cd.spiritStones = (cd.spiritStones || 0) + b.stones;
-        cd.fame = Math.min(100, (cd.fame || 0) + Math.floor(b.count / 2));
+        cd.fame = Math.min((window.FAME_CAP || 99999), (cd.fame || 0) + Math.floor(b.count / 2));
         if (b.items && typeof window.addResultItem === 'function') {
             b.items.forEach(function (it) { try { window.addResultItem(it.itemId, it.count); } catch (e) {} });
         }

@@ -7,9 +7,20 @@ const INVENTORY_CONFIG = {
     MAX_SLOTS: 99,          // 最大格子数
     COPPER_PER_SLOT: 10,    // 每扩展10格需要铜钱
     CATEGORIES: ['all', 'weapon', 'armor', 'accessory', 'consumable', 'material', 'secret_art', 'quest', 'currency'],
-    QUALITIES: ['all', 'COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'],
+    QUALITIES: ['all', 'PIN9', 'PIN8', 'PIN7', 'PIN6', 'PIN5', 'PIN4', 'PIN3', 'PIN2', 'PIN1', 'UNIQUE'],
     SORT_OPTIONS: { NAME_ASC: 'name_asc', NAME_DESC: 'name_desc', PRICE_ASC: 'price_asc', PRICE_DESC: 'price_desc', QUALITY_DESC: 'quality_desc', QUALITY_ASC: 'quality_asc', COUNT_DESC: 'count_desc', COUNT_ASC: 'count_asc' }
 };
+
+// 第九十五波·NEW-25：物品详情此前把内部类型串（secret_art/talisman…）直接印给玩家——过一层中文名再上屏
+function _typeCN(t) {
+    var M = {
+        weapon: '兵器', armor: '护具', accessory: '饰品', consumable: '消耗品',
+        material: '材料', secret_art: '秘笈', quest: '任务', currency: '财货',
+        talisman: '符箓', trap: '机关', poison: '毒物', pill: '丹药', book: '书卷',
+        food: '吃食', mount: '坐骑', artifact: '法器', treasure: '珍宝'
+    };
+    return M[t] || t || '—';
+}
 
 // ============ 已学功法列表 ============
 let learnedSecrets = window.learnedSecrets || [];
@@ -149,7 +160,8 @@ function initInventory(startItems = []) {
 
 // ============ 添加物品 ============
 function addItem(templateId, count = 1) {
-    // B2：正确堆叠拆分；返回是否全部放入
+    // B2：正确堆叠拆分；第八十二波·返回值改为「实际入袋数量」——0=没入袋、>0=入了多少，
+    // 与旧布尔语义真值兼容（全部入袋仍为真值，一件没进仍为假值，部分入袋如实报数不再谎称全败）
     count = Math.max(0, Math.floor(Number(count) || 0));
     if (count <= 0) return true;
     const template = window.itemById?.[templateId];
@@ -160,6 +172,27 @@ function addItem(templateId, count = 1) {
 
     let remaining = count;
     const maxStack = (template.stackable && template.maxStack) ? template.maxStack : (template.stackable ? 99 : 1);
+
+    // 第八十二波·FIX-01 关联：此前「全部堆入已有槽」与「背包已满」两个分支提前 return，
+    // 绕过下面的 item:obtained 事件——任务计数只认这个事件，采集堆进旧槽任务就永远 0/N。
+    // 现在所有出口统一走 _settle：事件按实际入袋数结算一次，UI 刷一次。
+    function _settle() {
+        var added = count - remaining;
+        if (added > 0 && typeof window.EventBus !== 'undefined') {
+            window.EventBus.emit('item:obtained', {
+                itemId: templateId,
+                itemName: template.name,
+                itemType: template.type,
+                subtype: template.subtype,
+                category: template.category,
+                tags: template.tags || [],
+                count: added, // 实际添加的数量
+                source: 'inventory_add'
+            });
+        }
+        if (typeof updateInventoryUI === 'function') updateInventoryUI();
+        return added;
+    }
 
     // 1) 先填已有堆
     if (template.stackable) {
@@ -172,8 +205,7 @@ function addItem(templateId, count = 1) {
             slot.count = (slot.count || 0) + put;
             remaining -= put;
             if (remaining <= 0) {
-                if (typeof updateInventoryUI === 'function') updateInventoryUI();
-                return true;
+                return _settle();
             }
         }
     }
@@ -190,8 +222,7 @@ function addItem(templateId, count = 1) {
                 inventory.slots.push(null);
             } else {
                 console.warn('背包已满！未能放入 ' + templateId + ' x' + remaining);
-                if (typeof updateInventoryUI === 'function') updateInventoryUI();
-                return false;
+                return _settle(); // 部分入袋也如实结算，不吞已入袋部分的事件
             }
         }
         const put = template.stackable ? Math.min(maxStack, remaining) : 1;
@@ -202,23 +233,8 @@ function addItem(templateId, count = 1) {
             continue;
         }
     }
-    
-    // P1：物品获得事件 - 发射 item:obtained 事件供任务系统订阅
-    if (typeof window.EventBus !== 'undefined') {
-        window.EventBus.emit('item:obtained', {
-            itemId: templateId,
-            itemName: template.name,
-            itemType: template.type,
-            subtype: template.subtype,
-            category: template.category,
-            tags: template.tags || [],
-            count: count - remaining, // 实际添加的数量
-            source: 'inventory_add'
-        });
-    }
-    
-    if (typeof updateInventoryUI === 'function') updateInventoryUI();
-    return true;
+
+    return _settle();
 }
 
 // ============ 移除物品 ============
@@ -295,12 +311,16 @@ function useItem(uid) {
                 }
                 return false;
             }
-            // 陷阱/毒药类：未实现
+            // v21.9 陷阱/毒药做实：门派特产爆裂符/暗器/毒药此前发放到手、使用永远弹「暂不可用」——
+            // 现在走符箓同一条效果管线（真实效果在 gameplay/talisman-system.js）
             if (template.subtype === 'trap' || template.subtype === 'poison') {
-                if (typeof window.showMessage === 'function') {
-                    window.showMessage(template.name + ' 暂不可用', 'warning');
+                if (!applyTalismanEffect(slot, template)) return false;
+                slot.removeCount(1);
+                if (slot.count <= 0) {
+                    inventory.slots[inventory.slots.indexOf(slot)] = null;
                 }
-                return false;
+                if (typeof window.updateInventoryUI === 'function') window.updateInventoryUI();
+                return true;
             }
             // 所有可用的消耗品子类型统一处理（v13.1：+manual 绝技秘籍）
             if (['pill', 'buff_pill', 'perm_pill', 'special_pill', 'herb', 'fruit', 'food', 'talisman', 'special', 'manual'].includes(template.subtype)) {
@@ -310,16 +330,36 @@ function useItem(uid) {
                     window.addPillPoison(slot.templateId || template.id, 1);
                 }
                 // 止血丹特殊处理：调用 hemostaticTreatment
-                if (template.subtype === 'pill' && template.effect && template.effect.hemostatic) {
+                // v23.0 吞丹 BUG 修复：旧版①只认 subtype==='pill'（止血丹实为 special_pill，此分支从不命中，
+                // 落进通用管线后 effect.hemostatic 无人认识——丹被扣、血照流）；②即使命中也不传实体，
+                // hemostaticTreatment 无参必返回 false，丹照样扣。现在：无流血伤口不服（丹不白吃），
+                // 有伤才催药并传入真身。
+                if (template.effect && template.effect.hemostatic) {
+                    var _hEnt = window._playerEntity || (window.currentBattle && window.currentBattle.player) || null;
+                    var _hWounds = (_hEnt && _hEnt.physiology && _hEnt.physiology.wounds) || [];
+                    var _hBleeding = _hWounds.some(function (w) {
+                        return w && (w.bleeding || (w.externalBleedRate || 0) > 0 || (w.internalBleedRate || 0) > 0);
+                    });
+                    if (!_hEnt || !_hBleeding) {
+                        if (typeof window.showMessage === 'function') {
+                            window.showMessage('眼下并无流血的伤口——止血丹留着救命，别白吃。（丹未消耗）', 'info');
+                        }
+                        return false;
+                    }
                     if (typeof window.hemostaticTreatment === 'function') {
-                        window.hemostaticTreatment();
+                        window.hemostaticTreatment(_hEnt);
                     } else {
                         console.warn('hemostaticTreatment 未定义');
+                        return false;
+                    }
+                    if (typeof window.showMessage === 'function') {
+                        window.showMessage('💊 药力化开——外出血减半，内出血止住了。', 'success');
                     }
                     slot.removeCount(1);
                     if (slot.count <= 0) {
                         inventory.slots[inventory.slots.indexOf(slot)] = null;
                     }
+                    if (typeof window.updateInventoryUI === 'function') window.updateInventoryUI();
                     return true;
                 }
                 // v20.16 重塑灵根丹：挪饼+封顶拒服（拒绝时不消耗——药力不白受，丹也不白吃）
@@ -345,11 +385,48 @@ function useItem(uid) {
                     }
                     return true;
                 }
+                // v23.1 饱食闸：吃撑了塞不进（食物不白扣）；辟谷期内不思凡食；辟谷丹真辟谷（三日）
+                var _isFoodUse = template.subtype === 'food';
+                if (_isFoodUse && window.satietySystem) {
+                    if (window.satietySystem.isFasting()) {
+                        if (typeof window.showMessage === 'function') window.showMessage('辟谷之中，腹中空明——凡食竟有些难以下咽。（未消耗）', 'info');
+                        return false;
+                    }
+                    if (!window.satietySystem.canEat()) {
+                        if (typeof window.showMessage === 'function') window.showMessage('🍚 你已经吃撑了，实在塞不下——食物要在香的时候吃。（未消耗）', 'info');
+                        return false;
+                    }
+                }
+                if (template.id === 'pill_fasting' && window.satietySystem && window.satietySystem.startFasting) {
+                    window.satietySystem.startFasting(3);
+                }
+                // v23.1 服药要花时间炼化，药力吸收有波动（旧版：点击即到账、数值恒定——丹药成了按钮）
+                var _useTemplate = template;
+                if (['pill', 'buff_pill', 'perm_pill', 'special_pill', 'herb', 'fruit', 'food'].indexOf(template.subtype) >= 0) {
+                    var _brewMin = template.subtype === 'food' ? 10 : ((template.subtype === 'herb' || template.subtype === 'fruit') ? 5 : 15);
+                    if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
+                        try { window.timeSystem.advanceTime(_brewMin, template.subtype === 'food' ? '用饭' : '炼化药力'); } catch (eBrew) {}
+                    }
+                    var _eff = template.effect;
+                    if (_eff && (_eff.hp_recovery || _eff.qi_recovery || _eff.energy_recovery || _eff.health_recovery)) {
+                        var _potency = 0.85 + Math.random() * 0.3; // 药力吸收率 85%~115%
+                        var _scaled = Object.assign({}, _eff);
+                        ['hp_recovery', 'qi_recovery', 'energy_recovery', 'health_recovery'].forEach(function (pk) {
+                            if (typeof _scaled[pk] === 'number') _scaled[pk] = Math.max(1, Math.round(_scaled[pk] * _potency));
+                        });
+                        _useTemplate = Object.assign({}, template, { effect: _scaled });
+                        if (typeof window.showMessage === 'function') {
+                            if (_potency >= 1.12) window.showMessage('✨ 药力格外醇和——这一枚炼得正好。', 'success');
+                            else if (_potency <= 0.88) window.showMessage('药力略沉，吸收平平。', 'info');
+                        }
+                    }
+                }
                 if (template.subtype === 'talisman') {
                     if (!applyTalismanEffect(slot, template)) return false;
                 } else {
                     // v13.1 绝技秘籍：已掌握时 applyConsumableEffect 返回 false，阻断消耗（参照既有拒绝使用路径）
-                    if (applyConsumableEffect(slot, template) === false) return false;
+                    if (applyConsumableEffect(slot, _useTemplate) === false) return false;
+                    if (_isFoodUse && window.satietySystem) window.satietySystem.eat();
                 }
                 slot.removeCount(1);
                 if (slot.count <= 0) {
@@ -530,7 +607,60 @@ function applyTalismanEffect(item, template) {
 
 // ============ 学习功法（返回 {success, consumed}） ============
 function learnSecretArt(item, template) {
-    // v9.2：走知识系统，写入 techniqueKnowledge，并映射到 skillPages id
+    // v23.1 渐进研读：秘籍不是一摸就会——每次研读耗两个时辰+精力，进度随神识/悟性走，
+    // 读满一百才算入门（入知识账）；进度随角色存档，随时放下随时续读；硬啃有气机紊乱之险。
+    // 旧版：点击→必定成功→completeness 硬编码100→原生 alert「学会了」——四十年功力一秒钟到账。
+    var cd = window.currentCharData;
+    if (!cd) {
+        if (typeof window.showMessage === 'function') window.showMessage('请先创建角色', 'warning');
+        return { success: false, consumed: false };
+    }
+    cd._manualProgress = cd._manualProgress || {};
+    var prog = cd._manualProgress[template.id] || 0;
+
+    // 已入门者不再重读
+    if (prog >= 100) {
+        if (typeof window.showMessage === 'function') window.showMessage('这部' + template.name + '你早已读通，再翻只是温书。', 'info');
+        return { success: false, consumed: false };
+    }
+    if ((cd.energy || 0) < 10) {
+        if (typeof window.showMessage === 'function') window.showMessage('你已困倦得睁不开眼——读书费神，歇足了再读。', 'warning');
+        return { success: false, consumed: false };
+    }
+    cd.energy = (cd.energy || 0) - 10;
+    if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
+        // 第二十四波：洞府「藏书阁」不再是死账——卡面写着「研究时间 -20%」，研读的时辰真按它省
+        var _studyMin = 120;
+        try {
+            if (window.CaveFacilities && typeof window.CaveFacilities.getBuff === 'function') {
+                var _stm = Number(window.CaveFacilities.getBuff('player', 'studyTimeMul')) || 0;
+                if (_stm > 0 && _stm < 1) _studyMin = Math.max(30, Math.round(120 * _stm));
+            }
+        } catch (eLib) {}
+        try { window.timeSystem.advanceTime(_studyMin, '研读' + template.name); } catch (e) {}
+    }
+    // 硬啃之险：精力见底强读，两成概率头昏气乱
+    if ((cd.energy || 0) < 15 && Math.random() < 0.2) {
+        cd.health = Math.max(1, (cd.health || 100) - 5);
+        if (typeof window.showMessage === 'function') window.showMessage('😵 你强撑着硬啃，只觉头昏脑胀、气机发乱……（健康-5，这次白读了）', 'warning');
+        if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e2) {} }
+        return { success: true, consumed: false };
+    }
+    var sense = (cd.attrs && cd.attrs.intelligence) || (cd.mainAttributes && (cd.mainAttributes['神识'] || cd.mainAttributes['智力'])) || 10;
+    var gain = Math.round((12 + Number(sense) * 1.6) * (0.8 + Math.random() * 0.4));
+    prog = Math.min(100, prog + gain);
+    cd._manualProgress[template.id] = prog;
+    if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e3) {} }
+
+    if (prog < 100) {
+        if (typeof window.showMessage === 'function') {
+            var flavor = prog < 40 ? '字句艰涩，你逐字逐句地啃。' : (prog < 75 ? '渐入佳境，行气路线图在识海里成形。' : '只差临门一脚——下一次研读当可通读全篇。');
+            window.showMessage('📖 研读《' + template.name + '》：进度 ' + prog + '/100。' + flavor + '（秘籍未耗，随时续读）', 'info');
+        }
+        return { success: true, consumed: false };
+    }
+
+    // 读满入门：入知识账（沿用原成功链路）
     if (window.KnowledgeSystem && typeof window.KnowledgeSystem.learnFromManual === 'function') {
         var result = window.KnowledgeSystem.learnFromManual(template.id, template.name, {
             source: 'manual',
@@ -538,14 +668,14 @@ function learnSecretArt(item, template) {
             completeness: 100
         });
         if (result.already) {
-            alert(result.msg || '你已经学过这门功法了！');
+            if (typeof window.showMessage === 'function') window.showMessage(result.msg || '你已经学过这门功法了！', 'info');
             return { success: false, consumed: false };
         }
         if (!result.success) {
-            alert(result.msg || '学习失败');
+            if (typeof window.showMessage === 'function') window.showMessage(result.msg || '入门失败', 'warning');
             return { success: false, consumed: false };
         }
-        alert(result.msg || ('你学会了功法：' + template.name + '！'));
+        if (typeof window.showMessage === 'function') window.showMessage('📖 掩卷长吁——《' + template.name + '》通读入门！（' + (result.msg || '') + '）', 'success');
         if (typeof renderEquipmentPanel === 'function') renderEquipmentPanel();
         if (typeof updateSkillPanels === 'function') updateSkillPanels();
         if (typeof renderSkillBrowse === 'function') renderSkillBrowse();
@@ -558,11 +688,11 @@ function learnSecretArt(item, template) {
     }
     if (!window.learnedSecrets.includes(template.id)) {
         window.learnedSecrets.push(template.id);
-        alert('你学会了功法：' + template.name + '！');
+        if (typeof window.showMessage === 'function') window.showMessage('📖 你读通了功法：' + template.name + '！', 'success');
         if (typeof updateSkillPanels === 'function') updateSkillPanels();
         return { success: true, consumed: true };
     } else {
-        alert('你已经学过这门功法了！');
+        if (typeof window.showMessage === 'function') window.showMessage('你已经学过这门功法了！', 'info');
         return { success: false, consumed: false };
     }
 }
@@ -623,7 +753,7 @@ function getInventoryItemsByCategory(category) {
     
     return inventory.slots.filter(slot => {
         if (!slot) return false;
-        const template = slot.getTemplate();
+        const template = _slotTemplate(slot);
         return template?.category === category || template?.type === category;
     });
 }
@@ -632,16 +762,8 @@ function getInventoryItemsByCategory(category) {
 function filterInventory(category) {
     inventory.filter = category;
     
-    // 更新按钮样式
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        if (btn.dataset.category === category) {
-            btn.classList.add('bg-yellow-600');
-            btn.classList.remove('bg-gray-600');
-        } else {
-            btn.classList.remove('bg-yellow-600');
-            btn.classList.add('bg-gray-600');
-        }
-    });
+    // v21.x 界面整改：选中态统一走 is-active，配色收在 panel-inventory.css，JS 不再拼 bg-* 类
+    _syncInventoryFilterChips();
     
     // 刷新背包UI
     updateInventoryUI();
@@ -656,16 +778,7 @@ function setSearchQuery(query) {
 // ============ 品质筛选 ============
 function setQualityFilter(quality) {
     inventory.qualityFilter = quality || 'all';
-    // 更新品质按钮样式
-    document.querySelectorAll('.quality-filter-btn').forEach(btn => {
-        if (btn.dataset.quality === inventory.qualityFilter) {
-            btn.classList.add('bg-yellow-600', 'text-gray-900');
-            btn.classList.remove('bg-gray-600', 'text-white');
-        } else {
-            btn.classList.remove('bg-yellow-600', 'text-gray-900');
-            btn.classList.add('bg-gray-600', 'text-white');
-        }
-    });
+    _syncInventoryFilterChips();   // v21.x：品质档已折进「更多筛选」，选中态同样只写 is-active
     updateInventoryUI();
 }
 
@@ -711,13 +824,24 @@ function isFavorite(uid) {
 }
 
 // ============ 获取筛选后的物品列表（含搜索、品质、排序） ============
+// 第八十二波·渲染链守卫：历史裸格子（采药直写 slots 的旧档遗留）没有 getTemplate，
+// 无条件调用抛 TypeError 又被渲染合并器的空 catch 吞掉 → 背包整屏空白。
+// 读模板统一走这里：有方法用方法，没有按 templateId 回查模板库——裸格子也能如实渲染。
+function _slotTemplate(slot) {
+    if (!slot) return null;
+    if (typeof slot.getTemplate === 'function') {
+        try { return slot.getTemplate(); } catch (e) { /* 落到模板库回查 */ }
+    }
+    return (window.itemById && slot.templateId && window.itemById[slot.templateId]) || null;
+}
+
 function getFilteredSlots() {
     // 1) 先按类别筛选
     let slots = inventory.slots;
     if (inventory.filter !== 'all') {
         slots = inventory.slots.filter(slot => {
             if (!slot) return false;
-            const template = slot.getTemplate();
+            const template = _slotTemplate(slot);
             if (!template) return false;
             if (template.category === inventory.filter) return true;
             if (template.type === inventory.filter) return true;
@@ -727,26 +851,26 @@ function getFilteredSlots() {
             return false;
         });
     }
-    
+
     // 2) 搜索过滤
     if (inventory.searchQuery) {
         const q = inventory.searchQuery;
         slots = slots.filter(slot => {
             if (!slot) return false;
-            const t = slot.getTemplate();
+            const t = _slotTemplate(slot);
             if (!t) return false;
             return (t.name && t.name.toLowerCase().indexOf(q) >= 0) ||
                    (t.desc && t.desc.toLowerCase().indexOf(q) >= 0) ||
                    (t.id && t.id.toLowerCase().indexOf(q) >= 0);
         });
     }
-    
+
     // 3) 品质过滤
     if (inventory.qualityFilter && inventory.qualityFilter !== 'all') {
         slots = slots.filter(slot => {
             if (!slot) return false;
-            const t = slot.getTemplate();
-            return t && t.quality === inventory.qualityFilter;
+            const t = _slotTemplate(slot);
+            return t && ((window.normalizeQuality ? window.normalizeQuality(t.quality) : t.quality) === inventory.qualityFilter);
         });
     }
     
@@ -764,11 +888,9 @@ function getFilteredSlots() {
             case 'price_asc': cmp = (ta.price || 0) - (tb.price || 0); break;
             case 'price_desc': cmp = (tb.price || 0) - (ta.price || 0); break;
             case 'quality_desc':
-                var qOrder = { MYTHIC:6, LEGENDARY:5, EPIC:4, RARE:3, UNCOMMON:2, COMMON:1 };
-                cmp = (qOrder[tb.quality]||0) - (qOrder[ta.quality]||0); break;
+                cmp = (_qRank(tb.quality)) - (_qRank(ta.quality)); break;
             case 'quality_asc':
-                var qOrder2 = { MYTHIC:6, LEGENDARY:5, EPIC:4, RARE:3, UNCOMMON:2, COMMON:1 };
-                cmp = (qOrder2[ta.quality]||0) - (qOrder2[tb.quality]||0); break;
+                cmp = (_qRank(ta.quality)) - (_qRank(tb.quality)); break;
             case 'count_desc': cmp = (b.count||0) - (a.count||0); break;
             case 'count_asc': cmp = (a.count||0) - (b.count||0); break;
         }
@@ -777,69 +899,316 @@ function getFilteredSlots() {
     return sortable;
 }
 
+// ============ 面板外观装配（v21.x 界面整改：只动呈现，筛选口径与容量规则不变） ============
+// 静态排板（仙侠.html）把「两张半屏货币卡 + 三层筛选」堆在首屏，内容区被挤到看不见。
+// 这里在首帧渲染前把**已有节点**重排成「信息行（标题·计数·货币）+ 工具行（搜索·分类·更多筛选）」，
+// 品质 11 档与排序折进「更多筛选」；配色与排版全部收在 styles/panel-inventory.css。
+var _INV_CHIP_NOISE = ['bg-yellow-600', 'bg-gray-600', 'text-white', 'text-gray-900', 'font-bold',
+    'hover:bg-yellow-500', 'hover:bg-gray-500', 'py-1', 'px-2', 'rounded', 'text-xs'];
+
+function _invFilterActive() {
+    return !!(inventory.filter && inventory.filter !== 'all')
+        || !!(inventory.qualityFilter && inventory.qualityFilter !== 'all')
+        || !!inventory.searchQuery;
+}
+
+function _invUsedSlots() {
+    return inventory.slots.filter(function (s) { return !!s; }).length;
+}
+
+// 空态必须点名「是谁把东西筛没了」，玩家才知道下一步按哪个钮（对齐 禁止设计.md 第 2 条）
+function _invFilterLabels() {
+    var catCN = { weapon: '武器', armor: '防具', accessory: '饰品', consumable: '消耗品', material: '材料', secret_art: '秘籍', quest: '任务', currency: '财货' };
+    var out = [];
+    if (inventory.filter && inventory.filter !== 'all') out.push('分类「' + (catCN[inventory.filter] || inventory.filter) + '」');
+    if (inventory.qualityFilter && inventory.qualityFilter !== 'all') out.push('品质「' + (QUALITY_NAMES[inventory.qualityFilter] || inventory.qualityFilter) + '」');
+    if (inventory.searchQuery) out.push('关键词「' + inventory.searchQuery + '」');
+    return out;
+}
+
+function _invSpan(cls, text) {
+    var s = document.createElement('span');
+    if (cls) s.className = cls;
+    s.textContent = (text == null ? '' : String(text));
+    return s;
+}
+
+function _invDropHollow(node) {
+    if (node && node.parentNode && !node.children.length) node.parentNode.removeChild(node);
+}
+
+// 选中态统一表达成 is-active；只在本面板内动，避免误伤其他面板的同名 class
+function _syncInventoryFilterChips() {
+    var nodes = document.querySelectorAll('#panel-inventory .filter-btn, #panel-inventory .quality-filter-btn');
+    for (var i = 0; i < nodes.length; i++) {
+        var d = nodes[i].dataset || {};
+        var on = false;
+        if (d.category != null) on = d.category === (inventory.filter || 'all');
+        else if (d.quality != null) on = d.quality === (inventory.qualityFilter || 'all');
+        nodes[i].classList.toggle('is-active', on);
+    }
+}
+
+// 折叠起来也不许丢信息：把折进去的正生效条件（品质档 + 排序）写在开关上
+function _syncInventoryAdvToggle() {
+    var btn = document.getElementById('inv-adv-toggle');
+    if (!btn) return;
+    var open = !!(btn.parentNode && btn.parentNode.classList.contains('inv-toolbar--adv'));
+    var qualityOn = !!(inventory.qualityFilter && inventory.qualityFilter !== 'all');
+    var qTxt = qualityOn ? ('品质「' + (QUALITY_NAMES[inventory.qualityFilter] || inventory.qualityFilter) + '」') : '品质不限';
+    var sortBtn = document.getElementById('sort-toggle-btn');
+    var sortTxt = sortBtn ? String(sortBtn.textContent).replace(/\s+/g, '') : '';
+    btn.textContent = (open ? '▾ ' : '▸ ') + '更多筛选 · ' + qTxt + (sortTxt ? ' · ' + sortTxt : '');
+    btn.classList.toggle('is-active', qualityOn);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function _invCoinChip(el, unit) {
+    var chip = document.createElement('span');
+    chip.className = 'inv-coin';
+    chip.appendChild(el);
+    chip.appendChild(_invSpan('inv-coin__unit', unit));
+    return chip;
+}
+
+function _ensureInventoryChrome() {
+    var panel = document.getElementById('panel-inventory');
+    if (!panel || panel.getAttribute('data-inv-chrome') === '1') return;
+
+    var title = panel.querySelector('h2');
+    var capEl = document.getElementById('inventory-capacity');
+    var hitsEl = document.getElementById('search-result-info');
+    var goldEl = document.getElementById('inventory-gold');
+    var stoneEl = document.getElementById('inventory-spirit-stones');
+    var searchEl = document.getElementById('inventory-search');
+    var gridEl = document.getElementById('inventory-grid');
+    var batchEl = document.getElementById('batch-sell-btn');
+    var catBtn = panel.querySelector('.filter-btn');
+    var qualBtn = panel.querySelector('.quality-filter-btn');
+    if (!capEl || !goldEl || !stoneEl || !searchEl || !gridEl || !catBtn || !qualBtn) return;   // 静态结构对不上就整块不动，别把面板拆坏
+    // 先占坑再动手：中途抛错也不许下次渲染重排一遍（搬一半 + 再搬一次 = 结构错乱）
+    panel.setAttribute('data-inv-chrome', '1');
+
+    // 搬人之前先记下要拆掉的壳
+    var coinCards = [goldEl.parentNode, stoneEl.parentNode];
+    var coinRow = coinCards[0] ? coinCards[0].parentNode : null;
+    var capLine = capEl.parentNode;
+
+    // —— 第 1 行：标题 + 唯一计数 + 两个货币 chip（原「容量」行与两张货币卡并到一行）——
+    var meta = document.createElement('div');
+    meta.className = 'inv-meta';
+    if (title) meta.appendChild(title);
+    var capBox = _invSpan('inv-cap');
+    capBox.appendChild(capEl);
+    meta.appendChild(capBox);
+    if (hitsEl) {
+        hitsEl.classList.remove('text-xs', 'text-gray-500', 'whitespace-nowrap');
+        hitsEl.classList.add('inv-hits');
+        meta.appendChild(hitsEl);
+    }
+    meta.appendChild(_invSpan('inv-meta__gap', ''));
+    meta.appendChild(_invCoinChip(goldEl, '铜钱'));
+    meta.appendChild(_invCoinChip(stoneEl, '灵石'));
+
+    // —— 第 2 行：搜索 + 分类 chips + 「更多筛选」开关（品质 11 档与排序折在里面）——
+    var bar = document.createElement('div');
+    bar.className = 'inv-toolbar';
+    var searchBox = searchEl.parentNode;
+    searchBox.className = 'inv-search';
+    bar.appendChild(searchBox);
+    var catBox = catBtn.parentNode;
+    catBox.className = 'inv-chips';
+    bar.appendChild(catBox);
+    var advBtn = document.createElement('button');
+    advBtn.type = 'button';
+    advBtn.id = 'inv-adv-toggle';
+    advBtn.className = 'inv-chip inv-chip--adv';
+    advBtn.setAttribute('aria-controls', 'inv-adv-panel');
+    advBtn.onclick = function () {
+        bar.classList.toggle('inv-toolbar--adv');
+        _syncInventoryAdvToggle();
+    };
+    bar.appendChild(advBtn);
+    var advBox = qualBtn.parentNode;
+    advBox.className = 'inv-adv';
+    advBox.id = 'inv-adv-panel';
+    bar.appendChild(advBox);
+
+    panel.insertBefore(bar, gridEl);
+    panel.insertBefore(meta, bar);
+    coinCards.forEach(_invDropHollow);
+    _invDropHollow(coinRow);
+    _invDropHollow(capLine);
+
+    // —— chips 与动作按钮去色：颜色分级交给 CSS，JS 里不再留 bg-red-600 这类语义 ——
+    var chips = document.querySelectorAll('#panel-inventory .filter-btn, #panel-inventory .quality-filter-btn');
+    for (var i = 0; i < chips.length; i++) {
+        var cl = chips[i].classList;
+        cl.add('inv-chip');
+        for (var k = 0; k < _INV_CHIP_NOISE.length; k++) cl.remove(_INV_CHIP_NOISE[k]);
+    }
+    if (batchEl && batchEl.parentNode) {
+        var acts = batchEl.parentNode;
+        acts.className = 'inv-actions';
+        for (var a = 0; a < acts.children.length; a++) {
+            var b = acts.children[a];
+            var bl = b.classList;
+            bl.add('inv-btn');
+            bl.remove('bg-orange-600', 'bg-blue-600', 'bg-red-600', 'bg-green-600',
+                'hover:bg-orange-500', 'hover:bg-blue-500', 'hover:bg-red-500', 'hover:bg-green-500',
+                'text-white', 'py-2', 'px-3', 'rounded', 'text-xs');
+            var oc = b.getAttribute('onclick') || '';   // 只读不改：靠它认出每个钮的职责
+            if (oc.indexOf('expandInventory') >= 0) b.setAttribute('data-inv-role', 'expand');
+            else if (oc.indexOf('executeBatchSell') >= 0) b.setAttribute('data-inv-role', 'sell');
+        }
+    }
+
+    _syncInventoryFilterChips();
+    _syncInventoryAdvToggle();
+}
+
+// 一屏只留一个主色按钮：常态「扩展背包」，进批量模式让位给「确认出售」
+function _syncInventoryActionButtons() {
+    var expandBtn = document.querySelector('#panel-inventory [data-inv-role="expand"]');
+    var sellBtn = document.querySelector('#panel-inventory [data-inv-role="sell"]');
+    if (expandBtn) expandBtn.classList.toggle('inv-btn--primary', !inventory.batchSellMode);
+    if (sellBtn) sellBtn.classList.toggle('inv-btn--primary', !!inventory.batchSellMode);
+}
+
+// 空态/筛选态的下一步：只走既有 setter 清筛选，不碰任何物品数据
+function clearInventoryFilters() {
+    var searchEl = document.getElementById('inventory-search');
+    if (searchEl) searchEl.value = '';
+    inventory.filter = 'all';
+    inventory.qualityFilter = 'all';
+    inventory.searchQuery = '';
+    _syncInventoryFilterChips();
+    updateInventoryUI();
+}
+
+function _invEmptyBox(filtering, used) {
+    var box = document.createElement('div');
+    box.className = 'inv-empty';
+    var h = document.createElement('p');
+    h.className = 'inv-empty__title';
+    var p = document.createElement('p');
+    p.className = 'inv-empty__hint';
+    box.appendChild(h);
+    box.appendChild(p);
+    var cost = (INVENTORY_CONFIG.COPPER_PER_SLOT || 10) * 10;
+    if (!filtering && !used) {
+        h.textContent = '🪶 乾坤袋还空着';
+        p.textContent = '历练搜刮、采药炼丹、市集采买换来的东西都会落进这 ' + (inventory.maxSlots || INVENTORY_CONFIG.INITIAL_SLOTS)
+            + ' 个格子里——下面每一格虚线就是一个空位。嫌挤可花 ' + cost + ' 铜钱扩 10 格（下方「扩展背包」）。';
+    } else if (!filtering) {
+        h.textContent = '⚠ 包里有 ' + used + ' 件，但都读不出条目';
+        p.textContent = '这些物品的条目在当前物品库里查不到（多见于跨版本的旧存档），所以格位只能显示为空。'
+            + '可先用「扩展背包」腾位置，或在设置里读一份新档。';
+    } else {
+        var labels = _invFilterLabels();
+        h.textContent = '🔍 没有匹配的物品';
+        p.textContent = '是筛选把它们藏起来了：' + (labels.length ? labels.join(' · ') : '（当前无筛选条件）')
+            + '。背包里其实有 ' + used + ' 件' + (labels.length ? '，只是都不合这几条。' : '，却一件都没通过筛选。');
+        var clear = document.createElement('button');
+        clear.type = 'button';
+        clear.className = 'inv-btn inv-btn--sm';
+        clear.textContent = '清除筛选，看全部 ' + used + ' 件';
+        clear.onclick = clearInventoryFilters;
+        box.appendChild(clear);
+    }
+    return box;
+}
+
+function _invFilterFootnote(hiddenCount) {
+    var foot = document.createElement('p');
+    foot.className = 'inv-foot';
+    foot.appendChild(document.createTextNode('另有 ' + hiddenCount + ' 件不符合当前筛选 '));
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'inv-btn inv-btn--sm';
+    btn.textContent = '清除筛选';
+    btn.onclick = clearInventoryFilters;
+    foot.appendChild(btn);
+    return foot;
+}
+
 // ============ 更新UI（v10.0 重写：搜索+排序+品质+收藏+批量出售集成） ============
+// v20.96 渲染刹车：对外名字不变，整屏重建一帧只画一次
 function updateInventoryUI() {
+    if (typeof window.coalesceRender === 'function') window.coalesceRender('inventory', _updateInventoryUIImpl);
+    else _updateInventoryUIImpl();
+}
+function updateCurrencyUI() {
+    if (typeof window.coalesceRender === 'function') window.coalesceRender('currency', _updateCurrencyUIImpl);
+    else _updateCurrencyUIImpl();
+}
+
+function _updateInventoryUIImpl() {
     const container = document.getElementById('inventory-grid');
     if (!container) return;
+    
+    // 首帧把静态排板重排成「信息行 + 工具行」；测试桩里没有真 DOM，装配失败也只跳过美化，不许带走格子
+    try { _ensureInventoryChrome(); } catch (e) {
+        if (window.console && console.warn) console.warn('[inventory] 面板装配跳过：' + (e && e.message));
+    }
     
     container.innerHTML = '';
     
     // 获取筛选排序后的物品
     const slotsToShow = getFilteredSlots();
+    const used = _invUsedSlots();
+    const filtering = _invFilterActive();
     
-    // 更新搜索结果计数
-    const searchInfo = document.getElementById('search-result-info');
-    if (searchInfo) {
-        var total = inventory.slots.filter(function(s) { return s; }).length;
-        searchInfo.textContent = '共 ' + slotsToShow.length + ' / ' + total + ' 件';
-    }
-    // 更新容量
+    // 计数只留一个真相：容量行说「N 格中已用 M」；命中数只在真在筛选时才出现，并写明与总数的关系
     var capEl = document.getElementById('inventory-capacity');
-    if (capEl) {
-        var used = inventory.slots.filter(function(s) { return s; }).length;
-        capEl.textContent = used + '/' + inventory.maxSlots;
+    if (capEl) capEl.textContent = inventory.maxSlots + ' 格中已用 ' + used;
+    var searchInfo = document.getElementById('search-result-info');
+    if (searchInfo) {
+        searchInfo.textContent = filtering ? ('筛选命中 ' + slotsToShow.length + ' 件（背包共 ' + used + ' 件）') : '';
+        searchInfo.style.display = filtering ? '' : 'none';
     }
+    _syncInventoryFilterChips();
+    _syncInventoryAdvToggle();
+    
+    // 一件都不剩：先分「真没东西」和「被筛没了」两种说法，各给下一步动作
+    if (slotsToShow.length === 0) container.appendChild(_invEmptyBox(filtering, used));
     
     // 显示筛选后的物品
     for (var i = 0; i < slotsToShow.length; i++) {
         var slot = slotsToShow[i];
         if (!slot) continue;
-        
-        var template = slot.getTemplate();
+
+        var template = _slotTemplate(slot);
         if (!template) continue;
-        
+
         var isFav = isFavorite(slot.uid);
         var isBatchSelected = inventory.batchSellMode && inventory.batchSellSelection.indexOf(slot.uid) >= 0;
         var isMarked = slot.markedForSale && inventory.markedForSale.has(slot.uid);
         var qualityColor = getQualityColor(template.quality);
         
         var slotDiv = document.createElement('div');
-        var cls = 'bg-gray-700 border border-gray-600 rounded-lg flex flex-col items-center justify-center relative hover:border-yellow-500 cursor-pointer transition p-1';
-        if (isFav) cls += ' ring-2 ring-pink-400';
-        if (isBatchSelected) cls += ' ring-2 ring-green-400 bg-green-800';
-        if (isMarked) cls += ' ring-2 ring-yellow-400 bg-yellow-900/30';
+        var cls = 'inv-slot';
+        if (isFav) cls += ' inv-slot--fav';
+        if (isBatchSelected) cls += ' inv-slot--picked';
+        if (isMarked) cls += ' inv-slot--marked';
         slotDiv.className = cls;
-        slotDiv.style.borderColor = qualityColor;
+        slotDiv.style.setProperty('--inv-q', qualityColor);   // 品质描边交给 CSS，hover 才能换成金色
         
-        var itemName = (template.name || templateId).length > 4 ? (template.name || templateId).slice(0, 4) + '..' : (template.name || templateId);
-        var innerHtml = '<span class="text-xs text-gray-300 leading-tight text-center truncate w-full px-0.5">' + itemName + '</span>';
-        // 收藏标记
-        if (isFav) {
-            innerHtml += '<span class="absolute top-0 left-0 text-xs text-pink-400">★</span>';
-        }
-        // 标记出售标记（v10.5）
-        if (isMarked) {
-            innerHtml += '<span class="absolute top-0 right-0 text-xs text-yellow-400">🏷️</span>';
-        }
-        // 数量（×格式，始终显示）
-        innerHtml += '<span class="text-xs text-white font-bold mt-0.5">×' + (slot.count || 1) + '</span>';
-        // 批量出售勾选
-        if (inventory.batchSellMode) {
-            var checked = isBatchSelected ? '✓' : '';
-            innerHtml += '<span class="absolute top-0 right-0 text-xs w-4 h-4 rounded-full border border-gray-400 flex items-center justify-center bg-gray-900 text-green-400">' + checked + '</span>';
-        }
+        var displayName = template.name || slot.templateId || '未知物品';
+        slotDiv.setAttribute('role', 'button');
+        slotDiv.setAttribute('tabindex', '0');
+        slotDiv.title = displayName + ' ×' + (slot.count || 1) + ' · '
+            + (QUALITY_NAMES[template.quality] || '未知品质')
+            + (isMarked ? ' · 已标记待售' : '') + (isFav ? ' · 已收藏' : '');
         
-        slotDiv.innerHTML = innerHtml;
+        if (template.icon) slotDiv.appendChild(_invSpan('inv-slot__icon', template.icon));
+        // 名称不再 JS 截四字节打省略号——CSS 省略号 + title 里给全名
+        slotDiv.appendChild(_invSpan('inv-slot__name', displayName));
+        // 数量只在多件时占角标，×1 是噪声
+        if ((slot.count || 1) > 1) slotDiv.appendChild(_invSpan('inv-slot__qty', '×' + slot.count));
+        if (isFav) slotDiv.appendChild(_invSpan('inv-slot__flag inv-slot__flag--fav', '★'));
+        if (isMarked) slotDiv.appendChild(_invSpan('inv-slot__flag inv-slot__flag--marked', '🏷'));
+        if (inventory.batchSellMode) slotDiv.appendChild(_invSpan('inv-slot__check', isBatchSelected ? '✓' : ''));
         
         // 点击事件
         slotDiv.onclick = function(uid, isBatch) {
@@ -851,49 +1220,78 @@ function updateInventoryUI() {
                 }
             };
         }(slot.uid, inventory.batchSellMode);
+        slotDiv.onkeydown = function(uid, isBatch) {
+            return function(ev) {
+                if (!ev || (ev.key !== 'Enter' && ev.key !== ' ')) return;
+                if (ev.preventDefault) ev.preventDefault();
+                if (isBatch) {
+                    toggleBatchSellSelection(uid);
+                } else {
+                    showItemMenu(uid);
+                }
+            };
+        }(slot.uid, inventory.batchSellMode);
         
         container.appendChild(slotDiv);
     }
     
-    // 如果筛选后没有物品，显示提示
-    if (slotsToShow.length === 0) {
-        container.innerHTML = '<p class="text-gray-500 text-sm text-center col-span-full">没有找到匹配的物品</p>';
+    // 空格子照实铺出来：先让人看清「30 格」长什么样，才知道还剩多少地方
+    if (!filtering) {
+        var emptySlots = Math.max(0, Math.max(inventory.slots.length, inventory.maxSlots || 0) - used);
+        for (var ei = 0; ei < emptySlots; ei++) {
+            var emptyDiv = document.createElement('div');
+            emptyDiv.className = 'inv-slot inv-slot--empty';
+            emptyDiv.title = '空格子';
+            emptyDiv.setAttribute('aria-label', '空格子');
+            container.appendChild(emptyDiv);
+        }
+    } else if (slotsToShow.length > 0 && slotsToShow.length < used) {
+        container.appendChild(_invFilterFootnote(used - slotsToShow.length));
     }
     
     // 更新批量出售按钮状态
     var batchBtn = document.getElementById('batch-sell-btn');
     if (batchBtn) {
         if (inventory.batchSellMode) {
-            batchBtn.textContent = '❌ 退出批量 (' + inventory.batchSellSelection.length + ')';
-            batchBtn.classList.add('bg-green-600');
-            batchBtn.classList.remove('bg-red-600');
+            batchBtn.textContent = '✕ 退出批量出售（已选 ' + inventory.batchSellSelection.length + '）';
         } else {
             batchBtn.textContent = '📦 批量出售';
-            batchBtn.classList.remove('bg-green-600');
-            batchBtn.classList.add('bg-red-600');
         }
     }
     var execBtn = document.getElementById('execute-batch-sell-btn');
     if (execBtn) {
         if (inventory.batchSellMode && inventory.batchSellSelection.length > 0) {
-            execBtn.style.display = 'inline-block';
+            execBtn.style.display = 'inline-flex';
         } else {
             execBtn.style.display = 'none';
         }
     }
+    _syncInventoryActionButtons();
 }
+
+// ============ 品质档位（v20.91 九品制，兼容旧串） ============
+const QUALITY_RANK = { PIN9:1, PIN8:2, PIN7:3, PIN6:4, PIN5:5, PIN4:6, PIN3:7, PIN2:8, PIN1:9, UNIQUE:10,
+                       COMMON:1, UNCOMMON:2, RARE:3, EPIC:5, LEGENDARY:7, MYTHIC:9 };
+const QUALITY_NAMES = { PIN9:'九品', PIN8:'八品', PIN7:'七品', PIN6:'六品', PIN5:'五品', PIN4:'四品', PIN3:'三品', PIN2:'二品', PIN1:'一品', UNIQUE:'特殊',
+                        COMMON:'九品', UNCOMMON:'八品', RARE:'七品', EPIC:'五品', LEGENDARY:'三品', MYTHIC:'一品' };
+function _qRank(q) { return QUALITY_RANK[q] || 0; }
 
 // ============ 获取品质颜色 ============
 function getQualityColor(quality) {
     const colors = {
-        'COMMON': '#9ca3af',    // 灰色
-        'UNCOMMON': '#4ade80',  // 绿色
-        'RARE': '#60a5fa',      // 蓝色
-        'EPIC': '#c084fc',      // 紫色
-        'LEGENDARY': '#fbbf24', // 金色
-        'MYTHIC': '#ef4444'     // 红色
+        'PIN9': '#9ca3af',      // 灰色
+        'PIN8': '#4ade80',      // 绿色
+        'PIN7': '#60a5fa',      // 蓝色
+        'PIN6': '#67e8f9',      // 青色
+        'PIN5': '#c084fc',      // 紫色
+        'PIN4': '#e879f9',      // 紫红
+        'PIN3': '#fbbf24',      // 金色
+        'PIN2': '#fb923c',      // 橙色
+        'PIN1': '#ef4444',      // 红色
+        'UNIQUE': '#f472b6'     // 粉色（特殊信物）
     };
-    return colors[quality] || '#9ca3af';
+    var key = (window.QUALITY_LEGACY_MAP && window.QUALITY_LEGACY_MAP[quality]) || quality;
+    return colors[key] || '#9ca3af';
 }
 
 // ============ 显示物品菜单（v10.0 增强：收藏保护+来源提示+已拥有数量；v10.5 出售改为标记出售） ============
@@ -986,8 +1384,8 @@ function showItemMenu(uid) {
     actions += favBtn;
     actions += `<button onclick="this.closest('.fixed').remove();" class="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded text-white">关闭</button>`;
     
-    var qualityLabel = template.quality || 'COMMON';
-    var qualityNames = { COMMON:'凡品', UNCOMMON:'良品', RARE:'珍品', EPIC:'极品', LEGENDARY:'仙品', MYTHIC:'神品' };
+    var qualityLabel = template.quality || 'PIN9';
+    var qualityNames = QUALITY_NAMES;
     
     // 使用场景/未实现提示
     var extraInfo = '';
@@ -1012,12 +1410,12 @@ function showItemMenu(uid) {
             <div class="flex items-center gap-3 mb-4">
                 <span class="text-4xl">${template.icon}</span>
                 <div>
-                    <h3 class="text-xl font-bold ${template.quality === 'LEGENDARY' || template.quality === 'MYTHIC' ? 'text-yellow-400' : 'text-white'}">${template.name}</h3>
+                    <h3 class="text-xl font-bold ${_qRank(template.quality) >= 7 ? 'text-yellow-400' : 'text-white'}">${template.name}</h3>
                     <p class="text-sm text-gray-400">${template.desc}</p>
                 </div>
             </div>
             <div class="grid grid-cols-2 gap-2 text-sm mb-4">
-                <div><span class="text-gray-400">类型：</span>${template.type}</div>
+                <div><span class="text-gray-400">类型：</span>${_typeCN(template.type)}</div>
                 <div><span class="text-gray-400">品质：</span>${qualityNames[qualityLabel] || qualityLabel}</div>
                 <div><span class="text-gray-400">数量：</span>${slot.count}</div>
                 <div><span class="text-gray-400">价格：</span>${template.price} 灵石</div>
@@ -1079,7 +1477,7 @@ function showEquipmentCompareDialog(uid) {
 
     var slotNames = { head:'头部', neck:'颈部', body:'身体', waist:'腰部', hands:'手部', feet:'脚部',
                       mainHand:'主手', offHand:'副手', ring1:'戒指1', ring2:'戒指2', acc1:'饰品1', acc2:'饰品2' };
-    var qualityNames = { COMMON:'凡品', UNCOMMON:'良品', RARE:'珍品', EPIC:'极品', LEGENDARY:'仙品', MYTHIC:'神品' };
+    var qualityNames = QUALITY_NAMES;
 
     function _statRow(k) {
         var nv = newStats[k] || 0;
@@ -1198,7 +1596,7 @@ function confirmMarkForSale(uid) {
     if (qty <= 0) return;
     
     markForSale(uid, qty);
-    document.querySelectorAll('.fixed.inset-0').forEach(function(el) { el.remove(); });
+    window.closeRuntimeModals();   // 第九十五波·NEW-47：只收运行时弹窗，静态面板不动
 }
 
 // ============ 标记出售系统（v10.5 替代直接出售） ============
@@ -1579,6 +1977,20 @@ function getCombatBonuses(baseBonuses) {
             });
         }
     } catch (eGround) {}
+    // v20.90 琴心映剑：主手持琴 + 生活技能「音律」→ 琴音折进攻击命中（空手/别家伙不给一文）
+    try {
+        if (window.QinArts && typeof window.QinArts.combatBonus === 'function') {
+            var _qinBonus = window.QinArts.combatBonus() || {};
+            Object.entries(_qinBonus).forEach(function (qe) { final[qe[0]] = (final[qe[0]] || 0) + qe[1]; });
+        }
+    } catch (eQin) {}
+    // 第十二波 · 百工秘艺第二面：耳目练出听风辨位——情报域折进命中与闪避（千耳百目功上场了）
+    try {
+        if (typeof window.sectSignatureCombatBonus === 'function') {
+            var _sigB = window.sectSignatureCombatBonus() || {};
+            Object.keys(_sigB).forEach(function (sk) { if (_sigB[sk]) final[sk] = (final[sk] || 0) + _sigB[sk]; });
+        }
+    } catch (eSig) {}
     // v20.48 境界质变补电：block/dodge/penetrate/crit 四个百分点键此前无人读（乘数三键已接 _realmCombatMul）
     try {
         var _rzRealm = (window.currentCharData && window.currentCharData.realm) || '';
@@ -1589,6 +2001,20 @@ function getCombatBonuses(baseBonuses) {
             });
         }
     } catch (eRealm) {}
+    // 第七十七波·套装有名有魂：毕业装凑成套才有回响（没穿套货一分不添，空表直通）
+    try {
+        if (window.EquipmentSets && typeof window.EquipmentSets.combatBonus === 'function') {
+            var _setB = window.EquipmentSets.combatBonus() || {};
+            Object.keys(_setB).forEach(function (sk2) { if (_setB[sk2]) final[sk2] = (final[sk2] || 0) + _setB[sk2]; });
+        }
+    } catch (eSet) {}
+    // 第七十八波·组合技点数账：暴击/破防/格挡/闪避/命中走这条汇总河（百分数账在战斗实体上，两本分明）
+    try {
+        if (typeof window.getSkillComboFlatBonus === 'function') {
+            var _cmbB = window.getSkillComboFlatBonus() || {};
+            Object.keys(_cmbB).forEach(function (ck) { if (_cmbB[ck]) final[ck] = (final[ck] || 0) + _cmbB[ck]; });
+        }
+    } catch (eCmb) {}
     return final;
 }
 
@@ -1603,7 +2029,7 @@ function showDiscardConfirm(uid) {
     const template = slot.getTemplate();
     if (!template) return;
     
-    if (confirm(`确定要丢弃 ${template.name} x${slot.count} 吗？此操作不可恢复！`)) {
+    if (confirm(`确定要丢弃 ${template.name} ×${slot.count} 吗？此操作不可恢复！`)) {
         // 从背包移除
         const index = inventory.slots.indexOf(slot);
         if (index >= 0) {
@@ -1624,7 +2050,7 @@ function sellItem(uid) {
 }
 
 // ============ 更新货币显示 ============
-function updateCurrencyUI() {
+function _updateCurrencyUIImpl() {
     const goldText = document.getElementById('inventory-gold');
     const spiritText = document.getElementById('inventory-spirit-stones');
     
@@ -1669,8 +2095,9 @@ function loadInventory() {
         inventory.slots = data.slots.map(slotData => {
             if (!slotData) return null;
             const instance = new ItemInstance(slotData.templateId, slotData.count);
-            instance.uid = slotData.uid;
-            instance.durability = slotData.durability;
+            // 第八十二波：裸格子旧档不再把新生成的 uid 覆盖回 undefined（与 game-state 主路径同款条件覆盖）
+            if (slotData.uid) instance.uid = slotData.uid;
+            if (slotData.durability != null) instance.durability = slotData.durability;
             instance.markedForSale = slotData.markedForSale || false;
             return instance;
         });
@@ -1696,7 +2123,7 @@ const SHOP_ITEMS = {
     basic: ['qi_recovery_pill', 'vitality_pill', 'attack_talisman', 'defense_talisman'],
     uncommon: ['spirit_restoring_pill', 'ginseng', 'lingzhi', 'iron_sword', 'cloth_hat'],
     rare: ['flying_sword', 'cloud_armor', 'spirit_ring', 'foundation_pill'],
-    epic: ['thunder_sword', 'nine_heaven_robe', 'flight_boots', 'golden_core_pill'],
+    epic: ['thunder_sword', 'arm_nine_heaven_robe', 'flight_boots', 'golden_core_pill'],
     legendary: ['immortal_sword', 'immortal_crown', 'five_element_ring']
 };
 
@@ -1986,17 +2413,22 @@ function confirmBuyQuantity(itemId, unitPrice) {
     var qty = parseInt(input.value) || 1;
     var total = unitPrice * qty;
     if (inventory.currency.spiritStones < total) {
-        alert('灵石不足！需要 ' + total + ' 灵石，当前 ' + inventory.currency.spiritStones);
+        // v23.2 系统腔 alert 清除
+        if (typeof window.showMessage === 'function') window.showMessage('灵石不足！需要 ' + total + ' 灵石，当前 ' + inventory.currency.spiritStones, 'error');
         return;
     }
     if (!addItem(itemId, qty)) {
-        alert('背包已满！');
+        if (typeof window.showMessage === 'function') window.showMessage('背包已满！', 'error');
         return;
     }
     inventory.currency.spiritStones -= total;
+    // v23.2 买入推动本城行情（供需模型接线）
+    if (window.MarketDynamic && typeof window.MarketDynamic.notePlayerTrade === 'function') {
+        window.MarketDynamic.notePlayerTrade(itemId, qty, true);
+    }
     updateInventoryUI();
     updateCurrencyUI();
-    document.querySelectorAll('.fixed.inset-0').forEach(function(el) { el.remove(); });
+    window.closeRuntimeModals();   // 第九十五波·NEW-47：只收运行时弹窗，静态面板不动
     if (window.showMessage) {
         window.showMessage('购买成功：' + (window.itemById?.[itemId]?.name || itemId) + ' x' + qty, 'success');
     }
@@ -2026,6 +2458,43 @@ window.addItem = function(templateId, count) {
 // B2：对象方法别名（crafting 曾调 inventory.addItem）
 inventory.addItem = window.addItem;
 window.addItemToInventory = window.addItem; // 唯一全局背包入库入口
+
+// ============ 第八十三波·实例账：按快照原样归还原物 ============
+// EconomyTransaction.addSnapshot 与商铺回购早就在调这个口，但它从来没被实现——
+// 一直靠 addItem 兜底造新实例，耐久/强化/uid 全丢（回购一把强化剑回来变成白板剑）。
+// 现在把口做实：可堆货无实例账可讲，照走正式入袋；不可堆的逐件还原，
+// uid/耐久/自定义属性原样带回，经手过的货不背旧待售标。
+function restoreItemFromSnapshot(snapshot) {
+    if (!snapshot || !snapshot.templateId) return false;
+    const template = window.itemById?.[snapshot.templateId];
+    if (!template) return false;
+    const count = Math.max(1, Math.floor(Number(snapshot.count) || 1));
+    if (template.stackable) {
+        const added = Number(addItem(snapshot.templateId, count)) || 0;
+        return added >= count;
+    }
+    // 先算空位，装不下就整单不动（事务层语义：要么全归位，要么原样）
+    let free = 0;
+    for (let i = 0; i < inventory.slots.length; i++) if (!inventory.slots[i]) free++;
+    free += Math.max(0, (inventory.maxSlots || 30) - inventory.slots.length);
+    if (free < count) return false;
+    for (let n = 0; n < count; n++) {
+        let emptyIdx = -1;
+        for (let i = 0; i < inventory.slots.length; i++) {
+            if (!inventory.slots[i]) { emptyIdx = i; break; }
+        }
+        if (emptyIdx < 0) { emptyIdx = inventory.slots.length; inventory.slots.push(null); }
+        const inst = new ItemInstance(snapshot.templateId, 1);
+        if (n === 0 && snapshot.uid) inst.uid = snapshot.uid;   // 头一件认领原 uid（实例账的钥匙）
+        if (snapshot.durability != null) inst.durability = snapshot.durability;
+        try { inst.customProps = JSON.parse(JSON.stringify(snapshot.customProps || {})); } catch (e) { inst.customProps = {}; }
+        inst.markedForSale = false;
+        inventory.slots[emptyIdx] = inst;
+    }
+    if (typeof updateInventoryUI === 'function') updateInventoryUI();
+    return true;
+}
+window.restoreItemFromSnapshot = restoreItemFromSnapshot;
 if (typeof openShop === 'function') inventory.openShop = openShop;
 window.removeItem = removeItem;
 window.useItem = useItem;
@@ -2062,6 +2531,7 @@ window.equippedStatsCache = equippedStatsCache;
 window.setSearchQuery = setSearchQuery;
 window.setQualityFilter = setQualityFilter;
 window.setSortBy = setSortBy;
+window.clearInventoryFilters = clearInventoryFilters;   // v21.x：空态/脚注上的「清除筛选」
 window.toggleFavorite = toggleFavorite;
 window.isFavorite = isFavorite;
 window.getFilteredSlots = getFilteredSlots;

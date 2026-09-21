@@ -26,7 +26,13 @@ function triggerHeavenlyTribulation() {
         heartDemonWave: Math.floor(waves / 2), // 中段心魔劫
         ended: false, failed: false
     };
-    if (window.showMessage) window.showMessage('⚡⚡⚡ 天劫降临！共 ' + waves + ' 道雷劫，中段伴有心魔劫。', 'warning');
+    // v25.0 批七：旧终局旗作废——改接《灵气之尽》正典（锁的真相已知/收割者已被打退）
+    var _ef = window.eventFlags || {};
+    var _truth = !!(_ef['qi_truth_told'] || _ef['qi_truth']);
+    var _cut = !!_ef['qi_fin_fought'];
+    if (window.showMessage) window.showMessage(_cut
+        ? '⚡ 劫云又聚了——可镰刀已碎、收账的跑了，这道劫早不是清除，只是云。'
+        : '⚡⚡⚡ 天劫降临！共 ' + waves + ' 道雷劫，中段伴有心魔劫。' + (_truth ? '（你如今知道了：劫云后头不是仙班——是账房。）' : ''), 'warning');
     return startTribWave();
 }
 
@@ -133,7 +139,8 @@ function tribulationSuccess() {
         cd.realm = '飞升';
         cd.layer = 1;
     }
-    if (window.showMessage) window.showMessage('⚡⚡⚡ 渡劫成功！天门大开，你白日飞升，步入仙班！', 'success');
+    if (window.showMessage) window.showMessage('⚡⚡⚡ 渡劫成功！天门大开，你白日飞升，步入仙班！'
+        + ((window.eventFlags && (window.eventFlags['qi_truth_told'] || window.eventFlags['qi_truth'])) ? '（门后不是仙班——你最清楚。这一回飞升，不是被收割，是打入内部。）' : ''), 'success');
     // 雷劫产物（用既有雷系材料代指；雷劫液正式物品待后续物品扩展）
     if (typeof window.addItem === 'function') {
         try { window.addItem('mat_sky_iron', 2); window.addItem('mat_chaos_stone', 1); } catch (e) {}

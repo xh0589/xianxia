@@ -102,6 +102,26 @@
         return Object.keys(_state.tides).length > 0;
     }
 
+    // ============== 第一百零九波 · 一场潮只清剿一次 ==============
+    // 此前清剿按钮没有次数账：3 天事件窗内可以无限开新一轮多波战斗，
+    // 兽核、历练、声望、潮头遗宝全都能刷爆。账落在潮水本体上（_state.tides 随档持久）——
+    // 打退过的潮，余兽远遁，没有兽可再清；下一场潮涨了才有下一场清剿。
+    function isActiveTideRaided() {
+        for (var tid in _state.tides) {
+            var t = _state.tides[tid];
+            if (t && !t.raided) return false;   // 还有一场没清剿过的潮在场
+        }
+        return Object.keys(_state.tides).length > 0;
+    }
+
+    function markTidesRaided() {
+        var n = 0;
+        for (var tid in _state.tides) {
+            if (_state.tides[tid] && !_state.tides[tid].raided) { _state.tides[tid].raided = true; n++; }
+        }
+        return n;
+    }
+
     function getRarityBoost() {
         var max = 0;
         for (var tid in _state.tides) {
@@ -269,6 +289,8 @@
         tickDay: tickDay,
         getActiveTide: getActiveTide,
         isRaidActive: isRaidActive,
+        isActiveTideRaided: isActiveTideRaided,
+        markTidesRaided: markTidesRaided,
         getRarityBoost: getRarityBoost,
         getCurrentPool: getCurrentPool,
         listTideLevels: listTideLevels

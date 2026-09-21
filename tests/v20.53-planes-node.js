@@ -159,11 +159,21 @@ var planeBeasts = ['cloud_horn_deer', 'gangwind_crane', 'bloodmare_hound', 'neth
 assert('位面灵兽入册（四只）', planeBeasts.every(function (id) { return global.BEAST_TEMPLATES[id]; }));
 assert('位面兽最高到炼虚档（人间名册到元婴就断）',
     global.BEAST_TEMPLATES.nethervein_serpent.realm === '炼虚');
-assert('位面兽只在自家位面出没',
-    global.canCaptureInCurrentLocation('cloud_horn_deer') === false);
+// 第八十五波：过渡版主动捕捉链已拆——「只在自家位面出没」的账移进真分布表
+//（野外遇上→战斗削弱→战胜收服才是正门；canCaptureInCurrentLocation 已退役）
+load('js/extensions/beast-ecosystem.js');
+function poolNames(region, terrain) {
+    return global.BeastEcosystem.getBeastPoolForRegion(region, terrain).map(function (d) { return d.name; });
+}
+assert('到灵界灵泉就能遇上云角鹿（分布表真账）', poolNames('灵界', 'SPIRIT_SPRING').indexOf('云角鹿') >= 0);
+assert('灵界山线遇罡风鹤', poolNames('灵界', 'MOUNTAIN').indexOf('罡风鹤') >= 0);
+assert('魔界遇血鬃魔犬', poolNames('魔界', 'DESERT').indexOf('血鬃魔犬') >= 0);
+assert('位面兽不在人间出没', ['云角鹿','罡风鹤','血鬃魔犬','幽脉蟒'].every(function (n) { return poolNames('中州', 'PLAIN').indexOf(n) < 0; }));
+assert('灵界遇不上魔界犬', poolNames('灵界', 'SPIRIT_SPRING').indexOf('血鬃魔犬') < 0 && poolNames('灵界', 'MOUNTAIN').indexOf('血鬃魔犬') < 0);
+assert('杂兽不再瞎猜成灵兽（野狼≠风狼）', global.getBeastTemplateIdFromEnemy({ name: '野狼' }) === null);
+assert('名种精确命中（云角鹿）', global.getBeastTemplateIdFromEnemy({ name: '云角鹿' }) === 'cloud_horn_deer');
+assert('过渡版捕捉三件套已拆干净', typeof global.captureBeast === 'undefined' && typeof global.canCaptureInCurrentLocation === 'undefined' && typeof global.getCatchableBeastsHere === 'undefined');
 global.currentCharData.location = '灵界·蓬莱仙境';
-assert('到灵界就能遇上云角鹿', global.canCaptureInCurrentLocation('cloud_horn_deer') === true);
-assert('灵界遇不上魔界犬', global.canCaptureInCurrentLocation('bloodmare_hound') === false);
 
 // ==================== P8 主线接通 ====================
 console.log('\n[P8] 主线接通');

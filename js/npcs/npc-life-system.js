@@ -427,7 +427,7 @@
                 case 'send_message':
                     // P2-10 增强：通过飞鸽传书系统发送
                     if (window.MailSystem && window.MailSystem.sendNPCMail) {
-                        window.MailSystem.sendNPCMail(npc, '最近可好？有空来坐坐。', 'normal');
+                        window.MailSystem.sendNPCMail(npc, '最近可好？有空来坐坐。', 'normal', 'greet');
                     } else if (window.showMessage) {
                         window.showMessage('📩 ' + npc.name + '给你传音：「最近可好？有空来坐坐。」', 'info');
                     }
@@ -467,7 +467,7 @@
                 case 'invite':
                     // P2-10：发送邀请邮件
                     if (window.MailSystem && window.MailSystem.sendNPCMail) {
-                        window.MailSystem.sendNPCMail(npc, '邀请你一同探索秘境，有空请回复。', 'important');
+                        window.MailSystem.sendNPCMail(npc, '邀请你一同探索秘境，有空请回复。', 'important', 'invite');
                     } else if (window.showMessage) {
                         window.showMessage('📩 ' + npc.name + '邀请你一同探索秘境。', 'info');
                     }
@@ -479,7 +479,7 @@
         if (aff < -30 && Math.random() < 0.08) {
             // P2-10：敌意也走邮件
             if (window.MailSystem && window.MailSystem.sendNPCMail) {
-                window.MailSystem.sendNPCMail(npc, '听说你在外面说我的坏话，记住。', 'urgent');
+                window.MailSystem.sendNPCMail(npc, '听说你在外面说我的坏话，记住。', 'urgent', 'hostile');
             } else if (window.showMessage) {
                 window.showMessage('💢 你听说' + npc.name + '在背后说了你的坏话。', 'warning');
             }

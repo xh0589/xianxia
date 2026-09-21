@@ -84,7 +84,7 @@ function mkNpc(id, name, loc) {
         changeAffection: function (d) { this.relationship.affection += d; }
     };
 }
-var A = mkNpc('npcA', '沈孤鸿', '帝都');
+var A = mkNpc('npcA', '云千帆', '帝都');
 var B = mkNpc('npcB', '陆九渊', '帝都');
 var C = mkNpc('npcC', '温蘅', '帝都');
 pairSet(A, B, 'enemy', 60);

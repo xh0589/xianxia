@@ -47,20 +47,24 @@
 
     // v18.9 世界日历：把"今日开市"注册为 auction 事件（镜像，非真源；不影响原有 trigger 路径）
     // oneShot=false：拍卖每天开市，重复 register 同 id 会被 calendar 拒，所以 id 天然按日变化
+    // 第一百零九波：坊市/皇家场本就是「每日开市」的账——但此前只当天补票，0 点的到期结算
+    // 早就跑完，日历里永远只有「已过期」的假账，「闭关至下次拍卖」永远天机未显。
+    // 现在同时把「明日开市」提前记上：只要开过市，日历上就真有一个未来的开市日可指。
     function tryRegisterAuctionEvent(tier, day) {
         try {
             if (!global.WorldCalendar || typeof global.WorldCalendar.register !== 'function') return;
             var cal = global.WorldCalendar;
-            var id = 'auction.' + tier + '.day' + day;
             var title = tier === 'royal' ? '皇家拍卖场开市' : '坊市开市';
-            cal.register({
-                id: id,
-                title: title,
-                category: 'auction',
-                dueAbsoluteDay: day,
-                source: { system: 'auction-service', refId: tier },
-                severity: tier === 'royal' ? 'major' : 'info',
-                oneShot: false
+            [day, day + 1].forEach(function (d) {
+                cal.register({
+                    id: 'auction.' + tier + '.day' + d,
+                    title: title,
+                    category: 'auction',
+                    dueAbsoluteDay: d,
+                    source: { system: 'auction-service', refId: tier },
+                    severity: tier === 'royal' ? 'major' : 'info',
+                    oneShot: false
+                });
             });
         } catch (e) { /* calendar not ready — ignore, auction 行为不变 */ }
     }
@@ -210,8 +214,9 @@
         var pool = Object.keys(global.itemById || {}).map(function (id) { return global.itemById[id]; }).filter(function (t) {
             if (!t || t.implemented === false || !t.id || !t.name) return false;
             if (t.type === 'quest' || t.category === 'quest' || t.type === 'currency') return false;
+            if (t.qiyuOnly) return false;   // v20.94 奇遇奇物不上拍卖行
             var p = Number(t.price || t.basePrice) || 0;
-            return p > 0 && p <= maxBase && ['LEGENDARY', 'MYTHIC'].indexOf(t.quality) < 0;
+            return p > 0 && p <= maxBase && ['PIN3', 'PIN2', 'PIN1', 'UNIQUE'].indexOf(t.quality) < 0;   // v20.91 三品及以上与特殊信物不上拍卖行
         });
         for (var i = pool.length - 1; i > 0; i--) {
             var j = Math.floor(Math.random() * (i + 1)); var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;

@@ -7,6 +7,7 @@
     if (typeof window === 'undefined') return;
 
     var HOUSE_TO_CAVE = {
+        ruin: 'ruin_cave',   // 第一百零四波：破山洞 0 设施位——修缮起来才有地方安置
         cave: 'grass_hut',
         courtyard: 'stone_room',
         mansion: 'spirit_manor',
@@ -15,7 +16,9 @@
 
     var MARKET_CITY_ALIAS = {
         '西漠': '西荒',
-        '东荒': '中州',
+        '东荒': '东海',   // 第一百一十一波：与 MarketDynamic.regionFor / randomMap 的行情归属统一——
+                          // 旧版这里映射「中州」：在东荒买货按中州指数算价、交易却记到东海账上，
+                          // 玩家扫货永远压不动眼前这座城的价，跨城差价套利三本账互相打架
         '蜀地': '中州',
         '东南海域': '东海',
         '西荒': '西荒',
@@ -23,7 +26,10 @@
         '南疆': '南疆',
         '东海': '东海',
         '北冥': '北冥',
-        '天空': '天空'
+        '天空': '天空',
+        // v42 补两界：此前灵界魔界查无别名，野市会错挂中州价——天上地下的市，归天空城行价
+        '灵界': '天空',
+        '魔界': '天空'
     };
 
     var _lastTickDay = null;
@@ -209,8 +215,14 @@
         var list = window.tamedBeasts || [];
         if (!list.length) return { ok: true, trained: 0 };
         var housed = {};
+        // 第二十三波：与建园那把尺对齐（playerGardenSectId）——在别家门下认师门的园，
+        // 自立了宗认自家宗门的园（此前掌门的灵兽园建在自家名下、培养线却只认「散修园」，园子白修）
         var sectId = '散修园';
-        if (window.discipleState && window.discipleState.sectId) sectId = window.discipleState.sectId;
+        if (window.discipleState && window.discipleState.isInSect && window.discipleState.sectId) {
+            sectId = window.discipleState.sectId;
+        } else if (window.PlayerSect && typeof window.PlayerSect.listMySects === 'function') {
+            try { var _mg = window.PlayerSect.listMySects(); if (_mg && _mg.length && _mg[0].id) sectId = _mg[0].id; } catch (eG) {}
+        }
         if (window.BeastGarden && typeof window.BeastGarden.listGardens === 'function') {
             var gardens = window.BeastGarden.listGardens(sectId) || [];
             for (var g = 0; g < gardens.length; g++) {
@@ -237,6 +249,13 @@
                 if (gb && gb.trainingPct) gain = Math.round(gain * (1 + gb.trainingPct));
             }
             if (hasPen) gain = Math.round(gain * 1.2);
+            // 第一百零六波：宅基洞天的地脉也养兽——雾屿岛上雾障拢着，灵兽住得安心，训练见长
+            try {
+                if (typeof window.getCaveLeyBonus === 'function') {
+                    var _beastLey = window.getCaveLeyBonus('beast') || 1;
+                    if (_beastLey !== 1) gain = Math.round(gain * _beastLey);
+                }
+            } catch (eLey) {}
             b.exp = (b.exp || 0) + gain;
             var needed = (b.level || 1) * 50;
             while (b.exp >= needed) {

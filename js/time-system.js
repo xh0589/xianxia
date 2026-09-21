@@ -117,6 +117,13 @@ function saveGameTime() {
 
 // ============ 推进时间 ============
 // minutes: 要推进的分钟数
+// ===== 第九十六波·NEW-11 收口：时间两本账的唯一口径锚点 =====
+// totalMinutes = 开局以来的绝对分钟钟（只增不折回）。用途仅限三种：时长差/冷却差（如日常事件
+//   lastTriggerTotalMin 的间隔判定）、当日钟点（%1440 再 /60 得小时）——这些用法跨日天然正确。
+// currentDay = 日界账。凡「本日/当日/某日」判定（日结、租期、份例、门禁 lastXXXDay）一律走它
+//   或 getAbsoluteDay()，禁止拿 totalMinutes 除以 1440 自推日号（time-system 内部推导除外）。
+// 两本账并存不是错位：一本是钟，一本是历。误用历的活让钟去干，才会「多背一天的分钟数」。
+//
 // actionName: 动作名称（用于提示）
 function advanceTime(minutes, actionName) {
     minutes = Math.max(0, Math.floor(Number(minutes) || 0));
@@ -133,10 +140,18 @@ function advanceTime(minutes, actionName) {
     // 修复：按 oldDay+1..newDay 循环触发，保证每个被跨越的天都跑 onNewDay。
     const newDay = Math.floor(gameTime.totalMinutes / 1440) + 1;
     if (newDay > gameTime.currentDay) {
+        var _dayFrom = gameTime.currentDay;
         for (var _d = gameTime.currentDay + 1; _d <= newDay; _d++) {
+            // 第九十五波·NEW-26：先把日历翻到今天再喊人——订阅者里按日比较的账
+            // （钱庄催收/当铺死当/赁房租期/寻差事）读 getAbsoluteDay() 必须拿到新的一天，
+            // 此前先派发后赋值，所有「今日」都晚一天；跨多日时逐天翻，一天一账
+            gameTime.currentDay = _d;
             onNewDay(_d - 1, _d);
         }
         gameTime.currentDay = newDay;
+        console.log(newDay - _dayFrom > 1
+            ? ('连过 ' + (newDay - _dayFrom) + ' 天：第' + _dayFrom + '天 -> 第' + newDay + '天')
+            : ('新的一天开始了！第' + _dayFrom + '天 -> 第' + newDay + '天'));
     }
     
     // B3：月份/年份由绝对天数推导（每30天一月，每12月一年）
@@ -339,14 +354,31 @@ function onNewDay(oldDay, newDay) {
         console.warn('[time] onNewDay hook error', e);
     }
     for (var li = 0; li < _newDayListeners.length; li++) {
-        try { _newDayListeners[li](oldDay, newDay); } catch (e2) {}
+        // 第九十五波·NEW-26：订阅者抛错不再全静默——排查无门的哑账要出声
+        try { _newDayListeners[li](oldDay, newDay); } catch (e2) { console.warn('[time] newDay listener failed:', e2); }
     }
     if (window.GameEvents && typeof window.GameEvents.emit === 'function') {
         try { window.GameEvents.emit('newDay', { oldDay: oldDay, newDay: newDay }); } catch (e3) {}
     }
     
-    console.log('新的一天开始了！第' + oldDay + '天 -> 第' + newDay + '天');
+    // v20.96：日志挪到 advanceTime 整跳汇总（连过三十天不再刷三十条）
 }
+
+// 第九十五波·NEW-34：时辰口径全游戏一处算——1 时辰 = 120 分钟；
+// 非整除回落「X小时」，牌面/日志别再各自口算出「四个时辰=240分钟」这种鬼账
+function formatShichen(minutes) {
+    var m = Math.max(0, Math.round(Number(minutes) || 0));
+    if (m === 0) return '片刻';
+    if (m % 120 === 0) {
+        var sc = m / 120;
+        var cn = { 1: '一', 2: '两', 3: '三', 4: '四', 5: '五', 6: '六', 7: '七', 8: '八', 9: '九', 10: '十', 11: '十一', 12: '十二' };
+        return (cn[sc] || sc) + '个时辰';
+    }
+    if (m === 60) return '半个时辰';
+    if (m % 60 === 0) return (m / 60) + '小时';
+    return m + '分钟';
+}
+window.formatShichen = formatShichen;
 
 function onNewDaySubscribe(fn) {
     // F-35：同引用去重，防重复订阅致 onNewDay 重复执行同逻辑
@@ -391,6 +423,19 @@ function naturalRecovery() {
     try {
         if (window.ArtEffects && typeof window.ArtEffects.regenPct === 'function') _artRegen = window.ArtEffects.regenPct();
     } catch (eArt) {}
+    // 第十二波 · 开山秘艺养气域：内功秘艺练上身，吐纳自绵长（掌握度折成真气恢复，至多百分之三）
+    try {
+        if (typeof window.sectSignatureQiRegenPct === 'function') _artRegen.qi = (Number(_artRegen.qi) || 0) + (window.sectSignatureQiRegenPct() || 0);
+    } catch (eSig) {}
+    // 第七十八波 · 生生不息兑现：青木诀+清风剑法的组合，血气恢复+50%、真气恢复+30%——
+    // 牌面从 v6.2 挂到今天，兑现在每日自然恢复这口真管线里（与功法掌握/开山秘艺同一本加法账）
+    try {
+        if (typeof window.getSkillComboRegenPct === 'function') {
+            var _cmbRegen = window.getSkillComboRegenPct() || {};
+            if (_cmbRegen.hp) _artRegen.hp = (Number(_artRegen.hp) || 0) + _cmbRegen.hp;
+            if (_cmbRegen.qi) _artRegen.qi = (Number(_artRegen.qi) || 0) + _cmbRegen.qi;
+        }
+    } catch (eCmbR) {}
     var _hpRec = Math.round(healthRecovery * (1 + (_artRegen.hp || 0) / 100) * 10) / 10;
     var _qiRec = Math.round(qiRecovery * (1 + (_artRegen.qi || 0) / 100) * 10) / 10;
 
@@ -677,6 +722,7 @@ window.timeSystem = {
     onNewDay: _internalOnNewDayHook, // B3：可被寿命/天气等包装；advance 内会调用
     onNewDaySubscribe: onNewDaySubscribe,
     getAbsoluteDay: getAbsoluteDay,
+    formatShichen: formatShichen,
     TIME_PERIODS,
     SEASONS,
     ACTION_TIME_COSTS,

@@ -8,8 +8,8 @@
  *     逾期划扣（有钱整笔划走、没钱划光+恶名+伤且同日至多一轮）、次日再来直至结清
  *   C 情境接线：钱庄剧本四笔业务全挂账本；引擎对账本失败原样报错（不吞成"结算失败"）；
  *     借贷的业障/恶名与银钱同笔结算
- *   D 两衙职能：税课司如实报本城真实物价系数与特产；司法堂委托分支耗真气给历练声望、
- *     气力不济如实婉拒、无案旁听零收益
+ *   D 三司公务剧本（v21.4）：税课司查账如实报本城物价真源；下乡协征/缉查委托耗成本抽签给对价；
+ *     真气不济引擎如实婉拒；司法堂堂审按城+日定死；户籍司翻档旧规矩原样进剧本
  *   E 静态：存档白名单成对、页面接线、引擎钩子、假门道选项已除、催收同日护栏在案
  *
  * 运行：node tests/v20.18-bank-node.js
@@ -209,61 +209,92 @@ res = eng2.choose(0); // 再签押 → 账本原样报错
 assert(res && res.error === '欠条未销，钱庄不再放贷',
     'C6 账本失败原样上屏（不被吞成笼统的"结算失败"）：' + JSON.stringify(res && res.error));
 
-// ============ D: 两衙职能（app.js 真源码提取跑） ============
-function extractFn(src, name) {
-    var head = 'function ' + name + '(';
-    var i = src.indexOf(head);
-    if (i < 0) return null;
-    var j = src.indexOf('{', i), depth = 0, k = j;
-    for (; k < src.length; k++) {
-        if (src[k] === '{') depth++;
-        else if (src[k] === '}') { depth--; if (depth === 0) break; }
-    }
-    return src.slice(i, k + 1);
+// ============ D: 三司公务剧本（v21.4：facility-offices.js 进情境引擎真跑） ============
+// 税课司/司法堂/户籍司不再是 app.js 里"烧10真气换一句日志"的死函数——
+// 委托进情境引擎后，成本/成败/对价全在剧本选项里，这里按引擎口径逐牌验收。
+function officeWorld(opts) {
+    opts = opts || {};
+    var reps = [];
+    var copper = { n: 0 };
+    var Wx = makeWorld({
+        char: opts.char || { qi: 50, energy: 100, health: 100, tempering: 0, karma: 0, notoriety: 0, location: opts.city || '帝都·长安' },
+        locationSystem: opts.locationSystem || null,
+        repSpy: function (c, n) { reps.push([c, n]); }
+    });
+    // makeWorld 的经济事务桩只认真金白银里的灵石——铜钱也记上账
+    var origCredit = Wx.w.EconomyTransaction.credit;
+    Wx.w.EconomyTransaction.credit = function (k, n) { if (k === 'copper') copper.n += n; return origCredit(k, n); };
+    Wx.w.timeSystem.getAbsoluteDay = function () { return opts.day != null ? opts.day : CURDAY; };
+    Wx.w.getLifeSkill = function () { return 0; };
+    Wx.w.getRealmTier = function () { return 1; };
+    Wx.w.EventBus = { emit: function () {}, on: function () {} };
+    Wx.w.StateRegistry = { register: function () {} };
+    loadInto(Wx.ctx, 'js/core/reward-service.js');
+    loadInto(Wx.ctx, 'js/core/scenario-engine.js');
+    loadInto(Wx.ctx, 'js/city-facilities/facility-offices.js');
+    Wx.reps = reps; Wx.copper = copper;
+    return Wx;
 }
-var appSrc = fs.readFileSync(path.resolve(__dirname, '..', 'js', 'app.js'), 'utf8');
 
-// 税课司：如实报真实物价系数
-var Wt = makeWorld({
-    char: { qi: 50, health: 100, tempering: 0, location: '帝都·长安' },
+// D1/D2 税课司查账：如实读本城物价真源
+var Wo = officeWorld({
     locationSystem: { getCityData: function () { return { priceModifier: { buy: 1.2 }, specialties: ['皇家贡品', '御用丹药', '宫廷秘法'] }; } }
 });
-vm.runInContext(extractFn(appSrc, 'openTaxBureau') + '\nopenTaxBureau();', Wt.ctx);
-var taxLog = Wt.logs.join('|');
-assert(Wt.w.currentCharData.qi === 40 && Wt.w.currentCharData.tempering === 5 &&
-    taxLog.indexOf('贵20%') >= 0 && taxLog.indexOf('皇家贡品') >= 0,
+var stO = Wo.w.scenarioEngine.start('tax_bureau', 'duty');
+assert(!!stO && stO.done === false && stO.desc.indexOf('三块公务牌') >= 0,
+    'D0 税课司推门进戏：三块公务牌挂牌（不再是点一下就完的空壳）');
+Wo.w.scenarioEngine.choose(0);
+var cdO = Wo.w.currentCharData;
+var logO = Wo.logs.join('|');
+assert(cdO.qi === 40 && cdO.tempering === 5 && logO.indexOf('贵20%') >= 0 && logO.indexOf('皇家贡品') >= 0,
     'D1 税课司查账如实报本城行价贵两成与课税大宗（读城建真源，不编数）');
-var Wt2 = makeWorld({
-    char: { qi: 50, health: 100, tempering: 0, location: '云梦泽' },
+var Wo2 = officeWorld({
     locationSystem: { getCityData: function () { return { priceModifier: { buy: 1.0 }, specialties: [] }; } }
 });
-vm.runInContext(extractFn(appSrc, 'openTaxBureau') + '\nopenTaxBureau();', Wt2.ctx);
-assert(Wt2.logs.join('|').indexOf('持平') >= 0, 'D2 平价城如实报持平（不硬找话说）');
+Wo2.w.scenarioEngine.start('tax_bureau', 'duty');
+Wo2.w.scenarioEngine.choose(0);
+assert(Wo2.logs.join('|').indexOf('持平') >= 0, 'D2 平价城如实报持平（不硬找话说）');
 
-// 司法堂：委托分支/婉拒分支/旁听分支
-var reps = [];
-var Wc = makeWorld({
-    char: { qi: 50, health: 100, tempering: 0, location: '帝都·长安' },
-    math: { random: function () { return 0.1; }, floor: Math.floor, max: Math.max, min: Math.min, round: Math.round },
-    repSpy: function (c, n) { reps.push([c, n]); }
-});
-vm.runInContext(extractFn(appSrc, 'openCourt') + '\nopenCourt();', Wc.ctx);
-assert(Wc.w.currentCharData.qi === 35 && Wc.w.currentCharData.tempering === 8 && reps.length === 1 && reps[0][1] === 2,
-    'D3 司法堂有案：领委托耗 15 真气，历练+8、本城声望+2（真职能）');
-var Wc2 = makeWorld({
-    char: { qi: 10, health: 100, tempering: 0, location: '帝都·长安' },
-    math: { random: function () { return 0.1; }, floor: Math.floor, max: Math.max, min: Math.min, round: Math.round }
-});
-vm.runInContext(extractFn(appSrc, 'openCourt') + '\nopenCourt();', Wc2.ctx);
-assert(Wc2.w.currentCharData.tempering === 0 && Wc2.w.currentCharData.qi === 10 &&
-    Wc2.logs.join('|').indexOf('签不了') >= 0, 'D4 气力不济：如实婉拒，分文不给');
-var Wc3 = makeWorld({
-    char: { qi: 50, health: 100, tempering: 0, location: '帝都·长安' },
-    math: { random: function () { return 0.9; }, floor: Math.floor, max: Math.max, min: Math.min, round: Math.round }
-});
-vm.runInContext(extractFn(appSrc, 'openCourt') + '\nopenCourt();', Wc3.ctx);
-assert(Wc3.w.currentCharData.tempering === 0 && Wc3.w.currentCharData.qi === 50,
-    'D5 无案旁听：纯见闻零收益（时间成本照付，白听不白送）');
+// D3 税课司下乡协征：耗精力、抽签定成败、赢面给铜钱+历练+本城声望
+Wo = officeWorld({});
+Wo.w.__scenarioRng = function () { return 0.1; }; // 必成
+Wo.w.scenarioEngine.start('tax_bureau', 'duty');
+Wo.w.scenarioEngine.choose(1);
+cdO = Wo.w.currentCharData;
+assert(cdO.energy === 80 && cdO.tempering === 5 && Wo.reps.length === 1 && Wo.reps[0][1] === 2 && Wo.copper.n === 300,
+    'D3 下乡协征成：精力-20、历练+5、本城声望+2、工食钱300铜（有成本有对价）');
+
+// D4 真气不济：引擎门槛如实婉拒，分文不给
+Wo = officeWorld({ char: { qi: 5, energy: 100, health: 100, tempering: 0, karma: 0, notoriety: 0, location: '帝都·长安' } });
+Wo.w.scenarioEngine.start('tax_bureau', 'duty');
+var resO = Wo.w.scenarioEngine.choose(0);
+cdO = Wo.w.currentCharData;
+assert(!!resO && !!resO.error && cdO.qi === 5 && cdO.tempering === 0,
+    'D4 气力不济：如实婉拒（' + (resO && resO.error) + '），分文不给');
+
+// D5 司法堂缉查委托：耗真气抽签，赢面历练+8、声望+2、跑腿钱200铜
+Wo = officeWorld({});
+Wo.w.__scenarioRng = function () { return 0.1; };
+Wo.w.scenarioEngine.start('court', 'duty');
+Wo.w.scenarioEngine.choose(1);
+cdO = Wo.w.currentCharData;
+assert(cdO.qi === 35 && cdO.tempering === 8 && Wo.reps.length === 1 && Wo.reps[0][1] === 2 && Wo.copper.n === 200,
+    'D5 司法堂缉查委托成：真气-15、历练+8、本城声望+2、200铜（真职能）');
+
+// D6 堂审按城+日定死：同城同日两次开堂是同一件案子（不靠掷骰说谎）
+var Wa = officeWorld({ city: '帝都·长安', day: 7 });
+var Wb = officeWorld({ city: '帝都·长安', day: 7 });
+var da = Wa.w.scenarioEngine.start('court', 'duty').desc;
+var db = Wb.w.scenarioEngine.start('court', 'duty').desc;
+assert(da === db && da.indexOf('司法堂今日开堂') >= 0, 'D6 同城同日堂审同一案（ seeded 确定性）');
+
+// D7 户籍司翻《流寓录》：与七衙门同一规矩——10 真气门槛与扣减成对
+Wo = officeWorld({});
+Wo.w.scenarioEngine.start('household_registry', 'duty');
+Wo.w.scenarioEngine.choose(0);
+cdO = Wo.w.currentCharData;
+assert(cdO.qi === 40 && cdO.tempering === 5 && Wo.logs.join('|').indexOf('流寓录') >= 0,
+    'D7 户籍司翻档：10 真气换历练+5（旧规矩原样进剧本）');
 
 // ============ E: 静态 ============
 var gsSrc = fs.readFileSync(path.resolve(__dirname, '..', 'js', 'core', 'game-state.js'), 'utf8');
