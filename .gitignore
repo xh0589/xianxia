@@ -36,3 +36,7 @@ node_modules/
 # 本地试玩启动脚本
 launch-test.ps1
 启动试玩浏览器.bat
+# 试制/归档作品与过程日志（不入库）
+beast-body.svg
+REFACTOR-NOTES.md
+改良说明.md
