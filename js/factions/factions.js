@@ -115,9 +115,45 @@ function initFactionSystem() {
 
 // ============ 声望操作 ============
 
+// 门派的正邪类型落在哪一本势力账上——全仓只这一支笔。
+// 病根（F5）：`changeFactionReputation` 的键表只有上面五个势力 id，而调用点把**门派名**（「少林寺」）
+// 或**政策 id**（'ally_sect'）直接喂进来，旧门禁挡下错键却**毫无声响**，屏上那句「声望大跌」便成了空头承诺。
+// 2026-09-24 收口：调用点先经这支笔换键，门禁自己也认键＋认不出即 warn（见 resolveFactionKey）。
+var SECT_TYPE_FACTION = { '正道': 'righteous_alliance', '邪派': 'demon_cult', '中立': 'rogue_cultivators' };
+function factionIdOfSect(sectName) {
+    var s = (window.sectsData || {})[sectName];
+    var id = s ? SECT_TYPE_FACTION[s.type] : null;
+    return (id && factionState.reputation[id] !== undefined) ? id : null;
+}
+
+// 势力展示名 → 势力 id。键表由 FACTIONS 自己的 name 字段生成，不另抄一份中文名（抄一份就是第二本账）。
+var FACTION_ID_BY_NAME = {};
+for (var _fid in FACTIONS) {
+    if (FACTIONS[_fid].name) FACTION_ID_BY_NAME[FACTIONS[_fid].name] = _fid;
+}
+function factionIdByName(name) {
+    var id = FACTION_ID_BY_NAME[name];
+    return (id && factionState.reputation[id] !== undefined) ? id : null;
+}
+
+// 认键只这一支笔：先当它是势力 id，再当它是势力展示名，最后当它是门派名；三条都不中才回 null。
+function resolveFactionKey(raw) {
+    if (typeof raw !== 'string' || raw === '') return null;
+    if (factionState.reputation[raw] !== undefined) return raw;
+    return factionIdByName(raw) || factionIdOfSect(raw) || null;
+}
+
 // 修改势力声望
-function changeFactionReputation(factionId, amount) {
-    if (factionState.reputation[factionId] === undefined) return 0;
+function changeFactionReputation(rawKey, amount) {
+    var factionId = resolveFactionKey(rawKey);
+    if (factionId === null) {
+        // 旧门禁 `if (reputation[factionId] === undefined) return 0;` 的病不在「挡下错键」，在**挡得毫无声响**：
+        // 调用点照样把「声望大跌」喊上屏。认不出一本账现在要在控制台留一行，屏上那句由调用点自己收口。
+        if (typeof console !== 'undefined' && console.warn) {
+            console.warn('[factions] 认不出这笔声望该落哪本账：' + String(rawKey) + '（数额 ' + amount + ' 未入账）');
+        }
+        return 0;
+    }
     factionState.reputation[factionId] = Math.max(-10000, Math.min(10000, factionState.reputation[factionId] + amount));
     saveFactionData();
     
@@ -160,13 +196,26 @@ function triggerFactionConflict(faction1Id, faction2Id) {
     var f1 = FACTIONS[faction1Id];
     var f2 = FACTIONS[faction2Id];
     if (!f1 || !f2) return null;
-    
+
+    // 同一对势力只允许有一场开着的仗：此前每日掷一次骰子就多压一条，
+    // 半年下来「正道联盟 vs 魔教」能在榜上并列上百条，面板也就没法看了。
+    var i, same = null;
+    for (i = 0; i < factionState.activeConflicts.length; i++) {
+        var c0 = factionState.activeConflicts[i];
+        if (c0 && c0.status === 'active'
+            && ((c0.faction1 === faction1Id && c0.faction2 === faction2Id)
+                || (c0.faction1 === faction2Id && c0.faction2 === faction1Id))) { same = c0; break; }
+    }
+    if (same) return same;
+
     var conflict = {
         id: 'conflict_' + Date.now(),
         faction1: faction1Id,
         faction2: faction2Id,
         name: f1.name + ' vs ' + f2.name,
         startTime: Date.now(),
+        // 世界历上的日子（面板要说「第几日结下」不能拿真实毫秒时钟糊玩家）
+        startDay: (window.timeSystem && window.timeSystem.gameTime) ? (window.timeSystem.gameTime.currentDay || null) : null,
         status: 'active', // active, resolved
         winner: null,
         events: []
@@ -236,7 +285,7 @@ function generateFactionMission(factionId) {
 // ============ 存档 ============
 function saveFactionData() {
     try {
-        localStorage.setItem('xianxia_factions', JSON.stringify({
+        window.saveToStorage('xianxia_factions', JSON.stringify({
             reputation: factionState.reputation,
             activeConflicts: factionState.activeConflicts,
             completedMissions: factionState.completedMissions
@@ -250,6 +299,11 @@ window.FACTION_REPUTATION_LEVELS = FACTION_REPUTATION_LEVELS;
 window.factionState = factionState;
 window.initFactionSystem = initFactionSystem;
 window.changeFactionReputation = changeFactionReputation;
+window.factionIdOfSect = factionIdOfSect;
+window.SECT_TYPE_FACTION = SECT_TYPE_FACTION;
+window.FACTION_ID_BY_NAME = FACTION_ID_BY_NAME;
+window.factionIdByName = factionIdByName;
+window.resolveFactionKey = resolveFactionKey;
 window.getFactionReputationLevel = getFactionReputationLevel;
 window.getFactionDiscount = getFactionDiscount;
 window.triggerFactionConflict = triggerFactionConflict;

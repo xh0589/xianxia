@@ -406,7 +406,7 @@ function saveQuestProgress() {
         });
         playerQuestProgress.questState = stMap;
     } catch (eQS) {}
-    localStorage.setItem('xianxia_quest_progress', JSON.stringify(playerQuestProgress));
+    window.saveToStorage('xianxia_quest_progress', JSON.stringify(playerQuestProgress));
 }
 
 // ============ 第一百一十波 · NEW-105/109：账本回灌模板（真源接口） ============
@@ -750,7 +750,10 @@ function checkEndingCondition() {
     var charData = window.currentCharData;
     if (!charData) return null;
     
-    var killCount = charData.killCount || 0;
+    // 第一百二十三批 DES-76：读随档持久的那本杀孽（_killCount）。
+    // 改前读 charData.killCount——那本只有「入魔 +10」会写、且从不入档，
+    // 于是杀人再多也不判「入魔」，而攒够的十点存一次档就清零。
+    var killCount = charData._killCount || 0;
     var bonds = charData.bonds || {};
     var hasDaoCompanion = Object.values(bonds).some(function(b) { return b.type === 'dao_companion'; });
     var questProgress = window.playerQuestProgress;
@@ -817,7 +820,7 @@ function showEndingScreen(endingId) {
             playerName: window.currentCharData ? window.currentCharData.name : '未知',
             realm: window.currentCharData ? (window.currentCharData.realm + window.currentCharData.layer + '层') : '未知'
         });
-        localStorage.setItem('xianxia_endings', JSON.stringify(endingHistory));
+        window.saveToStorage('xianxia_endings', JSON.stringify(endingHistory));
     } catch(e) {}
     
     // 创建结局画面
@@ -949,16 +952,21 @@ function turnInQuest(questId) {
     // 这避免背包已满/事务失败时出现“任务消失但奖励没拿全”的半结算状态。
     var rewardResult = giveQuestRewards(quest);
     if (!rewardResult || rewardResult.success === false) {
-        var reasonMap = {
-            spiritStones: '灵石不足',
-            copper: '铜钱不足',
-            inventory_full_or_invalid_item: '背包空间不足或奖励物品无效',
-            qi: '真气不足',
-            energy: '精力不足',
-            health: '生命不足',
-            no_character: '角色状态未初始化',
-            transaction_unavailable: '经济事务模块未加载'
-        };
+      var reasonMap = {
+        spiritStones: '灵石不足',
+        copper: '铜钱不足',
+        // DES-85 尾（第一百四十二批）：三个键替掉原来那个一名两义的
+        // `inventory_full_or_invalid_item`（原文案「背包空间不足或奖励物品无效」——
+        // 玩家看完不知道该腾格子还是该报障）。现在按真因分话。
+        bag_full: '行囊满了，腾出格子再来领',
+        item_no_template: '奖励里有一件在百宝册上查无此号（是我们的疏漏，不是你的问题）',
+        inventory_failed: '这一笔奖励没能落进行囊，事由待查',
+        qi: '真气不足',
+        energy: '精力不足',
+        health: '生命不足',
+        no_character: '角色状态未初始化',
+        transaction_unavailable: '经济事务模块未加载'
+      };
         var reason = rewardResult && (rewardResult.reason || rewardResult.error);
         showMessage('奖励结算失败：' + (reasonMap[reason] || '资源或背包状态异常') + '。任务仍保留，可处理后再次交付。', 'error');
         return false;
@@ -1421,6 +1429,30 @@ function _qgMountBar(list, headHtml) {
     update();
 }
 
+// 一条高度策略：任务页所有列表都跟着页面滚，长表靠「折叠」收口，不再各自开小滚窗。
+// 额度取 4：实机量过 6 条一屏放得下（布告 6 单＝956px），但「门派日常 4 条」与之并排成栅格，
+// 6 单反而把整页顶到 2.49 屏（改前内层滚窗定高时 2.04 屏）——折起来的目的就是少滚，别折出更长的一页。
+// 剩下的没被删掉，只是折起来。
+var QG_LIST_CAP = 4;
+
+// cards: [{ html, keep }]——keep 的（眼下就动得了的）全露；其余露到 cap 为止，剩下的折进一格。
+function _qgFoldTail(cards, cap, unit) {
+    const head = [], tail = [];
+    let quota = cap;
+    cards.forEach(function (c) {
+        if (c.keep) { head.push(c.html); return; }
+        if (quota > 0) { quota--; head.push(c.html); return; }
+        tail.push(c.html);
+    });
+    let html = head.join('');
+    if (tail.length) {
+        html += '<details class="qg-fold"><summary class="qg-fold__sum">📜 另有 '
+            + tail.length + ' ' + unit + '（点开翻）</summary>'
+            + '<div class="qg-fold__body space-y-2">' + tail.join('') + '</div></details>';
+    }
+    return html;
+}
+
 // 空态不许只写「暂无」：说清为什么空、下一步点哪儿。
 function _qgActiveEmptyHtml() {
     const chain = _qgMainOrdered();
@@ -1431,18 +1463,17 @@ function _qgActiveEmptyHtml() {
     (window.allQuests || []).forEach(q => {
         if (q && q.type === 'random' && !q.accepted && !q.completed) boardable++;
     });
-    let html = '<div class="qg-empty">'
-        + '<p class="qg-empty__title">手里还没有任务</p>'
-        + '<p class="qg-empty__why">任务不会自己上身——要在左栏「主线任务」，或下面的「门派日常」「布告委托」里点一次接取。</p>';
-    if (nextMain) {
-        html += '<p class="qg-empty__next">下一步：主线第 ' + (focus.index + 1) + ' 章《'
-            + (nextMain.title || '') + '》，' + verb + '。</p>';
-    }
-    if (boardable > 0) {
-        html += '<p class="qg-empty__hint">布告栏上还贴着 ' + boardable + ' 单现结的活计，不要前置，赏钱当场给。</p>';
-    }
-    html += '<p class="qg-empty__hint">接了之后就会出现在这一栏，并自动挂上右上角的追踪条。</p></div>';
-    return html;
+    const hints = [];
+    if (boardable > 0) hints.push('布告栏上还贴着 ' + boardable + ' 单现结的活计，不要前置，赏钱当场给。');
+    hints.push('接了之后就会出现在这一栏，并自动挂上右上角的追踪条。');
+    return xEmptyHtml({
+        // fill：这一格与左栏主线同排，行高由主线定（实机 ~700px），空卡不填就在地面上留 ~460px 死背景
+        fill: true,
+        title: '手里还没有任务',
+        why: '任务不会自己上身——要在左栏「主线任务」，或下面的「门派日常」「布告委托」里点一次接取。',
+        next: nextMain ? '下一步：主线第 ' + (focus.index + 1) + ' 章《' + (nextMain.title || '') + '》，' + verb + '。' : '',
+        hints: hints
+    });
 }
 
 // ============ 更新任务UI ============
@@ -1461,36 +1492,26 @@ function updateQuestUI() {
     // 更新任务列表显示
     const activeList = document.getElementById('active-quest-list');
     if (activeList) {
-        activeList.innerHTML = '';
         const activeQuests = getActiveQuests();
-        
-        if (activeQuests.length === 0) {
-            activeList.innerHTML = _qgActiveEmptyHtml();
-        } else {
-            activeQuests.forEach(quest => {
-                const questItem = createQuestItemElement(quest);
-                activeList.appendChild(questItem);
-            });
-        }
+        activeList.innerHTML = activeQuests.length === 0 ? _qgActiveEmptyHtml()
+            : _qgFoldTail(activeQuests.map(function (quest) {
+                // 活跃栏里的每一条都动得了，故 keep 恒真：这一栏不折叠，只跟着页面滚。
+                return { keep: true, html: createQuestItemElement(quest).outerHTML };
+            }), activeQuests.length, '条');
     }
     
     // 更新已完成任务列表
     const completedList = document.getElementById('completed-quest-list');
     if (completedList) {
-        completedList.innerHTML = '';
         const completedQuests = getCompletedQuests();
-        
-        if (completedQuests.length === 0) {
-            completedList.innerHTML = '<div class="qg-empty">'
-                + '<p class="qg-empty__title">这里还空着</p>'
-                + '<p class="qg-empty__why">目标做满的任务不会自己结掉——要在「活跃任务」或左栏主线里点【交付】，领了赏才归档到这一栏。</p>'
-                + '</div>';
-        } else {
-            completedQuests.forEach(quest => {
-                const questItem = createQuestItemElement(quest, true);
-                completedList.appendChild(questItem);
-            });
-        }
+        completedList.innerHTML = completedQuests.length === 0
+            ? xEmptyHtml({
+                title: '这里还空着',
+                why: '目标做满的任务不会自己结掉——要在「活跃任务」或左栏主线里点【交付】，领了赏才归档到这一栏。'
+            })
+            : _qgFoldTail(completedQuests.map(function (quest) {
+                return { keep: false, html: createQuestItemElement(quest, true).outerHTML };
+            }), 5, '条');
     }
 }
 
@@ -1511,7 +1532,7 @@ function initQuestTracker() {
 }
 
 function saveTrackedQuests() {
-    localStorage.setItem('xianxia_tracked_quests', JSON.stringify(_trackedQuests));
+    window.saveToStorage('xianxia_tracked_quests', JSON.stringify(_trackedQuests));
 }
 
 function toggleTrackQuest(questId) {
@@ -1669,6 +1690,11 @@ function showQuestPanel() {
 }
 
 // ============ 更新主线任务UI ============
+// 主线一次铺 48 章是不知所措：新号一章没做完时，列表内容 9083px 塞在 601px 的滚窗里，
+// 玩家要找的只有「眼下这一章」与紧随其后的两章。其余折进 details，摘要报数、点开可查。
+// 折叠只碰「眼下动不了的」（待接/锁着/已了结）；在做与该交付的一律摆在明面上。
+var QG_MAIN_WINDOW = 2;
+
 function updateMainQuestUI() {
     const list = document.getElementById('main-quest-list');
     if (!list) return;
@@ -1677,19 +1703,27 @@ function updateMainQuestUI() {
     
     const chain = _qgMainOrdered();
     const focus = _qgMainFocus(chain);
+    const statusAt = chain.map(function (q) { return _qgStatusOf(q); });
     let doneCnt = 0, runCnt = 0, todoCnt = 0;
-    chain.forEach(q => {
-        const st = _qgStatusOf(q);
+    statusAt.forEach(function (st) {
         if (st === 'done') doneCnt++;
         else if (st === 'todo') todoCnt++;
         else runCnt++;
     });
     
-    const cards = chain.map((quest, i) => {
-        const status = _qgStatusOf(quest);
+    const startAt = focus ? focus.index : 0;
+    const windowEnd = Math.min(chain.length - 1, startAt + QG_MAIN_WINDOW);
+    const shownAt = chain.map(function (quest, i) {
+        if (statusAt[i] === 'doing' || statusAt[i] === 'ready') return true;
+        return i >= startAt && i <= windowEnd;
+    });
+    
+    const cardAt = function (i) {
+        const quest = chain[i];
+        const status = statusAt[i];
         const isFocus = !!focus && focus.index === i;
         const prev = i > 0 ? chain[i - 1] : null;
-        const prevStatus = prev ? _qgStatusOf(prev) : 'done';
+        const prevStatus = prev ? statusAt[i - 1] : 'done';
         
         // 顺序判定只用于「显示成什么样」：接不接得了仍由 acceptQuest 说了算，锁不拦点击。
         let state = status, lock = '', tag = '', primary = false;
@@ -1723,15 +1757,38 @@ function updateMainQuestUI() {
             objectives: _qgObjectiveHtml(quest, isFocus ? 3 : 2),
             actions: actions
         });
-    });
+    };
     
-    list.innerHTML = cards.join('');
+    // 按连续段拼装：露的多章，折的做成一格，段与段交替，章节顺序不乱。
+    // 折段只并同类（已了结归已了结、没轮到归没轮到）——混在一段里摘要就只能含糊其辞。
+    const kindOf = function (i) { return shownAt[i] ? 's' : (statusAt[i] === 'done' ? 'd' : 'l'); };
+    let html = '', folded = 0, i = 0;
+    while (i < chain.length) {
+        const kind = kindOf(i);
+        let j = i;
+        while (j < chain.length && kindOf(j) === kind) j++;
+        const run = [];
+        for (let k = i; k < j; k++) run.push(cardAt(k));
+        if (kind === 's') {
+            html += run.join('');
+        } else {
+            const first = i + 1, last = j;
+            folded += run.length;
+            html += '<details class="qg-fold"><summary class="qg-fold__sum">'
+                + (kind === 'd' ? '📖 已了结 ' : '🔒 还没轮到的 ')
+                + run.length + ' 章（第 ' + first + '～' + last + ' 章）'
+                + '</summary><div class="qg-fold__body space-y-2">' + run.join('') + '</div></details>';
+        }
+        i = j;
+    }
+    list.innerHTML = html;
     
     const now = focus ? chain[focus.index] : null;
     _qgMountBar(list, '<span class="qg-bar__title">共 ' + chain.length + ' 章</span>'
         + '<span class="qg-bar__stat">已了结 ' + doneCnt + '</span>'
         + '<span class="qg-bar__stat">在做 ' + runCnt + '</span>'
         + '<span class="qg-bar__stat">待接 ' + todoCnt + '</span>'
+        + (folded ? '<span class="qg-bar__stat">折起 ' + folded + ' 章</span>' : '')
         + (now ? '<span class="qg-bar__now">当前 · 第 ' + (focus.index + 1) + ' 章《' + (now.title || '') + '》</span>' : '')
         + '<span class="qg-bar__rest"></span>');
 }
@@ -1785,10 +1842,11 @@ function updateRandomQuestUI() {
     list.innerHTML = '';
     const randoms = (window.allQuests || []).filter(q => q && q.type === 'random');
     if (!randoms.length) {
-        list.innerHTML = '<div class="qg-empty">'
-            + '<p class="qg-empty__title">布告栏空着</p>'
-            + '<p class="qg-empty__why">城里的活计是贴上去的，也会被领完——过些时辰再来瞧一眼。</p>'
-            + '<p class="qg-empty__next">眼下先去左栏接主线，历练和灵石不会自己长出来。</p></div>';
+        renderXEmpty(list, {
+            title: '布告栏空着',
+            why: '城里的活计是贴上去的，也会被领完——过些时辰再来瞧一眼。',
+            next: '眼下先去左栏接主线，历练和灵石不会自己长出来。'
+        });
         return;
     }
     let openCnt = 0;
@@ -1799,21 +1857,24 @@ function updateRandomQuestUI() {
         if (status === 'todo') actions = _qgAcceptBtn(quest, false, '接下');
         else if (status === 'ready') actions = _qgTurnInBtn(quest, false);
         else if (status === 'doing') actions = _qgTrackBtn(quest);
-        return _qgCardHtml({
-            state: status,
-            title: quest.title,
-            prio: _qgPrioName(quest),
-            prioId: _qgPrioId(quest),
-            desc: quest.description,
-            status: status,
-            progress: (status === 'doing' || status === 'ready') ? _qgProgressOf(quest) : null,
-            reward: _qgRewardText(quest),
-            rewardLabel: '赏格',
-            objectives: _qgObjectiveHtml(quest, 2),
-            actions: actions
-        });
+        return {
+            keep: status === 'doing' || status === 'ready',
+            html: _qgCardHtml({
+                state: status,
+                title: quest.title,
+                prio: _qgPrioName(quest),
+                prioId: _qgPrioId(quest),
+                desc: quest.description,
+                status: status,
+                progress: (status === 'doing' || status === 'ready') ? _qgProgressOf(quest) : null,
+                reward: _qgRewardText(quest),
+                rewardLabel: '赏格',
+                objectives: _qgObjectiveHtml(quest, 2),
+                actions: actions
+            })
+        };
     });
-    list.innerHTML = cards.join('');
+    list.innerHTML = _qgFoldTail(cards, QG_LIST_CAP, '单');
     _qgMountBar(list, '<span class="qg-bar__title">共 ' + randoms.length + ' 单</span>'
         + '<span class="qg-bar__stat">未接 ' + openCnt + ' 单</span>'
         + '<span class="qg-bar__hint">赏钱现结，不要前置</span><span class="qg-bar__rest"></span>');
@@ -1826,9 +1887,10 @@ function updateNpcQuestUI() {
     list.innerHTML = '';
     const npcQuests = (window.allQuests || []).filter(q => q && q.type === 'npc_story');
     if (!npcQuests.length) {
-        list.innerHTML = '<div class="qg-empty">'
-            + '<p class="qg-empty__title">暂时没有故人托付心事</p>'
-            + '<p class="qg-empty__why">这一栏要靠交情开箱：认得的人越多、话说得越深，才有人把私事递到你手上。</p></div>';
+        renderXEmpty(list, {
+            title: '暂时没有故人托付心事',
+            why: '这一栏要靠交情开箱：认得的人越多、话说得越深，才有人把私事递到你手上。'
+        });
         return;
     }
     const rel = (window.npcSystem && typeof window.npcSystem.getNPCRelationship === 'function')
@@ -1848,29 +1910,33 @@ function updateNpcQuestUI() {
         if (status === 'todo') actions = _qgAcceptBtn(quest, false, '细听');
         else if (status === 'ready') actions = _qgTurnInBtn(quest, false);
         else if (status === 'doing') actions = _qgTrackBtn(quest);
-        cards.push(_qgCardHtml({
-            state: status,
-            title: quest.title,
-            prio: _qgPrioName(quest),
-            prioId: _qgPrioId(quest),
-            tag: '交情 ' + aff + '/' + (quest.minAffection || 0),
-            desc: quest.description,
-            status: status,
-            statusText: { ready: '话已办妥', doing: '记挂在心', todo: '有话想说', done: '已了结' }[status],
-            progress: (status === 'doing' || status === 'ready') ? _qgProgressOf(quest) : null,
-            reward: _qgRewardText(quest),
-            objectives: _qgObjectiveHtml(quest, 2),
-            actions: actions
-        }));
+        cards.push({
+            keep: status === 'doing' || status === 'ready',
+            html: _qgCardHtml({
+                state: status,
+                title: quest.title,
+                prio: _qgPrioName(quest),
+                prioId: _qgPrioId(quest),
+                tag: '交情 ' + aff + '/' + (quest.minAffection || 0),
+                desc: quest.description,
+                status: status,
+                statusText: { ready: '话已办妥', doing: '记挂在心', todo: '有话想说', done: '已了结' }[status],
+                progress: (status === 'doing' || status === 'ready') ? _qgProgressOf(quest) : null,
+                reward: _qgRewardText(quest),
+                objectives: _qgObjectiveHtml(quest, 2),
+                actions: actions
+            })
+        });
     });
     if (!cards.length) {
-        list.innerHTML = '<div class="qg-empty">'
-            + '<p class="qg-empty__title">交情还不够，没人肯把心事托给你</p>'
-            + '<p class="qg-empty__why">这些人认得你，但还没把你当自己人——差的是交情，不是机会。</p>'
-            + '<p class="qg-empty__next">下一步：去「人物 → 关系」看看都认得谁，再当面交谈、送礼把交情养到门槛，心事自己会找上门。</p></div>';
+        renderXEmpty(list, {
+            title: '交情还不够，没人肯把心事托给你',
+            why: '这些人认得你，但还没把你当自己人——差的是交情，不是机会。',
+            next: '下一步：去「人物 → 关系」看看都认得谁，再当面交谈、送礼把交情养到门槛，心事自己会找上门。'
+        });
         return;
     }
-    list.innerHTML = cards.join('');
+    list.innerHTML = _qgFoldTail(cards, QG_LIST_CAP, '条');
     _qgMountBar(list, '<span class="qg-bar__title">可托付 ' + cards.length + ' 条</span>'
         + '<span class="qg-bar__hint">交情到了才看得见下文</span><span class="qg-bar__rest"></span>');
 }

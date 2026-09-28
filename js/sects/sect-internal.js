@@ -628,31 +628,6 @@ function registerAllSectSpecificItems() {
     for (var name in SECT_SPECIFIC_ARTS) registerSectSpecificItems(name);
 }
 
-// ============ 门派声望互斥系统（P4） ============
-var SECT_REPUTATION_EFFECTS = {
-    '正道': { self: 30, opposite: -30, neutral: -10 },
-    '邪派': { self: 30, opposite: -30, neutral: -10 },
-    '中立': { self: 10, opposite: -5, neutral: 5 }
-};
-
-function applySectReputationEffects(sectName, sectType) {
-    if (!window.changeFactionReputation || !window.sectsData) return;
-    var effects = SECT_REPUTATION_EFFECTS[sectType] || SECT_REPUTATION_EFFECTS['中立'];
-    var sects = window.sectsData;
-    var selfChanged = false, oppChanged = false;
-    for (var name in sects) {
-        if (name === sectName) continue;
-        var otherType = sects[name].type;
-        if (otherType === sectType) { window.changeFactionReputation(name, effects.self); selfChanged = true; }
-        else if ((sectType === '正道' && otherType === '邪派') || (sectType === '邪派' && otherType === '正道')) { window.changeFactionReputation(name, effects.opposite); oppChanged = true; }
-        else { window.changeFactionReputation(name, effects.neutral); }
-    }
-    var msg = '🏛️ 门派声望变化：';
-    if (selfChanged) msg += '同门声望+' + effects.self + ' ';
-    if (oppChanged) msg += '敌对声望' + effects.opposite + ' ';
-    if (typeof window.showMessage === 'function') window.showMessage(msg, 'info');
-}
-
 // ============ 导出 ============
 if (typeof window !== 'undefined') {
     window.SECT_INTERNAL = SECT_INTERNAL;
@@ -674,8 +649,6 @@ if (typeof window !== 'undefined') {
     window.getReadableSectArts = getReadableSectArts;
     window.registerSectSpecificItems = registerSectSpecificItems;
     window.registerAllSectSpecificItems = registerAllSectSpecificItems;
-    window.applySectReputationEffects = applySectReputationEffects;
-    window.SECT_REPUTATION_EFFECTS = SECT_REPUTATION_EFFECTS;
 }
 
 // v18.9 路线图 P0-2：宗门资源真实日结由 newDay 事件统一驱动，

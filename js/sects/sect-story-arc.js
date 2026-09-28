@@ -1824,7 +1824,7 @@ function _storyState() {
 }
 
 function _save() {
-    try { if (window.StateRegistry && typeof window.StateRegistry.saveAll === 'function') window.StateRegistry.saveAll(); } catch (e) {}
+    try { if (window.StateRegistry && typeof window.StateRegistry.saveAll === 'function') window.StateRegistry.saveAll(); } catch (e) { console.warn('[静默失败] js/sects/sect-story-arc.js:1827 · 门派剧情存盘：演完一幕要落盘，这里没接住，玩家会察觉剧情白演了', e && e && e.message); }
 }
 
 // 当前该演哪一幕（贡献门槛 + 未演过）；无戏可演返回 null

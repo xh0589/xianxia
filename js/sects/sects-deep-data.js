@@ -1366,7 +1366,8 @@ function initSectsDeepData() {
 initSectsDeepData();
 
 // ==================== v16.3 门派每日事件池（D2 泛化引擎数据） ====================
-// effects 词表：contribution/points/fame/item{id,count}/buff{name,effects,hours}/repSelf(本派声望)
+// effects 词表：contribution/points/fame/item{id,count}/buff{name,effects,hours}
+// （旧词表里的 repSelf「本派声望」已撤：弟子侧没有这本账，写不进任何地方——别往事件表里填这个键）
 // 触发：入派弟子每日首次开门派面板 roll 50%；无事件日安静；同日不重弹
 const SECT_EVENTS = {
     '少林寺': [

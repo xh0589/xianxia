@@ -25,6 +25,13 @@ function deepMerge(target, source) {
     return result;
 }
 
+// DES-57：地名认账只用一把尺。全仓城名有两串写法——regions.js 的 mapData 写「帝都 · 长安」（· 两边带空格），
+// cityData 表键与 NPC 的 homeLocation／location 写「帝都·长安」；按地名取人若用 === 精确等值，
+// 从舆图进的城与角色身上那本账对不上，城中人物名册与送礼／深谈那几扇正门会在屏上整段消失。
+// 页面里认 global-utils.js 的公共口径，单独加载本文件的测试桩里就地同式实现（只去空白，不动「·」）。
+var placeKeyOf = window.placeKey || function (name) { return String(name == null ? '' : name).replace(/\s+/g, ''); };
+function samePlaceOf(a, b) { var ka = placeKeyOf(a), kb = placeKeyOf(b); return !!ka && !!kb && ka === kb; }
+
 function npcNowGameMinute() {
     if (window.GameScheduler && typeof window.GameScheduler.nowMinute === 'function') return window.GameScheduler.nowMinute();
     if (window.timeSystem && window.timeSystem.gameTime) return Number(window.timeSystem.gameTime.totalMinutes) || 0;
@@ -68,9 +75,10 @@ function isWorldLocationName(loc) {
     if (!loc || typeof loc !== 'string') return false;
     var hasSource = false;
     var ls = window.locationSystem;
-    if (ls && ls.cityData) { hasSource = true; if (ls.cityData[loc]) return true; }
+    var k = placeKeyOf(loc);
+    if (ls && ls.cityData) { hasSource = true; if (ls.cityData[loc] || (k && ls.cityData[k])) return true; }
     var sects = window.sectsData;
-    if (sects) { hasSource = true; if (sects[loc]) return true; }
+    if (sects) { hasSource = true; if (sects[loc] || (k && sects[k])) return true; }
     if (hasSource) return false;
     return NPC_FACILITY_TILES.indexOf(loc) < 0;
 }
@@ -1658,9 +1666,9 @@ class NPCManager {
     }
     getNPC(npcId) { return this.npcs.get(npcId); }
     getAllNPCs() { return Array.from(this.npcs.values()); }
-    getNPCsAtLocation(location) { return this.activeNPCs.filter(npc => npc.location === location); }
+    getNPCsAtLocation(location) { const k = placeKeyOf(location); return k ? this.activeNPCs.filter(npc => placeKeyOf(npc.location) === k) : []; }
     // NEW-43④：按「家锚点」查人——城中人物卡这类归属读端用它，NPC 出门串门不再把城面板清空
-    getNPCsByHomeLocation(location) { return this.activeNPCs.filter(npc => (npc.homeLocation || npc.location) === location); }
+    getNPCsByHomeLocation(location) { const k = placeKeyOf(location); return k ? this.activeNPCs.filter(npc => placeKeyOf(npc.homeLocation || npc.location) === k) : []; }
     talkToNPC(npcId, topic = null) {
         const npc = this.npcs.get(npcId);
         if (!npc) { showMessage('找不到这个NPC', 'error'); return null; }
@@ -1700,8 +1708,8 @@ class NPCManager {
         hoursDelta = hoursDelta || 1;
         // ===== 新增：如果NPC正在跟随玩家，跳过位置调度 =====
         if (npc.isFollowing) {
-            npc.state.energy = Math.min(100, (npc.state.energy || 100) + 0.5 * hoursDelta);
-            npc.state.mood = Math.min(100, (npc.state.mood || 50) + 0.5 * hoursDelta);
+            npc.state.energy = Math.min(100, (npc.state.energy ?? 100) + 0.5 * hoursDelta);
+            npc.state.mood = Math.min(100, (npc.state.mood ?? 50) + 0.5 * hoursDelta);
             npc.state.currentActivity = '跟随玩家';
             // 不修改 npc.location，保持与玩家一致
             return;
@@ -1718,11 +1726,11 @@ class NPCManager {
                 
                 // 状态自然恢复
                 if (currentSchedule.activity === '休息' || currentSchedule.activity === '睡眠') {
-                    npc.state.energy = Math.min(100, (npc.state.energy || 100) + 5 * hoursDelta);
-                    npc.state.mood = Math.min(100, (npc.state.mood || 50) + 2 * hoursDelta);
+                    npc.state.energy = Math.min(100, (npc.state.energy ?? 100) + 5 * hoursDelta);
+                    npc.state.mood = Math.min(100, (npc.state.mood ?? 50) + 2 * hoursDelta);
                 } else if (currentSchedule.activity === '用餐' || currentSchedule.activity === '进食') {
-                    npc.state.energy = Math.min(100, (npc.state.energy || 100) + 10 * hoursDelta);
-                    npc.state.mood = Math.min(100, (npc.state.mood || 50) + 3 * hoursDelta);
+                    npc.state.energy = Math.min(100, (npc.state.energy ?? 100) + 10 * hoursDelta);
+                    npc.state.mood = Math.min(100, (npc.state.mood ?? 50) + 3 * hoursDelta);
                 }
             } else {
                 npc.state.currentActivity = this.getDefaultActivity(gameHour);
@@ -1804,7 +1812,7 @@ class NPCManager {
             // 属性提升
             npc.combat.attack = (npc.combat.attack || 0) + 2;
             npc.combat.defense = (npc.combat.defense || 0) + 2;
-            npc.state.mood = Math.min(100, (npc.state.mood || 50) + 10);
+            npc.state.mood = Math.min(100, (npc.state.mood ?? 50) + 10);
             
             if (window.showMessage) {
                 window.showMessage('⬆️ ' + npc.name + ' 突破至 ' + realm + (newLayer) + '层！', 'success');
@@ -1814,7 +1822,7 @@ class NPCManager {
         } else {
             // 突破失败，消耗部分经验
             npc.combat.exp = Math.max(0, exp - threshold * 0.3);
-            npc.state.mood = Math.max(0, (npc.state.mood || 50) - 5);
+            npc.state.mood = Math.max(0, (npc.state.mood ?? 50) - 5);
             npc.addStress(10);
         }
     }
@@ -1902,8 +1910,9 @@ class NPCManager {
     // 获取NPC附近可交互的NPC列表
     getNearbyNPCs(location) {
         if (!location) return [];
+        const k = placeKeyOf(location);   // DES-57：城名两串写法，认账用同一把尺
         return this.activeNPCs.filter(npc =>
-            npc.state?.location === location || npc.location === location
+            placeKeyOf(npc.state && npc.state.location) === k || placeKeyOf(npc.location) === k
         );
     }
     serialize() { return Array.from(this.npcs.values()).map(npc => npc.serialize()); }
@@ -3030,7 +3039,7 @@ switch (interactionType) {
             else { showMessage(name + ' 皱眉：「请不要开这种玩笑。」', 'warning'); }
             break;
         case 'spend_time':
-            if (aff >= 50) { showMessage('👫 你和' + name + '一起散步赏景，心情愉悦。好感度+3', 'success'); npc.changeAffection(3); npc.changeLove(4); if (npc.state) npc.state.mood = Math.min(100, (npc.state.mood || 50) + 5); }
+            if (aff >= 50) { showMessage('👫 你和' + name + '一起散步赏景，心情愉悦。好感度+3', 'success'); npc.changeAffection(3); npc.changeLove(4); if (npc.state) npc.state.mood = Math.min(100, (npc.state.mood ?? 50) + 5); }
             else { showMessage(name + ' 婉拒：「下次吧。」', 'warning'); }
             break;
         case 'confess':
@@ -3300,17 +3309,17 @@ function respondNpcRequest(npcId, idx, accept) {
             if (sl.count <= 0) window.inventory.slots[j] = null;
         }
         if (typeof window.updateInventoryUI === 'function') window.updateInventoryUI();
-        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(10, '送交物件'); } catch (e) {}
+        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(10, '送交物件'); } catch (e) { console.warn('[静默失败] js/npcs/npc-system.js:3312 · 送件时辰：交件给NPC的时辰本该走掉，这里没接住，玩家会察觉时间没扣', e && e && e.message); }
         showMessage('🎁 你把东西交到 ' + npc.name + ' 手上，TA 眉开眼笑：「正是急用，谢了！」（好感+' + (req.rewardAff || 5) + '）', 'success');
     } else if (req.action === 'spar') {
-        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '陪练切磋'); } catch (e2) {}
+        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '陪练切磋'); } catch (e2) { console.warn('[静默失败] js/npcs/npc-system.js:3315 · 陪练时辰：陪NPC拆招的时辰本该走掉，这里没接住，玩家会察觉时间没扣', e2 && e2 && e2.message); }
         var _cdS = window.currentCharData;
         if (_cdS) _cdS.energy = Math.max(0, (_cdS.energy || 0) - 15);
         showMessage('⚔️ 你陪 ' + npc.name + ' 拆了几十招，彼此都有进益。（精力-15，好感+' + (req.rewardAff || 3) + '）', 'success');
         if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e3) {} }
     } else {
         // gather 及其他：搭手跑腿
-        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(90, '帮忙采集'); } catch (e4) {}
+        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(90, '帮忙采集'); } catch (e4) { console.warn('[静默失败] js/npcs/npc-system.js:3322 · 跑腿时辰：陪NPC跑山采集的时辰本该走掉，这里没接住，玩家会察觉时间没扣', e4 && e4 && e4.message); }
         var _cdG = window.currentCharData;
         if (_cdG) _cdG.energy = Math.max(0, (_cdG.energy || 0) - 20);
         showMessage('🧺 你陪 ' + npc.name + ' 跑了一趟山里，材料凑齐了。（精力-20，好感+' + (req.rewardAff || 4) + '）', 'success');
@@ -3328,7 +3337,7 @@ function npcNotCoLocated(npc) {    try {
         var pl = String(window.currentCharData.location);
         var nl = String(npc.location || '');
         if (!nl) return false;
-        if (pl === nl) return false;
+        if (samePlaceOf(pl, nl)) return false;   // DES-57：先按地名公共尺认同城——「帝都 · 长安」与「帝都·长安」只差个空格，旧三关都跨不过去
         var pa = pl.split('·').pop(), na = nl.split('·').pop();
         if (pa === na) return false;
         if (pl.indexOf(nl) >= 0 || nl.indexOf(pl) >= 0) return false;
@@ -3352,7 +3361,7 @@ function executeDeepTalkSubOption(npcId, categoryId, subOptionId) {
         if (!_dtRec || _dtRec.day !== _dtDay) _dtRec = _dtCd._deepTalkLog[npcId] = { day: _dtDay, n: 0 };
         _dtRec.n++;
         _dtFatigue = _dtRec.n; // 今日第几席（内部记账，永不报数）
-        try { if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') window.timeSystem.advanceTime(10, '与' + npc.name + '深谈'); } catch (e) {}
+        try { if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') window.timeSystem.advanceTime(10, '与' + npc.name + '深谈'); } catch (e) { console.warn('[静默失败] js/npcs/npc-system.js:3364 · 深谈时辰：促膝深谈的时辰本该走掉，这里没接住，玩家会察觉时间没扣', e && e && e.message); }
     }
     const aff = npc.relationship?.affection || 0;
     let subOption = null, cat = null;
@@ -3416,7 +3425,7 @@ function executeDeepTalkSubOption(npcId, categoryId, subOptionId) {
     if (hoursSince >= 0 && hoursSince < 1) npcResponse += '（我们刚见过）';
     else if (hoursSince >= 24) npcResponse += '（好久不见）';
 
-    const mood = npc.state?.mood || 50;
+    const mood = npc.state?.mood ?? 50;
     const stress = npc.state?.stress || 0;
     if (mood > 70) npcResponse += '（心情不错）';
     if (stress > 60) npcResponse += '（有些烦躁）';
@@ -3512,7 +3521,7 @@ function showNPCDialog(npcId, screen = 'main') {
     const favor = npc.relationship?.favor || 0;
     const favorMax = npc.relationship?.favorMax || 50;
     const respect = npc.relationship?.respect || 0;
-    const mood = npc.state?.mood || 50;
+    const mood = npc.state?.mood ?? 50;
     const stress = npc.state?.stress || 0;
     let affectionLevel = '陌生人', affectionColor = 'text-gray-400';
     if (affection >= 80) { affectionLevel = '挚爱'; affectionColor = 'text-red-400'; }
@@ -3825,7 +3834,7 @@ function showBranchDialog(npcId, categoryId, subOptionId, branchKey) {
     if (!node) { showMessage('对话节点不存在', 'error'); return; }
 
     // v18.1 分支树接互动计时：促膝一场，一刻钟（与话题深谈同源语义）
-    try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(15, '促膝深谈'); } catch (eBT) {}
+    try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(15, '促膝深谈'); } catch (eBT) { console.warn('[静默失败] js/npcs/npc-system.js:3837 · 促膝时辰：分支树促膝一场的时辰本该走掉，这里没接住，玩家会察觉时间没扣', eBT && eBT && eBT.message); }
 
     // 检查是否为结束节点
     if (node.isEnd) {
@@ -3914,7 +3923,7 @@ function handleBranchChoice(npcId, categoryId, subOptionId, branchKey, choiceInd
     if (effect.respect) npc.changeRespect(effect.respect);
     // 情绪提升
     if (effect.moodBoost && npc.state) {
-        npc.state.mood = Math.min(100, (npc.state.mood || 50) + effect.moodBoost);
+        npc.state.mood = Math.min(100, (npc.state.mood ?? 50) + effect.moodBoost);
     }
 
     // 2. 记录选择后果
@@ -4269,7 +4278,7 @@ function executeAdvancedRequest(npc, requestId) {
     if (favor < req.minFavor) return { success: false, msg: '情分不足（需要' + req.minFavor + '）' };
 
     // v15.6 登门相求亦耗时辰（开口求人，无论成否）
-    try { if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') window.timeSystem.advanceTime(15, '登门相求'); } catch (e) {}
+    try { if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') window.timeSystem.advanceTime(15, '登门相求'); } catch (e) { console.warn('[静默失败] js/npcs/npc-system.js:4281 · 登门时辰：开口求人耗的时辰本该走掉，这里没接住，玩家会察觉时间没扣', e && e && e.message); }
 
     // v23.2 开口求人就是花情分：旧版 minFavor 只是门票，进门后分文不扣——人情可以无限白嫖。
     // 现在按请求轻重扣情分票子，成与不成都算欠了一回（favor 归零后大门自然关上，攒情分靠平日）。

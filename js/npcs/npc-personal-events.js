@@ -712,16 +712,20 @@ var XIULUO_EVENTS = {
         npcId: 'sect_leader_修罗宫',
         title: '真名·绯泪',
         icon: '💌',
-        desc: '绯泪把她的真名告诉了你。',
+        desc: '绯泪把她的名字，正式交给了你。',
         trigger: { random: 0.5 },
         cooldown: 0,
         flag: 'xl_e013_done',
         scenes: [
-            { speaker: 'narrator', text: '你的房间里多了一封信，信上只有两个字。', type: 'description' },
-            { speaker: 'narrator', text: '「绯泪」——那是她的真名。', type: 'description' },
+            { speaker: 'narrator', text: '你的房间里多了一封信，两页。', type: 'description' },
+            { speaker: 'narrator', text: '第一页两个字：「绯泪」。这两个字你听了不知多少回，一直当它是称呼。', type: 'description' },
+            { speaker: 'narrator', text: '第二页是半张旧笺，边角磨得起了绒，一看就是贴身带了许多年。上头一行妇人的字：', type: 'description' },
+            { speaker: 'narrator', text: '「绯，是娘嫁衣上拆下来的颜色。泪，是娘留给你的——往后要哭，就哭值钱的那一种。」', type: 'description' },
+            { speaker: 'narrator', text: '没有落款，只有指甲掐出来的一个小小的月牙印。', type: 'description' },
+            { speaker: 'narrator', text: '你这才明白：那两个字不是名，是名讳。名讳这东西，亲娘叫完，她收了半辈子，没许任何人叫。', type: 'description' },
             { speaker: 'narrator', text: '你去找她。她正坐在梳妆台前，把那根断簪插回发髻。', type: 'description' },
             { speaker: 'narrator', text: '她从镜子里看到你，笑了一下。', type: 'description' },
-            { speaker: 'npc', text: '……你知道真名，在修仙界意味着什么吗？' },
+            { speaker: 'npc', text: '……你知道把名讳交到你手上，在修仙界意味着什么吗？' },
             { speaker: 'npc', text: '意味着——我把我的命，交到你手上了。' },
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '「我也会把我的命交给你。」', effect: 'mutual', affection: 20 },
@@ -761,7 +765,7 @@ var XIULUO_EVENTS = {
             { speaker: 'npc', text: '……然后我拔了刀。那把他送我的刀。' },
             { speaker: 'npc', text: '他也没躲。' },
             { speaker: 'narrator', text: '她说完这句话，好像用完了所有力气。', type: 'description' },
-            { speaker: 'npc', text: '两个人都知道他不是故意的。但「不是故意的」并不能让我死而复生。' },
+            { speaker: 'npc', text: '两个人都知道他不是故意的。但「不是故意的」并不能让寒烟门死而复生。' },
             { speaker: 'player_select', text: '你如何回应？', options: [
                 { text: '「那你现在还恨他吗？」', effect: 'hate_now', affection: 15 },
                 { text: '「如果你再见到他，会怎么做？」', effect: 'meet', affection: 10 },
@@ -1229,7 +1233,7 @@ function resetPersonalEventFlags() {
 
 function savePersonalEventFlags() {
     // 写入 localStorage（兼容旧方式）
-    try { localStorage.setItem('xianxia_personal_event_flags', JSON.stringify(personalEventFlags)); } catch(e) {}
+    try { localStorage.setItem('xianxia_personal_event_flags', JSON.stringify(personalEventFlags)); } catch(e) { console.warn('[静默失败] js/npcs/npc-personal-events.js:1232 · 个人事件标志存档：某条 NPC 感情线的剧情进度没存上，读档后这条线打回原形，玩家以为还挂着的进展全没了', e && e.message); }
     // 同步到 window 全局变量，确保 GameState.collectFullGameState 能读取
     window.personalEventFlags = personalEventFlags;
 }
@@ -1633,11 +1637,27 @@ window.handlePersonalEventChoice = function(sceneIndex, choiceIndex) {
     }
     
     // ===== 处理物品奖励（如事件007的半截断簪） =====
-    if (result.item && typeof window.addItem === 'function') {
-        window.addItem(result.item, 1);
+    // 两条来源都要认：effects() 回的 result.item，与只写在选项上的 choice.item；
+    // 形如 {id,count} 的对象要摊平——旧版把整枚对象塞给 addItem，东西不入库、屏上还印成 [object Object]。
+    var gift = result.item || choice.item || null;
+    var giftId = (gift && typeof gift === 'object') ? gift.id : gift;
+    var giftCount = (gift && typeof gift === 'object' && gift.count > 0) ? gift.count : 1;
+    if (giftId && (typeof window.giveWithReceipt === 'function' || typeof window.addItem === 'function')) {
+        // DES-72（第一百三十批）：旧写法丢了返回值——「获得物品：X ×N」照印，囊里真进了几件不管
+        var 收 = typeof window.giveWithReceipt === 'function'
+            ? window.giveWithReceipt(giftId, giftCount, { quiet: true })
+            : { got: Number(window.addItem(giftId, giftCount)) || 0, count: giftCount, name: (window.itemById && window.itemById[giftId] && window.itemById[giftId].name) || giftId };
         var itemDiv = document.createElement('div');
         itemDiv.className = 'text-center py-1';
-        itemDiv.innerHTML = '<p class="text-green-400 text-xs">📦 获得物品：' + (window.itemById?.[result.item]?.name || result.item) + '</p>';
+        var giftName = 收.name || giftId;
+        var 礼话 = 收.got >= 收.count
+            ? '获得物品：' + giftName + (收.count > 1 ? ' ×' + 收.count : '')
+            : (收.got > 0
+                ? '行囊只塞得下 ' + giftName + ' ' + 收.got + '/' + 收.count + ' 件，另 ' + (收.count - 收.got) + ' 件没带走'
+                : giftName + ' ×' + 收.count + ' 一件也没能带走：'
+                  // DES-90（第一百三十九批）：问不到账时不许由站点断言满包；NPC 赠礼是一次性剧情，改用②形
+                  + ((typeof window.addItemFailText === 'function' && window.addItemFailText(giftName)) || '它没有跟你走。'));
+        itemDiv.innerHTML = '<p class="text-green-400 text-xs">📦 ' + 礼话 + '</p>';
         ev.msgArea.appendChild(itemDiv);
         ev.msgArea.scrollTop = ev.msgArea.scrollHeight;
     }

@@ -57,7 +57,7 @@
         if (isFasting()) return;
         c._satiety = Math.max(0, get() - DAILY_DECAY);
         if (c._satiety < HUNGER_THRESHOLD) {
-            c.mood = Math.max(0, (c.mood || 50) - 5);
+            c.mood = Math.max(0, (c.mood ?? 50) - 5);
             if (window.showMessage) window.showMessage('🍚 肚子咕咕叫——饿着肚子修行，心情好不起来。（心情-5，找点吃的吧）', 'warning');
         }
     }

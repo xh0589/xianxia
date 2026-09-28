@@ -119,7 +119,7 @@ function initProficiencyData() {
 
 // ============ 保存熟练度数据 ============
 function saveProficiencyData() {
-    localStorage.setItem('xianxia_proficiency', JSON.stringify(proficiencyData));
+    window.saveToStorage('xianxia_proficiency', JSON.stringify(proficiencyData));
 }
 
 // ============ 获取功法熟练度信息 ============
@@ -1153,11 +1153,13 @@ function checkHeartDemonTrigger() {
     var charData = window.currentCharData;
     if (!charData) return null;
     
-    var killCount = charData.killCount || 0;
+    // 第一百二十三批 DES-76：杀戮只认 _killCount 这一本（随档持久、收藏与成就同尺）。
+    // 此前入魔 +10 写的是 charData.killCount，读档后那本清零 ⇒ 心魔「杀孽」那条永远差一截。
+    var killCount = charData._killCount || 0;
     var spiritStones = window.inventory ? window.inventory.currency.spiritStones : 0;
     var bonds = Object.keys(charData.bonds || {}).length;
     var realmLevel = charData.realmLevel || 0;
-    var failedBreakthroughs = charData.failedBreakthroughs || 0;
+    var failedBreakthroughs = charData._failedBreakthroughs || 0;
     
     // 按优先级检查
     if (killCount >= 50 && Math.random() < 0.3) return HEART_DEMON_TYPES.slaughter;
@@ -1262,9 +1264,9 @@ function resolveHeartDemonSuccess(demonId) {
     };
     
     charData.willpower = (charData.willpower || 0) + bonus.willpower;
-    if (window.addItem) {
-        window.addItem('pill_clarity', 1);
-    }
+    // DES-72（第一百三十批）：这枚清明丹旧写法发得无声无息——囊里到底有没有它，屏上从不提
+    var 丹 = (typeof window.giveWithReceipt === 'function')
+        ? window.giveWithReceipt('pill_clarity', 1, { quiet: true }) : null;
     
     // 清除心魔标记
     if (charData._heartDemon) {
@@ -1275,7 +1277,13 @@ function resolveHeartDemonSuccess(demonId) {
     charData._heartDemonResolved = (charData._heartDemonResolved || 0) + 1;
     
     if (typeof window.showMessage === 'function') {
-        window.showMessage('✨ 你战胜了【' + demon.name + '】！道心更加坚定！\n意志+' + bonus.willpower + '，经验+' + bonus.exp, 'success');
+        window.showMessage('✨ 你战胜了【' + demon.name + '】！道心更加坚定！\n意志+' + bonus.willpower + '，经验+' + bonus.exp
+            + (丹 && 丹.got > 0 ? '，' + 丹.name + '×' + 丹.got + ' 入囊' : '')
+            + (丹 && 丹.got === 0
+                ? '\n——可那一枚' + 丹.name + '没能带走：'
+                  // DES-90（第一百三十九批）：心魔战胜的清明丹可反复获得，问不到账时不许站点断言满包，改用①形·句尾位带句号
+                  + ((typeof window.addItemFailText === 'function' && window.addItemFailText(丹.name)) || '这一件先还留在原处。')
+                : ''), 'success');
     }
     
     // 触发突破成功
@@ -1324,9 +1332,9 @@ function surrenderToHeartDemon(demonId) {
     if (!charData) return;
     
     // 入魔效果
-    charData.killCount = (charData.killCount || 0) + 10;
-    charData.energy = Math.max(0, (charData.energy || 100) - 30);
-    charData.mood = Math.max(0, (charData.mood || 50) - 20);
+    charData._killCount = (charData._killCount || 0) + 10;
+    charData.energy = Math.max(0, (charData.energy ?? 100) - 30);
+    charData.mood = Math.max(0, (charData.mood ?? 50) - 20);
     
     // 短期力量提升但长期代价
     var tempPower = Math.floor((charData.level || 10) * 0.5);

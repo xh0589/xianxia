@@ -31,6 +31,7 @@ var els = {};
 function fakeEl() {
     var el = {
         children: [], style: {}, className: '', id: '',
+        classList: { toggle: function () {}, add: function () {}, remove: function () {}, contains: function () { return false; } },
         appendChild: function (c) { this.children.push(c); return c; },
         remove: function () {}, addEventListener: function () {},
         querySelectorAll: function () { return []; },
@@ -93,6 +94,7 @@ global.playerReputation = 0;
 load('js/core/world-loop.js');
 load('js/extensions/market-dynamic.js');
 load('js/world-events.js');
+load('js/core/empty-state.js');   // 弹窗里货架/回购筛空时空态卡走公共件（与 仙侠.html 的加载次序一致）
 load('js/enhanced-shop.js');
 load('js/map/travel-journal.js');
 
@@ -238,8 +240,10 @@ console.log('\n[E] 哨兵（接线在册、零拉丁、不双算）');
     var iCache = es.indexOf('this._priceCache[cacheKey] = price;');
     var iSpeech = es.indexOf("window.getPlayerSpeechDiscount");
     assert(iCache > iSpeech, 'E6 价格缓存写在全部乘数之后（当日一口价）');
-    // 零拉丁：称呼表四句全查
-    var gSeg = es.slice(es.indexOf('var SHOP_TITLE_GREET'), es.indexOf('function showShopDialog'));
+    // 零拉丁：称呼表四句全查。只圈表字面量本身——表与下个函数之间会插进别的代码（v24 就插了货架筛选），
+    // 圈到「下一个 function」会让不相干的代码把这条哨兵挤红。
+    var gStart = es.indexOf('var SHOP_TITLE_GREET');
+    var gSeg = es.slice(gStart, es.indexOf('\n};', gStart));
     var gLits = gSeg.match(/'[^']*'/g) || [];
     assert(gLits.length >= 8 && gLits.every(function (s) { return !/[A-Za-z]/.test(s); }), 'E7 称呼表话术零拉丁');
     assert(gSeg.indexOf('初出茅庐') < 0, 'E8 称呼表里真没有新人档（不认就是不认）');

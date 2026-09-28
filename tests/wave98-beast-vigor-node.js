@@ -229,6 +229,10 @@ eq(fakeActor.bar, 100, 'C5 这一动的条按重手价扣（250-150=100）');
 // ==================== D · 采补功协同（真联动，非新账） ====================
 console.log('\n[D] 采补功吸的就是这本精力账（吸干妖王，它就只能干挠爪子）');
 var bD1 = newBattle(mkPlayer({ combatAbilities: ['drain_qi'] }), mkBeast('妖王', { type: 'boss', level: 14 }));
+// 建场推轴是真骰：妖王先手偶尔一口把玩家咬昏，_executeAttack 见 attacker 昏迷直接返回（结算钩子压根不跑）
+// → D1 偶发「精力纹丝不动」。与 C 段同一口径：先扶起玩家，再把妖王精力归满才对账。
+freshField(bD1);
+bD1.enemy.stamina = bD1.enemy.maxStamina;
 var stamBefore = bD1.enemy.stamina;
 stubRnd(0.5);
 bD1._executeAttack(bD1.player, bD1.enemy, 'chest', 'slash');

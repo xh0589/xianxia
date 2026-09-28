@@ -279,17 +279,24 @@
             cd.hp = Math.max(1, (cd.hp || 100) - Math.floor((cd.maxHp || 100) * 0.3));
         }
         // 落物品到背包
-        var addOk = true;
+        // DES-72 同族：addResultItem 报的是行囊**实收件数**，旧写法只判真假 ⇒ 回执照念开价的粒数
+        var _asked = Math.max(1, Math.floor(recipe.result.count * quality.mult));
+        var addGot = _asked;
         if (typeof window.addResultItem === 'function') {
-            addOk = window.addResultItem(itemId, Math.max(1, Math.floor(recipe.result.count * quality.mult)));
+            addGot = Number(window.addResultItem(itemId, _asked)) || 0;
         }
-        if (!addOk) {
+        if (!addGot) {
             // 回滚（v23.0 连材料一起退——炉子没开成，药材不能吞）
             if (cd && recipe.qiCost) cd.qi = (cd.qi || 0) + recipe.qiCost;
+            var _rf = null;
             if (window.compoundMat && typeof window.compoundMat.refund === 'function') {
-                try { window.compoundMat.refund(materials); } catch (eRf) {}
+                try { _rf = window.compoundMat.refund(materials); } catch (eRf) {}
             }
-            return { ok: false, reason: 'inventory-full' };
+            return {
+                ok: false, reason: 'inventory-full',
+                failReason: (typeof window.addItemFailReason === 'string') ? window.addItemFailReason : null,
+                refundBack: _rf ? _rf.back : null, refundAsked: _rf ? _rf.asked : null
+            };
         }
         // 时间推进
         if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
@@ -316,7 +323,7 @@
             if (isFlaw) st.flaw++;
             if (quality.id === 'imperial') st.imperial++;
         } catch (e) {}
-        return { ok: true, itemId: itemId, quality: quality, score: finalScore, toxic: avgToxic };
+        return { ok: true, itemId: itemId, quality: quality, score: finalScore, toxic: avgToxic, count: addGot, asked: _asked };
     }
 
     // ============== 5. 模块级状态（StateRegistry 兼容） ==============

@@ -606,13 +606,13 @@
                 alignShiftOf(name, -3, '攻山');
                 moraleOf(name, 6);
                 bumpAll(ps, 3);
-                try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 5); } catch (e5) {}
+                try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 5); } catch (e5) { console.warn('[静默失败] js/extensions/player-sect-world.js:609 · 名望记账：攻山缴获的名望本该加上，这里没接住，玩家会察觉名望没涨', e5 && e5 && e5.message); }
                 if (rescued) {
                     // 出兵相援成了：围军被击退，战云散；受援方按库房谢礼（守恒：真从对方库里出、真进自家宗库）
                     try { flags()['sect_world_war_pending'] = null; } catch (eP) {}
                     setRelBoth(name, rescued, 25);
                     gainRep(name, 3, '出兵相援盟家·击退围军');
-                    try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 3); } catch (e6) {}
+                    try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 3); } catch (e6) { console.warn('[静默失败] js/extensions/player-sect-world.js:615 · 名望记账：出兵相援击退围军的名望本该加上，这里没接住，玩家会察觉名望没涨', e6 && e6 && e6.message); }
                     var ia = internal(rescued);
                     var gift = ia ? Math.min(120, Math.floor((Number(ia.resources) || 0) * 0.15)) : 0;
                     if (gift > 0) {

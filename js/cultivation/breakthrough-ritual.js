@@ -154,13 +154,13 @@ function startBreakthroughRitual() {
     const req = BREAKTHROUGH_MATERIALS[materialKey] || BREAKTHROUGH_MATERIALS['default'];
 
     // 检查精力
-    if ((charData.energy || 100) < req.minEnergy) {
+    if ((charData.energy ?? 100) < req.minEnergy) {
         showMessage(`精力不足（需要≥${req.minEnergy}），请先休息恢复`, 'warning');
         return;
     }
 
     // 检查真气
-    if ((charData.qi || 100) < req.minQi) {
+    if ((charData.qi ?? 100) < req.minQi) {
         showMessage(`真气不足（需要≥${req.minQi}），请先修炼恢复`, 'warning');
         return;
     }
@@ -414,8 +414,8 @@ function executeBreakthroughRitual() {
     }
 
     // 消耗精力/真气
-    charData.energy = Math.max(0, (charData.energy || 100) - 30);
-    charData.qi = Math.max(0, (charData.qi || 100) - 30);
+    charData.energy = Math.max(0, (charData.energy ?? 100) - 30);
+    charData.qi = Math.max(0, (charData.qi ?? 100) - 30);
 
     // 开始阶段演出
     breakthroughState.stage = 0;

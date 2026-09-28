@@ -88,9 +88,18 @@
         return { realm: cd.realm || '凡人', layer: cd.layer || 1 };
     }
 
-    var REALM_ORDER = ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '大乘', '渡劫'];
-    function realmIndex(realm) {
-        return REALM_ORDER.indexOf(realm);
+    // DES-92（第一百三十二批）：境界序不再自己抄一份。旧表是
+    //   ['凡人','炼气','筑基','金丹','元婴','化神','大乘','渡劫']——**缺「炼虚」「合体」**，
+    //   那两境的考生 realmIndex 得 -1，连 minRealm 写着「凡人」的飞鸽都判成「境界不足（需凡人）」，
+    //   修到炼虚反而一封也寄不出去。尺只此一把：window.realmIndex（真源见 js/global-utils.js）。
+    // ⚠️ 本批全量跑当场抓到：尺未就绪那一支旧写法 `return 999`，「两边同回一个数⇒放行」是拿
+    //   「测不了」换成了「开大门」——凡人在牌面上挑得走灵镜（wave76 C16/C17、v24 D 段同一笔）。
+    //   现改判不了即不够格，只认门槛写着「凡人」那一档（全序下界，谁都在它上面，放行不算敞口）。
+    function realmGateOk(playerRealm, needRealm) {
+        if (typeof window.realmIndex !== 'function') return needRealm === '凡人';
+        var need = window.realmIndex(needRealm);
+        if (need < 0) return true;   // 门牌本身认不出 ⇒ 别拿一张写错的门牌把人锁在门外（与 realmAtLeast 同口径）
+        return window.realmIndex(playerRealm) >= need;
     }
 
     /**
@@ -102,13 +111,12 @@
         if (!carrier) return { canUse: false, reason: '未知载具' };
 
         var pr = getPlayerRealm();
-        var playerIdx = realmIndex(pr.realm);
-        var requiredIdx = realmIndex(carrier.minRealm);
 
-        if (playerIdx < requiredIdx) {
+        if (!realmGateOk(pr.realm, carrier.minRealm)) {
             return {
                 canUse: false,
-                reason: '境界不足（需' + carrier.minRealm + '）',
+                reason: '境界不足（需' + carrier.minRealm + '）'
+                    + (typeof window.realmIndex === 'function' ? '' : '（境界尺未加载，暂按不够格办）'),
                 needRealm: carrier.minRealm
             };
         }
@@ -134,6 +142,12 @@
         return 'mail_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
     }
 
+    // 信纸长度门：纸短情长，存档也短。截断定在数据层，谁写信都绕不过；UI 只负责说出口。
+    var MAIL_BODY_CAP = 500;
+    function clampMailBody(body) {
+        return String(body == null ? '' : body).slice(0, MAIL_BODY_CAP);
+    }
+
     /**
      * 发送邮件（核心入口）
      * @param {Object} opts
@@ -151,9 +165,8 @@
             return null;
         }
         var carrier = CARRIERS[opts.carrier || 'pigeon'];
-        var pr = getPlayerRealm();
-        var playerIdx = realmIndex(pr.realm);
-        var requiredIdx = realmIndex(carrier.minRealm);
+        // DES-92（第一百三十二批）：这里旧写法先算了 playerIdx/requiredIdx 却一处也没用——看着像守卫，其实拦不住任何东西。
+        //   载具门槛真把在 playerSendMail → checkCarrierAvailability 那一道；直接调 sendMail（NPC 回信等）绕得开。补守卫属改变现有行为，登记等裁。
 
         // 计算延迟
         var delayMin = 0;
@@ -179,7 +192,7 @@
             fromNpcName: opts.fromNpcName || (opts.fromPlayer ? '我' : '系统'),
             toNpcId: opts.toNpcId || null,
             subject: opts.subject,
-            body: opts.body,
+            body: clampMailBody(opts.body),
             location: opts.location || '',
             carrier: opts.carrier || 'pigeon',
             importance: opts.importance || 'normal',
@@ -265,6 +278,7 @@
     function deleteMail(id) {
         if (!window._mailSystemData) return;
         window._mailSystemData.inbox = window._mailSystemData.inbox.filter(function(x) { return x.id !== id; });
+        window._mailSystemData.outbox = (window._mailSystemData.outbox || []).filter(function(x) { return x.id !== id; });
         window._mailSystemData.favorites = window._mailSystemData.favorites.filter(function(x) { return x.id !== id; });
         saveMailData();
         if (window.MailSystemUI) window.MailSystemUI.updateUnreadBadge();
@@ -297,10 +311,10 @@
 
     // 玩家回复NPC（智能回信概率）
     function playerReply(mailId, text) {
-        if (!window._mailSystemData) return;
+        if (!window._mailSystemData) return false;
         var orig = window._mailSystemData.inbox.find(function(x) { return x.id === mailId; });
-        if (!orig) return;
-        if (!text || !text.trim()) return;
+        if (!orig) return false;
+        if (!text || !text.trim()) return false;
 
         // 记录玩家发信
         sendMail({
@@ -323,8 +337,8 @@
             else if (aff > 60) replyProb = 0.7;
             else if (aff > 40) replyProb = 0.5;
             else if (aff > 20) replyProb = 0.3;
-            else if (aff < -30) replyProb = 0.05;
             else if (aff < -60) replyProb = 0;
+            else if (aff < -30) replyProb = 0.05;
         }
 
         if (Math.random() < replyProb) {
@@ -337,6 +351,7 @@
                 sendAutoReplyFromNPC(orig);
             }
         }
+        return true;
     }
 
     // NPC智能回复
@@ -387,8 +402,8 @@
         // 优先用灵镜（如果可用）
         var carrierId = 'pigeon';
         var pr = getPlayerRealm();
-        if (realmIndex(pr.realm) >= realmIndex('筑基')) carrierId = 'mirror';
-        if (realmIndex(pr.realm) >= realmIndex('金丹')) carrierId = 'jade';
+        if (realmGateOk(pr.realm, '筑基')) carrierId = 'mirror';
+        if (realmGateOk(pr.realm, '金丹')) carrierId = 'jade';
         sendMail({
             fromNpcId: orig.fromNpcId,
             fromNpcName: orig.fromNpcName,
@@ -518,12 +533,12 @@
     }
 
     // ============ 存档 ============
-    function saveMailData() {
-        if (!window._mailSystemData) return;
-        try {
-            localStorage.setItem('xianxia_mail_system', JSON.stringify(window._mailSystemData));
-        } catch (e) {}
-    }
+function saveMailData() {
+    if (!window._mailSystemData) return;
+    try {
+        localStorage.setItem('xianxia_mail_system', JSON.stringify(window._mailSystemData));
+    } catch (e) { console.warn('[静默失败] js/mail-system.js:540 · 邮件存档：寄出的信、收到的回音没存上，读档后信箱空了，玩家以为信还在对方手里', e && e.message); }
+}
 
     function loadMailData() {
         try {
@@ -610,8 +625,11 @@
             cleanupExpiredMail: cleanupExpiredMail,
             moveToInbox: moveToInbox,
             getPlayerRealm: getPlayerRealm,
-            realmIndex: realmIndex,
-            getData: function() { return window._mailSystemData; }
+            // DES-92（第一百三十二批）：本地那只 realmIndex（自抄表 + 尺未就绪回 999）不再存在，
+            //   导出口同批改成判定手；仓内无消费方（全仓 `.realmIndex(` 只吃 window 那一把尺）。
+            realmGateOk: realmGateOk,
+            getData: function() { return window._mailSystemData; },
+            MAIL_BODY_CAP: MAIL_BODY_CAP
         };
     }
 })();

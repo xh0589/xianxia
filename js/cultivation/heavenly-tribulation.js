@@ -16,8 +16,12 @@ function triggerHeavenlyTribulation() {
     if (!cd) { if (window.showMessage) window.showMessage('请先创建角色', 'warning'); return false; }
     var realm = cd.realm || '';
     var tier = (typeof window.getRealmTier === 'function') ? window.getRealmTier(realm) : 0;
-    if (tier < 9) {
-        if (window.showMessage) window.showMessage('天劫唯有渡劫期方会降临，你修为尚浅。', 'info');
+    // 第一百四十二批：原判 `tier < 9`，与 location-system.js:1343 的 `>= 9` 两道门一致。
+    // 但 `>= 9` 那边已收紧到 `tier === 9`（并尺后「飞升」10、「金仙」11 也会落进 `>=`，
+    // 已渡劫成仙的人会被再劈一次）。这一边同步收紧，两道门仍是同一把尺。
+    if (tier !== 9) {
+        if (window.showMessage) window.showMessage(
+            tier > 9 ? '你已渡过天劫——雷不会再落第二次。' : '天劫唯有渡劫期方会降临，你修为尚浅。', 'info');
         return false;
     }
     var waves = calcTribWaves(tier);
@@ -139,12 +143,26 @@ function tribulationSuccess() {
         cd.realm = '飞升';
         cd.layer = 1;
     }
-    if (window.showMessage) window.showMessage('⚡⚡⚡ 渡劫成功！天门大开，你白日飞升，步入仙班！'
-        + ((window.eventFlags && (window.eventFlags['qi_truth_told'] || window.eventFlags['qi_truth'])) ? '（门后不是仙班——你最清楚。这一回飞升，不是被收割，是打入内部。）' : ''), 'success');
     // 雷劫产物（用既有雷系材料代指；雷劫液正式物品待后续物品扩展）
-    if (typeof window.addItem === 'function') {
-        try { window.addItem('mat_sky_iron', 2); window.addItem('mat_chaos_stone', 1); } catch (e) {}
+    // DES-72（第一百三十批）：旧写法丢了返回值——飞升喜话念完，这两枚到底进没进囊，屏上从不提
+    function 雷收入(id, n) {
+        var 名 = (window.itemById && window.itemById[id] && window.itemById[id].name) || id;
+        if (typeof window.giveWithReceipt === 'function') return window.giveWithReceipt(id, n, { quiet: true });
+        var 得 = 0;
+        try { 得 = Number(window.addItem(id, n)) || 0; } catch (e) {}
+        // DES-96（第一百三十八批）：账要在此刻抄——下面连发两笔，拼串时全局账只剩末笔的
+        return { got: 得, count: n, name: 名, reason: window.addItemFailReason || null };
     }
+    var 雷材 = (typeof window.giveWithReceipt === 'function' || typeof window.addItem === 'function')
+        ? [雷收入('mat_sky_iron', 2), 雷收入('mat_chaos_stone', 1)]
+        : null;
+    if (window.showMessage) window.showMessage('⚡⚡⚡ 渡劫成功！天门大开，你白日飞升，步入仙班！'
+        + ((window.eventFlags && (window.eventFlags['qi_truth_told'] || window.eventFlags['qi_truth'])) ? '（门后不是仙班——你最清楚。这一回飞升，不是被收割，是打入内部。）' : '')
+        + (雷材 ? '\n' + 雷材.map(function (r) {
+            return r.got > 0 ? r.name + '×' + r.got + ' 已收入囊中。'
+                : r.name + '×' + r.count + ' 一件也没能带走：'
+                  + ((typeof window.addItemFailTextFor === 'function' && window.addItemFailTextFor(r.reason, r.name)) || '没能落进你的行囊。');
+        }).join('') : ''), 'success');
     if (window.updateCharacterStatus) window.updateCharacterStatus();
 }
 

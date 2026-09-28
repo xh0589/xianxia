@@ -68,7 +68,7 @@ function makeWorld(opts) {
         startBattle: function (e) { W._lastEnemy = e; var b = { enemy: e }; W.currentBattle = b; return b; },
         getRealmTier: function (r) { return ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'].indexOf(r) >= 0 ? ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'].indexOf(r) : 1; },
         realmScaledEnemyLevel: function () { return 10; },
-        addItem: function (id, n) { added.push({ id: id, n: n || 1 }); return true; },
+        addItem: function (id, n) { added.push({ id: id, n: n || 1 }); return n || 1; },   // 桩：回实收件数
         consumeItem: function (id, n) {
             var inv = W.inventory, rem = n;
             for (var i = 0; i < inv.slots.length && rem > 0; i++) { var s = inv.slots[i]; if (s && s.templateId === id) { var c = Math.min(s.count, rem); s.count -= c; rem -= c; if (s.count <= 0) inv.slots[i] = null; } }

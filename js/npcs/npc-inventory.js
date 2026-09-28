@@ -1,4 +1,4 @@
-/**
+﻿/**
  * npc-inventory.js — 物品与NPC联动·一期：行囊系统（v13.9）
  *
  * NPC开始真正持有东西：
@@ -186,28 +186,45 @@
             var qid = 'want_' + npcId + '_' + itemId;
             if (qs.completedQuests.has && qs.completedQuests.has(qid)) return;
             var had = false;
+            var _摘下的愿 = null;
             if (qs.availableQuests) {
                 qs.availableQuests = qs.availableQuests.filter(function (q) {
-                    if (q.id === qid) { had = true; return false; }
+                    if (q.id === qid) { had = true; _摘下的愿 = q; return false; }
                     return true;
                 });
             }
             if (!had && !(qs.quests && qs.quests.has(qid))) return;
-            qs.completedQuests.add(qid); // 绕开 completeQuest 的 changeFavor 隐患
             var npc = window.npcManager && window.npcManager.getNPC ? window.npcManager.getNPC(npcId) : null;
             var payMsg = '';
+            var _谢礼没处放 = false;
             if (npc && npc.inventory && Array.isArray(npc.inventory.items)) {
                 var cand = null;
                 for (var i = 0; i < npc.inventory.items.length; i++) {
                     if (npc.inventory.items[i].templateId !== itemId && npc.inventory.items[i].count >= 1) { cand = npc.inventory.items[i]; break; }
                 }
                 if (cand && typeof npc.removeItemFromInventory === 'function') {
-                    npc.removeItemFromInventory(cand.templateId, 1);
-                    if (typeof window.addItemToInventory === 'function') window.addItemToInventory(cand.templateId, 1);
-                    else if (typeof window.addItem === 'function') window.addItem(cand.templateId, 1);
-                    payMsg = itemName(cand.templateId);
+                    // DES-86：谢礼先真落进玩家行囊，才准扣 NPC 那一件、才准结这一单——旧写法扣完就把返回值丢在地上，满包时东西蒸发而委托已标记完成，永不再来
+                    var _收 = (typeof window.addItemToInventory === 'function')
+                        ? (Number(window.addItemToInventory(cand.templateId, 1)) || 0)
+                        : ((typeof window.addItem === 'function') ? (Number(window.addItem(cand.templateId, 1)) || 0) : 1);
+                    _谢礼id = cand.templateId;
+                    if (_收 > 0) {
+                        npc.removeItemFromInventory(cand.templateId, 1);
+                        payMsg = itemName(cand.templateId);
+                    } else {
+                        _谢礼没处放 = true;
+                    }
                 }
             }
+            if (_谢礼没处放) {
+                if (had && _摘下的愿 && qs.availableQuests) qs.availableQuests.push(_摘下的愿);
+// DES-97＋DES-90 R2（第一百四十批／真机屏证）：本处是中段位——回退串『这份先还搁在他那儿。』后面还接 + '再来一趟。'。
+                //   句尾支 addItemFailText 带句号，钉在句子中间会破句，故改用中段支 addItemFailPhrase 并去掉回退串句号；
+                //   另『再来一趟』对一次性内容是骗人（判断见下），已撤掉改为句号收尾。
+                if (window.showMessage) window.showMessage('📜 「捎来：' + itemName(itemId) + '」这一单先记着——' + (npc ? npc.name : '') + ' 的谢礼没能落进你的行囊：' + ((typeof window.addItemFailPhrase === 'function' && window.addItemFailPhrase(_谢礼id ? itemName(_谢礼id) : itemName(itemId))) || '这份先还搁在他那儿') + '。', 'warning');
+                return;
+            }
+            qs.completedQuests.add(qid); // 绕开 completeQuest 的 changeFavor 隐患
             if (!payMsg) {
                 if (window.currentCharData) window.currentCharData.spiritStones = (window.currentCharData.spiritStones || 0) + 40;
                 payMsg = '灵石×40';
@@ -229,7 +246,7 @@
                     var tpl = window.itemById ? window.itemById[it.templateId] : null;
                     if (tpl && tpl.type === 'consumable') {
                         if (typeof npc.removeItemFromInventory === 'function') npc.removeItemFromInventory(it.templateId, 1);
-                        if (npc.state) npc.state.mood = Math.min(100, (npc.state.mood || 50) + 3);
+                        if (npc.state) npc.state.mood = Math.min(100, (npc.state.mood ?? 50) + 3);
                         return; // 每人每日至多消耗一颗
                     }
                 }

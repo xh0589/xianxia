@@ -86,7 +86,6 @@ const travelEvents = [
         minRealm: '炼气',
         onTrigger: function() {
             if (typeof window.setFlag === 'function') window.setFlag('bandit_ambushed');
-            if (typeof window.unlockBanditDenQuest === 'function') window.unlockBanditDenQuest();
             if (window.startBattle) {
                 window.startBattle('bandits');
             } else if (window.showMessage) {
@@ -103,10 +102,17 @@ const travelEvents = [
         description: '你在路边发现了一株罕见的灵药！',
         minRealm: '炼气',
         onTrigger: function() {
-            if (window.addItemToInventory) {
-                window.addItemToInventory('lingzhi', 1);
-            }
-            showMessage('获得：灵芝 x1', 'success');
+            // DES-72（第一百三十批）：旧写法丢了返回值——「获得：灵芝 x1」照念，囊里到底进没进不管
+            var 收 = typeof window.giveWithReceipt === 'function'
+                ? window.giveWithReceipt('lingzhi', 1, { quiet: true })
+                : (window.addItemToInventory
+                    ? { got: Number(window.addItemToInventory('lingzhi', 1)) || 0, count: 1, name: (window.itemById && window.itemById['lingzhi'] && window.itemById['lingzhi'].name) || '灵芝' }
+                    : null);
+            if (收 && 收.got > 0) { showMessage('获得：' + 收.name + ' x' + 收.got, 'success'); return; }
+            var 名 = (收 && 收.name) || '灵芝';
+            // DES-90（第一百三十九批）：路边采撷属野外可再来，句尾位带句号，改用①形
+            showMessage('路边那株 ' + 名 + ' 你没能带走：'
+                + ((typeof window.addItemFailText === 'function' && window.addItemFailText(名)) || '这一件先还留在原处。'), 'warning');
         }
     },
     {
@@ -161,7 +167,7 @@ const travelEvents = [
         minRealm: '炼气',
         onTrigger: function() {
             if (window.currentCharData) {
-                currentCharData.health = Math.max(1, (currentCharData.health || 100) - 30);
+                currentCharData.health = Math.max(1, (currentCharData.health ?? 100) - 30);
                 showMessage('受到30点伤害！', 'error');
                 if (window.updateStatusPanel) {
                     window.updateCharacterStatus();
@@ -178,9 +184,8 @@ const travelEvents = [
         minRealm: '炼气',
         requiresFlag: 'bandit_ambushed',
         onTrigger: function() {
-            if (typeof window.setFlag === 'function') window.setFlag('know_bandit_den');
-            if (typeof window.unlockBanditDenQuest === 'function') window.unlockBanditDenQuest();
-            if (window.showMessage) window.showMessage('已标记山贼巢穴方向（黑风寨）', 'success');
+            // 第一百一十一波：脚印认出的是舆图上一处真地点（旧版只写两枚无人读的空旗，屏上喊一句「已标记」就完）
+            window.SpecialPlaces.discover('heifeng_zhai', 'trail');
         }
     },
     {
@@ -192,7 +197,7 @@ const travelEvents = [
         minRealm: '炼气',
         onTrigger: function() {
             if (window.currentCharData) {
-                currentCharData.energy = Math.max(0, (currentCharData.energy || 100) - 15);
+                currentCharData.energy = Math.max(0, (currentCharData.energy ?? 100) - 15);
             }
             if (window.showMessage) window.showMessage('精力-15，耽搁了行程', 'error');
         }
@@ -408,6 +413,24 @@ function startTravel(toCity, method = 'walk') {
         return false;
     }
     
+    // 第一百四十二批：扣费(416-437) 与「设状态 / 排期 / 推进时钟」(439-460) 之间**原来没有 try**。
+    // 后半段任一环抛异常 ⇒ 钱已经扣了、人没走成、travelState 没设 ⇒ 白扣。
+    // ⚠️ 为什么不走 EconomyTransaction.run：它的 capture()（economy-transaction.js:28-39）
+    // 只快照 slots / maxSlots / currency / charCurrency 四项，**不收 energy/qi** ——
+    // 走事务也回不了精力这一笔。要真正解决得先扩快照范围，那是另一个改动。
+    // 这里用最小可靠法：自己记下扣了多少，后半段出岔子原路退回。
+    var _已扣石 = 0, _已扣铜 = 0, _已扣精力 = 0;
+    var _回退 = function () {
+        try {
+            var dm2 = window.XianXia && window.XianXia.DataManager;
+            if (_已扣石) { if (dm2 && dm2.addSpiritStones) dm2.addSpiritStones(_已扣石); else currentCharData.spiritStones = (currentCharData.spiritStones || 0) + _已扣石; }
+            if (_已扣铜) { if (dm2 && dm2.addCopper) dm2.addCopper(_已扣铜); else currentCharData.copper = (currentCharData.copper || 0) + _已扣铜; }
+            if (_已扣精力) currentCharData[_精力键] = (currentCharData[_精力键] || 0) + _已扣精力;
+            travelState.isTraveling = false;
+            if (window.showMessage) window.showMessage('这一趟没走成——灵石与精力已原样退回。', 'warning');
+        } catch (e) { if (window.console && console.error) console.error('[travel] 退款失败:', e); }
+    };
+
     // 扣除资源（使用 DataManager 统一接口）
     if (travelMethod.cost) {
         const dm = window.XianXia?.DataManager;
@@ -417,6 +440,7 @@ function startTravel(toCity, method = 'walk') {
             } else {
                 currentCharData.spiritStones = (currentCharData.spiritStones || 0) - travelMethod.cost;
             }
+            _已扣石 = travelMethod.cost;
         } else {
             const gold = dm ? dm.getCopper() : (currentCharData.copper || 0);
             if (dm) {
@@ -424,45 +448,58 @@ function startTravel(toCity, method = 'walk') {
             } else {
                 currentCharData.copper = gold - travelMethod.cost;
             }
+            _已扣铜 = travelMethod.cost;
         }
     }
+    var _精力键 = travelMethod.energyCost > 0 ? (travelMethod.id === 'float_sword' ? 'qi' : 'energy') : 'energy';
     if (travelMethod.energyCost > 0) {
         const resource = travelMethod.id === 'float_sword' ? 'qi' : 'energy';
         currentCharData[resource] -= travelMethod.energyCost;
-    }
-    
-    // 设置旅行状态。旅行是游戏时间事务，不依赖现实 setTimeout。
-    var startGameMinute = _travelNowMinute();
-    Object.assign(travelState, {
-        isTraveling: true,
-        fromCity: fromCity,
-        toCity: toCity,
-        method: method,
-        startGameMinute: startGameMinute,
-        arrivalGameMinute: startGameMinute + actualTimeCost
-    });
-
-    if (window.GameScheduler && typeof window.GameScheduler.schedule === 'function') {
-        window.GameScheduler.schedule('travel:complete', travelState.arrivalGameMinute, { risk: travelMethod.risk });
+        _已扣精力 = travelMethod.energyCost;
     }
 
-    showMessage(`开始前往 ${toCity}...（${travelMethod.name}${mountNote}）`, 'info');
-    if (window.timeSystem) window.timeSystem.advanceTime(actualTimeCost);
+    try {
+        // 设置旅行状态。旅行是游戏时间事务，不依赖现实 setTimeout。
+        var startGameMinute = _travelNowMinute();
+        Object.assign(travelState, {
+            isTraveling: true,
+            fromCity: fromCity,
+            toCity: toCity,
+            method: method,
+            startGameMinute: startGameMinute,
+            arrivalGameMinute: startGameMinute + actualTimeCost
+        });
 
-    // 无调度器时同步兜底；正常路径会在 time:advanced 中自动结算。
-    if (travelState.isTraveling && (!window.GameScheduler || typeof window.GameScheduler.schedule !== 'function')) {
-        completeTravel(travelMethod.risk);
+        if (window.GameScheduler && typeof window.GameScheduler.schedule === 'function') {
+            window.GameScheduler.schedule('travel:complete', travelState.arrivalGameMinute, { risk: travelMethod.risk });
+        }
+
+        showMessage(`开始前往 ${toCity}...（${travelMethod.name}${mountNote}）`, 'info');
+        if (window.timeSystem) window.timeSystem.advanceTime(actualTimeCost);
+
+        // 无调度器时同步兜底；正常路径会在 time:advanced 中自动结算。
+        if (travelState.isTraveling && (!window.GameScheduler || typeof window.GameScheduler.schedule !== 'function')) {
+            completeTravel(travelMethod.risk);
+        }
+    } catch (e) {
+        if (window.console && console.error) console.error('[travel] 行程中断，退款:', e);
+        _回退();
     }
 }
 
 // ============ 检查境界要求 ============
 function checkRealmRequirement(requirement, playerRealm, playerLayer) {
     const realmOrder = ['炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'];
+    // DES-92（第一百三十二批）：境界序这把尺只此一把。旧写法数到渡劫就断了，飞升／金仙 indexOf 得 -1，
+    //   「化神／炼虚／大乘」那几档高境界专属脚程反倒把大能挡在门外（屏上还念「您的境界不足」）。
+    const _境尺 = (typeof window.realmIndex === 'function')
+        ? window.realmIndex
+        : function (名) { return realmOrder.indexOf(名); };
     const requiredLayer = parseInt(requirement.replace(/[^\d]/g, '')) || 1;
     const realmName = requirement.replace(/\d+层?/, '');
     
-    const playerRealmIndex = realmOrder.indexOf(playerRealm);
-    const requiredRealmIndex = realmOrder.indexOf(realmName);
+    const playerRealmIndex = _境尺(playerRealm);
+    const requiredRealmIndex = _境尺(realmName);
     
     if (playerRealmIndex < requiredRealmIndex) return false;
     if (playerRealmIndex === requiredRealmIndex && playerLayer < requiredLayer) return false;
@@ -548,7 +585,8 @@ function triggerTravelEvent() {
     const weighted = availableEvents.map(e => {
         let w = e.weight;
         if ((e.type === 'combat' || e.type === 'negative') && weatherMul > 1) w *= weatherMul;
-        if (e.id === 'bandit_den_clue' && typeof window.hasFlag === 'function' && window.hasFlag('bandit_ambushed')) w *= 2;
+        // 第一百一十一波：此处原有「bandit_den_clue 遇 bandit_ambushed 再 ×2」——同一枚旗子既是这道事件的
+        // 入场门（上面 requiresFlag）又给它自己加权，门开时倍率恒真、门关时它不在池内，是一支空转的账，已撤
         return { e, w };
     });
     const totalWeight = weighted.reduce((sum, x) => sum + x.w, 0);
@@ -728,7 +766,8 @@ function startTravelBattleFallback(type) {
             meridian: ma['经脉'] || cd.meridian || 10
         }
     }, 'player');
-    var enemyData = window.generateRandomEnemy(level, enemyType);
+    var enemyData = window.generateRandomEnemy(level, enemyType,
+        (type === 'bandits' || type === 'bandit') ? { physiologyType: 'humanoid' } : null);
     if (type === 'bandits' || type === 'bandit') enemyData.name = '山贼';
     var enemy = new window.Entity(enemyData, enemyType);
     var battle = new window.Battle(playerEntity, enemy);
@@ -738,20 +777,6 @@ function startTravelBattleFallback(type) {
 }
 window.startTravelBattleFallback = startTravelBattleFallback;
 
-
-// ============ 山贼巢穴后续（由 app.js 完整实现，此处为占位） ============
-function unlockBanditDenQuest() {
-    if (typeof window.setFlag === 'function') {
-        window.setFlag('know_bandit_den');
-        window.setFlag('quest_bandit_den_available');
-    }
-}
-function openBanditDen() {
-    if (typeof window.startBattle === 'function') {
-        window.startBattle('bandits');
-    }
-    if (window.showMessage) window.showMessage('你杀入黑风寨！', 'warning');
-}
 
 if (window.GameScheduler && typeof window.GameScheduler.registerHandler === 'function') {
     window.GameScheduler.registerHandler('travel:complete', function(payload) {
@@ -788,8 +813,6 @@ window.travelSystem = {
     completeTravel,
     triggerTravelEvent,
     triggerEventAction,
-    unlockBanditDenQuest,
-    openBanditDen,
     unlockTeleport,   // 第九十五波·NEW-38：进城处调它解锁传送阵（抵达即解锁的对外写入口）
     TRAVEL_METHODS,
     travelEvents,

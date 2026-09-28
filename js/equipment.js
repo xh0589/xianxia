@@ -424,7 +424,8 @@ function setQuickMoveSlot(index, moveId) {
     if (index < 0 || index >= quickMoveSlots.length) return false;
     quickMoveSlots[index] = moveId || '';
     // 保存到localStorage
-    try { localStorage.setItem('xianxia_quick_moves', JSON.stringify(quickMoveSlots)); } catch(e) {}
+    // 第一百四十四批：原式是 `try { … } catch (e) {}`。接入 saveToStorage 后那层 catch 成为死支（单源自己吞异常、返回布尔、从不抛）——留着它等于假装还有一层守卫。已拆。
+    window.saveToStorage('xianxia_quick_moves', JSON.stringify(quickMoveSlots));
     return true;
 }
 

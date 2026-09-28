@@ -30,6 +30,15 @@ if (typeof window !== 'undefined' && !window.gameLog) {
 
 function _achNum(v) { var n = Number(v); return isFinite(n) ? n : 0; }
 
+// DES-48：回执念进账、不念开价——业障封在 ±100、名气封在 FAME_CAP，年政策「声名远播」还会把名气多给两成，
+// 照抄开价就在触顶时多印一截、在加成时少印一截。口径与 js/core/reward-service.js 的 pushGain 同一把尺。
+function _achGain(label, want, before, after) {
+    var got = _achNum(after) - _achNum(before);
+    if (got === want) return label + (want > 0 ? '+' : '') + want;
+    if (want > 0 && got > want) return label + '+' + got;
+    return label + (want > 0 ? '已达上限，实得+' : '已见底，实得') + got;
+}
+
 // ==================== 成就档案快照（只读派生，唯一真源拼装） ====================
 // ⚠️ 成就 requirements 的路径必须在此对象上有定义，否则永远不会点亮（幽灵键）。
 // 新增真源时同步扩这里，并保持"缺世界数据时给保守 0 值"。
@@ -291,16 +300,23 @@ class Achievement {
             var r = {};
             if (this.reward.fame) r.fame = _achNum(this.reward.fame);
             if (this.reward.karma) r.karma = _achNum(this.reward.karma);
-            var handled = false;
+            // DES-48：此前 handled 只由「没抛错」决定，而通道失败时不抛错、只 return { success:false }
+            // ——漏账就被当成已入账，兜底直写跳过，末了照样报「名气+N」。
+            var _fame0 = cd ? _achNum(cd.fame) : null;
+            var _karma0 = cd ? _achNum(cd.karma) : null;
+            var res = null;
             if (window.RewardService && typeof window.RewardService.apply === 'function') {
-                try { window.RewardService.apply(r, { source: 'achievement' }); handled = true; } catch (e) {}
+                try { res = window.RewardService.apply(r, { source: 'achievement' }); } catch (e) {}
             }
+            var handled = !!(res && res.success === true);
             if (!handled && cd) {
                 if (r.fame) cd.fame = Math.max(0, Math.min((window.FAME_CAP || 99999), _achNum(cd.fame) + r.fame)); // v21.9 名望尺度统一
                 if (r.karma) cd.karma = Math.max(-100, Math.min(100, _achNum(cd.karma) + r.karma));
             }
-            if (r.fame) paid.push('名气+' + r.fame);
-            if (r.karma) paid.push('业障' + (r.karma > 0 ? '+' : '') + r.karma);
+            if (cd) {
+                if (r.fame) paid.push(_achGain('名气', r.fame, _fame0, _achNum(cd.fame)));
+                if (r.karma) paid.push(_achGain('业障', r.karma, _karma0, _achNum(cd.karma)));
+            }
         }
         if (this.reward.items) {
             for (const item of this.reward.items) {

@@ -136,6 +136,20 @@
             if (Math.random() < t.appearChance * chanceMul) {
                 var a = { id: t.id, name: t.name, env: t.env, region: t.region, openedDay: worldDay, closeDay: worldDay + t.duration, template: t };
                 _state.active.push(a);
+                // v24·DES-26：开窗即把关窗日镜像进世界日历——闭关的「下次秘境窗口」卡从此有真目标
+                try {
+                    if (window.WorldCalendar && typeof window.WorldCalendar.register === 'function') {
+                        window.WorldCalendar.register({
+                            id: 'dungeon_window.' + t.id + '.close.' + a.closeDay,
+                            title: a.name + '（' + (a.region || '野外') + '）·窗口闭于第 ' + a.closeDay + ' 天',
+                            category: 'dungeon_window',
+                            dueAbsoluteDay: a.closeDay,
+                            source: { system: 'dungeon_dynamic', refId: t.id },
+                            severity: 'remind',
+                            payload: { dungeonId: t.id, name: a.name, region: a.region, openedDay: worldDay, closeDay: a.closeDay }
+                        });
+                    }
+                } catch (eCal) {}
                 if (window.EventBus) window.EventBus.emit('dungeon:dynamic:spawn', { id: t.id, day: worldDay, closeDay: a.closeDay });
             }
         }

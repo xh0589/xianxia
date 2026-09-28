@@ -76,7 +76,7 @@ global.timeSystem = {
     getAbsoluteDay: function () { return ABS_DAY; },
     onNewDaySubscribe: function () {}
 };
-global.addItemToInventory = function () { return true; };
+global.addItemToInventory = function (id, n) { return n || 1; };   // 第一百三十批：桩按真源口径回实收件数
 global.itemById = {
     pill_qi_gather: { id: 'pill_qi_gather', name: '聚气丹' },
     pill_big_recovery: { id: 'pill_big_recovery', name: '大还丹' },

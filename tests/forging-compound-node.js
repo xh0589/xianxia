@@ -14,7 +14,8 @@ var mockWindow = {
     inventory: { slots: [] },
     currentCharData: { qi: 1000, hp: 100, maxHp: 100, lifeSkills: { '锻造': 100, '炼制': 100 } },
     itemById: {},
-    addItem: function (id, cnt) { return true; },
+    // 第八十二波契约：addItem／addResultItem 返回的是行囊**实收件数**（不是布尔）
+    addItem: function (id, cnt) { return cnt || 1; },
     addResultItem: function (id, cnt) { return mockWindow.addItem(id, cnt); },
     getLifeSkill: function (k) { return mockWindow.currentCharData.lifeSkills[k] || 0; },
     getCurrentCharData: function () { return mockWindow.currentCharData; },

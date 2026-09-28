@@ -194,9 +194,14 @@ assert(linSrc.indexOf('global.NpcLineage = api') >= 0, 'E4 族谱导出名确为
 
 // ============ F 消防司做实 ============
 assert(appSrc.indexOf('window._fireDeptAct') >= 0, 'F1 消防司不再是纯台词死按钮（真业务动作在册）');
-assert(appSrc.indexOf("source: 'fire_duty'") >= 0 && appSrc.indexOf("source: 'fire_fight'") >= 0, 'F2 当差/扑救走统一结算（RewardService 认账）');
+// 第四十六次自修：两处奖励改走 _settleLedger（认 RewardService 的返回值，回执读账不读开价），
+// 原来那两枚字面锚（source: 'fire_duty' 直调串）随之下线——这里换锚，口径不变：仍必须过统一结算通道。
+assert(appSrc.indexOf("_settleLedger({ karma: 1, rep: 2 }, 'fire_duty')") >= 0
+    && appSrc.indexOf("_settleLedger({ karma: 3, rep: 5 }, 'fire_fight')") >= 0, 'F2 当差/扑救走统一结算（RewardService 认账）');
 assert(appSrc.indexOf("没真气压不住水龙") >= 0, 'F3 真气不济如实拒绝（成本世界真实）');
-assert(appSrc.indexOf("window.RewardService.apply({ karma: 1, rep: 2") >= 0, 'F4 当差功德+1声望+2走统一结算');
+assert(appSrc.indexOf('if (!res || res.success !== true) return null;') >= 0
+    && appSrc.indexOf("window.RewardService.apply({ karma: 1, rep: 2, msg: '', msgType: 'info' }") < 0,
+    'F4 当差功德+1声望+2走统一结算，且结算返回值被认（改前丢掉返回值、无条件上屏常量）');
 
 // ============ G 挂载与旧账 ============
 var html = fs.readFileSync(path.join(ROOT, '仙侠.html'), 'utf8');

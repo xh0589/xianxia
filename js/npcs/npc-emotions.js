@@ -85,16 +85,25 @@ const EMOTION_ACTIONS = {
         execute: function(npc, player) {
             const gifts = ['pill_small_recovery', 'mat_lingzhi', 'spec_spirit_stone'];
             const gift = gifts[Math.floor(Math.random() * gifts.length)];
-            const giftName = window.itemById?.[gift]?.name || '小礼物';
-            if (typeof window.addItemToInventory === 'function') {
-                window.addItemToInventory(gift, 1);
-                if (window.showMessage) {
-                    window.showMessage(`🎁 ${npc.name}心情很好，送了${giftName}给你！`, 'success');
-                }
-                npc.recordPlayerAction('received_gift', 'positive');
-                return true;
+            // DES-72（第一百三十批）：旧写法丢了返回值——「送了X给你」照念，囊里有没有照记人情
+            let 收 = null;
+            if (typeof window.giveWithReceipt === 'function') {
+                收 = window.giveWithReceipt(gift, 1, { quiet: true });
+            } else if (typeof window.addItemToInventory === 'function') {
+                收 = {
+                    got: Number(window.addItemToInventory(gift, 1)) || 0, count: 1,
+                    name: window.itemById?.[gift]?.name || '小礼物'
+                };
             }
-            return false;
+            if (!收) return false;
+            const giftName = 收.name || '小礼物';
+            if (window.showMessage) {
+                window.showMessage(收.got > 0
+                    ? `🎁 ${npc.name}心情很好，送了${giftName}给你！`
+                    : `🎁 ${npc.name}心情很好，要送${giftName}给你，这份却没落进你的行囊：${(typeof window.addItemFailText === 'function' && window.addItemFailText(giftName)) || '这份先还搁在他那儿。'}`, 'success');
+            }
+            if (收.got > 0) npc.recordPlayerAction('received_gift', 'positive');
+            return true;
         }
     },
     initiate_talk: {
@@ -162,7 +171,7 @@ function getEmotionState(mood) {
 
 // ============ 获取情绪对话前缀 ============
 function getEmotionDialoguePrefix(npc) {
-    const mood = npc.state?.mood || 50;
+    const mood = npc.state?.mood ?? 50;
     const emotion = getEmotionState(mood);
     const prefixes = EMOTION_DIALOGUE_PREFIXES[emotion.id];
     if (prefixes && prefixes.length > 0) {
@@ -197,7 +206,7 @@ function checkSocialConditions(npc, actionName, options) {
     }
 
     // 2. NPC状态检查（情绪是否允许互动）
-    var mood = npc.state?.mood || 50;
+    var mood = npc.state?.mood ?? 50;
     if (mood < minMood || mood > maxMood) {
         if (window.showMessage) window.showMessage(npc.name + '当前状态不适合' + actionName + '。', 'warning');
         return { pass: false, msg: 'NPC状态不满足' };
@@ -292,7 +301,7 @@ function comfortNPC(npcId) {
     });
     if (!check.pass) return;
 
-    var oldMood = npc.state.mood || 50;
+    var oldMood = npc.state.mood ?? 50;
     npc.state.mood = Math.min(100, oldMood + 8);
     npc.state.stress = Math.max(0, (npc.state.stress || 0) - 5);
     npc.recordPlayerAction('comfort', 'positive');
@@ -320,7 +329,7 @@ function encourageNPC(npcId) {
     });
     if (!check.pass) return;
 
-    npc.state.mood = Math.min(100, (npc.state.mood || 50) + 5);
+    npc.state.mood = Math.min(100, (npc.state.mood ?? 50) + 5);
     npc.state.stress = Math.max(0, (npc.state.stress || 0) - 8);
     npc.changeRespect(2);
     npc.recordPlayerAction('encourage', 'positive');
@@ -343,7 +352,7 @@ function accompanyNPC(npcId) {
     });
     if (!check.pass) return;
 
-    var oldMood = npc.state.mood || 50;
+    var oldMood = npc.state.mood ?? 50;
     npc.state.mood = Math.min(100, oldMood + 12);
     npc.state.stress = Math.max(0, (npc.state.stress || 0) - 10);
     npc.changeAffection(3);
@@ -367,7 +376,7 @@ function executeEmotionAction(npc) {
     // 天下任何角落一个心情低落的 NPC 都能隔空把你的社交面板顶开（小概率走一格弹一次面板的根因）。
     if (typeof npcNotCoLocated === 'function' && npcNotCoLocated(npc)) return;
 
-    const mood = npc.state.mood || 50;
+    const mood = npc.state.mood ?? 50;
     const emotion = getEmotionState(mood);
 
     // 只有情绪达到极端值时触发主动行为
@@ -396,7 +405,7 @@ function executeEmotionAction(npc) {
 // ============ 情绪状态UI渲染 ============
 function getEmotionBadgeHTML(npc) {
     // NEW-17 修：心情/压力是自然波动算出的浮点，读数处取整，不再打出「心情 46.362351…」
-    const mood = Math.round(npc.state?.mood || 50);
+    const mood = Math.round(npc.state?.mood ?? 50);
     const emotion = getEmotionState(mood);
     const stress = Math.round(npc.state?.stress || 0);
 
@@ -419,7 +428,7 @@ function getEmotionBadgeHTML(npc) {
 
 // ============ 情绪影响的对话响应 ============
 function getEmotionAffectedResponse(npc, baseResponse) {
-    const mood = npc.state?.mood || 50;
+    const mood = npc.state?.mood ?? 50;
     const emotion = getEmotionState(mood);
     const prefix = EMOTION_DIALOGUE_PREFIXES[emotion.id] || [''];
     const chosenPrefix = prefix[Math.floor(Math.random() * prefix.length)];
@@ -462,7 +471,7 @@ function injectEmotionToDialog(npcId) {
     if (!npc) return '';
 
     // NEW-17 修：读数取整（与 getEmotionBadgeHTML 同口径），进度条 width 用整数值不受影响
-    const mood = Math.round(npc.state?.mood || 50);
+    const mood = Math.round(npc.state?.mood ?? 50);
     const emotion = getEmotionState(mood);
     const stress = Math.round(npc.state?.stress || 0);
 

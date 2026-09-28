@@ -67,7 +67,7 @@ function makeSandbox(opts) {
             deductSpiritStones: function (n) { if (stt.wallet >= n) { stt.wallet -= n; W.inventory.currency.spiritStones = stt.wallet; return true; } return false; },
             addSpiritStones: function (n) { stt.wallet += n; W.inventory.currency.spiritStones = stt.wallet; }
         },
-        addItem: function (id, n) { stt.items.push({ id: id, n: n }); return true; },
+        addItem: function (id, n) { stt.items.push({ id: id, n: n }); return n || 1; },   // 桩：回实收件数
         applyBeastTideDefeatWound: function () { stt.wounds++; return { healthLost: 10, energyLost: 5 }; },
         SectGov: { chronicle: function (s, t) { stt.chron.push(String(t)); } },
         sectPowerNow: function () { return { tier: '中等', score: 150 }; },

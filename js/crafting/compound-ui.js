@@ -45,10 +45,17 @@
             return true;
         },
         refund: function (ids) {
+            var 退回 = 0;
             for (var i = 0; i < ids.length; i++) {
-                if (typeof window.addItemToInventory === 'function') window.addItemToInventory(ids[i], 1);
-                else if (typeof window.addItem === 'function') window.addItem(ids[i], 1);
+                // DES-84：退料走同一支笔——addItem 报的是实收件数，旧写法丢返回值，退不进去的材料照样念「已退回」
+                var got;
+                if (typeof window.addItemToInventory === 'function') got = Number(window.addItemToInventory(ids[i], 1)) || 0;
+                else if (typeof window.addItem === 'function') got = Number(window.addItem(ids[i], 1)) || 0;
+                else got = 1; // 无背包世界（测试沙盒）按全数退回计，与 consume 那侧的「不拦」同口径
+                退回 += got;
             }
+            if (typeof window.updateInventoryUI === 'function') { try { window.updateInventoryUI(); } catch (e) {} }
+            return { back: 退回, asked: ids.length };
         }
     };
 
@@ -199,6 +206,13 @@
             var reasons = { 'recipe-not-found': '方子不对', 'empty-pick': '还没选材', 'material-short': '材料不齐', 'inventory-full': '背包满了，丹没地方放（材料已退回）' };
             var reason = (res && res.reason) || '';
             var msg = reasons[reason] || reason;
+            // DES-84：退料也讲实收——只退回一部分时不许再念「材料已退回」
+            if (reason === 'inventory-full' && res && res.refundAsked != null) {
+                // DES-97（第一百四十批）：本处是中段位——后面还接 `+ '（N 件材料已退回）'`，句尾支 addItemFailText 带句号会把句号钉在句子中间（破句）。回退串原为「背包满了，丹没地方放」，断言容量违反 DES-90（原因账 window.addItemFailReason 全局一条，addItem 只在「一件也没收」时落 'bag_full'，半包档/死账档问不到账，站点不许自己断言满包），改用只说事实、不带句号的那一形。
+                msg = ((typeof window.addItemFailPhrase === 'function' && window.addItemFailPhrase('这一炉的丹')) || '这一炉先不开') + (res.refundBack >= res.refundAsked
+                    ? '（' + res.refundAsked + ' 件材料已退回）'
+                    : '（材料只退回 ' + res.refundBack + '/' + res.refundAsked + ' 件，其余没腾出地方）');
+            }
             if (reason.indexOf('skill-low') === 0) msg = '炼制手艺不到火候（' + reason.replace('skill-low', '').replace(/[()]/g, ' ') + '）';
             if (reason.indexOf('qi-low') === 0) msg = '真气不足，压不住丹火';
             if (reason.indexOf('count-mismatch') >= 0 || reason.indexOf('slot-') === 0) msg = '槽位选材不合方子';
@@ -210,7 +224,8 @@
             '<p class="text-3xl mb-2">' + (q.id === 'imperial' ? '🌟' : (res.toxic >= 40 ? '☣️' : '⚗️')) + '</p>' +
             '<p class="font-bold text-white text-lg">' + _nameOf(res.itemId) + '</p>' +
             '<p class="text-sm mt-1" style="color:' + (q.color === 'purple' ? '#c084fc' : q.color === 'gold' ? '#fbbf24' : q.color === 'blue' ? '#60a5fa' : '#d1d5db') + '">品质：' + (q.name || '?') + '（评分 ' + Math.round(res.score) + '，毒性 ' + Math.round(res.toxic) + '）</p>' +
-            '<p class="text-xs text-gray-400 mt-2">' + (q.id === 'imperial' ? '御品出炉，丹香十里！' : (res.toxic >= 40 ? '毒性偏重——丹成瑕疵，下回选药材长个心眼。' : '丹成，收入囊中。')) + '</p>' +
+            '<p class="text-xs text-gray-400 mt-2">' + (q.id === 'imperial' ? '御品出炉，丹香十里！' : (res.toxic >= 40 ? '毒性偏重——丹成瑕疵，下回选药材长个心眼。' : '丹成，收入囊中。')) +
+            (res.count != null ? '这一炉收下 ' + res.count + ' 粒' + (res.asked != null && res.count < res.asked ? '（行囊只吞得下这些，另 ' + (res.asked - res.count) + ' 粒没处放）' : '') : '') + '</p>' +
             '<button onclick="openCompoundPilfarUI()" class="mt-4 text-xs px-4 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white">再开一炉</button></div>');
     };
 
@@ -312,6 +327,13 @@
             var reason = (res && res.reason) || '';
             var msgs = { 'empty-embryo': '还没定器胚', 'material-short': '材料不齐', 'qi-low': '真气不足，抡不动锤', 'inventory-full': '背包满了（材料已退回）' };
             var msg = msgs[reason] || reason;
+            // DES-84：与丹炉同一支笔——退料只成功一半时不许再念「材料已退回」
+            if (reason === 'inventory-full' && res && res.refundAsked != null) {
+                // DES-97（第一百四十批）：本处是中段位——后面还接 `+ '（N 件材料已退回）'`，句尾支 addItemFailText 带句号会把句号钉在句子中间（破句）。回退串原为「背包满了，器没地方放」，断言容量违反 DES-90，改用只说事实、不带句号的那一形。
+                msg = ((typeof window.addItemFailPhrase === 'function' && window.addItemFailPhrase('这一炉的器')) || '这一炉先不开') + (res.refundBack >= res.refundAsked
+                    ? '（' + res.refundAsked + ' 件材料已退回）'
+                    : '（材料只退回 ' + res.refundBack + '/' + res.refundAsked + ' 件，其余没腾出地方）');
+            }
             if (reason.indexOf('skill-low') === 0) msg = '锻造手艺不到（' + reason.replace('skill-low', '').replace(/[()]/g, ' ') + '）';
             if (reason.indexOf('count-mismatch') >= 0 || reason.indexOf('-count') >= 0) msg = '槽位选材数不合器谱';
             if (reason.indexOf('rune-skill-low') === 0) msg = '铭纹是大活——锻造手艺不够，铭纹槽用不得';
@@ -322,10 +344,14 @@
         // 第二十六波：出炉的器有品相——品质字头、工评、极品成双都亮给玩家看
         var _qId = (res.quality && res.quality.id) || 'normal';
         var _qColor = { poor: 'text-gray-400', normal: 'text-gray-300', good: 'text-blue-300', excellent: 'text-yellow-300', imperial: 'text-purple-300' }[_qId] || 'text-gray-300';
+        // DES-72 同族：件数念实收，「成双」那句要两件真进囊才说出口
+        var _outTxt = _qId === 'imperial'
+            ? (res.asked != null && res.count != null && res.count < res.asked ? '·极品本该成双，行囊只收下 ' + res.count + '/' + res.asked + ' 件' : '·极品出炉成双，同款多一件')
+            : '';
         _redraw('<div class="text-center py-4">' +
             '<p class="text-3xl mb-2">' + (res.imprint ? '🌟' : '🗡️') + '</p>' +
             '<p class="font-bold text-white text-lg">' + (res.name || _nameOf(res.itemId)) + '</p>' +
-            '<p class="text-sm ' + _qColor + ' mt-1">品相：' + ((res.quality && res.quality.name) || '普通') + '（工评 ' + (res.score != null ? res.score : '？') + '/100' + (_qId === 'imperial' ? '·极品出炉成双，同款多一件' : '') + '）</p>' +
+            '<p class="text-sm ' + _qColor + ' mt-1">品相：' + ((res.quality && res.quality.name) || '普通') + '（工评 ' + (res.score != null ? res.score : '？') + '/100' + _outTxt + '）</p>' +
             '<p class="text-sm text-cyan-300 mt-1">词缀：' + affTxt + '</p>' +
             (res.imprint ? '<p class="text-xs text-purple-300 mt-1">铭纹入器——这一炉是大活。</p>' : '') +
             '<button onclick="openCompoundForgingUI()" class="mt-4 text-xs px-4 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white">再锻一件</button></div>');

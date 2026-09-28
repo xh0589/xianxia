@@ -42,7 +42,7 @@ function makeWorld(opts) {
         recordChoice: function (id) { choices.push(id); },
         getRealmTier: function (r) { var i = realmOrder.indexOf(r); return i < 0 ? 6 : i; },
         addFame: function () {}, gainCultivationBonus: function () {},
-        addItem: function (id) { (W._items = W._items || []).push(id); return true; },
+        addItem: function (id, n) { (W._items = W._items || []).push(id); return n || 1; },   // 桩：回实收件数
         itemById: {}, allItems: [], materials: [],
         WorldJournal: { record: function (e) { journals.push(e); return { ok: true }; } },
         Codex: { discover: function (t, id, info) { codexes.push({ type: t, id: id, info: info }); return { ok: true }; } },

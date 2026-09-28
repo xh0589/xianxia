@@ -4,21 +4,21 @@
 
 // ============ 公告栏数据 ============
 const SECT_BULLETIN = [
-    { type: 'notice', icon: '📢', text: '欢迎光临本派，外院免费开放，内院弟子区域请止步。' },
-    { type: 'rule', icon: '📜', text: '门派重地，非请勿入。擅闯内院者，后果自负。' },
-    { type: 'info', icon: 'ℹ️', text: '本派长期招收弟子，有意者可至山门登记。' },
-    { type: 'tip', icon: '💡', text: '门派坊市出售各类物品，游客价格略高。' }
+    { type: 'notice', icon: '📢', text: '山门大开，外院随意看；内院有功课，客人止步——不是拦你，是里头在练的东西，看了伤眼。' },
+    { type: 'rule', icon: '📜', text: '门里是山门的重地，门外是官道的太平。哪边凉快，客人自己掂量。' },
+    { type: 'info', icon: 'ℹ️', text: '山门收人，年年都收——收得进来，站不站得住，各凭各的骨头。有意向的，门房登记。' },
+    { type: 'tip', icon: '💡', text: '坊市开门，童叟无欺。同一样货，游客价高一成——不是宰你，是山道的轿钱摊进去了。' },
 ];
 
 // 公告栏内容（按门派类型附加额外信息）
 function getSectBulletins(sectType) {
     var bulletins = SECT_BULLETIN.slice();
     if (sectType === '正道') {
-        bulletins.push({ type: 'notice', icon: '🕊️', text: '正道同气连枝，本派与各正道门派世代交好。' });
+        bulletins.push({ type: 'notice', icon: '🕊️', text: '布告：正道一家亲，是写给人看的；一家亲写了几代，也就成了真的。本派与各正道门派，交好是真的，账也是各记各的。' });
     } else if (sectType === '邪派') {
-        bulletins.push({ type: 'warning', icon: '⚠️', text: '擅闯禁地者，格杀勿论！' });
+        bulletins.push({ type: 'warning', icon: '⚠️', text: '布告：禁地的门没有锁——锁不住的东西才叫禁地。进去的人，山规替他收尸都赶趟。' });
     } else {
-        bulletins.push({ type: 'info', icon: '🤝', text: '本派保持中立，欢迎各方来客。' });
+        bulletins.push({ type: 'info', icon: '🤝', text: '布告：本派两不相帮，两边都喝茶。江湖的雨淋到山门为止——进来请带伞走的规矩，出门还给江湖。' });
     }
     return bulletins;
 }
@@ -48,7 +48,7 @@ function getGateGuardDialogue(sectName, sect) {
             '"来者何人！此乃【' + sectName + '】地界。"',
             '"规矩很简单：不该去的地方别去，不该问的别问。"',
             '"想加入？先证明你有这个实力。"',
-            '"哼，又是一个不知天高地厚的家伙。"'
+            '"站住。报个名号——门房的册子不挑人，只挑谎话。"'
         ],
         '中立': [
             '"欢迎来到【' + sectName + '】。"',
@@ -247,15 +247,29 @@ function buySectItem(itemId, price) {
         return;
     }
     
-    inventory.currency.spiritStones = stones - price;
-    if (typeof window.addItem === 'function') {
-        window.addItem(itemId, 1);
+    // DES-72＋DES-86（第一百三十批）：柜台规矩——先交货再收钱。旧写法先扣灵石、又把 addItem 的返回值丢在地上，
+    // 行囊满时货没到手钱照扣，屏上还念「购买成功！」
+    var 货名 = (window.itemById && window.itemById[itemId] && window.itemById[itemId].name) || itemId;
+    var 收 = typeof window.giveWithReceipt === 'function'
+        ? window.giveWithReceipt(itemId, 1, { quiet: true, label: 货名 })
+        : (typeof window.addItem === 'function'
+            ? { got: Number(window.addItem(itemId, 1)) || 0, count: 1, name: 货名 }
+            : { got: 1, count: 1, name: 货名 });
+    if (收.got <= 0) {
+        if (typeof window.showMessage === 'function') {
+            // DES-90（第一百三十九批）：问不到账时不许由站点断言满包。这条同时报了退款 ⇒ 词表 ③。
+            // 「货没接／灵石原样退你」是代码真做的事，留着；「你行囊装不下」与黑话串一起撤。
+            window.showMessage('这一件 ' + 货名 + ' 货没接，' + price + ' 灵石也原样退你：'
+                + ((typeof window.addItemFailText === 'function' && window.addItemFailText(货名)) || '这一件没能交到你手上。'), 'warning');
+        }
+        return;
     }
+    inventory.currency.spiritStones = stones - price;
     if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI();
     if (typeof window.updateInventoryUI === 'function') window.updateInventoryUI();
     
     if (typeof window.showMessage === 'function') {
-        window.showMessage('购买成功！', 'success');
+        window.showMessage('购买成功！付灵石 ' + price + '，' + 货名 + '×' + 收.got + ' 入囊。', 'success');
     }
 }
 
@@ -643,7 +657,7 @@ function initSectDiplomacy() {
 }
 
 function saveSectDiplomacy() {
-    try { localStorage.setItem('xianxia_sect_diplomacy', JSON.stringify(SECT_DIPLOMACY_STATE)); } catch(e) {}
+    try { localStorage.setItem('xianxia_sect_diplomacy', JSON.stringify(SECT_DIPLOMACY_STATE)); } catch(e) { console.warn('[静默失败] js/sects/sect-visit.js:660 · 外交关系存档：结盟/仇怨/通商的账没存上，读档后两家关系打回原形，玩家的外交努力全白费', e && e.message); }
 }
 
 function getSectRelationLabel(value) {
@@ -796,7 +810,7 @@ function initiateSectConflict(mySect, targetSect) {
         return;
     }
     ds.contribution -= 200;
-    if (window.timeSystem && window.timeSystem.advanceTime) { try { window.timeSystem.advanceTime(240, '征讨点兵'); } catch (e) {} }
+    if (window.timeSystem && window.timeSystem.advanceTime) { try { window.timeSystem.advanceTime(240, '征讨点兵'); } catch (e) { console.warn('[静默失败] js/sects/sect-visit.js:813 · 征讨耗时：点兵开拔的两百四十分钟没走掉，贡献已扣、仗已打完，时间却还停在出兵前', e && e.message); } }
     var _cWin = Math.random() < 0.55;
     if (SECT_DIPLOMACY_STATE[mySect] && SECT_DIPLOMACY_STATE[mySect][targetSect]) {
         SECT_DIPLOMACY_STATE[mySect][targetSect].relation -= _cWin ? 20 : 30;
@@ -811,8 +825,8 @@ function initiateSectConflict(mySect, targetSect) {
         try { window.sectLedgerNote && window.sectLedgerNote(320, '外交出战·旗开得胜'); } catch (e) {}
         if (window.showMessage) window.showMessage('⚔️ 捷报！门下弟子旗开得胜，缴获颇丰——记功 320 贡献。但 ' + targetSect + ' 这个仇算是结死了（关系-20）。', 'success');
     } else {
-        if (window.currentCharData) window.currentCharData.health = Math.max(1, (window.currentCharData.health || 100) - 20);
-        if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e2) {} }
+        if (window.currentCharData) window.currentCharData.health = Math.max(1, (window.currentCharData.health ?? 100) - 20);
+        if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e2) { console.warn('[静默失败] js/sects/sect-visit.js:829 · 征讨失利回血：带伤而回的气血扣减没落进面板，玩家只看到一句「挂了彩」却不知自己掉了多少血', e2 && e2.message); } }
         if (window.showMessage) window.showMessage('💔 征讨失利，弟子们带伤而回，你也在乱战中挂了彩（健康-20）。' + targetSect + ' 气焰更盛，仇怨加深（关系-30）。', 'error');
     }
     showSectDiplomacy(mySect);
@@ -835,7 +849,7 @@ function proposeSectAlliance(mySect, targetSect) {
         return;
     }
     dsA.contribution -= 100;
-    if (window.timeSystem && window.timeSystem.advanceTime) { try { window.timeSystem.advanceTime(120, '遣使议盟'); } catch (e) {} }
+    if (window.timeSystem && window.timeSystem.advanceTime) { try { window.timeSystem.advanceTime(120, '遣使议盟'); } catch (e) { console.warn('[静默失败] js/sects/sect-visit.js:852 · 遣使耗时：使者盘缠已扣、盟约结果已出，这一百二十分钟却没走掉，日程对不上', e && e.message); } }
     var _rel = (SECT_DIPLOMACY_STATE[mySect] && SECT_DIPLOMACY_STATE[mySect][targetSect] && SECT_DIPLOMACY_STATE[mySect][targetSect].relation) || 0;
     var _aChance = Math.min(0.9, Math.max(0.15, 0.5 + _rel / 200));
     var _aOk = Math.random() < _aChance;
@@ -914,7 +928,7 @@ function sectVisitDay() {
 function sectVisitPassTime(minutes, reason) {
     try {
         if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') window.timeSystem.advanceTime(minutes, reason);
-    } catch (e) {}
+    } catch (e) { console.warn('[静默失败] js/sects/sect-visit.js:931 · 拜山/切磋耗时：时辰没走掉，礼金已收、交情已记，时钟却还停在原处', e && e.message); }
 }
 function sectVisitDeduct(n) {
     try {

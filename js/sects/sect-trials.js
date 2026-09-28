@@ -22,6 +22,14 @@
     W._closeModal = W._closeModal || _close;
     function realmTier() { try { return typeof W.getRealmTier === 'function' ? W.getRealmTier((cd() || {}).realm) : 1; } catch (e) { return 1; } }
     function addC(n, r) { try { if (typeof W.sectAddContribution === 'function') return W.sectAddContribution(n, r); } catch (e) {} var d = ds(); if (d) d.contribution = (Number(d.contribution) || 0) + n; }
+    // DES-72（第一百三十批）：试炼彩头要认实收——旧写法丢了返回值，屏上照念「物件入行囊」
+    function 试发(id, n) {
+        if (typeof W.giveWithReceipt === 'function') return W.giveWithReceipt(id, n, { quiet: true });
+        var 得 = 0; try { 得 = Number(W.addItem(id, n)) || 0; } catch (e) { }
+        return { got: 得, count: n, name: (W.itemById && W.itemById[id] && W.itemById[id].name) || id };
+    }
+    // DES-97（第一百三十八批）：这一支只被拼进「（…）」里用，所以只准出从句——句尾带圆点的那一支会把括号顶破
+    function 试原因(名) { return (typeof W.addItemReasonPhrase === 'function' && W.addItemReasonPhrase(名)) || '没能落进你的行囊'; }
     function spendC(n, r) { try { if (typeof W.sectSpendContribution === 'function') return W.sectSpendContribution(n, r); } catch (e) {} var d = ds(); if (!d || (Number(d.contribution) || 0) < n) return false; d.contribution -= n; return true; }
     function addStones(n) {
         try { if (W.XianXia && W.XianXia.DataManager && W.XianXia.DataManager.addSpiritStones) { W.XianXia.DataManager.addSpiritStones(n); return; } } catch (e) {}
@@ -136,8 +144,12 @@
         try { if (typeof W.sectPassiveTrain === 'function') W.sectPassiveTrain('battle'); } catch (e) {}
         if (floor < 5) {
             var pills = ['pill_qi_gather', 'mat_lingzhi', 'iron_ore'];
-            try { if (typeof W.addItem === 'function') W.addItem(pills[floor % pills.length], 1 + Math.floor(floor / 2)); } catch (e) {}
-            var line = '✨ 「' + nm + '」第' + floor + '层通了——影散处留下一份祖师余泽（贡献+' + (40 * floor) + '，物件入行囊）。下一层的门开了。';
+            var 余 = 试发(pills[floor % pills.length], 1 + Math.floor(floor / 2));
+            var line = '✨ 「' + nm + '」第' + floor + '层通了——影散处留下一份祖师余泽（贡献+' + (40 * floor) + '，'
+                + (余.got > 0
+                    ? 余.name + '×' + 余.got + ' 入囊' + (余.got < 余.count ? '（另 ' + (余.count - 余.got) + ' 件：' + ((typeof W.addItemReasonPhrase === 'function' && W.addItemReasonPhrase(余.name)) || '没能带走') + '）' : '')
+                    : '那份' + 余.name + '你没能带走（' + 试原因(余.name) + '）')
+                + '）。下一层的门开了。';
             log(line, 'success'); msg(line, 'success');
         } else {
             // 首通第五层：山门宝库
@@ -147,10 +159,15 @@
                 var wpn = null;
                 try { wpn = W.getSectEquipment && W.getSectEquipment(sect); } catch (e) {}
                 var wpnId = (wpn && wpn.weapon && wpn.weapon.id) || 'wpn_spirit_sword';
-                try { if (typeof W.addItem === 'function') W.addItem(wpnId, 1); } catch (e) {}
+                var 刃 = 试发(wpnId, 1);
                 try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 5); } catch (e) {}
                 chron(sect, '有弟子通了「' + nm + '」试炼的五层——开山以来头一遭。祖师宝库为他开了一次：专属兵刃出匣，全门传观。');
-                line5 = '🏆 第五层的「开山之意」向你低头了。「' + nm + '」深处石门开——祖师宝库：灵石二百、本派专属兵刃一柄出匣认你。（名望+5，编年记名：开山以来头一遭）';
+                line5 = '🏆 第五层的「开山之意」向你低头了。「' + nm + '」深处石门开——祖师宝库：灵石二百、'
+                    + (刃.got > 0
+                        ? '本派专属兵刃一柄出匣认你'
+                        // DES-90（第一百三十九批）：「腾不出手接」是站点断言容量（R1）；改只说事实——兵刃出了匣、你没能接住它，后半句代码真做的事与真实原因保留
+                        : '兵刃出了匣，你却没能接住它——那柄' + 刃.name + '又搁回架上（' + 试原因(刃.name) + '）')
+                    + '。（名望+5，编年记名：开山以来头一遭）';
             } else {
                 line5 = '🏆 你又一次走通了五层——宝库的门认得你了，兵刃不重复出匣，灵石照给。（灵石+200）';
             }

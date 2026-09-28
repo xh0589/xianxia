@@ -176,6 +176,9 @@
             health: charData.health != null ? charData.health : 100,
             qi: charData.qi != null ? charData.qi : 100,
             energy: charData.energy != null ? charData.energy : 100,
+            // SAVE-03：心境入档（此前漏白名单——茶馆瓦舍养起来的心境存读档蒸发，屏上照样印底色）
+            mood: charData.mood != null ? charData.mood : 80,
+            maxMood: charData.maxMood != null ? charData.maxMood : 100,
             spiritStones: charData.spiritStones != null ? charData.spiritStones : 0,
             copper: charData.copper != null ? charData.copper : 0,
             karma: charData.karma != null ? charData.karma : 0,
@@ -215,6 +218,43 @@
             mortalOrigin: charData._mortalOrigin != null ? charData._mortalOrigin : '',
             // P0-5 死亡仙侠化：神魂/残魂状态
             soulState: charData.soulState ? JSON.parse(JSON.stringify(charData.soulState)) : null,
+            // ===== 第一百二十三批 DES-75：这批角色账此前两头都没点名 =====
+            // 不是「写了没读」——collect 与 apply 都零命中，于是攒了一世的东西读档即蒸发，
+            // 屏上照旧念那个数（HUD 名气／机缘行／悟道点／香火信徒），玩家只当自己见鬼了。
+            fame: charData.fame != null ? charData.fame : 0,
+            notoriety: charData.notoriety != null ? charData.notoriety : 0,
+            fortune: charData.fortune != null ? charData.fortune : 0,
+            insightPoints: charData.insightPoints != null ? charData.insightPoints : 0,
+            incense: charData.incense != null ? charData.incense : 0,
+            _poisoned: !!charData._poisoned,
+            springBlessing: charData.springBlessing != null ? charData.springBlessing : 0,
+            lastDailyClaimDay: charData.lastDailyClaimDay != null ? charData.lastDailyClaimDay : null,
+            _demonicCorruption: charData._demonicCorruption != null ? charData._demonicCorruption : 0,
+            _foundationBonus: charData._foundationBonus != null ? charData._foundationBonus : 0,
+            _coreBonus: charData._coreBonus != null ? charData._coreBonus : 0,
+            _primordialBonus: charData._primordialBonus != null ? charData._primordialBonus : 0,
+            _divineBonus: charData._divineBonus != null ? charData._divineBonus : 0,
+            _breakthroughPillBonus: charData._breakthroughPillBonus != null ? charData._breakthroughPillBonus : 0,
+            _manualProgress: charData._manualProgress && typeof charData._manualProgress === 'object'
+                ? JSON.parse(JSON.stringify(charData._manualProgress)) : {},
+            dungeonProgress: charData.dungeonProgress && typeof charData.dungeonProgress === 'object'
+                ? JSON.parse(JSON.stringify(charData.dungeonProgress)) : {},
+            _customPills: Array.isArray(charData._customPills)
+                ? charData._customPills.slice() : [],
+            _pastLifeMemory: charData._pastLifeMemory && typeof charData._pastLifeMemory === 'object'
+                ? JSON.parse(JSON.stringify(charData._pastLifeMemory)) : null,
+            charFlags: charData.flags && typeof charData.flags === 'object'
+                ? JSON.parse(JSON.stringify(charData.flags)) : {},
+            // 同日牌与战绩：只有真读者、此前不入档 ⇒ 存读档即「今日还能上台 N 场」回满、
+            // 秘境七日枯荣作废、榜上留旧分而本人清零。
+            _arenaDay: charData._arenaDay != null ? charData._arenaDay : null,
+            _arenaDailyCount: charData._arenaDailyCount != null ? charData._arenaDailyCount : 0,
+            arenaWins: charData.arenaWins != null ? charData.arenaWins : 0,
+            arenaStreak: charData.arenaStreak != null ? charData.arenaStreak : 0,
+            arenaScore: charData.arenaScore != null ? charData.arenaScore : 0,
+            _failedBreakthroughs: charData._failedBreakthroughs != null ? charData._failedBreakthroughs : 0,
+            dungeonClearedAt: charData.dungeonClearedAt && typeof charData.dungeonClearedAt === 'object'
+                ? JSON.parse(JSON.stringify(charData.dungeonClearedAt)) : {},
             maxHealth: charData.maxHealth != null ? charData.maxHealth : 100,
             maxQi: charData.maxQi != null ? charData.maxQi : 100,
             maxEnergy: charData.maxEnergy != null ? charData.maxEnergy : 100,
@@ -701,6 +741,9 @@
             health: n(saveData.health, 100),
             qi: n(saveData.qi, 100),
             energy: n(saveData.energy, 100),
+            // SAVE-03：心境回灌（旧档无字段按新号底色 80／100 处理——与角色模板、HUD 兜底同口径）
+            mood: n(saveData.mood, 80),
+            maxMood: n(saveData.maxMood, 100),
             spiritStones: n(saveData.spiritStones, 0),
             copper: n(saveData.copper, 0),
             karma: n(saveData.karma, 0),
@@ -733,6 +776,38 @@
             _mortalOrigin: saveData.mortalOrigin || '',
             // P0-5 死亡仙侠化：神魂/残魂状态
             soulState: saveData.soulState || null,
+            // ===== 第一百二十三批 DES-75：与上方 collect 一一对应的回灌 =====
+            // 旧档没这些字段时按新号底色处理（与 mood/luck 那两条同口径），不凭空发钱发点。
+            fame: n(saveData.fame, 0),
+            notoriety: n(saveData.notoriety, 0),
+            fortune: n(saveData.fortune, 0),
+            insightPoints: n(saveData.insightPoints, 0),
+            incense: n(saveData.incense, 0),
+            _poisoned: !!saveData._poisoned,
+            springBlessing: n(saveData.springBlessing, 0),
+            lastDailyClaimDay: n(saveData.lastDailyClaimDay, null),
+            _demonicCorruption: n(saveData._demonicCorruption, 0),
+            _foundationBonus: n(saveData._foundationBonus, 0),
+            _coreBonus: n(saveData._coreBonus, 0),
+            _primordialBonus: n(saveData._primordialBonus, 0),
+            _divineBonus: n(saveData._divineBonus, 0),
+            _breakthroughPillBonus: n(saveData._breakthroughPillBonus, 0),
+            _manualProgress: (saveData._manualProgress && typeof saveData._manualProgress === 'object')
+                ? saveData._manualProgress : {},
+            dungeonProgress: (saveData.dungeonProgress && typeof saveData.dungeonProgress === 'object')
+                ? saveData.dungeonProgress : {},
+            _customPills: Array.isArray(saveData._customPills) ? saveData._customPills.slice() : [],
+            _pastLifeMemory: (saveData._pastLifeMemory && typeof saveData._pastLifeMemory === 'object')
+                ? saveData._pastLifeMemory : null,
+            flags: (saveData.charFlags && typeof saveData.charFlags === 'object') ? saveData.charFlags : {},
+            _arenaDay: n(saveData._arenaDay, null),
+            _arenaDailyCount: n(saveData._arenaDailyCount, 0),
+            arenaWins: n(saveData.arenaWins, 0),
+            arenaStreak: n(saveData.arenaStreak, 0),
+            arenaScore: n(saveData.arenaScore, 0),
+            _failedBreakthroughs: n(saveData._failedBreakthroughs, 0),
+            dungeonClearedAt: (saveData.dungeonClearedAt && typeof saveData.dungeonClearedAt === 'object')
+                ? saveData.dungeonClearedAt : {},
             maxHealth: n(saveData.maxHealth, 100),
             maxQi: n(saveData.maxQi, 100),
             maxEnergy: n(saveData.maxEnergy, 100),
@@ -1133,6 +1208,12 @@
             try { global.StateRegistry.importAll(saveData.modules || {}); }
             catch (e) { console.warn('[GameState] 模块状态恢复失败:', e); }
         }
+
+        // 载入即定妆：本函数开头 clearCharacterStorage() 会连 `xianxia_save` 一起删（它在
+        // CHARACTER_STORAGE_KEYS 里），而那一份正是此刻应用的档——读一次等于抹一次。
+        // 只靠 xianxia_save 存活的档（auto-save.js:154 独写此键）因此一读就没；载入摘要槽时
+        // app.js:2908 的「同名完整档」兜底同样落在被自己删掉的键上。
+        writeKey('xianxia_save', saveData);
 
         return true;
     }

@@ -36,6 +36,11 @@
         return f ? f.num(v) : String(v);
     }
 
+    // 时长口径归 time-system.js（1 时辰=120 分钟）；视图层不裸调跨层全局，缺位时回落分钟数而非抛错
+    function _dur(minutes) {
+        return window.formatShichen ? window.formatShichen(minutes) : (Math.max(0, Math.round(Number(minutes) || 0)) + '分钟');
+    }
+
     /** 主按钮发号器：一屏只给第一个开口要 x-cta 的按钮上色（render 里重置） */
     function _cta() {
         if (_primaryUsed) return '';
@@ -310,7 +315,7 @@
             '<div class="flex flex-wrap items-center justify-between gap-2 mb-1"><span class="x-h2">' + (t.icon || '🏗️') + ' 修缮图样：' + next.targetName +
             ' <span class="x-chip x-chip--flat">等级 ' + (t.level || 1) + '</span></span>' +
             '<button onclick="repairHouse(\'' + next.target + '\')" class="x-btn x-btn--sm' + ((afford && matsOk) ? _cta() : ' x-off') + '">动工（补差价灵石 ' + _num(r.stones) + '）</button></div>' +
-            '<p class="x-meta mb-1">' + r.label + ' · 工期约 ' + Math.round(r.minutes / 60) + ' 个时辰（动工真耗时）</p>' +
+            '<p class="x-meta mb-1">' + r.label + ' · 工期约 ' + _dur(r.minutes) + '（动工真耗时）</p>' +
             '<p class="x-meta">工料：' + matLine + (matsOk ? '' : ' <span class="x-bad">—— 工料不足，备齐了这一钮才按得动</span>') + '</p></div>';
     }
     function _tradeUpHtml() {
@@ -362,9 +367,14 @@
                 '<p class="x-dim">' + (rt && !rt.same ? (rt.legs.join(' → ') + ' · ' + rt.li + ' 里 · 约 ' + rt.minutes + ' 分钟') : '脚程见舆图关隘账') + '</p></div>' +
                 '<button onclick="HousePanelUI._depart(\'' + reg + '\')" class="x-btn x-btn--sm shrink-0' + (home ? '' : ' x-off') + '">' + (home ? '动身' : '人在外') + '</button></div>';
         });
+        // DES-54（第一百三十一批）：这句图例旧写法写死「60 里≈两个时辰」，比本面板自己算出来印在下面的分钟数大一倍
+        //   （journeyMinutes：60 里＝120 分钟＝一个时辰）。图例改吃同一把尺现推，别再手写常量——下面那几行的账动了，这句会跟着动。
+        var _WM = window.WorldMap || {};
+        var 里尺话 = (typeof _WM.shichenText === 'function' && typeof _WM.journeyMinutes === 'function')
+            ? _WM.shichenText(_WM.journeyMinutes({ li: 60 })) : '120 分钟';
         return '<div class="x-card mb-3">' +
             '<p class="x-h2 x-loc mb-1">🧭 路引——从「' + site.region + ' · ' + site.name + '」下山出门，各州脚程：</p>' +
-            '<p class="x-dim mb-2">里数与耗时走「天下疆界」的关隘账（60 里≈两个时辰）；不接壤的州得一站一站走，动身时自会说清取道哪几座关。进城另结进城的脚程。</p>' +
+            '<p class="x-dim mb-2">里数与耗时走「天下疆界」的关隘账（60 里≈' + 里尺话 + '）；不接壤的州得一站一站走，动身时自会说清取道哪几座关。进城另结进城的脚程。</p>' +
             '<div class="grid grid-cols-1 md:grid-cols-3 gap-1.5">' + rows + '</div></div>';
     }
 
@@ -670,7 +680,7 @@
         var _ruinMat = '';
         if (_r0 && _r0.recipe) {
             _ruinMat = (_r0.recipe.materials || []).map(function (m) { return _matName(m.itemId) + ' ' + m.count; }).join(' + ') +
-                ' + 灵石 ' + _num(_r0.recipe.stones) + '，工期约 ' + Math.round(_r0.recipe.minutes / 60) + ' 个时辰';
+                ' + 灵石 ' + _num(_r0.recipe.stones) + '，工期约 ' + _dur(_r0.recipe.minutes);
         }
         html += '<div class="x-card x-card--on mb-3 flex flex-wrap items-center justify-between gap-3">' +
             '<div class="flex-1"><p class="x-h">🪨 破山洞 <span class="x-chip">免费占山</span></p>' +

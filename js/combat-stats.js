@@ -429,8 +429,12 @@
             var mul = 1 + Math.max(0, L - 10) * 0.12;
             if (mul <= 1) return entity;
             if (entity.physiology) {
-                entity.physiology.bloodVolume = Math.round((entity.physiology.bloodVolume || 100) * mul);
+                var bloodBase = entity.physiology.bloodVolume || 100;
+                entity.physiology.bloodVolume = Math.round(bloodBase * mul);
                 entity.physiology.health = entity.physiology.bloodVolume;
+                // DES-32：血量乘上去了、上限没跟，等于又造一个「150/100」。同源同乘。
+                entity.physiology.maxBloodVolume = Math.round(
+                    (entity.physiology.maxBloodVolume || bloodBase) * mul);
             }
             if (entity.durabilities) {
                 Object.keys(entity.durabilities).forEach(function (p) {

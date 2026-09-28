@@ -20,3 +20,19 @@ _backup_pre_*/
 # 会话记录
 session-*.md
 对话记录.txt
+# 依赖（不入库，体积 23MB）
+node_modules/
+# 工具与代理的本地工作区（.kilo/worktrees 是本仓源码副本，29MB）
+.kilo/
+# 临时分析产物（含 4 份工作树快照 tar.gz，32MB）
+.scratch/
+# 改坏前留下的备份
+*.bak58
+*.bak
+# 导出包（与 剧情导出/ 目录内容重复）
+剧情导出.zip
+# 外包交付物（仓库只收落地的代码，不收交付工作区）
+仙路长青-成品文案包*/
+# 本地试玩启动脚本
+launch-test.ps1
+启动试玩浏览器.bat

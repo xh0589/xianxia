@@ -23,6 +23,25 @@ const REPUTATION_FEATURE_LEVELS = Object.freeze({
     hidden_dungeon: 5
 });
 
+// 同一张卡里的数字要一个写法：名下印「10,000」而门槛印「10000」是两张嘴
+function repNum(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
+// 五张牌的名字与去处：解锁播报和城情卡都读这两张表，别在 UI 里再抄一份名字
+const REPUTATION_FEATURE_LABELS = Object.freeze({
+    hidden_shop: '隐藏商店',
+    special_quests: '专属任务',
+    secret_arts: '秘传功法',
+    special_permit: '特殊许可',
+    hidden_dungeon: '隐藏地宫'
+});
+const REPUTATION_FEATURE_ENTRIES = Object.freeze({
+    hidden_shop: 'openHiddenShop()',
+    special_quests: 'openSpecialQuests()',
+    secret_arts: 'openSecretArtsShop()',
+    special_permit: 'useSpecialPermit()',
+    hidden_dungeon: 'enterHiddenDungeon()'
+});
+
 // ============ 声望数据 ============
 // 保持对象引用稳定，避免 window.cityReputation 指向旧对象。
 let cityReputation = {}; // { cityName: { value: 0, flags: [], unlockedFeatures: [] } }
@@ -211,18 +230,11 @@ function syncUnlockedFeatures(cityName, options) {
     if (!rep) return [];
     normalizeReputationEntry(rep);
     const level = getReputationLevelIndex(cityName);
-    const labels = {
-        hidden_shop: '隐藏商店',
-        special_quests: '专属任务',
-        secret_arts: '秘传功法',
-        special_permit: '特殊许可',
-        hidden_dungeon: '隐藏地宫'
-    };
     const unlocks = [];
     Object.keys(REPUTATION_FEATURE_LEVELS).forEach(function(feature) {
         if (level >= REPUTATION_FEATURE_LEVELS[feature] && !rep.unlockedFeatures.includes(feature)) {
             rep.unlockedFeatures.push(feature);
-            unlocks.push(labels[feature] || feature);
+            unlocks.push(REPUTATION_FEATURE_LABELS[feature] || feature);
         }
     });
     if (options.notify && unlocks.length > 0 && window.showMessage) {
@@ -301,30 +313,9 @@ function addReputationFromTrade(cityName, amount) {
     return 0;
 }
 
-// 捐赠增加声望
-function addReputationFromDonation(cityName, spiritStones) {
-    if (spiritStones < 100) {
-        if (window.showMessage) window.showMessage('捐赠至少需要100灵石', 'warning');
-        return 0;
-    }
-    
-    // 扣除灵石
-    if (window.inventory) {
-        if (window.inventory.currency.spiritStones < spiritStones) {
-            if (window.showMessage) window.showMessage('灵石不足', 'error');
-            return 0;
-        }
-        window.inventory.currency.spiritStones -= spiritStones;
-        if (window.updateCurrencyUI) window.updateCurrencyUI();
-    }
-    
-    const gain = Math.floor(spiritStones / 20);
-    const result = addReputation(cityName, gain);
-    if (window.showMessage) {
-        window.showMessage(`捐赠 ${spiritStones} 灵石，声望 +${gain}`, 'info');
-    }
-    return result;
-}
+// 捐赠只有一条路：善堂的情景账（捐粮 50／捐药 30／大捐 200，各带功德与时辰）。
+// 这里曾另有一个「按灵石数直接买声望」的小函数——同样花灵石，却不记业障、不费时辰、
+// 不问捐什么，等于在善堂之外私开一本账。城情卡上那枚裸钮已撤，这条平行账一并删掉。
 
 // ============ 存档 ============
 function saveReputation() {
@@ -355,7 +346,6 @@ window.getUnlockedFeatures = getUnlockedFeatures;
 window.hasUnlockedFeature = hasUnlockedFeature;
 window.addReputationFromQuest = addReputationFromQuest;
 window.addReputationFromTrade = addReputationFromTrade;
-window.addReputationFromDonation = addReputationFromDonation;
 window.saveReputation = saveReputation;
 window.loadReputation = loadReputation;
 window.setReputation = setReputation;
@@ -439,8 +429,15 @@ function _buyHiddenShopItem(itemId, price, cityName) {
         if (window.showMessage) window.showMessage('灵石不足', 'error');
         return;
     }
+    // DES-72 副账收口（第一百二十七批）：先交货再收钱（与 js/building-effects.js 的 buy() 同一条柜台规矩）——旧写法扣了灵石、记了声望，货却没进囊
+    var _购得 = (typeof window.addItem === 'function') ? (Number(window.addItem(itemId, 1)) || 0) : 1;
+    var _购账 = (typeof window.addItem === 'function') ? (window.addItemFailReason || null) : null;   // DES-96：账当场抄，别回头读被别笔刷过的那条
+    if (_购得 <= 0) {
+        // DES-96：原先这里在原因账那句（自带「先腾个格子再来。」收尾）之后又裸接一句「腾个格子再来。」——同一屏说两遍
+        if (window.showMessage) window.showMessage('货是好的，这一单先不做——' + ((typeof window.addItemFailTextFor === 'function' && window.addItemFailTextFor(_购账, ((window.itemById && window.itemById[itemId] ? window.itemById[itemId].name : itemId)))) || '这一件没能落进你的行囊。'), 'warning');
+        return;
+    }
     window.inventory.currency.spiritStones -= price;
-    if (typeof window.addItem === 'function') window.addItem(itemId, 1);
     if (window.updateCurrencyUI) window.updateCurrencyUI();
     if (typeof addReputationFromTrade === 'function') addReputationFromTrade(cityName, price);
     if (window.showMessage) window.showMessage('购得隐藏商品', 'success');
@@ -535,20 +532,39 @@ function _turnInCityRepQuest(index, cityName) {
     var list = getOrCreateSpecialQuests(cityName);
     var q = list[index];
     if (!q || !q.completed || q.turnedIn) return;
-    q.turnedIn = true;
-    q.accepted = false;
     // 发奖
     var r = q.rewards || {};
+    // DES-72＋DES-86（第一百三十批）：赏品先真落进囊里，才准结这一单——旧写法先把 turnedIn 烧了、
+    //   又把 addItem 的返回值丢在地上，满包时赏件蒸发而任务永不再来，屏上还念「交付成功！」
+    var 赏 = [];
+    if (r.items && (typeof window.giveWithReceipt === 'function' || typeof window.addItem === 'function')) {
+        r.items.forEach(function (it) {
+            var id = it.itemId || it.id;
+            var 要 = it.count || 1;
+            if (!id) return;
+            赏.push(typeof window.giveWithReceipt === 'function'
+                ? window.giveWithReceipt(id, 要, { quiet: true })
+                : { got: Number(window.addItem(id, 要)) || 0, count: 要, name: (window.itemById && window.itemById[id] && window.itemById[id].name) || id });
+        });
+        if (赏.reduce(function (n, x) { return n + x.got; }, 0) <= 0) {
+            var 赏名 = 赏.map(function (x) { return x.name; }).join('、');
+            if (window.showMessage) window.showMessage('📜 这一单的赏品（' + (赏名 || '赏件') + '）没能落进你的行囊：' + ((typeof window.addItemFailText === 'function' && window.addItemFailText(赏名 || '这一单的赏品')) || '这一件仍留在柜上。') + '单先不结，赏品还在柜上。再来一趟。', 'warning');
+            return;
+        }
+    }
+    q.turnedIn = true;
+    q.accepted = false;
     if (r.exp && window.currentCharData) window.currentCharData.tempering = (window.currentCharData.tempering || 0) + r.exp;
     if (r.spiritStones && window.inventory) window.inventory.currency.spiritStones = (window.inventory.currency.spiritStones || 0) + r.spiritStones;
     if (r.gold && window.inventory) window.inventory.currency.copper = (window.inventory.currency.copper || 0) + r.gold;
-    if (r.items && typeof window.addItem === 'function') {
-        r.items.forEach(function(it) { window.addItem(it.itemId || it.id, it.count || 1); });
-    }
     addReputationFromQuest(cityName, q.difficulty || 1);
     if (window.updateCurrencyUI) window.updateCurrencyUI();
     saveReputation();
-    if (window.showMessage) window.showMessage('交付成功！', 'success');
+    if (window.showMessage) {
+        var 缺 = 赏.filter(function (x) { return x.got < x.count; });
+        window.showMessage('交付成功！' + (赏.length ? '赏品入囊：' + 赏.map(function (x) { return x.name + '×' + x.got; }).join('、')
+            + (缺.length ? '（另有 ' + 缺.map(function (x) { return x.name + '×' + (x.count - x.got); }).join('、') + ' 留在了柜上：' + ((typeof window.addItemReasonPhrase === 'function' && window.addItemReasonPhrase('这次的赏品')) || '没能带走') + '）' : '') : ''), 'success');
+    }
     if (window.showEffect) window.showEffect('quest_done');
     openSpecialQuests(cityName);
 }
@@ -584,8 +600,13 @@ function _buySecretArt(artId, cost, cityName) {
         if (window.showMessage) window.showMessage('灵石不足', 'error');
         return;
     }
+    // DES-72 副账收口（第一百二十七批）：先交货再收钱——旧写法扣了灵石、记了声望，残卷却没进囊，还念「习得秘传残卷！」
+    var _残卷收 = (typeof window.addItem === 'function') ? (Number(window.addItem(artId, 1)) || 0) : 1;
+    if (_残卷收 <= 0) {
+        if (window.showMessage) window.showMessage('残卷是拿到了，可' + ((typeof window.addItemFailText === 'function' && window.addItemFailText('这门残卷')) || '它没有跟你走。') + '师父又收了回去。', 'warning'); // DES-90（第一百三十九批）：门派秘传残卷是一次性内容，②形；原「回去理理行囊再来」违反 R2，改为只陈述已收回
+        return;
+    }
     window.inventory.currency.spiritStones -= cost;
-    if (typeof window.addItem === 'function') window.addItem(artId, 1);
     addReputationFromTrade(cityName, cost);
     if (window.updateCurrencyUI) window.updateCurrencyUI();
     if (window.showMessage) window.showMessage('习得秘传残卷！', 'success');
@@ -631,11 +652,15 @@ function enterHiddenDungeon(cityName) {
     } else {
         // 简化奖励
         if (window.currentCharData) window.currentCharData.tempering = (window.currentCharData.tempering || 0) + 200;
+        // DES-72 两本账同收（第一百二十七批）：念的件数以行囊真收下为准——旧写法两件都丢返回值，满包也念「有所收获」
+        var _地宫收 = 0, _地宫该 = 0;
         if (typeof window.addItem === 'function') {
-            window.addItem('mat_dragon_crystal', 1);
-            if (Math.random() < 0.3) window.addItem('spec_transfer_stone', 1);
-        }
-        if (window.showMessage) window.showMessage('地宫探索有所收获！', 'success');
+            _地宫该 = 1; _地宫收 += Number(window.addItem('mat_dragon_crystal', 1)) || 0;
+            if (Math.random() < 0.3) { _地宫该 += 1; _地宫收 += Number(window.addItem('spec_transfer_stone', 1)) || 0; }
+        } else { _地宫收 = _地宫该 = 1; }
+        if (window.showMessage) window.showMessage(_地宫收 > 0
+            ? '地宫探索有所收获！' + (_地宫收 < _地宫该 ? '（另有 ' + (_地宫该 - _地宫收) + ' 件：' + ((typeof window.addItemReasonPhrase === 'function' && window.addItemReasonPhrase('石室里的东西')) || '这一件先还留在原处') + '，仍留在石室里）' : '') // DES-90（第一百三十九批）：地宫可再探，①形·从句支不带句号
+            : '历练是磨出来了，可两件东西没能落进你的行囊——只好原样留在石室里：' + ((typeof window.addItemFailText === 'function' && window.addItemFailText('石室里的东西')) || '这一单先不做。'), _地宫收 >= _地宫该 ? 'success' : 'warning');
     }
     addReputation(cityName, 20);
     return true;
@@ -647,21 +672,42 @@ function getReputationPanelHtml(cityName) {
     var level = getReputationLevel(cityName);
     var val = getReputationValue(cityName);
     var feats = getUnlockedFeatures(cityName);
+    var discountPct = Math.floor((level.discount || 0) * 100);
     var html = '<div class="bg-gray-700/30 p-3 rounded border border-gray-600 mb-2">' +
         '<p class="font-bold text-white">' + cityName + '</p>' +
-        '<p class="text-sm ' + (level.color || 'text-gray-300') + '">' + level.name + ' · ' + level.title + '（' + val + '）</p>' +
-        '<p class="text-xs text-gray-400">商店折扣：' + Math.floor((level.discount || 0) * 100) + '%</p>' +
-        '<p class="text-xs text-gray-500 mt-1">城市声望范围 0 ~ 10,000；角色“名气”是另一项属性</p>' +
-        '<p class="text-xs text-gray-500 mt-1">已解锁：' + (feats.length ? feats.join(', ') : '无') + '</p></div>';
-    html += '<div class="flex flex-wrap gap-2">' +
-        '<button onclick="openHiddenShop()" class="text-xs bg-purple-700 text-white px-2 py-1 rounded">隐藏商店</button>' +
-        '<button onclick="openSpecialQuests()" class="text-xs bg-blue-700 text-white px-2 py-1 rounded">专属任务</button>' +
-        '<button onclick="openSecretArtsShop()" class="text-xs bg-yellow-700 text-white px-2 py-1 rounded">秘传功法</button>' +
-        '<button onclick="useSpecialPermit()" class="text-xs bg-gray-600 text-white px-2 py-1 rounded">特殊许可</button>' +
-        '<button onclick="enterHiddenDungeon()" class="text-xs bg-red-800 text-white px-2 py-1 rounded">隐藏地宫</button>' +
-        '<button onclick="addReputationFromDonation(getCurrentCityName(), 100)" class="text-xs bg-green-800 text-white px-2 py-1 rounded">捐赠100</button>' +
+        '<p class="text-sm ' + (level.color || 'text-gray-300') + '">' + level.name + ' · ' + level.title + '（' + repNum(val) + '）</p>' +
+        '<p class="text-xs text-gray-400">' + (discountPct > 0 ? '铺子里肯让的脸面：' + discountPct + '%' : '铺子还没肯让一分') + '</p>' +
+        '<p class="text-xs text-gray-500 mt-1">你在本城的名分，与江湖上的「名气」不是一回事。</p>' +
         '</div>';
+    // 五张牌恒摆着，锁着的把「差什么」写在脸上（禁止设计 #2：锁就亮锁、写清楚为什么锁）。
+    // 改前这五枚看着一样能点，点下去才飘一句 toast 说声望不足——那是把说明藏在报错里。
+    html += '<div class="rep-gates">' + Object.keys(REPUTATION_FEATURE_LEVELS).map(function (feature) {
+        var need = REPUTATION_LEVELS[REPUTATION_FEATURE_LEVELS[feature]];
+        var on = feats.indexOf(feature) >= 0;
+        return '<button type="button" onclick="' + REPUTATION_FEATURE_ENTRIES[feature] + '" ' +
+            (on ? '' : 'disabled ') +
+            'class="rep-gate' + (on ? ' rep-gate-on' : '') + '">' +
+            '<span class="rep-gate__name">' + REPUTATION_FEATURE_LABELS[feature] + '</span>' +
+            '<span class="rep-gate__brief">' +
+            (on ? '已解锁' : '需声望 ' + (need && need.min != null ? repNum(need.min) : '?') +
+                '<span class="rep-gate__tier">（' + (need && need.name ? need.name : '更高名望') + '）</span>') +
+            '</span></button>';
+    }).join('') + '</div>';
+    // 捐资这一页办不了：善堂那条线写明捐粮还是捐药、各花多少灵石、记多少功德。
+    // 原先这里挂着一枚只写金额的裸钮——不问捐什么、不费时辰，当场扣一百灵石换几点声望。
+    if (cityHasCharityHall(cityName)) {
+        html += '<p class="rep-donate-note">🏮 想捐资积德请去<b>善堂</b>：那里分得清捐粮还是捐药、各花多少灵石、记多少功德。</p>';
+    }
     return html;
+}
+
+// 这座城有没有善堂——查得到名册才敢指路，查不到就当没有，不画一条走不通的路
+function cityHasCharityHall(cityName) {
+    var ls = window.locationSystem;
+    if (!ls || typeof ls.getCityData !== 'function') return false;
+    var city = null;
+    try { city = ls.getCityData(cityName); } catch (e) { return false; }
+    return !!(city && (city.buildings || []).indexOf('charity_hall') >= 0);
 }
 
 window.HIDDEN_SHOP_ITEMS = HIDDEN_SHOP_ITEMS;

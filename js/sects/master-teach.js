@@ -154,6 +154,12 @@ function _playerTier() {
     try {
         var cd = window.currentCharData;
         if (!cd) return 0;
+        // DES-92（第一百三十二批）：出师这道门只判够不够格，故优先借真源那把尺——
+        //   它在 凡人..渡劫 十档上序号与 getRealmTier 完全相同，只是不再把飞升／金仙当成炼气。
+        if (typeof window.realmIndex === 'function') {
+            var ri = window.realmIndex(cd.realm);
+            if (ri >= 0) return ri;
+        }
         return (typeof window.getRealmTier === 'function') ? window.getRealmTier(cd.realm) : 0;
     } catch (e) { return 0; }
 }

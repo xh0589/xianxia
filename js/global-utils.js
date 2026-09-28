@@ -9,6 +9,22 @@
 // ===== 全局命名空间 =====
 window.XianXia = window.XianXia || {};
 
+// ===== 第一百一十八批 DES-57：地名认账只用一把尺 =====
+// 全仓城名有两串写法：js/regions.js 的 mapData 把起始城写成「帝都 · 长安」（· 两边带空格），
+// 而 cityData 表键、NPC 的 homeLocation／location、app.js 新开局的初值都写「帝都·长安」。
+// 差的只是那个空格，可按地名取数／判同城的十来处用的是 === 精确等值——从舆图点「前往」进的城
+// 与角色身上那本账拼写不一致时，城中人物名册、送礼深谈、庙会摆摊赁屋营生整段在屏上静默消失。
+// 口径沿用仓里已有的两支归一笔（house-system.js:_normCityName、reputation-system.js:repKey）：
+// 只去空白，不动「·」，不新增第三种地名，也不改屏上给玩家看的那串写法。
+(function () {
+    window.placeKey = function (name) { return String(name == null ? '' : name).replace(/\s+/g, ''); };
+    /** 两处地名是不是同一个地方。任一为空即判不成——不许把「无地」认成「某城」。 */
+    window.samePlace = function (a, b) {
+        var ka = window.placeKey(a), kb = window.placeKey(b);
+        return !!ka && !!kb && ka === kb;
+    };
+})();
+
 // ===== v20.96 渲染刹车：一帧内多次同名整屏渲染合并成一次 =====
 // 背包/货币/角色/战斗四张面板都是整屏 innerHTML 重建，一次行动常被连着调五六回
 // （addItem 一回、RewardService 一回、growLifeSkill 一回……）。合并到动画帧结算：
@@ -388,6 +404,48 @@ window.XianXia = window.XianXia || {};
             }
         }
     };
+
+    // ===== NEW-73 结案（第一百二十三批）：灵石这本账此前在守卫前面「不存在」 =====
+    // 全仓 `window.DataManager`（不带 XianXia.）字面命中 85 处／20 本，其中 31 行为纯裸名调用、
+    // 27 行写成 `if (window.DataManager && ...)` 这一形，而这层访问器只挂在 window.XianXia.DataManager 上
+    // ⇒ 守卫恒假：该收费的放行（延医 200／自创丹方 50／入门 10…屏上仍念「灵石-200」），
+    // 该发钱的落空（悬赏赏金／宿敌终战／子嗣孝敬／矿脉收益…屏上仍念「+50」）。
+    // 用到的只有 get/add/deductSpiritStones 三个方法，本对象全有，故别名指过去即可两全。
+    window.DataManager = window.XianXia.DataManager;
+})();
+
+// ============ 存储单源：写盘失败不许静默 ============
+// 【第一百四十四批 · 2026-09-27】
+// 缘起：v20.87 早就给「主档／自动档」配了写失败告警，而且原话写得很重——
+//   js/core/auto-save.js:39「自动档写失败不再静默——**玩家以为存上了实际丢了是最坏情况**」
+//   js/app.js:2780        「存档写入失败不再静默——多半是浏览器存储空间已满」
+// 但**各模块的小存档一个都没跟上**。2026-09-27 实扫全仓：18 个存档键写失败时玩家听不到，
+// 其中 9 个**连 try 都没有**（`js/inventory.js:2134` 的 xianxia_inventory 最要命——
+// 那是玩家的整个行囊；配额一满，那行直接抛给调用方）。
+// 也就是说 v20.87 修的是那个「最坏情况」的**一个样本**，不是它的全量。
+//
+// 本函数是这件事的**单一 owner**：规矩收在这里，各模块只调这一个口。
+// ⚠️ 告警去重（_盘满已警）：配额一满会连炸几十处，弹一次就够，别刷屏。
+// ⚠️ 玩家可见文本零外文字母（强制规则）—— 下面那句已自查过。
+// ⚠️ 放在 DataManager 那个对象字面量**外面**（第一版误插在 getCharAttr 之前，
+//    那是对象字面量内部，`var` 加 `window.x=` 直接语法错——尺插错了位置，不是内容错）。
+(function () {
+    var _盘满已警 = false;
+    window.saveToStorage = function (key, value) {
+        try {
+            localStorage.setItem(key, value);
+            return true;
+        } catch (e) {
+            if (!_盘满已警 && window.showMessage) {
+                _盘满已警 = true;
+                window.showMessage('⚠️ 存盘失败：浏览器的存储空间可能已满。这一部分进度**没有存上**（旧档还在）。建议清理旧存档后重试。', 'error');
+            }
+            if (window.console && console.error) console.error('[存盘失败] ' + key + '：', e && e.message);
+            return false;
+        }
+    };
+    // 测试用：让告警能重新弹一次（免得一条闸把后续用例全闷掉）
+    window._resetStorageWarn = function () { _盘满已警 = false; };
 })();
 
 // ===== 统一UI更新接口 =====
@@ -671,6 +729,58 @@ window.XianXia = window.XianXia || {};
         }
         if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e) {} }
         return gain;
+    };
+
+    /**
+     * DES-72／86／89／90／91 一族的公共发奖手（第一百三十批）。
+     * 旧写法全仓十几处把 addItem 的返回值丢在地上，于是「该给几件」直接当「真收几件」念上屏。
+     * 口径与 js/items-extended/11-event-extensions.js 的 xGive 一致（那边在扩展表内部，这一支给全局用）。
+     * @param {string} id 物品模板 id
+     * @param {number} [count=1] 该给几件
+     * @param {object} [opts] { msg: 前半句彩头话, label: 回执主语, quiet: 只记账不上屏 }
+     * @returns {{got:number,count:number,name:string,reason:(string|null)}} got＝真收进囊的件数，拼串点位自己拿去分流；reason＝入袋那一刻从 `addItemFailReason` 抄下的快照（'bag_full'／'no_template'／null），多件发放与循环外拼串的点位于是能对**这一件**归因
+     */
+    window.giveWithReceipt = function (id, count, opts) {
+        opts = opts || {};
+        count = Math.max(1, Math.floor(Number(count) || 1));
+        var nm = opts.label || ((window.itemById && window.itemById[id] && window.itemById[id].name) || id);
+        // 没有入库通道的世界（无背包脚本）按全数认——与 xGive 同一口径，别凭空造一次「没收到」
+        var got = (typeof window.addItem === 'function') ? (Number(window.addItem(id, count)) || 0) : count;
+        // DES-96（第一百三十八批）：账当场抄进收据。全局那条 addItemFailReason 会被下一次入袋刷掉，
+        // 所以「先发货、后拼串」的点位只有在此刻抄下才拿得到**这一件**的缘由。
+        var 账 = (typeof window.addItem === 'function') ? (window.addItemFailReason || null) : null;
+        if (got < count && !opts.quiet && typeof window.showMessage === 'function') {
+            window.showMessage(got > 0
+                ? (opts.msg ? opts.msg + '——' : '🎁 ') + nm + ' 行囊只塞得下 ' + got + '/' + count + ' 件，另 ' + (count - got) + ' 件没带走。'
+                : (opts.msg ? opts.msg + '——' : '🎁 ') + nm + '×' + count + ' 一件也没能带走：'
+                  + ((typeof window.addItemFailTextFor === 'function' && window.addItemFailTextFor(账, nm)) || '没能落进你的行囊。'), // DES-90：模板缺失不许怪给行囊
+                'warning');
+        }
+        return { got: got, count: count, name: nm, reason: 账 };
+    };
+
+    /**
+     * DES-92（第一百三十二批）：境界序只此一把尺。
+     * 旧状是全仓各自抄表——同一个「谁比谁高」抄了十来份，档位多寡从 7 到 13 不等，
+     *   其中一份把「炼气」抄成「练气」，一份含游戏里从没落到过玩家身上的「真仙」，
+     *   还有几份排在渡劫就断了。判门槛的那几支于是对 炼虚/合体/大乘/渡劫/飞升/金仙 一律判「不够格」。
+     * 进度真源＝ js/cultivation/cultivation.js 的 REALM_UNIQUE_EFFECTS（渡劫 → 飞升 → 二段飞升＝金仙）。
+     * ⚠️ 这一把只用于**判够不够格**。把序号直接换算成数值的那几支（战斗面板、伤势等级、城望评分、重塑费用）
+     *    换尺会挪动数值，本批按原样留着，逐本登记在 FIX_NOTES。
+     */
+    var REALM_ORDER = ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫', '飞升', '金仙'];
+    window.REALM_ORDER = REALM_ORDER;
+
+    // 认不出来的境界名 ⇒ -1（宁可让人查得出来，也别默默当成炼气）
+    window.realmIndex = function (realm) {
+        return REALM_ORDER.indexOf(String(realm == null ? '' : realm).trim());
+    };
+
+    // 「门槛本身认不出」⇒ 放行——别拿一张写错的门牌把人锁在门外（与 js/location-system.js 同口径）
+    window.realmAtLeast = function (current, target) {
+        var t = window.realmIndex(target);
+        if (t < 0) return true;
+        return window.realmIndex(current) >= t;
     };
 })();
 

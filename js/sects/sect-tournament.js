@@ -329,13 +329,13 @@
                         if (global.currentCharData) global.currentCharData.spiritStones = global.inventory.currency.spiritStones;
                         if (typeof global.updateCurrencyUI === 'function') global.updateCurrencyUI();
                     }
-                } catch (ePurse) {}
+                } catch (ePurse) { console.warn('[静默失败] js/sects/sect-tournament.js:332 · 大比彩头入账：夺冠的灵石彩头本该落袋，这里没接住，玩家会察觉账上少这笔钱', ePurse && ePurse && ePurse.message); }
                 try {
                     if (global.discipleState) {
                         global.discipleState.contribution = (Number(global.discipleState.contribution) || 0) + 50;
                         if (typeof global.sectLedgerNote === 'function') global.sectLedgerNote(50, '大比夺冠');
                     }
-                } catch (eContr) {}
+                } catch (eContr) { console.warn('[静默失败] js/sects/sect-tournament.js:338 · 大比贡献记账：夺冠的贡献点本该加上，这里没接住，玩家会察觉贡献没涨', eContr && eContr && eContr.message); }
                 if (global.showMessage) {
                     global.showMessage('🏆 你夺了魁！彩头入账：灵石 ' + purse + (stake ? '（含掌门加码的 ' + stake + '）' : '') + '、贡献 +50。', 'success');
                 }

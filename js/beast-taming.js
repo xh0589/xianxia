@@ -276,7 +276,7 @@ function importBeastState(data) {
     window.activeBeastIndex = activeBeastIndex;
     window.activeMountIndex = activeMountIndex;
     try {
-        localStorage.setItem('xianxia_beasts', JSON.stringify({
+        window.saveToStorage('xianxia_beasts', JSON.stringify({
             beasts: tamedBeasts,
             activeBeastIndex: activeBeastIndex,
             activeMountIndex: activeMountIndex
@@ -300,12 +300,12 @@ function initBeastTaming() {
 
 function saveBeastData() {
     try {
-        localStorage.setItem('xianxia_beasts', JSON.stringify({
+        window.saveToStorage('xianxia_beasts', JSON.stringify({
             beasts: tamedBeasts,
             activeBeastIndex: activeBeastIndex,
             activeMountIndex: activeMountIndex
         }));
-    } catch (e) {}
+    } catch (e) { console.warn('[静默失败] js/beast-taming.js:308 · 灵兽存盘：驯养的灵兽没写进本地存储，你以为它在栏里，读档后一无所有', e && e.message); }
     window.tamedBeasts = tamedBeasts;
     window.activeBeastIndex = activeBeastIndex;
     window.activeMountIndex = activeMountIndex;
@@ -322,9 +322,13 @@ function getCurrentRegionName() {
     if (window.currentLocation) loc = loc || window.currentLocation;
     // 尝试从 mapData 反查区域
     if (loc && window.mapData) {
+        // DES-57：mapData 的起始城写作「帝都 · 长安」（带空格），角色账多写「帝都·长安」——两边去空白再比
+        var locKey = String(loc).replace(/\s+/g, '');
         for (var region in window.mapData) {
             var cities = window.mapData[region].cities || [];
-            if (cities.indexOf(loc) >= 0) return region;
+            for (var i = 0; i < cities.length; i++) {
+                if (String(cities[i]).replace(/\s+/g, '') === locKey) return region;
+            }
         }
     }
     return loc || 'default';
@@ -1182,7 +1186,8 @@ window.buyBeastSealFromShop = function () {
             window.inventory.currency.spiritStones += price;
             if (window.currentCharData) window.currentCharData.spiritStones = window.inventory.currency.spiritStones;
         }
-        if (window.showMessage) window.showMessage('行囊满了，符纸塞不下——灵石退回。', 'error');
+        // DES-97（第一百四十批／真机屏证抓出）：本处是中段位——回退串后面还接 + '灵石原样退回。'。前两把尺看不见 || '回退串') 右边接 + 这一层。句尾支 addItemFailText 带句号会破句，改用中段支 addItemFailPhrase 并去掉回退串句号。
+        if (window.showMessage) window.showMessage('这张符纸没能带走：' + ((typeof window.addItemFailPhrase === 'function' && window.addItemFailPhrase('缚兽符')) || '这一单先不做') + '灵石原样退回。', 'error');
         return false;
     }
     if (typeof window.updateInventoryUI === 'function') window.updateInventoryUI();
@@ -1259,7 +1264,7 @@ window.releaseBeastNow = function (index) {
                 }
             });
         }
-    } catch (eGarden) {}
+    } catch (eGarden) { console.warn('[静默失败] js/beast-taming.js:1275 · 放生清园：从兽园里摘走这只灵兽没摘干净，栏里还挂着它的空位', eGarden && eGarden.message); }
     saveBeastData();
     if (homeRegion) {
         // 家乡放生：它认得路——手记落一笔确讯，驭兽阅历+4

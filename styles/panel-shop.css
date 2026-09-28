@@ -1,0 +1,72 @@
+/* ==================== 商店弹窗（UI-02：货架不该排成一里格长的队）====================
+   此前这扇窗是 max-w-2xl＝672px、货单一列铺到底（药铺实测内容 1934px / 可见 788px＝窗内滚 2.5 屏），
+   一屏只看得见 3~4 件货。这里只管三件事：窗宽、货架排成几张卡、筛选条的选中态。
+   纪律照其余面板文件：选择器一律带 #shop-modal-overlay 前缀，全篇无 !important。 */
+
+/* 货架一行两张卡，屏窄了自己退回一张——430px 是「货名＋一句描述＋价＋购买钮」不断行的最窄宽度 */
+#shop-modal-overlay .shop-goods-grid {
+    display: grid;
+    /* 430px 是量字量出来的（货名＋描述＋价＋钮不断行），所以它必须跟着字号档走：
+       26.875rem 在根 16px 恰等于 430px（标准档一像素不变），「大／特大」档字变宽则一起抬（UI-23）。 */
+    grid-template-columns: repeat(auto-fill, minmax(max(430px, 26.875rem), 1fr));
+    gap: 8px;
+}
+
+/* 筛选条：读的是背包那一本账（分类／关键词），这里只出「点得动、看得出当前是哪一档」 */
+#shop-modal-overlay .shop-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+#shop-modal-overlay .shop-search {
+    flex: 1 1 200px;
+    min-width: 160px;
+    padding: 5px 10px;
+    font-size: 13px;
+    color: var(--x-text);
+    background: #1f2733;
+    border: 1px solid #4b5563;
+    border-radius: 6px;
+}
+
+#shop-modal-overlay .shop-search:focus {
+    outline: none;
+    border-color: var(--x-gold);
+}
+
+/* 当前那一档：金描边＋淡金底（与背包 chips 同一语言，但各写各的选择器，不跨面板裸类） */
+#shop-modal-overlay .shop-chip.is-active {
+    background: rgba(251, 191, 36, .16);
+    border-color: var(--x-gold);
+    color: var(--x-gold);
+    font-weight: 700;
+}
+
+/* 没筛东西时这一枚根本不该在场——它一出现就是「你现在被筛着」的提示（由 _syncShopFilterChips 挂 is-filtering）。
+   禁止设计.md#2：不画一条此刻走不通的路，也不留一枚用不上的钮占位。 */
+#shop-modal-overlay .shop-chip--clear {
+    display: none;
+    border-style: dashed;
+    color: var(--x-muted);
+}
+
+#shop-modal-overlay.is-filtering .shop-chip--clear {
+    display: inline-block;
+}
+
+/* 筛空时那张卡横贯整排。1900×930 实机量过：只占一格的话它在 1100px 窗里宽 558px、右半页空着，
+   读起来像「这一格里恰好缺件货」，而不是一整页被筛空了——空态要说的是「这一页」，不是「这一格」。
+   这里只认商店自己那层壳，公共空态卡的长相仍归 ui-craft.css。 */
+#shop-modal-overlay .shop-goods__empty { grid-column: 1 / -1; }
+
+/* 出售页那行「只看已标记」：它是条看货的旁路，不该长得像主操作，故与说明挤在同一行、字号走小。 */
+#shop-modal-overlay .shop-sell-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}

@@ -60,6 +60,7 @@ global.document = {
     addEventListener: function () {},
     body: { appendChild: function () {} }
 };
+global.els = els;   // v24「窗内信纸」之后要看右栏铺出来的那面纸（innerHTML），不再从 prompt 桩取证
 var store = {};
 global.localStorage = {
     getItem: function (k) { return store[k] !== undefined ? store[k] : null; },
@@ -75,10 +76,11 @@ global.timeSystem = {
     advanceTime: function (m, r) { timeCalls.push({ m: m, r: String(r || '') }); this.gameTime.totalMinutes += m; },
     getAbsoluteDay: function () { return 800; }
 };
-global.PROMPT_RET = '见字如面。山中岁月长，一切安好，勿念。';
-global.prompt = function () { return global.PROMPT_RET; };
-global.CONFIRM_RET = false;
-global.confirm = function () { return global.CONFIRM_RET; };
+global.LETTER_TEXT = '见字如面。山中岁月长，一切安好，勿念。';
+// UI-01：写信·回复·删信的确认全在窗内办——这两根绊线一响就是回归
+global.prompt = function () { throw new Error('信件界面又弹原生 prompt 了'); };
+global.CONFIRM_CALLED = false;
+global.confirm = function () { global.CONFIRM_CALLED = true; return false; };
 global.GameScheduler = {
     registerHandler: function (id, fn) { global.__mailReplyHandler = fn; },
     schedule: function (id, when, payload) { scheduled.push({ id: id, when: when, payload: payload }); },
@@ -96,6 +98,13 @@ global.currentCharData = {
 global.inventory = { currency: { spiritStones: 200, copper: 500 }, slots: [] };
 global.updateCurrencyUI = function () {};
 global.updateCharacterStatus = function () {};
+
+// 第一百三十二批：载具境界门吃 window.realmIndex（真源 js/global-utils.js）。
+//   旧状本套件根本没装那把尺 ⇒ 测的是「尺未就绪」那条生产页面上不存在的降级支路（仙侠.html:1930 在 mail-system:2164 之前）。
+//   ⚠️ global-utils:131 会把 showMessage 换成只往 DOM 写的那只——装完立刻换回上面的 msgs 探针，否则「屏上念了哪句话」全测不到。
+var _探针showMessage = global.showMessage;
+load('js/global-utils.js');
+global.showMessage = _探针showMessage;
 
 load('js/mail-system.js');
 load('js/mail-system-ui.js');
@@ -120,8 +129,8 @@ function fresh() {
     global.currentCharData.location = '洛水城';
     global.inventory.currency = { spiritStones: 200, copper: 500 };
     msgs.length = 0; timeCalls.length = 0; scheduled.length = 0;
-    global.PROMPT_RET = '见字如面。山中岁月长，一切安好，勿念。';
-    global.CONFIRM_RET = false;
+    global.LETTER_TEXT = '见字如面。山中岁月长，一切安好，勿念。';
+    global.CONFIRM_CALLED = false;
 }
 function sent() { return global._mailSystemData.outbox; }
 
@@ -135,6 +144,8 @@ var uiSrc = fs.readFileSync(path.join(ROOT, 'js/mail-system-ui.js'), 'utf8');
 assert(uiSrc.indexOf('data-tab="compose"') >= 0 && uiSrc.indexOf('✍️ 写信') >= 0, 'A4 收件箱页签添了「写信」一页（门开在老面板里）');
 assert(uiSrc.indexOf("if (tab === 'compose')") >= 0, 'A5 写信页走真渲染（页签切换接上了）');
 assert(['openInbox', 'openMail', 'replyMail', 'toggleFav', 'deleteMail', 'renderInboxList'].every(function (k) { return typeof MUI[k] === 'function'; }), 'A6 收件箱老出口一个不缺');
+assert(['sendCompose', 'sendReply', 'openSheet', 'onSheetInput', 'pickCarrier', 'sendSheet', 'askDeleteMail', 'keepMail'].every(function (k) { return typeof MUI[k] === 'function'; }),
+    'A6b 窗内信纸与两步删除的出口都在册（v24 UI-01：铺纸/寄信分两层，删信不再借原生框）');
 assert(['send', 'playerSendMail', 'playerReply', 'checkCarrierAvailability', 'advancePendingMail'].every(function (k) { return typeof MS[k] === 'function'; }), 'A7 驿路老出口一个不缺');
 
 // ==================== B · 名录账 ====================
@@ -167,50 +178,56 @@ assert(listEl2.innerHTML.indexOf('composeTo') >= 0, 'B10 每人一支笔（写�
 // ==================== C · 寄信账 ====================
 console.log('\n[C] 寄信账（信随驿路走，账是老账）');
 fresh();
-eq(MUI.composeTo('npc_lu'), true, 'C1 给挚友寄信成功');
+eq(MUI.composeTo('npc_lu'), true, 'C0 写信的门只摊纸（composeTo 铺面即成，不再弹框）');
+eq(sent().length, 0, 'C0b 摊纸这一步不记账（铺纸与寄信分两层）');
+assert(global.els.mailDetailPanel.innerHTML.indexOf('写给') >= 0, 'C0c 信纸真摊在右栏（看得见抬头）');
+eq(MUI.sendCompose('npc_lu', global.LETTER_TEXT), true, 'C1 给挚友寄信成功');
 eq(sent().length, 1, 'C2 信落发件箱');
 eq(sent()[0].type, 'player_sent', 'C3 发件箱老格式（type 不变）');
 assert(sent()[0].subject.indexOf('寄自洛水城') >= 0, 'C4 信皮写着寄信的城');
-eq(sent()[0].body, global.PROMPT_RET, 'C5 信文原样（一字不改）');
+eq(sent()[0].body, global.LETTER_TEXT, 'C5 信文原样（一字不改）');
 eq(sent()[0].carrier, 'pigeon', 'C6 默认飞鸽（免费的那只）');
 eq(timeCalls[timeCalls.length - 1].m, 10, 'C7 修书一封费时一刻（老账）');
 eq(global.inventory.currency.spiritStones, 200, 'C8 飞鸽不要钱（分文未动）');
 // 回音排程（好感 66 → 概率 0.85，骰 0.1 必中）
 fresh();
 global.currentCharData.bonds = {};
-withRandom(0.1, function () { MUI.composeTo('npc_lu'); });
+withRandom(0.1, function () { MUI.sendCompose('npc_lu', global.LETTER_TEXT); });
 eq(scheduled.length, 1, 'C9 回音排上了程（驿路的骰是老骰——本波一枚不添）');
 eq(scheduled[0].id, 'mail:auto_reply', 'C10 排的是老回执（mail:auto_reply）');
 assert(scheduled[0].payload.originalMail.fromNpcId === 'npc_lu', 'C11 回执带着收信人（回信找得到人）');
 // 空信不寄
 fresh();
-global.PROMPT_RET = '   ';
-eq(MUI.composeTo('npc_lu'), false, 'C12 白纸一张不寄（空信拦下）');
+eq(MUI.sendCompose('npc_lu', '   '), false, 'C12 白纸一张不寄（空信拦下）');
 eq(sent().length, 0, 'C13 发件箱没落信');
 eq(timeCalls.length, 0, 'C14 没寄出也不费时');
 // 查无此人
 fresh();
-eq(MUI.composeTo('npc_ghost'), false, 'C15 查无此人如实拒');
-// 灵镜：凡人用不得
+eq(MUI.sendCompose('npc_ghost', global.LETTER_TEXT), false, 'C15 查无此人如实拒');
+// 灵镜：凡人用不得——门上是灰的，硬寄也寄不出去
 fresh();
-global.CONFIRM_RET = true;
-eq(MUI.composeTo('npc_lu'), true, 'C16 凡人想要灵镜——飞鸽照寄（灵镜用不得就不问）');
-eq(sent()[0].carrier, 'pigeon', 'C17 落回飞鸽');
+MUI.composeTo('npc_lu');
+var sheetHtml = global.els.mailDetailPanel.innerHTML;
+assert(sheetHtml.indexOf('disabled') >= 0 && sheetHtml.indexOf('境界不足（需筑基）') >= 0,
+    'C16 凡人这一页灵镜照摆、照灰、照写为什么用不得（禁设计 #2：锁不藏）');
+assert(sheetHtml.indexOf('飞鸽传书') >= 0 && (sheetHtml.match(/mail-carrier-name/g) || []).length === 5,
+    'C16b 五只载具全上墙（不是只给两只挑）');
+eq(MUI.sendCompose('npc_lu', global.LETTER_TEXT, 'mirror'), false, 'C17 硬寄灵镜——境界不够如实拒');
+eq(sent().length, 0, 'C17b 拒了就不落信');
 // 灵镜：筑基可用、资费真扣
 fresh();
 global.currentCharData.realm = '筑基';
-global.CONFIRM_RET = true;
-eq(MUI.composeTo('npc_lu'), true, 'C18 筑基寄灵镜成功');
+eq(MUI.sendCompose('npc_lu', global.LETTER_TEXT, 'mirror'), true, 'C18 筑基寄灵镜成功');
 eq(sent()[0].carrier, 'mirror', 'C19 走的灵镜');
 eq(global.inventory.currency.spiritStones, 150, 'C20 资费五十灵石真扣（价目表不是装饰——v23.2 老账）');
 // 灵镜资费不够
 fresh();
 global.currentCharData.realm = '筑基';
-global.CONFIRM_RET = true;
 global.inventory.currency.spiritStones = 10;
-eq(MUI.composeTo('npc_lu'), false, 'C21 囊中羞涩灵镜寄不出（老账如实拒）');
+eq(MUI.sendCompose('npc_lu', global.LETTER_TEXT, 'mirror'), false, 'C21 囊中羞涩灵镜寄不出（老账如实拒）');
 eq(sent().length, 0, 'C22 拒了就不落信');
 assert(msgs.some(function (m) { return m.indexOf('换只飞鸽') >= 0; }), 'C23 拒语还是那句老话');
+eq(global.CONFIRM_CALLED, false, 'C24 全程没碰原生 confirm（载具在窗内挑）');
 
 // ==================== D · 老账无恙 ====================
 console.log('\n[D] 老账无恙（回信的路一寸没动）');
@@ -224,8 +241,12 @@ eq(global._mailSystemData.inbox.length, 1, 'D1 待收信照旧入箱（灵镜即
 MS.advancePendingMail();
 MS.advancePendingMail();
 eq(global._mailSystemData.inbox.length, 1, 'D1b 即达信不入箱两次（双份老虫当场拔掉——轮询三遍也只有一封）');
-global.PROMPT_RET = '一切都好，勿念。';
 MUI.replyMail(global._mailSystemData.inbox[0].id);
+eq(sent().length, 0, 'D1c 点「回复」只摊纸，回信面不给载具挑（走飞鸽是老账）');
+assert(global.els.mailDetailPanel.innerHTML.indexOf('回信走飞鸽') >= 0 &&
+    global.els.mailDetailPanel.innerHTML.indexOf('mail-carrier-name') < 0,
+    'D1d 回信那一面写明走飞鸽，且不摆载具挑选');
+eq(MUI.sendReply(global._mailSystemData.inbox[0].id, '一切都好，勿念。'), true, 'D1e 真回口寄出成功');
 assert(sent().length === 1 && sent()[0].subject.indexOf('回复') === 0, 'D2 回复老路照走（回复: 前缀）');
 // 好感回信账（v23.3）：至交回信情分+1（一日两封封顶）
 fresh();

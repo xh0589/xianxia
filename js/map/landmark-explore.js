@@ -240,7 +240,8 @@ function saveLandmarkProgress() {
         (lm.rewards || []).forEach(function (rw, i) { if (rw._claimed) claimed.push(i); });
         data[key] = { progress: lm.exploreProgress, hiddenFound: lm._hiddenFound || false, swordPulled: lm._swordPulled || false, claimed: claimed };
     }
-    try { localStorage.setItem('xianxia_landmarks', JSON.stringify(data)); } catch(e) {}
+    // 第一百四十四批：原式是 `try { … } catch (e) {}`。接入 saveToStorage 后那层 catch 成为死支（单源自己吞异常、返回布尔、从不抛）——留着它等于假装还有一层守卫。已拆。
+    window.saveToStorage('xianxia_landmarks', JSON.stringify(data));
 }
 
 // ============ 探索地标 ============
@@ -325,7 +326,7 @@ function exploreLandmark(landmarkName) {
 function _offerPullSword(landmarkName) {
     var modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50';
-    modal.innerHTML = '<div class="bg-gray-800 border-2 border-yellow-600/50 rounded-xl p-6 max-w-md w-full mx-4 text-center">' +
+    modal.innerHTML = '<div class="bg-gray-800 border-2 border-yellow-600/50 rounded-xl p-6 max-w-md w-full mx-4 max-h-[85vh] overflow-y-auto text-center">' +
         '<h3 class="text-lg font-bold text-yellow-400 mb-2">⚔️ 岩中古剑</h3>' +
         '<p class="text-sm text-gray-300 mb-4">剑身没入岩中三寸，隐有剑鸣。你握上剑柄——拔，还是不拔？（力气越大，越拔得动）</p>' +
         '<button onclick="this.closest(\'.fixed\').remove(); window._landmarkPullSword && window._landmarkPullSword(\'' + landmarkName + '\')" class="w-full mb-2 bg-yellow-700 hover:bg-yellow-600 text-white py-2 rounded">奋力拔剑</button>' +
@@ -338,16 +339,23 @@ window._landmarkPullSword = function(landmarkName) {
         if (typeof window.showMessage === 'function') window.showMessage('岩中已无剑可拔。', 'info');
         return;
     }
-    landmark._swordPulled = true; // 无论成败，此剑认过一回人——不再出现
-    saveLandmarkProgress();
     var cd = window.currentCharData;
     var str = (cd && cd.attrs && cd.attrs.strength) || (cd && cd.mainAttributes && cd.mainAttributes['力量']) || 10;
     var chance = Math.min(0.85, Math.max(0.1, 0.3 + (Number(str) - 10) * 0.03));
     if (Math.random() < chance) {
-        if (typeof window.addItemToInventory === 'function') window.addItemToInventory('wpn_dark_iron_sword', 1);
+        // DES-86：真拔出来了、且剑真落进行囊，才收这道闸门——旧写法在掷骰前就 saveLandmarkProgress，满包时这柄唯一的剑当场永久消失
+        var _剑收 = (typeof window.addItemToInventory === 'function') ? (Number(window.addItemToInventory('wpn_dark_iron_sword', 1)) || 0) : 1;
+        if (!_剑收) {
+            if (typeof window.showMessage === 'function') window.showMessage('⚔️ 古剑应手而出，却又落回岩中——它还在等你。' + ((typeof window.addItemFailText === 'function' && window.addItemFailText('古剑')) || '这一件先还留在原处。'), 'warning');
+            return;
+        }
+        landmark._swordPulled = true; // 剑已认主入囊，此后再来岩中已无剑
+        saveLandmarkProgress();
         if (typeof window.showMessage === 'function') window.showMessage('⚔️ 剑鸣如龙吟——古剑应手而出！你得一柄「玄铁古剑」。', 'success');
     } else {
-        if (cd) cd.health = Math.max(1, (cd.health || 100) - 8);
+        landmark._swordPulled = true; // 无论成败，此剑认过一回人——失手也不再来
+        saveLandmarkProgress();
+        if (cd) cd.health = Math.max(1, (cd.health ?? 100) - 8);
         if (typeof window.showMessage === 'function') window.showMessage('古剑纹丝不动，反震之力撕开了你的虎口！（健康-8）——它不认你。', 'error');
         if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e) {} }
     }
@@ -361,8 +369,8 @@ function checkLandmarkRewards(landmark) {
     for (var i = 0; i < landmark.rewards.length; i++) {
         var entry = landmark.rewards[i];
         if (landmark.exploreProgress >= entry.progress && !entry._claimed) {
-            entry._claimed = true;
-            applyLandmarkReward(entry.reward, entry.msg);
+            // DES-86（第一百三十批）：这道旗挪到落袋之后——旧写法先立旗再发货、又把返回值丢了，这一份奖励从此不再补发
+            if (applyLandmarkReward(entry.reward, entry.msg)) entry._claimed = true;
         }
     }
 }
@@ -370,15 +378,32 @@ function checkLandmarkRewards(landmark) {
 // ============ 应用奖励 ============
 // 第三十四波 · 奖励真账：属性落战斗真源（addMainAttribute 中英双写）、功法落淬体、名号落名望——
 //   旧账把属性写进没人读的顶层字段、把功法/名号塞进零读取的死数组（纯假账），如今每一笔都进真账。
+// 返回 false ＝ 这一份货一件没落袋，调用方那道一次性闸门（_claimed／_hiddenFound）不许烧。
 function applyLandmarkReward(reward, msg) {
-    if (!reward) return;
+    if (!reward) return true;
     var cd = window.currentCharData;
+    var 少发 = '';
     switch (reward.type) {
-        case 'item':
-            if (typeof window.addItemToInventory === 'function') {
-                window.addItemToInventory(reward.id, reward.count || 1);
+        case 'item': {
+            var 要 = reward.count || 1;
+            // DES-72＋DES-86（第一百三十批）：旧写法丢了返回值，旗先烧、货没落袋就永久蒸发
+            var 收 = typeof window.giveWithReceipt === 'function'
+                ? window.giveWithReceipt(reward.id, 要, { quiet: true })
+                : (typeof window.addItemToInventory === 'function'
+                    ? { got: Number(window.addItemToInventory(reward.id, 要)) || 0, count: 要, name: (window.itemById && window.itemById[reward.id] && window.itemById[reward.id].name) || reward.id }
+                    : { got: 要, count: 要, name: reward.id });
+            if (收.got <= 0) {
+                if (typeof window.showMessage === 'function') {
+                    // DES-90（第一百三十九批）：问不到账时不许由站点断言满包——旧句在问账之前就把因写死成「你行囊装不下」。
+                    // 「先留在原地没有取走」是代码真做的事，留着；断言与黑话串一起撤。
+                    window.showMessage('🎁 这一份奖励是 ' + 收.name + '×' + 收.count + '，先留在原地没有取走：'
+                        + ((typeof window.addItemFailText === 'function' && window.addItemFailText(收.name)) || '这一件先还留在原处。'), 'warning');
+                }
+                return false;
             }
+            if (收.got < 收.count) 少发 = '——行囊只塞得下 ' + 收.got + '/' + 收.count + ' 件，另 ' + (收.count - 收.got) + ' 件留在了原地。';
             break;
+        }
         case 'exp':
             if (cd) cd.tempering = (cd.tempering || 0) + (reward.value || 0);
             break;
@@ -406,7 +431,8 @@ function applyLandmarkReward(reward, msg) {
             if (cd) cd.fame = Math.min(99999, (cd.fame || 0) + 15);
             break;
     }
-    showMessage('🎉 ' + (msg || reward.msg || '探索有所收获！'), 'success');
+    showMessage('🎉 ' + (msg || reward.msg || '探索有所收获！') + 少发, 'success');
+    return true;
 }
 
 // ============ 检查隐藏内容 ============
@@ -417,18 +443,25 @@ function checkLandmarkHidden(landmark) {
     if (cond.hasItem) {
         if (hasInventoryItem(cond.hasItem, cond.count || 1)) {
             showMessage('🔓 ' + landmark.hidden.content, 'success');
-            landmark._hiddenFound = true;
-            applyLandmarkReward(landmark.hidden.reward);
-            saveLandmarkProgress();
+            // DES-86（第一百三十批）：先验货落袋再立这道旗——旧写法一揭就永不再来，满包时这份隐藏奖励蒸发
+            if (applyLandmarkReward(landmark.hidden.reward)) {
+                landmark._hiddenFound = true;
+                saveLandmarkProgress();
+            }
         }
     }
     if (cond.realm) {
         var charData = window.currentCharData;
-        if (charData && charData.realm === cond.realm) {
+        // DES-92（第一百三十二批）：门槛是「至少这个境界」，不是「恰好这个境界」——旧写法用 === 判，
+        //   于是金仙探不开写着「筑基」的剑冢（境界比门槛高反而开不了）。尺只此一把：window.realmAtLeast。
+        // ⚠️ 尺未就绪 ⇒ false（判不了就是不够格）；旧回落 `!!charData` 是大开的一条敞口（凡人照揭）。
+        var 够 = (typeof window.realmAtLeast === 'function') && window.realmAtLeast(charData && charData.realm, cond.realm);
+        if (够) {
             showMessage('🔓 ' + landmark.hidden.content, 'success');
-            landmark._hiddenFound = true;
-            applyLandmarkReward(landmark.hidden.reward);
-            saveLandmarkProgress();
+            if (applyLandmarkReward(landmark.hidden.reward)) {
+                landmark._hiddenFound = true;
+                saveLandmarkProgress();
+            }
         }
     }
 }
@@ -468,7 +501,9 @@ function showLandmarkProgressUI(landmark) {
         hiddenHtml = '<div class="mt-2 text-xs ' + (landmark._hiddenFound ? 'text-yellow-400' : 'text-gray-500') + '">🔒 隐藏内容：' + (landmark._hiddenFound ? '✅已发现' : '探索度达到后可解锁') + '</div>';
     }
 
-    modal.innerHTML = '<div class="bg-gray-800 border-2 border-yellow-600/50 rounded-xl p-6 max-w-md w-full mx-4">' +
+    // v24 第六十批 · UI-25：卡片高度帽与 js/global-utils.js showModal 那张同一支笔（max-h-[85vh] + overflow-y-auto）。
+    // 不写帽，特大档「描述＋奖励名册」会顶穿视口，连这张卡自己的关闭叉都被推到屏外。
+    modal.innerHTML = '<div class="bg-gray-800 border-2 border-yellow-600/50 rounded-xl p-6 max-w-md w-full mx-4 max-h-[85vh] overflow-y-auto">' +
         '<div class="flex items-center gap-3 mb-4"><span class="text-3xl">' + landmark.icon + '</span><h3 class="text-xl font-bold text-yellow-500">' + landmark.name + '</h3><button onclick="this.closest(\'.fixed\').remove()" class="text-gray-400 hover:text-white text-2xl ml-auto">&times;</button></div>' +
         '<p class="text-sm text-gray-400 mb-4">' + landmark.desc + '</p>' +
         '<div class="mb-4"><div class="flex justify-between text-xs text-gray-400 mb-1"><span>探索度</span><span>' + landmark.exploreProgress + '%</span></div><div class="w-full bg-gray-700 rounded h-2"><div class="h-2 rounded bg-gradient-to-r from-yellow-500 to-red-500 transition-all" style="width:' + landmark.exploreProgress + '%"></div></div></div>' +
@@ -476,6 +511,38 @@ function showLandmarkProgressUI(landmark) {
         '<div class="flex justify-center mt-4"><button onclick="this.closest(\'.fixed\').remove()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded-lg">关闭</button></div>' +
     '</div>';
     document.body.appendChild(modal);
+}
+
+// ============ 图鉴的「知道多少」三态（v24 第五十九批 · UI-06）============
+// 旧版十二条一律真名＋空进度条：既把没去过的地方全剧透了一遍，又十二条印不出一条信息。
+// 现按成就页/兽径手记那条老规矩落笔——名录上只写脚走到过的与手里有进度的一本账。
+// 反查：图鉴数据按中文名录键（'魂殿'），野外图 POI 的 id 是 map-markers 的英文键（soul_temple/'魂殿遗迹'）。
+function _landmarkMarkerKey(cnName) {
+    try {
+        var all = window.LANDMARKS || {};
+        for (var k in all) {
+            var nm = all[k] && all[k].name;
+            if (nm && (nm === cnName || LANDMARK_ALIASES[nm] === cnName)) return k;
+        }
+    } catch (e) {}
+    return null;
+}
+
+function _landmarkHears(cnName) {
+    var k = _landmarkMarkerKey(cnName);
+    return (k && window.LANDMARKS[k] && window.LANDMARKS[k].region) || null;
+}
+
+// 「亲至」只有一本账：游历见闻里的 lm_<英文键>（野外图脚踩上地标时落的印）
+function _landmarkTouched(cnName) {
+    var k = _landmarkMarkerKey(cnName);
+    if (!k) return false;
+    try {
+        if (window.TravelJournal && typeof window.TravelJournal.hasMark === 'function') {
+            return !!window.TravelJournal.hasMark('lm_' + k);
+        }
+    } catch (e) {}
+    return false;
 }
 
 // ============ 打开地标图鉴 ============
@@ -497,19 +564,36 @@ function showLandmarkBestiary() {
         var pct = lm.exploreProgress;
         // v23.0 图鉴只看不探：旧版在图鉴里点任意地标即可远程「探索」，人不在场也能刷进度——
         // 探索地标必须亲至（野外地图上的地标 POI 才是入口），图鉴仅供回看进度。
-        listHtml += '<div class="flex items-center gap-2 p-2 bg-gray-700/30 rounded">' +
-            '<span class="text-lg">' + lm.icon + '</span>' +
-            '<span class="text-sm text-white">' + lm.name + '</span>' +
-            '<div class="flex-1 mx-2 bg-gray-700 rounded h-1.5"><div class="h-1.5 rounded bg-yellow-500" style="width:' + pct + '%"></div></div>' +
-            '<span class="text-xs text-gray-400">' + pct + '%</span>' +
-        '</div>';
+        if (pct > 0) {
+            listHtml += '<div class="flex items-center gap-2 p-2 bg-gray-700/30 rounded">' +
+                '<span class="text-lg">' + lm.icon + '</span>' +
+                '<span class="text-sm text-white">' + lm.name + '</span>' +
+                '<div class="flex-1 mx-2 bg-gray-700 rounded h-1.5"><div class="h-1.5 rounded bg-yellow-500" style="width:' + pct + '%"></div></div>' +
+                '<span class="text-xs text-gray-400">' + pct + '%</span>' +
+            '</div>';
+        } else if (_landmarkTouched(key)) {
+            listHtml += '<div class="flex items-center gap-2 p-2 bg-gray-700/30 rounded">' +
+                '<span class="text-lg">' + lm.icon + '</span>' +
+                '<span class="text-sm text-white">' + lm.name + '</span>' +
+                '<div class="flex-1 mx-2 text-xs text-yellow-600">已亲至 · 尚未探索</div>' +
+            '</div>';
+        } else {
+            var hearsRegion = _landmarkHears(key);
+            listHtml += '<div class="flex items-center gap-2 p-2 bg-gray-700/30 rounded">' +
+                '<span class="text-lg">❓</span>' +
+                '<span class="text-sm text-gray-500">？ ？ ？</span>' +
+                '<div class="flex-1 mx-2 text-xs text-gray-500">' + (hearsRegion ? '传闻在' + hearsRegion + '一带' : '出处无从可考') + '</div>' +
+            '</div>';
+        }
     }
 
-    modal.innerHTML = '<div class="bg-gray-800 border-2 border-yellow-600/50 rounded-xl p-6 max-w-lg w-full mx-4">' +
+    // v24 第五十九批量出的 UI-25：特大档十二条一行 55px，这张卡 960px 高而视口只有 800 —— 卡顶 −80、关闭叉 −49，
+    // 玩家点不到 × 也看不见标题。帽与滚法仍取 js/global-utils.js showModal 那张的同一支笔。
+    modal.innerHTML = '<div class="bg-gray-800 border-2 border-yellow-600/50 rounded-xl p-6 max-w-lg w-full mx-4 max-h-[85vh] overflow-y-auto">' +
         '<div class="flex items-center justify-between mb-4"><h3 class="text-xl font-bold text-yellow-500">🗺️ 地标图鉴</h3><button onclick="this.closest(\'.fixed\').remove()" class="text-gray-400 hover:text-white text-2xl">&times;</button></div>' +
         '<div class="mb-4"><div class="flex justify-between text-sm text-gray-400 mb-1"><span>探索进度</span><span>' + discovered + '/' + total + ' (' + progress + '%)</span></div><div class="w-full bg-gray-700 rounded h-2"><div class="h-2 rounded bg-gradient-to-r from-green-500 to-yellow-500" style="width:' + progress + '%"></div></div></div>' +
         '<div class="space-y-1">' + listHtml + '</div>' +
-        '<p class="text-xs text-gray-500 mt-3 text-center">地标须亲至方能探索——在野外地图寻到地标再下手。</p></div>';
+        '<p class="text-xs text-gray-500 mt-3 text-center">地标须亲至方能探索——未走到的那一处在名录上只落方位，真名要脚走到了才认得。</p></div>';
     document.body.appendChild(modal);
 }
 

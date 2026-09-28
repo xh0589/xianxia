@@ -13,9 +13,9 @@ const SECT_SPECIALTIES = {
     '少林寺': {
         name: '达摩洞悟道',
         icon: '🧘',
-        desc: '在达摩洞中参悟佛法，可临时提升心境与防御',
+        desc: '在达摩洞中参悟佛法，可临时提升意志与防御',
         type: 'buff',
-        effect: '防御+20%，心境+30，持续12小时',
+        effect: '防御+20%，意志+30，持续12小时',
         cooldown: 24,
         rankReq: 5,
         applyEffect: function() {
@@ -267,7 +267,7 @@ const SECT_SPECIALTIES = {
         icon: '🎵',
         desc: '以文入道，通过诗词歌赋提升精神修为',
         type: 'buff',
-        effect: '心境+50，精神力恢复+30%，持续8小时',
+        effect: '意志+50，精神力恢复+30%，持续8小时',
         cooldown: 12,
         rankReq: 5,
         applyEffect: function() {
@@ -521,7 +521,11 @@ function applyBuff(buffId, effects, duration) {
         expiryGameMinute: _sectSpecialtyNowMinute() + duration * 60,
         duration: duration
     };
-    // 更新UI
+    // ⚠️ 第一百四十二批实测：`window.updateBuffUI` **全仓没有定义**，这行一直是安全空操作。
+    // 也就是说：门派特色增益**存进了 window.activeBuffs（含效果与到期时辰），玩家看不见**。
+    // 这不是本批该顺手补的——补一块增益面板属于**新增功能**，是设计决策不是修 BUG，
+    // 已登记待拍板。这里只留注释点明「这一行现在不生效」，免得下个人以为增益 UI 是在线的。
+    // 将来若决定补面板，把 updateBuffUI 实现出来，这一行就自动接上了（别删它）。
     if (typeof window.updateBuffUI === 'function') window.updateBuffUI();
 }
 

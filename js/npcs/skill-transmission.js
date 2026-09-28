@@ -93,7 +93,11 @@
 
     // ============ 小工具 ============
     function tierOf(realm) {
-        var i = REALM_ORDER.indexOf(String(realm || ''));
+        // DES-92（第一百三十二批）：境界序这把尺只此一把——本表里的「真仙」游戏从没发到过玩家身上，
+        // 真出线的「飞升」反倒缺位。借真源，认不出的仍按炼气档。
+        var i = (typeof window.realmIndex === 'function')
+            ? window.realmIndex(realm)
+            : REALM_ORDER.indexOf(String(realm || ''));
         return i >= 0 ? i : 1;
     }
     function rng() {

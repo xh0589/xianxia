@@ -48,7 +48,10 @@ function makeLandmarkSandbox(opts) {
     sandbox.ATTRIBUTE_KEY_MAP = ATTRIBUTE_KEY_MAP;
     sandbox.showMessage = function (m) { msgs.push(String(m)); };
     sandbox.currentCharData = cd;
-    sandbox.addItemToInventory = function (id, n) { items.push({ id: id, n: n || 1 }); return true; };
+    sandbox.addItemToInventory = function (id, n) { items.push({ id: id, n: n || 1 }); return n || 1; };   // 第一百三十批：桩按真源口径回实收件数
+    // 第一百三十二批：沙箱装了真 global-utils ⇒ 发货走 giveWithReceipt，它吃的是 window.addItem
+    //   （没有 addItem 时按全数认、连 addItemToInventory 都不叫）——补这一只委托桩，货才落到上面的探针里。
+    sandbox.addItem = function (id, n) { return sandbox.addItemToInventory(id, n); };
     sandbox.timeSystem = { advanceTime: function () {}, getAbsoluteDay: function () { return 105; } };
     sandbox.updateCharacterStatus = function () {};
     sandbox.inventory = { slots: opts.slots || [] };
@@ -64,6 +67,12 @@ function makeLandmarkSandbox(opts) {
     };
     sandbox.syncCharAttrsFromMain = function (c) { c = c || cd; return c; };
     vm.createContext(sandbox);
+    // 第一百三十二批：地标境界门吃 window.realmAtLeast（真源 js/global-utils.js）；尺未就绪即判不够格。
+    //   不装尺的本沙箱等于活在「生产页面上不存在」的那条降级支路（仙侠.html:1930 先装尺）。
+    //   ⚠️ 只借尺：global-utils:131 会把 showMessage 换成只往 DOM 写的那只，装完立刻换回 msgs 探针。
+    const _探针 = sandbox.showMessage;
+    vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/global-utils.js'), 'utf8'), sandbox, { filename: 'js/global-utils.js' });
+    sandbox.showMessage = _探针;
     vm.runInContext(fs.readFileSync(path.join(ROOT, 'js/map/landmark-explore.js'), 'utf8'), sandbox);
     function setRand(v) { Math.random = function () { return v; }; }
     return { W: sandbox, cd: cd, msgs: msgs, items: items, store: store, setRand: setRand };

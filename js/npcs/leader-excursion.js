@@ -62,7 +62,9 @@
         var region = (window.mapData || {})[sect.location];
         var cities = region && region.cities || [];
         if (!cities.length) return null;
-        return cities[hashStr(sectName + '|city') % cities.length];
+        // DES-57：mapData 的起始城写作「帝都 · 长安」（带空格）——这串要写进 NPC 的 location 账，
+        // 而 cityData 表键与 homeLocation 都记「帝都·长安」，落位时一律取去空白的表键写法（其余 22 城两串同字）。
+        return String(cities[hashStr(sectName + '|city') % cities.length] || '').replace(/\s+/g, '');
     }
 
     // ---------- 日程同步 ----------
@@ -132,7 +134,8 @@
         if (aff < INVITE_AFFECTION) return false;
         var playerLoc = window.currentCharData.location || '';
         // 只在下山游历途中递话：人在城里与你相识，才邀你日后上山寻她
-        if (!playerLoc || playerLoc === sectName || playerLoc !== npc.location) return false;
+        // DES-57：两串城名写法（舆图带空格／表键不带），认同城前去空白
+        if (!playerLoc || playerLoc === sectName || String(playerLoc).replace(/\s+/g, '') !== String(npc.location || '').replace(/\s+/g, '')) return false;
         if (npc.setFlag) npc.setFlag(INVITE_FLAG);
         var line = npc.name + ' 略一沉吟，递话道：「江湖路远，聚散无常。你若日后路过' + sectName + '，报我名讳，门中自有人引你入内。」';
         if (typeof showMessage === 'function') showMessage('💌 ' + line, 'success');

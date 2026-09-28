@@ -69,7 +69,8 @@ function initSectJoinFlow() {
 
 // ============ 保存状态 ============
 function saveSectJoinState() {
-    try { localStorage.setItem('xianxia_sect_join_state', JSON.stringify(sectJoinState)); } catch(e) {}
+    // 第一百四十四批：原式是 `try { … } catch (e) {}`。接入 saveToStorage 后那层 catch 成为死支（单源自己吞异常、返回布尔、从不抛）——留着它等于假装还有一层守卫。已拆。
+    window.saveToStorage('xianxia_sect_join_state', JSON.stringify(sectJoinState));
 }
 
 // ============ 入口：申请入门（v10.0 加入守卫对话+试炼流程） ============
@@ -1962,14 +1963,28 @@ function tryJoinSect(sectId) {
 // ============ 境界档位（兼容字符串/数字/凡人） ============
 // 0=凡人，1=炼气…；申请入门不卡境界（joinSect 固定杂役）
 // 供升职 P1 与日常事件条件复用
+// DES-92（第一百三十三批）：档位不再自带境界表——「谁比谁高」只问那一把尺
+//   （window.REALM_ORDER / window.realmIndex，真源见 js/global-utils.js:734-747）。
+//   旧写法在本地抄了十档、排在「渡劫」就断，于是顶端两档被折回炼气：修到飞升/金仙的老角色
+//   反倒进不了天书阁（门槛 9）、开不了山（4）、占不了灵脉（3）、御不起剑（2）。
+//   js/quest/qi-arc2.js:234 早把这行写进注释（「getRealmTier 对飞升后境界按炼气处理，会误锁」），
+//   本批把那句注释落成代码。前十档逐名读数与旧表一字不差（套件 B 段逐名对账）。
+// ⚠️ 两支回落都不放行：认不出的名仍按旧保守值 1（别挪 NPC 挂的表外境界名，如「真仙」）；
+//   尺没就绪 ⇒ 0＝全序下界，判门槛处一律拦下（第一百二十七批 mail-system 那笔 `return 999`
+//   换「开大门」的账，别再记一遍）。生产走不到那一支：仙侠.html:1930 装尺先于 :2171。
+var 尺缺已告 = false;
 function getRealmTier(realm) {
-    var order = ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'];
     if (realm == null || realm === '') return 0;
     if (typeof realm === 'number') {
         if (realm <= 0) return 0;
-        return Math.min(realm, order.length - 1);
+        var 顶 = (window.REALM_ORDER && window.REALM_ORDER.length) ? window.REALM_ORDER.length - 1 : 0;
+        return 顶 ? Math.min(realm, 顶) : 0;
     }
-    var i = order.indexOf(String(realm));
+    if (typeof window.realmIndex !== 'function') {
+        if (!尺缺已告) { 尺缺已告 = true; console.warn('[境界尺] js/global-utils.js 未加载，境界档位一律按凡人（0）——判门槛处即拦下'); }
+        return 0;
+    }
+    var i = window.realmIndex(realm);
     if (i >= 0) return i;
     // 未知字符串：偏保守按炼气处理（不影响入门）
     return 1;

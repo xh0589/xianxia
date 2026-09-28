@@ -138,7 +138,10 @@
                     var ca = b._warAllies || [];
                     ca.forEach(function (a) { var ac = mySect ? relCell(mySect, a) : null; if (ac) ac.relation = Math.max(-100, Math.min(100, (Number(ac.relation) || 0) + 5)); });
                 } catch (eAl) {}
-                try { if (typeof W.changeFactionReputation === 'function') {} } catch (e) {}
+                // DES-25：这一处原本是一枚「判空后什么都不做」的空花括号，读起来像已经接了势力账、其实一笔没写——先撤掉。
+                // 要不要让宗门大战动那五本势力账，是机制口径，等用户定数（现成的参照：`js/world-events.js:300-306` 正邪大战参战＝胜方 +50／败方 −30）。
+                // 日后接通有两个坑必须一起防：① 攻守两家常同属一系（正道 vs 正道），同一本账上自己 +50 又 −30 是假账，须先判 `factionIdOfSect` 两边不同；
+                // ② 自建宗门不在 `sectsData` 里，映射回 `null`，那一侧就该安静地什么都不写。
                 var line = '🛡️ ' + sectId + '的人退了——山门保住，你的刀他们记住了。（本派关系回暖，贡献+60入账）';
                 log(line, 'success'); msg(line, 'success');
             } else {
@@ -162,7 +165,7 @@
                 addC(40, '攻山之战·先登之功');
                 if (mySect) standingHit(mySect, true);
                 try { if (typeof W.sectPowerWarMod === 'function') W.sectPowerWarMod(sectId, false); } catch (eW2) {}
-                try { if (W.currentCharData) W.currentCharData.fame = Math.min(9999, (W.currentCharData.fame || 0) + 5); } catch (e) {}
+                try { if (W.currentCharData) W.currentCharData.fame = Math.min(9999, (W.currentCharData.fame || 0) + 5); } catch (e) { console.warn('[静默失败] js/sects/sect-war.js:168 · 踏破山门记功：这一笔fame没接住，玩家会察觉的损失在此', e && e && e.message); }
                 var line3 = '⚔️ ' + sectId + '的山门被你踏破——库房清点出灵石' + spoils + '，门中记你先登之功。（对方记仇了：关系大跌）';
                 log(line3, 'success'); msg(line3, 'success');
             } else {
@@ -399,12 +402,22 @@
         if (win) {
             var cores = 1 + Math.floor(lv / 3) + Math.floor(Math.random() * 2);
             var temper = 40 + lv * 5;
-            try { if (typeof W.addItem === 'function') W.addItem('mat_demon_beast_core', cores); } catch (e1) {}
-            try { if (W.currentCharData) W.currentCharData.tempering = (Number(W.currentCharData.tempering) || 0) + temper; } catch (e2) {}
-            try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (Number(W.currentCharData.fame) || 0) + 2 + Math.floor(lv / 2)); } catch (e3) {}
+            // DES-72（第一百三十批）：旧写法丢了返回值——屏上照念「兽核×N入囊」，囊里到底几枚从不问
+            var 核收 = typeof W.giveWithReceipt === 'function'
+                ? W.giveWithReceipt('mat_demon_beast_core', cores, { quiet: true })
+                : (function () { var 得 = 0; try { 得 = Number(W.addItem('mat_demon_beast_core', cores)) || 0; } catch (e0) { console.warn('[静默失败] js/sects/sect-war.js:408 · 兽潮守山发兽核：这一笔发货没接住，玩家会察觉的损失在此', e0 && e0 && e0.message); } return { got: 得, count: cores }; })();
+            var 核名 = 核收.name || (W.itemById && W.itemById['mat_demon_beast_core'] && W.itemById['mat_demon_beast_core'].name) || '兽核';
+            var 核话 = 核收.got >= cores ? '兽核×' + 核收.got + '入囊'
+                : (核收.got > 0
+                    ? '兽核只塞得下 ' + 核收.got + '/' + cores + ' 枚'
+                    : '那 ' + cores + ' 枚' + 核名 + '你没能带走（'
+                      // DES-90（第一百三十九批）：问不到账时不许由站点断言满包
+                      + ((typeof W.addItemFailPhrase === 'function' && (W.addItemFailPhrase(核名) || '没能落进你的行囊')) || '没能落进你的行囊') + '）');
+            try { if (W.currentCharData) W.currentCharData.tempering = (Number(W.currentCharData.tempering) || 0) + temper; } catch (e2) { console.warn('[静默失败] js/sects/sect-war.js:416 · 兽潮守山记修为：这一笔tempering没接住，玩家会察觉的损失在此', e2 && e2 && e2.message); }
+            try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (Number(W.currentCharData.fame) || 0) + 2 + Math.floor(lv / 2)); } catch (e3) { console.warn('[静默失败] js/sects/sect-war.js:417 · 兽潮守山记名气：这一笔fame没接住，玩家会察觉的损失在此', e3 && e3 && e3.message); }
             if (home && W.PSectWorld) {
                 try { W.PSectWorld.gainRep(home, 2, '打退兽潮·山门无恙'); } catch (e4) {}
-                try { var itw = (W.SECT_INTERNAL || {})[home]; if (itw) itw.morale = Math.max(0, Math.min(100, (Number(itw.morale) || 50) + 6)); } catch (e5) {}
+                try { var itw = (W.SECT_INTERNAL || {})[home]; if (itw) itw.morale = Math.max(0, Math.min(100, (Number(itw.morale) || 50) + 6)); } catch (e5) { console.warn('[静默失败] js/sects/sect-war.js:420 · 兽潮守山涨士气：这一笔morale没接住，玩家会察觉的损失在此', e5 && e5 && e5.message); }
                 try {
                     var psw = W.PSectWorld.byName(home);
                     if (psw && W.PSectVenture && W.PSectVenture.bumpMoodAll) W.PSectVenture.bumpMoodAll(psw, 4);
@@ -416,7 +429,7 @@
                 try { var itn = (W.SECT_INTERNAL || {})[npcSect]; if (itn) itn.morale = Math.max(0, Math.min(100, (Number(itn.morale) || 50) + 6)); } catch (e7) {}
                 chronOf(npcSect, '「' + tideName() + '」的兽群扑到山门下，被门中上下打了回去。');
             }
-            log('🐾 兽群退了——墙头上兽血未干。这一仗：兽核×' + cores + '入囊，历练+' + temper + '。（挡潮的人，山门记着）', 'success');
+            log('🐾 兽群退了——墙头上兽血未干。这一仗：' + 核话 + '，历练+' + temper + '。（挡潮的人，山门记着）', 'success');
             tideAllyThanks(sectName, b._tideAllies, true); // 第二十七波：上墙头的盟家，情分记账、编年互记
         } else {
             // 败：人带伤（与清剿受挫同口径），山门被兽群糟蹋
@@ -588,9 +601,18 @@
         if (win) {
             var cores = 1 + Math.floor(lv / 3);
             var temper = 30 + lv * 4;
-            try { if (typeof W.addItem === 'function') W.addItem('mat_demon_beast_core', cores); } catch (e1) {}
-            try { if (W.currentCharData) W.currentCharData.tempering = (Number(W.currentCharData.tempering) || 0) + temper; } catch (e2) {}
-            try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (Number(W.currentCharData.fame) || 0) + 3); } catch (e3) {}
+            // DES-72（第一百三十批）：旧写法丢了返回值——「兽核×N入囊」照念，囊里几枚从不问
+            var 援核收 = typeof W.giveWithReceipt === 'function'
+                ? W.giveWithReceipt('mat_demon_beast_core', cores, { quiet: true })
+                : (function () { var 得 = 0; try { 得 = Number(W.addItem('mat_demon_beast_core', cores)) || 0; } catch (e0) { console.warn('[静默失败] js/sects/sect-war.js:607 · 潮汐请援发兽核：这一笔发货没接住，玩家会察觉的损失在此', e0 && e0 && e0.message); } return { got: 得, count: cores }; })();
+            var 援核名 = 援核收.name || (W.itemById && W.itemById['mat_demon_beast_core'] && W.itemById['mat_demon_beast_core'].name) || '兽核';
+            var 援核话 = 援核收.got >= cores ? '兽核×' + 援核收.got + '入囊'
+                : (援核收.got > 0
+                    ? '兽核只塞得下 ' + 援核收.got + '/' + cores + ' 枚'
+                    : '那 ' + cores + ' 枚' + 援核名 + '你没能带走（'
+                      + ((typeof W.addItemFailPhrase === 'function' && (W.addItemFailPhrase(援核名) || '没能落进你的行囊')) || '这一件没能交到你手上') + '）');
+            try { if (W.currentCharData) W.currentCharData.tempering = (Number(W.currentCharData.tempering) || 0) + temper; } catch (e2) { console.warn('[静默失败] js/sects/sect-war.js:614 · 潮汐请援记修为：这一笔tempering没接住，玩家会察觉的损失在此', e2 && e2 && e2.message); }
+            try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (Number(W.currentCharData.fame) || 0) + 3); } catch (e3) { console.warn('[静默失败] js/sects/sect-war.js:615 · 潮汐请援记名气：这一笔fame没接住，玩家会察觉的损失在此', e3 && e3 && e3.message); }
             // 谢礼守恒：真从受援方库房里出，真进自家宗库——穷门谢不出富礼
             var gift = it ? Math.min(100, Math.floor((Number(it.resources) || 0) * 0.12)) : 0;
             if (it && gift > 0) it.resources = (Number(it.resources) || 0) - gift;
@@ -605,7 +627,7 @@
             chronOf(victim, '「' + home + '」的人马驰援上山，把围门的兽群打了回去——谢礼装车送去，这份情编年记下了。');
             streetOf('江湖佳话：兽潮围了「' + victim + '」的山门，盟家「' + home + '」提兵驰援，把兽群打退在山下——茶棚里都说这段义气。');
             setTideRest(victim, 5);                        // 第三十波：救下来的山门也歇五日——兽群败一阵，不会掉头再来
-            log('🤝 兽群被你打退了——「' + victim + '」的山门保住了。（盟家关系大涨' + (gift > 0 ? '，谢礼灵石' + gift + '入宗库' : '') + '；兽核×' + cores + '入囊，历练+' + temper + '）', 'success');
+            log('🤝 兽群被你打退了——「' + victim + '」的山门保住了。（盟家关系大涨' + (gift > 0 ? '，谢礼灵石' + gift + '入宗库' : '') + '；' + 援核话 + '，历练+' + temper + '）', 'success');
         } else {
             try { if (typeof W.applyBeastTideDefeatWound === 'function') W.applyBeastTideDefeatWound({ wave: 1, waves: 1 }); } catch (eW) {}
             resolveWorldTide(victim, lv);                  // 援军败了，围还在——盟家还得自己熬这一潮

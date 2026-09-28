@@ -92,17 +92,31 @@ function claimBounty(idx) {
         return false;
     }
     var cd = window.currentCharData;
+    var gotItems = [];
+    var missed = 0;
     if (cd) {
         if (window.DataManager && typeof window.DataManager.addSpiritStones === 'function') window.DataManager.addSpiritStones(b.stones);
         else cd.spiritStones = (cd.spiritStones || 0) + b.stones;
         cd.fame = Math.min((window.FAME_CAP || 99999), (cd.fame || 0) + Math.floor(b.count / 2));
         if (b.items && typeof window.addResultItem === 'function') {
-            b.items.forEach(function (it) { try { window.addResultItem(it.itemId, it.count); } catch (e) {} });
+            b.items.forEach(function (it) {
+                try {
+                    // DES-72 同族：addResultItem 报的是实收件数，旧写法整个丢在地上
+                    var got = Number(window.addResultItem(it.itemId, it.count)) || 0;
+                    if (got > 0) {
+                        var nm = (window.itemById && window.itemById[it.itemId] && window.itemById[it.itemId].name) || it.itemId;
+                        gotItems.push(nm + '×' + got);
+                    }
+                    if (got < it.count) missed += (it.count - got);
+                } catch (e) {}
+            });
         }
     }
+    // DES-90（第一百三十九批）：账上没落笔时不许由站点断言满包（悬赏材料属机构交付，用③形，括号内不带句号）
+    var itemTxt = (gotItems.length ? '，材料 ' + gotItems.join('、') : '') + (missed > 0 ? '（另 ' + missed + ' 件：' + ((typeof window.addItemReasonPhrase === 'function' && window.addItemReasonPhrase('悬赏的材料')) || '这一件没能交到你手上') + '）' : '');
     b.claimed = true;
-    if (window.gameLog && window.gameLog.add) window.gameLog.add('🏆 悬赏「' + b.title + '」完成！获得灵石+' + b.stones, 'success');
-    if (window.showMessage) window.showMessage('悬赏「' + b.title + '」完成，领得灵石+' + b.stones + '！', 'success');
+    if (window.gameLog && window.gameLog.add) window.gameLog.add('🏆 悬赏「' + b.title + '」完成！获得灵石+' + b.stones + itemTxt, 'success');
+    if (window.showMessage) window.showMessage('悬赏「' + b.title + '」完成，领得灵石+' + b.stones + '！' + itemTxt, 'success');
     if (window.updateCharacterStatus) window.updateCharacterStatus();
     return true;
 }

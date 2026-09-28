@@ -5,7 +5,7 @@
      .qg-bar          列表首 child，吸顶计数条（共 N 章 / 在做 N / 下方还有 N 条）
      .qg-card         一条任务 = 左 .qg-card__body（可换行）+ 右 .qg-card__side（按钮列）
      .qg-card--todo/doing/ready/done/locked + .is-focus（当前该动的那一条）
-     .qg-empty        空态：为什么空 + 下一步做什么
+     空态走公共件 .x-empty（见 ui-craft.css），本文件不再私有一份
    挤成竖排的根因：旧结构里正文与按钮同为可伸缩 flex 项，长中文描述一撑，按钮列就被压到一个字宽。
    这里靠「正文列 min-width:0 + 按钮列 shrink-0/nowrap/min-width」根治，不靠截断描述。
    配色分级：主色金只给当前推荐的那一颗按钮，其余走中性描边；交付用绿，锁定用暗。
@@ -28,20 +28,45 @@
     color: var(--x-text);
 }
 
-/* 主线列表自带滚动：48 章全铺在页面上，玩家既看不到底也找不到北 */
-#panel-quests #main-quest-list {
-    max-height: clamp(340px, 62vh, 620px);
-    overflow-y: auto;
-    scrollbar-gutter: stable;
-    padding-right: 6px;
+/* 一条高度策略（UI-11）：本面板所有任务列表一律跟着页面滚，长表靠 JS 折叠收口。
+   此前是「外层页面滚 ＋ 每个列表自己再滚」的双滚：48 章主线 9083px、20 单布告 2948px 各塞在
+   601px 的小滚窗里，玩家既找不到底也数不清还剩几条。
+   选择器带 html 前缀，是为了赢 html 上残留的 max-h-72/overflow-y-auto 工具类（不用 !important）。 */
+html #panel-quests #main-quest-list,
+html #panel-quests #active-quest-list,
+html #panel-quests #daily-quest-list,
+html #panel-quests #random-quest-list,
+html #panel-quests #npc-quest-list,
+html #panel-quests #completed-quest-list {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
 }
 
-/* 布告委托同理：html 里写死的 max-h-72 只露得出三张告示，改成跟着窗口给的高度 */
-#panel-quests #random-quest-list {
-    max-height: clamp(340px, 62vh, 620px);
-    scrollbar-gutter: stable;
-    padding-right: 6px;
+/* ---------- 折叠格：长表折起来的那一段 ---------- */
+
+#panel-quests .qg-fold {
+    border: 1px dashed #4b5563;
+    border-radius: 10px;
+    background: rgba(17, 24, 39, .45);
 }
+
+#panel-quests .qg-fold__sum {
+    padding: 9px 12px;
+    font-size: var(--x-fs-sm);
+    font-weight: 700;
+    line-height: 1.5;
+    color: var(--x-muted);
+    cursor: pointer;
+    list-style-position: inside;
+}
+
+#panel-quests .qg-fold[open] > .qg-fold__sum {
+    border-bottom: 1px dashed #4b5563;
+    color: var(--x-text-2);
+}
+
+#panel-quests .qg-fold__body { padding: 10px; }
 
 /* ---------- 吸顶计数条 ---------- */
 
@@ -347,40 +372,9 @@
     font-weight: 700;
 }
 
-/* ---------- 空态 ---------- */
-
-#panel-quests .qg-empty {
-    padding: 14px 14px 15px;
-    border: 1px dashed #4b5563;
-    border-radius: 10px;
-    background: rgba(31, 41, 55, .55);
-}
-
-#panel-quests .qg-empty__title {
-    margin: 0 0 5px;
-    font-size: var(--x-fs-base);
-    font-weight: 700;
-    line-height: 1.45;
-    color: var(--x-text);
-}
-
-#panel-quests .qg-empty__why,
-#panel-quests .qg-empty__hint {
-    margin: 0 0 4px;
-    font-size: var(--x-fs-sm);
-    line-height: 1.65;
-    color: var(--x-muted);
-}
-
-#panel-quests .qg-empty__next {
-    margin: 0 0 4px;
-    font-size: var(--x-fs-sm);
-    font-weight: 700;
-    line-height: 1.6;
-    color: var(--x-gold);
-}
-
-#panel-quests .qg-empty__hint { font-size: var(--x-fs-xs); color: var(--x-dim); }
+/* ---------- 空态 ----------
+   已并入公共件 `.x-empty`（styles/ui-craft.css ＋ js/core/empty-state.js）：
+   本面板不再私有一份「为什么空＋下一步」的样式，免得两处各自长歪。 */
 
 /* ---------- 窄屏：按钮整排放到正文下面，谁也不挤谁 ---------- */
 
@@ -398,6 +392,4 @@
     }
     #panel-quests .qg-btn { flex: 1 1 auto; }
     #panel-quests .qg-bar__now { text-align: left; }
-    #panel-quests #main-quest-list,
-    #panel-quests #random-quest-list { max-height: none; }
 }

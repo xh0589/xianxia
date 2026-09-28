@@ -27,7 +27,7 @@ function tickKarmaRetribution() {
                 cd.luck = Math.max(0, (cd.luck || 50) - 1);
                 if (window.gameLog && window.gameLog.add) window.gameLog.add('恶有恶报：因果缠身，气运-1', 'error');
             } else {
-                cd.health = Math.max(1, (cd.health || 100) - 5);
+                cd.health = Math.max(1, (cd.health ?? 100) - 5);
                 if (window.gameLog && window.gameLog.add) window.gameLog.add('恶有恶报：仇家暗算，受伤-5气血', 'error');
             }
         }

@@ -203,7 +203,12 @@ input[type=number]::-webkit-outer-spin-button {
     transition: max-height 0.3s ease-out;
 }
 .city-list-item {
-    cursor: pointer;
+    /* 第九十六波·UI-09：这一行自己没有 onclick，可点的只有行内那两枚钮——旧版这里挂 cursor:pointer
+       等于整行向玩家承诺「点我」，点下去落在名字与钮之间的那道缝上却没人认账。指针只跟着真钮走，
+       hover 底色保留（它说的是「你在这一条目上」，不是「点这一行」）。
+       必须显式写 default：cursor 是继承属性，外层 .region-item 声明了 pointer，只把这一行删空
+       等于让它继续继承那枚 pointer——实机量过，删空后 computed 读数仍是 pointer（撒谎的那半条换了地方）。 */
+    cursor: default;
     transition: all 0.15s;
     border-radius: 4px;
 }

@@ -76,7 +76,7 @@ global.timeSystem = {
     onNewDaySubscribe: function () {}
 };
 global.openBattleWithEntity = function () {};
-global.addItemToInventory = function () { return true; };
+global.addItemToInventory = function (id, n) { return n || 1; };   // 第一百三十批：桩按真源口径回实收件数
 global.itemById = {};
 global.inventory = { currency: { spiritStones: 100 }, slots: [] };
 global.EconomyTransaction = { getBalance: function () { return 100; }, debit: function () { return true; }, credit: function () { return true; } };
@@ -200,9 +200,20 @@ console.log('\n[A] 饱腹账（一顿热饭的账）');
     assert(msgCount('热汤热菜') === 1 && msgCount('精力 +40') === 1 && msgCount('四个时辰') === 1, 'A4 话术把账讲明（补多少、顶多久、怎么省）');
     // 封不超上限
     setChar(95, 90);
+    msgs.length = 0;
     MEAL.feed('又是一顿');
     eq(global.currentCharData.energy, 100, 'A5 精力封顶不超（90+40 → 100）');
     eq(global.currentCharData.health, 100, 'A5b 气血封顶不超（95+10 → 100）');
+    // 触顶那一桌：回执要说进账、不说开价（DES-42④＝DES-38 原验收的「满精力吃饭」那一格）
+    assert(msgCount('精力已达上限，实得+10') === 1 && msgCount('气血已达上限，实得+5') === 1,
+        'A5c 部分触顶按差值报（90→100 报 +10、95→100 报 +5；改前一律印开价「精力 +40、气血 +10」）');
+    setChar(100, 100);
+    msgs.length = 0;
+    MEAL.feed('又一顿');
+    assert(msgCount('精力已达上限，实得+0') === 1 && msgCount('气血已达上限，实得+0') === 1,
+        'A5d 满账吃饭明说「实得+0」（改前账上一分不进、屏上照样印 +40／+10）');
+    assert(msgCount('精力 +40') === 0 && msgCount('气血 +10') === 0,
+        'A5e 两桌再无拿开价当进账的句子（措辞与统一通道 pushGain 同一把尺）');
     // 兜底菜话术
     setChar(50, 50);
     msgs.length = 0;

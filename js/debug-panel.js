@@ -47,9 +47,9 @@
     var ITEM_QUICK_IDS = {
         '丹药·筑基丹': 'foundation_pill',
         '丹药·小还丹': 'pill_small_recovery',
-        '丹药·大还丹': 'pill_great_recovery',
+        '丹药·大还丹': 'pill_big_recovery',
         '丹药·聚气丹': 'pill_qi_return',
-        '丹药·洗髓丹': 'pill_marrow_cleansing',
+        '丹药·洗髓丹': 'pill_marrow_wash',
         '丹药·延寿丹': 'spec_longevity_pill',
         '材料·灵芝': 'mat_lingzhi',
         '材料·火晶': 'mat_fire_crystal',
@@ -561,8 +561,8 @@
             return window.addItem(id, count);
         }
         if (typeof window.addItemToInventory === 'function') {
-            window.addItemToInventory(id, count);
-            return true;
+            // DES-88：这一路也报实收——旧写法丢返回值硬 return true，满包时面板念「添加物品成功」
+            return !!window.addItemToInventory(id, count);
         }
         return false;
     }
@@ -598,7 +598,7 @@
                 else e++;
             }
         });
-        _showMsg('添加完成：成功 ' + count + ' 个物品' + (errors ? '，失败 ' + errors + ' 个' : ''), 'success');
+        _showMsg('添加完成：成功 ' + c + ' 个物品' + (e ? '，失败 ' + e + ' 个' : ''), 'success');
         _refreshUI();
     }
 
@@ -784,7 +784,7 @@
                 var old = JSON.parse(localStorage.getItem('xianxia_landmarks') || '{}');
                 Object.keys(old).forEach(function (k) { save[k] = { progress: 100, hiddenFound: true }; });
             }
-            localStorage.setItem('xianxia_landmarks', JSON.stringify(save));
+            window.saveToStorage('xianxia_landmarks', JSON.stringify(save));
             _showMsg('已解锁全部地标（探索进度拉满，隐藏点全标记）', 'success');
         } catch (e) {
             _showMsg('解锁地图失败：' + (e && e.message ? e.message : e), 'warning');

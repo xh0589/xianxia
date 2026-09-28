@@ -126,25 +126,34 @@
         else ranking.push({ name: name, sect: sect, score: Number(score) || 0 });
         ranking.sort(function(a,b){ return b.score-a.score; }); ranking = ranking.slice(0,20);
         ranking.forEach(function(r,i){ r.rank=i+1; });
-        localStorage.setItem('xianxia_arena_ranking', JSON.stringify(ranking));
+        window.saveToStorage('xianxia_arena_ranking', JSON.stringify(ranking));
+    }
+
+    function arenaRankEmptyHtml() {
+        var c = cfg(), cd = charData();
+        var used = (cd && cd._arenaDay === currentDay()) ? (Number(cd._arenaDailyCount) || 0) : 0;
+        return window.xEmptyHtml({
+            title: '竞技台上还没有战绩',
+            why: '这张榜只认在台上赢过手的人——名字、门派、分数都来自真打过的那一场。',
+            next: '打赢一场切磋，你的名字就会头一回出现在这里。',
+            hints: ['今日还能上台 ' + Math.max(0, c.dailyLimit - used) + ' 场，每场约 ' + c.timeMinutes
+                + ' 分钟、耗 ' + c.energyCost + ' 精力。']
+        });
     }
 
     function showArenaRanking() {
         var ranking = [];
         try { ranking = JSON.parse(localStorage.getItem('xianxia_arena_ranking') || '[]'); } catch (e) { ranking = []; }
-        if (!ranking.length) ranking = [
-            { name:'张三丰', sect:'武当派', score:9999, rank:1 },
-            { name:'李逍遥', sect:'蜀山派', score:8888, rank:2 },
-            { name:'张小凡', sect:'青云门', score:7777, rank:3 }
-        ];
         var html = '<div class="space-y-2">';
+        if (!ranking.length) html += arenaRankEmptyHtml();
         ranking.forEach(function(r) {
             var medal = r.rank===1?'🥇':r.rank===2?'🥈':r.rank===3?'🥉':'#'+r.rank;
             html += '<div class="flex justify-between items-center bg-gray-700/30 p-2 rounded"><span>'+medal+' '+r.name+'</span><span class="text-sm text-gray-400">'+(r.sect||'散修')+'</span><span class="text-sm font-bold text-yellow-400">'+r.score+'</span></div>';
         });
+        if (ranking.length) html += '<p class="text-xs text-gray-500 mt-3 leading-relaxed">此榜只记胜场：一人一行，分数取他赢过的那几场里最高的一次。</p>';
         html += '</div>';
         var modal = document.createElement('div');
-        modal.className='fixed inset-0 bg-black/70 flex items-center justify-center z-50';
+        modal.className='fixed inset-0 bg-black/70 flex items-center justify-center z-50 x-arena-modal';
         modal.onclick=function(e){ if(e.target===modal) modal.remove(); };
         modal.innerHTML='<div class="bg-gray-800 border-2 border-red-500 rounded-xl p-6 max-w-md w-full mx-4"><div class="flex justify-between items-center mb-4"><h3 class="text-xl font-bold text-red-400">⚔️ 门派竞技排名</h3><button onclick="this.closest(\'.fixed\').remove()" class="text-gray-400 hover:text-white text-2xl">&times;</button></div>'+html+'<button onclick="enterArena(); this.closest(\'.fixed\').remove();" class="w-full mt-4 bg-red-600 hover:bg-red-500 text-white py-2 rounded">开始切磋</button></div>';
         document.body.appendChild(modal);

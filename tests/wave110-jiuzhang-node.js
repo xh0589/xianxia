@@ -69,7 +69,7 @@ global.showMessage = function (m) { msgs.push(String(m)); };
 var modals = [];
 global.showModal = function (title, body) { modals.push({ title: String(title), body: String(body) }); };
 global.EventBus = { emit: function () {}, on: function () {}, off: function () {} };
-global.addItem = function () { return true; };
+global.addItem = function (id, n) { return n || 1; };   // 桩：回实收件数
 global.updateCurrencyUI = function () {};
 global.updateCharacterStatus = function () {};
 global.switchPanel = function () {};
@@ -186,7 +186,9 @@ console.log('\n[G] 杂项：晋升钮、信纸转义、幽灵调用、叫错名�
 var sduSrc = src('js/sects/sects-deep-ui.js');
 assert(sduSrc.indexOf('var isNext = r.id === currentRank - 1;') >= 0 && sduSrc.indexOf('var isLocked = r.id < currentRank;') < 0, 'G1 晋升按钮的互斥死结解开（NEW-53：反向梯度按「下一级」认）');
 var mailSrc = src('js/mail-system-ui.js');
-assert(mailSrc.indexOf('function _esc(') >= 0 && mailSrc.indexOf('_esc(m.subject') >= 0 && mailSrc.indexOf("MAIL_BODY_CAP = 500") >= 0, 'G2 信纸进 DOM 先转义 + 500 字长度门（NEW-60）');
+assert(mailSrc.indexOf('function _esc(') >= 0 && mailSrc.indexOf('_esc(m.subject') >= 0
+    && mailSrc.indexOf('MAIL_BODY_CAP') >= 0 && src('js/mail-system.js').indexOf('MAIL_BODY_CAP = 500') >= 0,
+    'G2 信纸进 DOM 先转义 + 500 字长度门（NEW-60；v24 起容量门定在数据层，UI 读同一个数）');
 var hpSrc = src('js/map/high-planes.js');
 assert(hpSrc.indexOf('window.addExp(') < 0 && (hpSrc.match(/window\.gainExp\(/g) || []).length === 2, 'G3 血池/位面打坐的修为奖励接上真名 gainExp——「修为+300」不再是空话');
 assert(hpSrc.indexOf("typeof window.addInsightPoints === 'function'") < 0 && hpSrc.indexOf('window.insightPoints = (window.insightPoints || 0) + insight') >= 0, 'G4 位面顿悟的领悟点真落账');

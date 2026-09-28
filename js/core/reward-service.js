@@ -74,6 +74,19 @@
         return num(current) + delta >= 0;
     }
 
+    // DES-38：回执念进账、不念开价。这一通道每一条入账都带夹逼（上限／下限），照抄入参的写法
+    // 只要触顶就比账多印一截——而全仓 36 个调用点都直接把这串 messages 上屏。
+    // 一律「写前读一次、写后读一次」，拿差值说话；口径与庙会摊前那一句同一把尺（第三十七批）。
+    function pushGain(messages, label, want, before, after) {
+        // 读不到账（那本账的读者不在位——如纯 node 沙箱只桩了 addReputation）就退回旧口径照报开价，
+        // 别拿一个凭 0 减出来的「差值」冒充实话。
+        if (before === null || after === null) { messages.push(label + (want > 0 ? '+' : '') + want); return want; }
+        var got = num(after) - num(before);
+        if (got === want) { messages.push(label + (want > 0 ? '+' : '') + want); return got; }
+        messages.push(label + (want > 0 ? '已达上限，实得+' : '已见底，实得') + got);
+        return got;
+    }
+
     function apply(spec, ctx) {
         ctx = ctx || {};
         var r = normalize(spec);
@@ -97,9 +110,23 @@
                 for (var i = 0; i < r.items.length; i++) {
                     // 第八十三波：带快照按实例还原（uid/耐久/强化原样），无快照照旧按模板补货
                     var _snap = r.items[i].snap || { templateId: r.items[i].itemId, count: r.items[i].count };
-                    if (!tx.addSnapshot(_snap)) {
-                        return { success: false, reason: 'inventory_full_or_invalid_item' };
-                    }
+      if (!tx.addSnapshot(_snap)) {
+        // DES-85 尾（第一百四十二批）：原先这里一律回 `inventory_full_or_invalid_item`，
+        // 把**四种不同的失败**糊成一个键：模板不存在／行囊满／快照畸形／事务层没装 addItem。
+        // 玩家看到的是「背包空间不足**或**物品无效」——他不知道自己该腾格子还是该报障。
+        // 区分信息一直都在：addItem 失败时会把真因写进 window.addItemFailReason
+        // （inventory.js 的 no_template／bag_full），这里照账说话，不再猜。
+        //
+        // ⚠️ 为什么是三个平铺的 return、不是三元表达式：
+        // `tests/v24.0-audit-fixes-node.js` 的 AR2/AR2b 用**静态扫 `reason: '字面量'`**
+        // 来核对「通道能返回的 reason 集合」与「文案表里的键」两向相等。
+        // 写成 `reason: _reason`（变量）那把尺就看不见这三个键了 ⇒ 文案表会被判成「供着通道不会返回的原因」。
+        // 平铺写法让三个字面量保持静态可见，尺继续有牙，也比嵌套三元好读。
+        var _因 = global.addItemFailReason;
+        if (_因 === 'no_template') return { success: false, reason: 'item_no_template', cause: _因 };
+        if (_因 === 'bag_full') return { success: false, reason: 'bag_full', cause: _因 };
+        return { success: false, reason: 'inventory_failed', cause: _因 || null };
+      }
                 }
                 // v20.8：take 与给物同一事务——扣不够就整体回滚，杜绝"白拿钱不交货"
                 for (var j = 0; j < r.take.length; j++) {
@@ -120,8 +147,9 @@
 
         var messages = [];
         if (r.exp) {
-            p.tempering = Math.max(0, num(p.tempering) + r.exp);
-            messages.push('历练' + (r.exp > 0 ? '+' : '') + r.exp);
+            var _exp0 = num(p.tempering);
+            p.tempering = Math.max(0, _exp0 + r.exp);
+            pushGain(messages, '历练', r.exp, _exp0, p.tempering);
         }
         if (r.spiritStones) messages.push('灵石' + (r.spiritStones > 0 ? '+' : '') + r.spiritStones);
         if (r.copper) messages.push('铜钱' + (r.copper > 0 ? '+' : '') + r.copper);
@@ -129,38 +157,46 @@
         r.take.forEach(function(it) { messages.push(itemName(it.itemId) + ' x-' + it.count); });
 
         if (r.qi) {
-            p.qi = Math.max(0, Math.min(num(p.maxQi) || 1000, num(p.qi) + r.qi));
-            messages.push('真气' + (r.qi > 0 ? '+' : '') + r.qi);
+            var _qi0 = num(p.qi);
+            p.qi = Math.max(0, Math.min(num(p.maxQi) || 1000, _qi0 + r.qi));
+            pushGain(messages, '真气', r.qi, _qi0, p.qi);
         }
         if (r.energy) {
-            p.energy = Math.max(0, Math.min(num(p.maxEnergy) || 100, num(p.energy) + r.energy));
-            messages.push('精力' + (r.energy > 0 ? '+' : '') + r.energy);
+            var _en0 = num(p.energy);
+            p.energy = Math.max(0, Math.min(num(p.maxEnergy) || 100, _en0 + r.energy));
+            pushGain(messages, '精力', r.energy, _en0, p.energy);
         }
         if (r.health) {
             var maxHealth = num(p.maxHealth) || Math.max(1, num(p.health));
-            p.health = Math.max(0, Math.min(maxHealth, num(p.health) + r.health));
-            messages.push('生命' + (r.health > 0 ? '+' : '') + r.health);
+            var _hp0 = num(p.health);
+            p.health = Math.max(0, Math.min(maxHealth, _hp0 + r.health));
+            pushGain(messages, '生命', r.health, _hp0, p.health);
         }
 
         if (r.mood) {
-            p.mood = Math.max(0, Math.min(100, num(p.mood != null ? p.mood : 80) + r.mood));
-            messages.push('心境' + (r.mood > 0 ? '+' : '') + r.mood);
+            var _mood0 = num(p.mood != null ? p.mood : 80);
+            p.mood = Math.max(0, Math.min(100, _mood0 + r.mood));
+            pushGain(messages, '心境', r.mood, _mood0, p.mood);
         }
 
         if (r.cityReputation) {
             var city = resolveCity(ctx);
             if (city && typeof global.addReputation === 'function') {
+                var _rpGet = typeof global.getReputationValue === 'function' ? global.getReputationValue : null;
+                var _rep0 = _rpGet ? num(_rpGet(city)) : null;
                 global.addReputation(city, r.cityReputation);
-                messages.push(city + '声望' + (r.cityReputation > 0 ? '+' : '') + r.cityReputation);
+                pushGain(messages, city + '声望', r.cityReputation, _rep0, _rpGet ? num(_rpGet(city)) : null);
             }
         }
         if (r.notoriety) {
-            p.notoriety = num(p.notoriety) + r.notoriety;
-            messages.push('恶名' + (r.notoriety > 0 ? '+' : '') + r.notoriety);
+            var _noto0 = num(p.notoriety);
+            p.notoriety = _noto0 + r.notoriety;
+            pushGain(messages, '恶名', r.notoriety, _noto0, p.notoriety);
         }
         if (r.karma) {
-            p.karma = Math.max(-100, Math.min(100, num(p.karma) + r.karma));
-            messages.push('业障' + (r.karma > 0 ? '+' : '') + r.karma);
+            var _karma0 = num(p.karma);
+            p.karma = Math.max(-100, Math.min(100, _karma0 + r.karma));
+            pushGain(messages, '业障', r.karma, _karma0, p.karma);
             if (typeof global.updateKarmaDisplay === 'function') {
                 try { global.updateKarmaDisplay(p.karma, 'karma'); } catch (e) {}
             }
@@ -174,20 +210,27 @@
                     _fameAmt = Math.round(_fameAmt * 1.2);
                 }
             } catch (ePB) {}
+            var _fame0 = num(p.fame);
             if (typeof global.addFame === 'function') global.addFame(_fameAmt);
-            else p.fame = Math.max(0, Math.min((window.FAME_CAP || 99999), num(p.fame) + _fameAmt)); // v21.9 名望尺度统一
-            messages.push('角色名气' + (_fameAmt > 0 ? '+' : '') + _fameAmt);
+            else p.fame = Math.max(0, Math.min((window.FAME_CAP || 99999), _fame0 + _fameAmt)); // v21.9 名望尺度统一
+            pushGain(messages, '角色名气', _fameAmt, _fame0, p.fame);
         }
         if (r.contribution && global.discipleState) {
-            global.discipleState.contribution = Math.max(0, num(global.discipleState.contribution) + r.contribution);
+            var _ctr0 = num(global.discipleState.contribution);
+            global.discipleState.contribution = Math.max(0, _ctr0 + r.contribution);
             try { global.sectLedgerNote && global.sectLedgerNote(r.contribution, '宗门奖励结算'); } catch (e) {}
-            messages.push('门派贡献' + (r.contribution > 0 ? '+' : '') + r.contribution);
+            pushGain(messages, '门派贡献', r.contribution, _ctr0, global.discipleState.contribution);
         }
         if (r.affection && ctx.npcId && global.npcManager && typeof global.npcManager.getNPC === 'function') {
             var npc = global.npcManager.getNPC(ctx.npcId);
             if (npc && typeof npc.changeAffection === 'function') {
+                var _affOf = function () {
+                    var v = npc.relationship && npc.relationship.affection;
+                    return typeof v === 'number' ? v : null;
+                };
+                var _aff0 = _affOf();
                 npc.changeAffection(r.affection);
-                messages.push((npc.name || 'NPC') + '好感' + (r.affection > 0 ? '+' : '') + r.affection);
+                pushGain(messages, (npc.name || 'NPC') + '好感', r.affection, _aff0, _affOf());
             }
         }
         // v20.90：生活技能熟练长进——0~100 封边，与创角/转世同一把尺（v20.94 支持一次长多门）
@@ -198,9 +241,7 @@
                 var lsBefore = num(p.lifeSkills[lsOne.name]);
                 var lsAfter = Math.max(0, Math.min(100, lsBefore + lsOne.exp));
                 p.lifeSkills[lsOne.name] = lsAfter;
-                if (lsAfter !== lsBefore) {
-                    messages.push(lsOne.name + (lsAfter > lsBefore ? '+' : '') + (lsAfter - lsBefore));
-                }
+                if (lsAfter !== lsBefore) pushGain(messages, lsOne.name, lsOne.exp, lsBefore, lsAfter);
             }
         }
 

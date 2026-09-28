@@ -25,10 +25,15 @@
     --x-bad: #ef4444;
     --x-info: #3b82f6;
 
-    /* 字号阶：最小正文字 13px（原 12px 的 text-xs 在宋体下几乎读不动） */
-    --x-fs-xs: 13px;
-    --x-fs-sm: 14px;
-    --x-fs-base: 16px;
+    /* 字号阶：最小正文字 13px（原 12px 的 text-xs 在宋体下几乎读不动）。
+       「保底 + 跟手」两条都要：写死 px 会让设置里那三档字号形同虚设——实机量过（探针
+       .scratch/v24-AY-baseline.mjs → -before.out）：切「特大」后全站 2758 枚元素里 734 枚字号一分不动，
+       其中 13px 那一桶就占 481 枚，连「整个界面的文字一起放大缩小」这句说明自己（text-xs）也没放大。
+       改成 max(下限, rem) 之后：根 16px 时 0.8125×16=13、0.875×16=14、1×16=16，**标准档逐像素等于今天**；
+       根 18/20px（大／特大）才涨到 14.6/16.25 等，可读性下限仍在、放大承诺也真兑现。 */
+    --x-fs-xs: max(13px, 0.8125rem);
+    --x-fs-sm: max(14px, 0.875rem);
+    --x-fs-base: max(16px, 1rem);
     --x-lh-tight: 1.45;
 
     /* 层级阶：此前全站 z-50 一统，弹窗与 toast 同层互相压 */
@@ -81,7 +86,12 @@ html [class~="bg-amber-600"] [class~="text-white"] {
 /* toast 容器原先 pointer-events 默认可见即吃点击，且与右上角天气牌同角互相盖 */
 #game-message {
     pointer-events: none;
-    top: 44px !important;
+    /* UI-07：这一列必须让开**右上角整摞常驻牌**，不只是天气浮签。实测（v24-CA-toast-ca2.out）
+       标准档 天气牌 y=8~38／「● 未存档」牌 y=46~70，而旧值 top:44px 让首条 toast（y=44~116）压掉那块牌 **97%**
+       ——那块牌是 DES-28 唯一的「你还没落档」提醒，看不见等于没有。
+       改 rem 的理由：这三块牌的高度全跟着根字号长（特大档 天气 10~47／未存档 47~76），
+       裸 px 的让位尺在 20px 那一档会重新贴上（旧值连天气牌都压掉 8%）。4.75rem＝76px@16／95px@20，两档都在牌底下。 */
+    top: 4.75rem !important;
     z-index: var(--x-z-toast);
 }
 /* 气泡本体也必须穿透：内容只有 textContent（无按钮无链接），而它叠到第三条时正好压住
@@ -104,6 +114,74 @@ html :focus-visible {
 ::-webkit-scrollbar-track { background: #1f2937; }
 ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 5px; border: 2px solid #1f2937; }
 ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+/* ---------- 左栏导航：桌面高度不够时先收行距（UI-19）----------
+   实测 14 项内容高 796px，而 rail 可视高度随屏幕矮一路缩：
+     2048×970（本机真实桌面，物理 2560×1440 ÷125%，再扣浏览器自身 182px）→ 可视 784，差 12px 就出滚条
+     1366×768 / 1024×768 → 可视 582，藏掉 214px＝「活动／日程／设置」三枚主面板入口没了
+   换面板唯一的入口被藏在首屏外，所以这里收的是行距而不是字号：
+   两档只压 py 与 space-y 那 4px 间隙，图标 18px、文字 16px 一字不动。 */
+
+@media (max-height: 1040px) and (min-width: 768px) {
+    html #game-world .nav-item { padding-top: 8px; padding-bottom: 8px; }
+}
+
+@media (max-height: 820px) and (min-width: 768px) {
+    html #game-world .nav-item { padding-top: 5px; padding-bottom: 5px; }
+    html #game-world > div[class~="w-48"] > nav { padding-top: 2px; padding-bottom: 2px; }
+    html #game-world > div[class~="w-48"] > nav > * + * { margin-top: 2px; }   /* Tailwind space-y-1 */
+}
+
+/* 收到 5px 仍不够矮的（如 600px 高的窗口）留常驻滚动线索：
+   inset 阴影画在滚动容器的边框盒上、不随内容滚走，所以它是一条钉住的底部渐隐 */
+html #game-world > div[class~="w-48"] > nav {
+    box-shadow: inset 0 -14px 12px -12px rgba(0, 0, 0, .85);
+}
+
+/* ---------- 左栏导航：矮到收无可收时改两列（UI-19①）----------
+   5px 那一档再往下压就没有余地了（行距已经贴住 18px 图标 + 16px 文字的行盒），
+   而实测 1000×600 时可视只有 414px、14 项内容 562px，仍藏 4 枚（队伍／活动／日程／设置），
+   800×600 更藏 148px。与其继续磨行距，不如把项数减半：两列＝7 行 ≈ 278px，
+   414px 的可视窗装得下，14 枚主面板入口首屏全露。
+   不换 w-48→w-16 的纯图标方案：那只是砍掉文字，emoji 那一行 28px 行盒还在，
+   14 行还是 14 行，首屏一枚都多露不出来。
+   grid 的默认 align-content 会把 7 行拉伸出多余的行高，所以显式钉 start；
+   space-y-1 的 margin-top 在网格里会变成整列错位，一并归零。 */
+
+@media (max-height: 700px) and (min-width: 768px) {
+    html #game-world > div[class~="w-48"] > nav {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 2px 4px;
+        align-content: start;
+    }
+    html #game-world > div[class~="w-48"] > nav > * + * { margin-top: 0; }
+    /* 一列只有约 94px：px-4 的左右 16px 和 emoji 后 12px 间隙必须让出来，否则文字被挤成两行 */
+    html #game-world .nav-item { padding-left: 4px; padding-right: 4px; white-space: nowrap; }
+    html #game-world .nav-item > span { margin-right: 4px; }
+}
+
+/* ---------- 常驻落档状态位（DES-28）----------
+   旧位子在「人物」页的时间卡里：实机复验一切到别的面板它就量出宽度 0——
+   「● 未存档」恰恰在玩家赶路、读信、打完一场时最该开口，却只在首页看得见。
+   于是挪到右上角天气浮签下方常驻。文案/配色/字号归 continue-save.js 的 renderHud
+   （它整串覆写 className），这里只钉位置与可读性。 */
+html #continue-save-state {
+    position: fixed;
+    top: 2.625rem;            /* 让开天气浮签：它跟着字号长（实测 标准档 y=8~38／特大档 y=10~47），裸 42px 在特大档就贴上去了。
+                                 2.625rem＝42px@16（与改前同位）／52.5px@20，两档各留 4~5px 缝 */
+    right: 8px;
+    z-index: 40;
+    white-space: nowrap;       /* 定宽会折行把「档）」甩成孤字；右锚定的牌子宁可往左长 */
+    padding: 2px 8px;
+    text-align: right;
+    background: rgba(17, 24, 39, .8);
+    border: 1px solid #4b5563;
+    border-radius: 4px;
+}
+
+/* 空文案＝标题页与首笔落档前，别在角上挂一只空框 */
+html #continue-save-state:empty { display: none; }
 
 /* ---------- 窄屏骨架（≤767px）---------- */
 /* 横排的侧栏在手机上吃掉近半屏，内容列被挤到 180px（实测 66 个元素被裁）——整框转纵向，导航改横向滑条 */

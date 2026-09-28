@@ -18,6 +18,7 @@
         sect_event: { label: '宗门', icon: '⛩️', color: 'text-amber-400' },
         world_event: { label: '世界', icon: '🌐', color: 'text-orange-400' },
         dungeon_window: { label: '秘境', icon: '🗻', color: 'text-cyan-400' },
+        festival: { label: '节令', icon: '🏮', color: 'text-rose-300' },
         npc_appointment: { label: '约定', icon: '👤', color: 'text-emerald-400' },
         tribulation: { label: '天劫', icon: '⚡', color: 'text-red-400' },
         sect_tournament: { label: '大比', icon: '🏆', color: 'text-yellow-400' },
@@ -148,9 +149,12 @@
 
     function renderUpcomingSection(now, upcoming) {
         if (!upcoming.length) {
-            return '<div class="bg-gray-700/20 border border-gray-700 rounded-lg p-4 mb-6">' +
-                '<p class="text-gray-500 text-sm">未来 60 日暂无确定性事件。坊市日开、世界事件、宗门事件触发后会自动出现。</p>' +
-                '</div>';
+            return '<div class="mb-6">' + xEmptyHtml({
+                fill: true,
+                title: '未来 60 日没有已排定的事',
+                why: '这一栏只登已经排上日子的事——坊市拍卖、世界异动、宗门典仪、秘境开启、节令、与人约定、境界天劫。没排定的不占位，空着不是漏了。',
+                next: '下一步：日子往下走就会排上。近处的节令与拍卖一定档，这里立刻见着。'
+            }) + '</div>';
         }
         var bucketed = bucketByDay(upcoming);
         var html = '<div class="mb-6"><h3 class="text-lg font-bold text-gray-300 mb-3">🗓️ 未来 60 日</h3><div class="space-y-3">';
@@ -174,7 +178,11 @@
     function renderRecentSection(recent) {
         if (!recent.length) {
             return '<div class="mb-6"><h3 class="text-lg font-bold text-gray-300 mb-3">📜 近期 30 日</h3>' +
-                '<p class="text-gray-500 text-sm">暂无已发生事件。</p></div>';
+                xEmptyHtml({
+                    title: '近 30 日没有已发生的事',
+                    why: '这一栏只记已经到期或已过期的事，头一条要等日子真走过去才会有。',
+                    next: '闭关、跳日之后，那段日子里到期的事会一并结在这里。'
+                }) + '</div>';
         }
         var html = '<div class="mb-6"><h3 class="text-lg font-bold text-gray-300 mb-3">📜 近期 30 日（已归档）</h3><div class="space-y-1">';
         for (var i = 0; i < recent.length; i++) {
@@ -197,7 +205,10 @@
     function renderSummarySection(summary) {
         if (!summary.items.length) {
             return '<div class="mb-6"><h3 class="text-lg font-bold text-gray-300 mb-3">📊 30 日分类汇总</h3>' +
-                '<p class="text-gray-500 text-sm">暂无数据。</p></div>';
+                xEmptyHtml({
+                    title: '还没有可汇总的数',
+                    why: '这张表按类数近 30 日各发生过几件事；上面「近期 30 日」空着，这里就没有格子可填。'
+                }) + '</div>';
         }
         var html = '<div class="mb-6"><h3 class="text-lg font-bold text-gray-300 mb-3">📊 30 日分类汇总</h3><div class="grid grid-cols-2 md:grid-cols-5 gap-2">';
         for (var cat in summary.byCategory) {

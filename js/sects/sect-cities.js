@@ -1,4 +1,4 @@
-// ==================== sect-cities.js - 城市香火护持 + 分舵（方案四A · 仙凡分治） ====================
+﻿// ==================== sect-cities.js - 城市香火护持 + 分舵（方案四A · 仙凡分治） ====================
 // 天子管凡人，仙门管香火。城市不归门派「占领」——城主理政照旧，门派争的是「香火护持」：
 //   城请谁护佑、香火供奉送谁家、城门楼上挂谁的幡。
 // 帝都长安朝廷直辖永不可争（只可「御许」立分舵）；凡俗八城初始按地理发牌，护持是活账可易主；
@@ -231,12 +231,12 @@
             if (ct.player) {
                 if (isPSect(ct.sect)) {
                     // 第十七波：自建宗门的举幡功成——没有弟子贡献账，声望落宗门真账
-                    try { if (W.PSectWorld) W.PSectWorld.gainRep(ct.sect, 5, '举幡功成·' + city + '香火归门'); } catch (eR) {}
+                    try { if (W.PSectWorld) W.PSectWorld.gainRep(ct.sect, 5, '举幡功成·' + city + '香火归门'); } catch (eR) { console.warn('[静默失败] js/sects/sect-cities.js:235 · 宗门声望记账：自建宗门举幡功成的声望本该落库，这里没接住，玩家会察觉声望没涨', eR && eR && eR.message); }
                     try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 3); } catch (e) {}
                     log('🚩 ' + city + '城头挂上了你自家宗门的幡！城主亲捧香火册上门——往后每月供奉入宗库，本门也能在这城里立分舵了。（宗门声望+5，名望+3）', 'success');
                 } else {
                     addC(80, '举幡功成·' + city + '香火归门');
-                    try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 3); } catch (e) {}
+                    try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 3); } catch (e) { console.warn('[静默失败] js/sects/sect-cities.js:239 · 举幡名望记账：本门举幡功成的名望本该加上，这里没接住，玩家会察觉名望没涨', e && e && e.message); }
                     log('🚩 ' + city + '城头挂上了本门的幡！城主亲捧香火册上山——往后每月供奉入公库，本门也能在这城里立分舵了。（贡献+80，名望+3）', 'success');
                 }
             }
@@ -337,12 +337,28 @@
         if (!b || b.sect !== sect) { msg('舵里不认外人。', 'warning'); return; }
         var month = Math.floor(absDay() / 30);
         if (b.mealMonth === month) { msg('这个月的份例已经领过了。', 'info'); return; }
-        b.mealMonth = month;
         if (hasStore(sect, 'pill', 1)) {
+            // DES-72＋DES-86（第一百三十批）：旧写法先销舵账再丢着返回值不认——屏上照念「丹药入行囊」，囊里到底有没有不管
+            var 份 = typeof W.giveWithReceipt === 'function'
+                ? W.giveWithReceipt('pill_qi_gather', 1, { quiet: true })
+                : (function () { var 得 = 0; try { 得 = Number(W.addItem('pill_qi_gather', 1)) || 0; } catch (e0) { console.warn('[静默失败] js/sects/sect-cities.js:344 · 分舵份例入囊：灶上拨的那炉聚气丹本该进背包，这里没接住，玩家会察觉丹药没到手', e0 && e0 && e0.message); } return { got: 得, count: 1 }; })();
+            var 份名 = 份.name || (W.itemById && W.itemById['pill_qi_gather'] && W.itemById['pill_qi_gather'].name) || '聚气丹';
+            if (份.got <= 0) {
+                // DES-90（第一百三十九批）：问不到账时不许由站点断言满包
+                msg('灶上的饭你吃了，可这一炉' + 份名 + '你没能带走——'
+// DES-97（第一百四十批／真机屏证）：本处是中段位——回退串『没能落进你的行囊』后面还接 + '丹药仍留在舵里的丹库，本月名额也照旧。'。
+                    //   句尾支 addItemFailText 带句号，钉在句子中间会破句，故改用中段支 addItemFailPhrase；
+                    //   注意：此处回退串本来就没有句号（中段位是对的），只需换支名，一个字不许动。
+                    + ((typeof W.addItemFailPhrase === 'function' && W.addItemFailPhrase(份名)) || '没能落进你的行囊')
+                    + '丹药仍留在舵里的丹库，本月名额也照旧。', 'warning');
+                _close();
+                return;
+            }
             deduct(sect, 'pill', 1);
-            try { if (typeof W.addItem === 'function') W.addItem('pill_qi_gather', 1); } catch (e) {}
-            log('🍚 分舵的份例：灶上一顿饭，外加公库里拨的一炉聚气丹。（丹药入行囊——来路记在舵账上）', 'success');
+            b.mealMonth = month;
+            log('🍚 分舵的份例：灶上一顿饭，外加公库里拨的一炉聚气丹。（' + 份名 + '×' + 份.got + ' 入行囊——来路记在舵账上）', 'success');
         } else {
+            b.mealMonth = month;
             try { if (W.XianXia && W.XianXia.DataManager && W.XianXia.DataManager.addSpiritStones) W.XianXia.DataManager.addSpiritStones(5); } catch (e2) {}
             log('🍚 分舵的份例：灶上一顿饭，丹库里没存货，管事的塞给你五枚灵石「拿着路上用」。（灵石+5）', 'success');
         }
@@ -367,7 +383,7 @@
     W.doBranchRest = function (city) {
         _close();
         try { if (typeof W.advanceTime === 'function') W.advanceTime(120); } catch (e) {}
-        try { if (typeof W.restoreQi === 'function') W.restoreQi(30); else if (W.currentCharData) W.currentCharData.qi = Math.min(100, (W.currentCharData.qi || 50) + 30); } catch (e2) {}
+        try { if (typeof W.restoreQi === 'function') W.restoreQi(30); else if (W.currentCharData) W.currentCharData.qi = Math.min(100, (W.currentCharData.qi ?? 50) + 30); } catch (e2) { console.warn('[静默失败] js/sects/sect-cities.js:386 · 歇息回气：在分舵厢房歇半日的真气回复本该生效，这里没接住，玩家会察觉气血没回', e2 && e2 && e2.message); }
         log('🛏️ 你在分舵的厢房歇了半日——被褥是晒过的，比客栈干净，也不花钱。（时辰过去半日，真气回了三十）', 'success');
     };
 

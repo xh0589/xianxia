@@ -239,11 +239,19 @@ function joinSect(sectId, evalResult) {
         }
         // v16.0 叛门世界反应链：掌门震怒、同门记仇——惩罚来自世界而非数值清零
         var oldSectId = discipleState.sectId;
+        var _grudged = false;   // 真记恨上了才在回执里念那笔仇恨
         try {
-            if (typeof window.changeFactionReputation === 'function') window.changeFactionReputation(oldSectId, -40);
+            // F5 甲③：旧写法喂的是门派名（「少林寺」），而 changeFactionReputation 按势力 id 索引，
+            // 门禁一声不响 return 0 —— 上面 confirm 里那句「声望大跌」和回执里那句「旧门派声望-40」从来是一笔空账。
+            // 改走 factionIdOfSect：叛出哪一系的门，就在哪一系的势力账上记仇；认不出的（自建宗门/查无此门）就什么都不写，
+            // 也就不会有回执。势力声望那一句由写入函数自己喊，这里不再重念一遍数字。
+            try {
+                var _betrayFid = (typeof window.factionIdOfSect === 'function') ? window.factionIdOfSect(oldSectId) : null;
+                if (_betrayFid && typeof window.changeFactionReputation === 'function') window.changeFactionReputation(_betrayFid, -40);
+            } catch (eRep) {}
             var grudgeNpcs = (typeof window.getSectNPCs === 'function') ? window.getSectNPCs(oldSectId) : null;
             if (Array.isArray(grudgeNpcs)) {
-                grudgeNpcs.forEach(function (o) { if (o && typeof o.changeHatred === 'function') o.changeHatred(30); });
+                grudgeNpcs.forEach(function (o) { if (o && typeof o.changeHatred === 'function') { o.changeHatred(30); _grudged = true; } });
             }
             if (discipleState._masterId) { // 叛门兼叛师，罪加一等
                 discipleState._leftMasters = discipleState._leftMasters || {};
@@ -253,7 +261,8 @@ function joinSect(sectId, evalResult) {
         try { window.eventFlags = window.eventFlags || {}; window.eventFlags['sect_betrayed_recent'] = oldSectId; } catch (eT) {} // 腰牌另册（sect-roster 次日察觉）
         leaveSect(true); // 静默离开（清贡献/职位）
         if (typeof window.showMessage === 'function') {
-            window.showMessage('「' + oldSectId + '」上下一片哗然——掌门震怒，旧日同门对你恨之入骨。（旧门派声望-40，同门仇恨+30）', 'error');
+            window.showMessage('「' + oldSectId + '」上下一片哗然——掌门震怒，旧日同门对你恨之入骨。'
+                + (_grudged ? '（旧门派上下仇恨+30）' : ''), 'error');
         }
     }
     
@@ -304,10 +313,8 @@ function joinSect(sectId, evalResult) {
         discipleState._pendingSectEvent = null;
     } catch (eJoinEvt) {}
 
-    // 门派声望互斥（v7.3 P4）
-    if (typeof window.applySectReputationEffects === 'function') {
-        window.applySectReputationEffects(sectId, sect.type);
-    }
+    // 「入门即震动江湖势力格局」这一支刻意没接：退派只有 confirm（零代价）、入门在名册上一键可点，
+    // 接通便是 退派→入门 的免费声望循环口——口径待裁决（DES-39）。旧函数在此处调用，35 圈全 0 却照弹「同门声望+30」。
     
     // 更新UI
     updateSectUI();
@@ -627,9 +634,32 @@ function submitDailyTask(taskId) {
             discipleState.points += Math.max(1, Math.round(task.rewards.points * _tMul));
         }
         if (task.rewards.items) {
+            // DES-72（第一百三十批）：旧写法把入库的返回值丢在地上——许下的彩头进没进囊，屏上一个字不提
+            var _赏 = [];
             task.rewards.items.forEach(item => {
-                addItem(item.itemId, item.count);
+                var 要 = Math.max(1, Number(item.count) || 1);
+                var 收 = typeof window.giveWithReceipt === 'function'
+                    ? window.giveWithReceipt(item.itemId, 要, { quiet: true })
+                    : { got: Number(addItem(item.itemId, 要)) || 0, count: 要, reason: window.addItemFailReason || null };
+                var nm = 收.name || (window.itemById && window.itemById[item.itemId] && window.itemById[item.itemId].name) || item.itemId;
+                _赏.push({ n: nm, got: 收.got, 要: 要, 账: 收.reason });
             });
+            var _进 = _赏.filter(x => x.got > 0);
+            var _短 = _赏.filter(x => x.got < x.要);
+            // DES-96（第一百三十八批）：一件缘由归一件。旧写法整串只问末件的账（末件全收⇒账被刷空⇒屏上落回「行囊已满」），
+            // 且半包那一支错用了零收的支持牌手
+            _taskFlavor += (_进.length ? '，彩头' + _进.map(x => x.n + '×' + x.got).join('、') + '入囊' : '')
+                + (_短.length
+                    ? '（' + _短.map(function (x) {
+                        // DES-97（第一百三十八批）：这一串用「，」接起来，只准吃从句说话手（句尾不带圆点）；
+                        // 账上没落笔就不猜缘由，别由这一屏替玩家的格子定罪
+                        // DES-90（第一百三十九批）：账上没落笔时不许猜缘由（门派差事彩头属一次性内容，用②形，从句支不带句号）
+                        var 话 = (typeof window.addItemFailPhraseFor === 'function') ? (window.addItemFailPhraseFor(x.账, x.n) || '') : '';
+                        return x.got > 0
+                            ? x.n + ' 只塞得下 ' + x.got + '/' + x.要 + (话 ? '：' + 话 : '')
+                            : x.n + ' 一件也没接住' + (话 ? '：' + 话 : '，它没有跟你走');
+                    }).join('，') + '）'
+                    : '');
         }
     }
 
@@ -718,15 +748,26 @@ function updateSectUI() {
 
 // ============ 更新任务UI ============
 function updateTaskUI() {
-    const taskContainer = document.getElementById('sect-tasks-container');
-    if (!taskContainer) return;
-    
-    // 活跃任务
+    // 第一百二十三批 DES-79：这道门禁此前读的是 #sect-tasks-container——全仓无人创建那个 id
+    // （只有这一行提到它），于是函数永远在第一行 return，两栏容器从没被填过：
+    // 「门派任务」点开就是两行标题加一片空白，差事既不能接也不能交。
     const activeTasksDiv = document.getElementById('active-tasks');
+    const availableTasksDiv = document.getElementById('available-tasks');
+    if (!activeTasksDiv && !availableTasksDiv) return;
+
+    // 活跃任务
     if (activeTasksDiv) {
         const active = window.activeTasks || [];
         if (active.length === 0) {
-            activeTasksDiv.innerHTML = '<p class="text-xs text-gray-500 text-center">暂无活跃任务</p>';
+            if (typeof window.renderXEmpty === 'function') {
+                window.renderXEmpty(activeTasksDiv, {
+                    title: '没有在办的差事',
+                    why: '接一件门中派下来的活，这里才会挂上进度',
+                    next: '右边那一栏是眼下可接的差事'
+                });
+            } else {
+                activeTasksDiv.innerHTML = '<p class="text-xs text-gray-500 text-center">暂无活跃任务</p>';
+            }
         } else {
             activeTasksDiv.innerHTML = active.map(function(at) {
                 var objectives = at.task.objectives || [];
@@ -747,8 +788,18 @@ function updateTaskUI() {
     }
     
     // 可用任务列表
-    const availableTasksDiv = document.getElementById('available-tasks');
     if (availableTasksDiv) {
+        if (!sectTasks.length) {
+            if (typeof window.renderXEmpty === 'function') {
+                window.renderXEmpty(availableTasksDiv, {
+                    title: '门中这一阵没有可接的差事',
+                    hints: ['累计已交 ' + (completedTasks ? completedTasks.length : 0) + ' 件',
+                        '今日已办完 ' + (dailyCompletedTasks ? dailyCompletedTasks.length : 0) + ' 件']
+                });
+            } else {
+                availableTasksDiv.innerHTML = '<p class="text-xs text-gray-500 text-center">暂无可接任务</p>';
+            }
+        } else
         availableTasksDiv.innerHTML = sectTasks.map(task => {
             const isCompleted = completedTasks.includes(task.id);
             const isDaily = task.isDaily && task.dailyReset;
@@ -846,7 +897,7 @@ function openSectTaskUI() {
                 <!-- 右侧：可用任务 -->
                 <div>
                     <h4 class="text-lg font-bold text-green-400 mb-2">可用任务</h4>
-                    <div id="available-tasks" class="space-y-2 max-h-96 overflow-y-auto">
+                    <div id="available-tasks" class="space-y-2">
                         <!-- 动态生成 -->
                     </div>
                 </div>
@@ -926,7 +977,7 @@ function collectSectResources() {
         if (window.currentCharData) window.currentCharData.spiritStones = window.inventory.currency.spiritStones;
     }
     // 发出去的灵石真从门派库里扣（单一真源：resources 即灵石库）
-    try { if (window.SectGov && typeof window.SectGov.deductStore === 'function') window.SectGov.deductStore(_govSect, 'stone', baseStones); } catch (e) {}
+    try { if (window.SectGov && typeof window.SectGov.deductStore === 'function') window.SectGov.deductStore(_govSect, 'stone', baseStones); } catch (e) { console.warn('[静默失败] js/sects/sects-system.js:980 · 宗门俸禄扣库：发出去的灵石没从门派库里扣掉，账对不上，玩家察觉时库已空', e && e.message); }
     discipleState._lastSalaryDay = day;
     if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI();
 
@@ -1080,7 +1131,7 @@ function dualCultivate(npcId) {
     }
     
     // 检查精力
-    var energy = window.currentCharData?.energy || 100;
+    var energy = window.currentCharData?.energy ?? 100;
     if (energy < 20) {
         showMessage('精力不足，无法双修', 'error');
         return false;
@@ -1194,7 +1245,7 @@ function updateDaoCompanionMood(npcId) {
     if (!npc) return;
     
     var hoursSinceLast = npc.getHoursSinceLastMeet();
-    var mood = npc.state?.mood || 50;
+    var mood = npc.state?.mood ?? 50;
     
     // 长时间不见会降低情绪
     if (hoursSinceLast > 24) {
@@ -1512,6 +1563,11 @@ if (window.StateRegistry) {
                 _sectEventDay: ds._sectEventDay || null,
                 _pendingSectEvent: ds._pendingSectEvent ? JSON.parse(JSON.stringify(ds._pendingSectEvent)) : null,
                 _sectTaskDay: ds._sectTaskDay || null,
+                // 第一百二十三批 DES-75：日门牌随档走了，配套的「今日做过哪些」也必须走，
+                // 否则读档后跨天重置分支不触发、计数读回空 ⇒ 同日差事无限重接重领贡献。
+                _sectTaskCompleted: Number(ds._sectTaskCompleted) || 0,
+                _sectTaskDone: Array.isArray(ds._sectTaskDone) ? ds._sectTaskDone.slice() : [],
+                _sectRelation: Number(ds._sectRelation) || 0,
                 _lastSalaryDay: ds._lastSalaryDay || null
             };
         },
@@ -1549,6 +1605,10 @@ if (window.StateRegistry) {
             ds._sectEventDay = data._sectEventDay || null;
             ds._pendingSectEvent = data._pendingSectEvent ? JSON.parse(JSON.stringify(data._pendingSectEvent)) : null;
             ds._sectTaskDay = data._sectTaskDay || null;
+            // 第一百二十三批 DES-75：与 export 那三行对应——日门牌与「今日做过哪些」同进同出
+            ds._sectTaskCompleted = Number(data._sectTaskCompleted) || 0;
+            ds._sectTaskDone = Array.isArray(data._sectTaskDone) ? data._sectTaskDone.slice() : [];
+            ds._sectRelation = Number(data._sectRelation) || 0;
             ds._lastSalaryDay = data._lastSalaryDay || null;
             try {
                 if (typeof window.updateSectUI === 'function') window.updateSectUI();
@@ -1658,7 +1718,7 @@ function autoNpcVotes(sectName) {
 var SECT_LEADER_POLICIES = [
     { id: 'invite_disciple', name: '广招弟子', desc: '本季接纳更多散修入门（弟子数+3）', cost: { resources: 200 } },
     { id: 'upgrade_training', name: '修缮演武场', desc: '演武场训练效率+15%（持续 30 日）', cost: { resources: 500 } },
-    { id: 'ally_sect', name: '结盟', desc: '与最近中立门派结盟（声望+10）', cost: { resources: 800, influence: 20 } },
+    { id: 'ally_sect', name: '结盟', desc: '与中立门派修好（散修联盟声望+10）', cost: { resources: 800, influence: 20 } },
     { id: 'expand_market', name: '扩建坊市', desc: '坊市库存+20%，价格-5%（持续 60 日）', cost: { resources: 600 } }
 ];
 
@@ -2020,8 +2080,11 @@ function applyLeaderPolicy(policyId) {
     if (policyId === 'invite_disciple') {
         internal.disciples = (Number(internal.disciples) || 0) + 3;
     } else if (policyId === 'ally_sect') {
+        // F5 甲③：旧码 changeFactionReputation('ally_sect', 10) 把政策 id 当势力 id 喂进门禁，
+        // 一声不响 return 0——800 资源 + 20 影响力照扣，一点效果没落账。
+        // 中立门派在势力账上归的是散修联盟（同一支笔见 factions.js 的 SECT_TYPE_FACTION）。
         if (typeof window.changeFactionReputation === 'function') {
-            try { window.changeFactionReputation('ally_sect', 10); } catch (e) {}
+            try { window.changeFactionReputation('rogue_cultivators', 10); } catch (e) {}
         }
     } else if (policyId === 'upgrade_training' || policyId === 'expand_market') {
         // 简易 buff：写入 policyBuffs 数组，由 processAllSectDailyEconomy 在到期日清理

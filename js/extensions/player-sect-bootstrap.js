@@ -287,7 +287,12 @@
         if (all.length < 3) {
             try {
                 var more = (W.npcManager && W.npcManager.getAllNPCs ? W.npcManager.getAllNPCs() : []) || [];
-                all = all.concat(more.filter(function (n) { return n && (n.state && n.state.location === loc || n.location === loc); }));
+                // DES-57：城名两串写法（角色账可能带空格／NPC 账是表键），认同城前去空白
+                all = all.concat(more.filter(function (n) {
+                    var k = String(loc || '').replace(/\s+/g, '');
+                    return n && (String((n.state && n.state.location) || '').replace(/\s+/g, '') === k
+                        || String(n.location || '').replace(/\s+/g, '') === k);
+                }));
             } catch (e) {}
         }
         var seen = {}, out = [];

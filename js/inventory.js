@@ -7,6 +7,13 @@ const INVENTORY_CONFIG = {
     MAX_SLOTS: 99,          // 最大格子数
     COPPER_PER_SLOT: 10,    // 每扩展10格需要铜钱
     CATEGORIES: ['all', 'weapon', 'armor', 'accessory', 'consumable', 'material', 'secret_art', 'quest', 'currency'],
+    // v24 UI-02：分类中文名与「玩家能点哪几档」只在这一处写。背包那排静态 chip 与此表若有出入，
+    // 由 tests/v24.0-audit-fixes-node.js 当场翻脸——商店货架也读这张表，免得第三处再抄一遍。
+    CATEGORY_LABELS: {
+        all: '全部', weapon: '武器', armor: '防具', accessory: '饰品', consumable: '消耗品',
+        material: '材料', secret_art: '秘籍', quest: '任务', currency: '财货'
+    },
+    FILTER_CHIPS: ['all', 'weapon', 'armor', 'accessory', 'consumable', 'material', 'secret_art'],
     QUALITIES: ['all', 'PIN9', 'PIN8', 'PIN7', 'PIN6', 'PIN5', 'PIN4', 'PIN3', 'PIN2', 'PIN1', 'UNIQUE'],
     SORT_OPTIONS: { NAME_ASC: 'name_asc', NAME_DESC: 'name_desc', PRICE_ASC: 'price_asc', PRICE_DESC: 'price_desc', QUALITY_DESC: 'quality_desc', QUALITY_ASC: 'quality_asc', COUNT_DESC: 'count_desc', COUNT_ASC: 'count_asc' }
 };
@@ -152,20 +159,30 @@ function initInventory(startItems = []) {
         inventory.slots.push(null);
     }
     
-    // 添加初始物品
+    // 添加初始物品（DES-72 第一百三十批：认实收——没落袋的初始件要有人知道）
+    var 缺 = [];
     for (const item of startItems) {
-        addItem(item, 1);
+        if ((Number(addItem(item, 1)) || 0) <= 0) {
+            缺.push(item + '（' + (window.addItemFailReason === 'no_template' ? '百宝册查无此号' : '格子不够') + '）');
+        }
     }
+    if (缺.length && typeof console !== 'undefined') {
+        console.warn('[inventory] 初始物品有 ' + 缺.length + ' 件没能落进背包: ' + 缺.join(', '));
+    }
+    return 缺;
 }
 
 // ============ 添加物品 ============
 function addItem(templateId, count = 1) {
     // B2：正确堆叠拆分；第八十二波·返回值改为「实际入袋数量」——0=没入袋、>0=入了多少，
     // 与旧布尔语义真值兼容（全部入袋仍为真值，一件没进仍为假值，部分入袋如实报数不再谎称全败）
+    // DES-90（第一百二十八批）：模板缺失与行囊满在返回值上同形（都是假值），故另记一本原因账
+    window.addItemFailReason = null;
     count = Math.max(0, Math.floor(Number(count) || 0));
     if (count <= 0) return true;
     const template = window.itemById?.[templateId];
     if (!template) {
+        window.addItemFailReason = 'no_template';
         console.warn('物品模板不存在: ' + templateId);
         return false;
     }
@@ -178,6 +195,7 @@ function addItem(templateId, count = 1) {
     // 现在所有出口统一走 _settle：事件按实际入袋数结算一次，UI 刷一次。
     function _settle() {
         var added = count - remaining;
+        if (added === 0) window.addItemFailReason = 'bag_full'; // 模板已在上头查过，一件没进就只可能是格子的事
         if (added > 0 && typeof window.EventBus !== 'undefined') {
             window.EventBus.emit('item:obtained', {
                 itemId: templateId,
@@ -243,7 +261,7 @@ function removeItem(uid, count = 1) {
     if (slot === -1) return false;
     
     const instance = inventory.slots[slot];
-    instance.removeCount(count);
+    _slotRemoveCount(instance, count);
     
     if (instance.count <= 0) {
         inventory.slots[slot] = null;
@@ -265,8 +283,13 @@ function useItem(uid) {
         return false;
     }
     
-    const template = slot.getTemplate();
-    if (!template) return false;
+    const template = _slotTemplate(slot);
+    if (!template) {
+        if (typeof window.showMessage === 'function') {
+            window.showMessage('这一格来历不明（物品表上查无此物），用不了。', 'warning');
+        }
+        return false;
+    }
     
     // 检查 implemented:false — 禁止使用
     if (template.implemented === false) {
@@ -291,7 +314,7 @@ function useItem(uid) {
                 if (_bbActual > 0 && window.currentCharData) {
                     var _cd = window.currentCharData;
                     _cd._breakthroughPillBonus = (_cd._breakthroughPillBonus || 0) + _bbActual;
-                    slot.removeCount(1);
+                    _slotRemoveCount(slot, 1);
                     if (slot.count <= 0) inventory.slots[inventory.slots.indexOf(slot)] = null;
                     if (typeof window.showMessage === 'function') {
                         window.showMessage('已服用 ' + template.name + '，下次突破成功率 +' + Math.round(_bbActual * 100) + '%', 'success');
@@ -315,7 +338,7 @@ function useItem(uid) {
             // 现在走符箓同一条效果管线（真实效果在 gameplay/talisman-system.js）
             if (template.subtype === 'trap' || template.subtype === 'poison') {
                 if (!applyTalismanEffect(slot, template)) return false;
-                slot.removeCount(1);
+                _slotRemoveCount(slot, 1);
                 if (slot.count <= 0) {
                     inventory.slots[inventory.slots.indexOf(slot)] = null;
                 }
@@ -355,7 +378,7 @@ function useItem(uid) {
                     if (typeof window.showMessage === 'function') {
                         window.showMessage('💊 药力化开——外出血减半，内出血止住了。', 'success');
                     }
-                    slot.removeCount(1);
+                    _slotRemoveCount(slot, 1);
                     if (slot.count <= 0) {
                         inventory.slots[inventory.slots.indexOf(slot)] = null;
                     }
@@ -379,7 +402,7 @@ function useItem(uid) {
                     if (typeof window.updateCharacterStatus === 'function') {
                         try { window.updateCharacterStatus(); } catch (e) {}
                     }
-                    slot.removeCount(1);
+                    _slotRemoveCount(slot, 1);
                     if (slot.count <= 0) {
                         inventory.slots[inventory.slots.indexOf(slot)] = null;
                     }
@@ -428,7 +451,7 @@ function useItem(uid) {
                     if (applyConsumableEffect(slot, _useTemplate) === false) return false;
                     if (_isFoodUse && window.satietySystem) window.satietySystem.eat();
                 }
-                slot.removeCount(1);
+                _slotRemoveCount(slot, 1);
                 if (slot.count <= 0) {
                     inventory.slots[inventory.slots.indexOf(slot)] = null;
                 }
@@ -439,7 +462,7 @@ function useItem(uid) {
             // 学习秘籍：只有成功且消耗时才扣除
             var result = learnSecretArt(slot, template);
             if (result && result.consumed) {
-                slot.removeCount(1);
+                _slotRemoveCount(slot, 1);
                 if (slot.count <= 0) {
                     inventory.slots[inventory.slots.indexOf(slot)] = null;
                 }
@@ -576,7 +599,7 @@ function applyConsumableEffect(item, template) {
         }
         // 心情提升
         if (eff.mood_boost && window.currentCharData) {
-            window.currentCharData.mood = Math.min(100, (window.currentCharData.mood || 50) + eff.mood_boost);
+            window.currentCharData.mood = Math.min(100, (window.currentCharData.mood ?? 50) + eff.mood_boost);
         }
         if (eff.lifespan_years && typeof window.extendLifespan === 'function') {
             window.extendLifespan(eff.lifespan_years, template.name || '延寿丹');
@@ -641,7 +664,7 @@ function learnSecretArt(item, template) {
     }
     // 硬啃之险：精力见底强读，两成概率头昏气乱
     if ((cd.energy || 0) < 15 && Math.random() < 0.2) {
-        cd.health = Math.max(1, (cd.health || 100) - 5);
+        cd.health = Math.max(1, (cd.health ?? 100) - 5);
         if (typeof window.showMessage === 'function') window.showMessage('😵 你强撑着硬啃，只觉头昏脑胀、气机发乱……（健康-5，这次白读了）', 'warning');
         if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e2) {} }
         return { success: true, consumed: false };
@@ -835,68 +858,78 @@ function _slotTemplate(slot) {
     return (window.itemById && slot.templateId && window.itemById[slot.templateId]) || null;
 }
 
-function getFilteredSlots() {
-    // 1) 先按类别筛选
-    let slots = inventory.slots;
-    if (inventory.filter !== 'all') {
-        slots = inventory.slots.filter(slot => {
-            if (!slot) return false;
-            const template = _slotTemplate(slot);
-            if (!template) return false;
-            if (template.category === inventory.filter) return true;
-            if (template.type === inventory.filter) return true;
-            if (inventory.filter === 'currency') {
-                return template.id === 'copper' || template.id === 'spirit_stone';
-            }
-            return false;
-        });
-    }
+// 扣数也走同一根线：ItemInstance 自带 removeCount（含堆叠上限那套语义），
+// 而旧档里的 plain 格子没这个方法——以前玩家点「使用」就在这一刀上抛 TypeError，
+// 屏上只剩一句「游戏遇到一点小问题」，东西既没扣也没生效。回落按同一语义减 count。
+function _slotRemoveCount(slot, n) {
+    if (!slot) return false;
+    if (typeof slot.removeCount === 'function') return slot.removeCount(n);
+    var k = (typeof n === 'number' && n > 0) ? n : 1;
+    slot.count = Math.max(0, (slot.count || 1) - k);
+    return slot.count <= 0;
+}
 
-    // 2) 搜索过滤
+// v24 UI-02：一把筛子两处用。背包格子与商店货架读同一本筛选账（inventory.filter / searchQuery / qualityFilter / sortBy），
+// 判定只看模板字段——谁再抄一份 category/type 的比法，两处就会开始各说一套。
+function matchesInventoryFilter(template) {
+    if (!template) return false;
+    if (inventory.filter !== 'all') {
+        if (template.category === inventory.filter) { /* 命中分类 */ }
+        else if (template.type === inventory.filter) { /* 命中类型（旧档两种写法都有） */ }
+        else if (inventory.filter === 'currency') {
+            if (template.id !== 'copper' && template.id !== 'spirit_stone') return false;
+        } else return false;
+    }
     if (inventory.searchQuery) {
         const q = inventory.searchQuery;
-        slots = slots.filter(slot => {
-            if (!slot) return false;
-            const t = _slotTemplate(slot);
-            if (!t) return false;
-            return (t.name && t.name.toLowerCase().indexOf(q) >= 0) ||
-                   (t.desc && t.desc.toLowerCase().indexOf(q) >= 0) ||
-                   (t.id && t.id.toLowerCase().indexOf(q) >= 0);
-        });
+        const hit = (template.name && template.name.toLowerCase().indexOf(q) >= 0) ||
+            (template.desc && template.desc.toLowerCase().indexOf(q) >= 0) ||
+            (template.id && template.id.toLowerCase().indexOf(q) >= 0);
+        if (!hit) return false;
     }
-
-    // 3) 品质过滤
     if (inventory.qualityFilter && inventory.qualityFilter !== 'all') {
-        slots = slots.filter(slot => {
-            if (!slot) return false;
-            const t = _slotTemplate(slot);
-            return t && ((window.normalizeQuality ? window.normalizeQuality(t.quality) : t.quality) === inventory.qualityFilter);
-        });
+        const q = (window.normalizeQuality ? window.normalizeQuality(template.quality) : template.quality);
+        if (q !== inventory.qualityFilter) return false;
     }
-    
+    return true;
+}
+
+// 排序同理：档子在 inventory.sortBy，比法只此一份。一行货架或一格背包都写成 { tpl, count }
+// ——名字/价/品质在模板上、堆数在条目上，两处不必共用一种容器。
+function compareInventoryEntries(a, b) {
+    var ta = a && a.tpl, tb = b && b.tpl;
+    if (!ta || !tb) return 0;
+    var cmp = 0;
+    switch (inventory.sortBy || 'count_desc') {
+        case 'name_asc': cmp = (ta.name || '').localeCompare(tb.name || ''); break;
+        case 'name_desc': cmp = (tb.name || '').localeCompare(ta.name || ''); break;
+        case 'price_asc': cmp = (ta.price || 0) - (tb.price || 0); break;
+        case 'price_desc': cmp = (tb.price || 0) - (ta.price || 0); break;
+        case 'quality_desc': cmp = _qRank(tb.quality) - _qRank(ta.quality); break;
+        case 'quality_asc': cmp = _qRank(ta.quality) - _qRank(tb.quality); break;
+        case 'count_desc': cmp = (b.count || 0) - (a.count || 0); break;
+        case 'count_asc': cmp = (a.count || 0) - (b.count || 0); break;
+    }
+    return cmp;
+}
+
+function getFilteredSlots() {
+    // 1~3) 类别 + 搜索 + 品质：全交给上面那把筛子
+    var unknownSlots = [];
+    let entries = inventory.slots.filter(slot => {
+        if (!slot) return false;
+        const tpl = _slotTemplate(slot);
+        // 物品表查无此物的格子没有模板字段可筛，混进任何一档都是撒谎；单独留到「全部」那一档如实带出
+        if (!tpl) { unknownSlots.push(slot); return false; }
+        return matchesInventoryFilter(tpl);
+    })
+        .map(slot => ({ tpl: _slotTemplate(slot), count: slot.count, slot: slot }));
+
     // 4) 排序
-    const sortKey = inventory.sortBy || 'count_desc';
-    const sortable = slots.filter(Boolean);
-    sortable.sort(function(a, b) {
-        var ta = a.getTemplate && a.getTemplate();
-        var tb = b.getTemplate && b.getTemplate();
-        if (!ta || !tb) return 0;
-        var cmp = 0;
-        switch (sortKey) {
-            case 'name_asc': cmp = (ta.name || '').localeCompare(tb.name || ''); break;
-            case 'name_desc': cmp = (tb.name || '').localeCompare(ta.name || ''); break;
-            case 'price_asc': cmp = (ta.price || 0) - (tb.price || 0); break;
-            case 'price_desc': cmp = (tb.price || 0) - (ta.price || 0); break;
-            case 'quality_desc':
-                cmp = (_qRank(tb.quality)) - (_qRank(ta.quality)); break;
-            case 'quality_asc':
-                cmp = (_qRank(ta.quality)) - (_qRank(tb.quality)); break;
-            case 'count_desc': cmp = (b.count||0) - (a.count||0); break;
-            case 'count_asc': cmp = (a.count||0) - (b.count||0); break;
-        }
-        return cmp;
-    });
-    return sortable;
+    entries.sort(compareInventoryEntries);
+    const out = entries.map(e => e.slot);
+    // 一旦玩家设了任何筛选条件，就没法说清这一格算不算命中——只在「没在筛」时如实带出
+    return _invFilterActive() ? out : out.concat(unknownSlots);
 }
 
 // ============ 面板外观装配（v21.x 界面整改：只动呈现，筛选口径与容量规则不变） ============
@@ -918,7 +951,7 @@ function _invUsedSlots() {
 
 // 空态必须点名「是谁把东西筛没了」，玩家才知道下一步按哪个钮（对齐 禁止设计.md 第 2 条）
 function _invFilterLabels() {
-    var catCN = { weapon: '武器', armor: '防具', accessory: '饰品', consumable: '消耗品', material: '材料', secret_art: '秘籍', quest: '任务', currency: '财货' };
+    var catCN = INVENTORY_CONFIG.CATEGORY_LABELS;
     var out = [];
     if (inventory.filter && inventory.filter !== 'all') out.push('分类「' + (catCN[inventory.filter] || inventory.filter) + '」');
     if (inventory.qualityFilter && inventory.qualityFilter !== 'all') out.push('品质「' + (QUALITY_NAMES[inventory.qualityFilter] || inventory.qualityFilter) + '」');
@@ -931,6 +964,28 @@ function _invSpan(cls, text) {
     if (cls) s.className = cls;
     s.textContent = (text == null ? '' : String(text));
     return s;
+}
+
+// DES-65：物品表上查无此物的格子（旧档遗留，以及第一百二十波之前坊市虚标货写进去的死格子）。
+// 以前它被筛子丢掉、被渲染跳过，却仍占着容量——计数说 8/30，屏上只有 7 张卡，且那一格点不开、丢不掉。
+// 现在如实画出来，并把唯一的出口（丢掉腾格子）直接挂在点击上。
+function _invUnknownSlot(slot) {
+    var div = document.createElement('div');
+    div.className = 'inv-slot inv-slot--unknown';
+    var label = slot.name || '来历不明的一格';
+    div.setAttribute('role', 'button');
+    div.setAttribute('tabindex', '0');
+    div.title = label + ' ×' + (slot.count || 1) + ' · 物品表上查无此物：用不了、商铺不收，只能丢掉腾出这一格';
+    div.appendChild(_invSpan('inv-slot__icon', '❓'));
+    div.appendChild(_invSpan('inv-slot__name', label));
+    if ((slot.count || 1) > 1) div.appendChild(_invSpan('inv-slot__qty', '×' + slot.count));
+    div.onclick = function () { showDiscardConfirm(slot.uid); };
+    div.onkeydown = function (ev) {
+        if (!ev || (ev.key !== 'Enter' && ev.key !== ' ')) return;
+        if (ev.preventDefault) ev.preventDefault();
+        showDiscardConfirm(slot.uid);
+    };
+    return div;
 }
 
 function _invDropHollow(node) {
@@ -1179,7 +1234,10 @@ function _updateInventoryUIImpl() {
         if (!slot) continue;
 
         var template = _slotTemplate(slot);
-        if (!template) continue;
+        if (!template) {
+            container.appendChild(_invUnknownSlot(slot));
+            continue;
+        }
 
         var isFav = isFavorite(slot.uid);
         var isBatchSelected = inventory.batchSellMode && inventory.batchSellSelection.indexOf(slot.uid) >= 0;
@@ -1299,8 +1357,13 @@ function showItemMenu(uid) {
     const slot = inventory.slots.find(s => s && s.uid === uid);
     if (!slot) return;
     
-    const template = slot.getTemplate();
-    if (!template) return;
+    const template = _slotTemplate(slot);
+    if (!template) {
+        if (typeof window.showMessage === 'function') {
+            window.showMessage('这一格来历不明（物品表上查无此物）：用不了、商铺不收。点它一下可以直接丢掉。', 'warning');
+        }
+        return;
+    }
     
     var isMarked = isMarkedForSale(uid);
     
@@ -1445,7 +1508,7 @@ var _EQUIP_BONUS_NAMES = {
 function showEquipmentCompareDialog(uid) {
     const slot = inventory.slots.find(s => s && s.uid === uid);
     if (!slot) return;
-    const template = slot.getTemplate();
+    const template = _slotTemplate(slot);
     if (!template) return;
 
     // 槽位映射参考 equipment.js equipmentSlots：物品模板自带 slot 字段
@@ -1534,7 +1597,7 @@ function showEquipmentCompareDialog(uid) {
 function showMarkForSaleQuantityDialog(uid) {
     const slot = inventory.slots.find(s => s && s.uid === uid);
     if (!slot) return;
-    const template = slot.getTemplate();
+    const template = _slotTemplate(slot);
     if (!template) return;
     
     var maxQty = slot.count || 1;
@@ -1605,8 +1668,11 @@ function confirmMarkForSale(uid) {
 function markForSale(uid, qty) {
     const slot = inventory.slots.find(s => s && s.uid === uid);
     if (!slot) return false;
-    const template = slot.getTemplate();
-    if (!template) return false;
+    const template = _slotTemplate(slot);
+    if (!template) {
+        if (window.showMessage) window.showMessage('商铺不收这一格——物品表上查无此物，谁也报不出价。', 'warning');
+        return false;
+    }
     
     qty = qty || slot.count;
     qty = Math.min(qty, slot.count);
@@ -1657,7 +1723,7 @@ function unmarkForSale(uid) {
     inventory.markedForSale.delete(uid);
     updateInventoryUI();
     if (window.showMessage) {
-        var template = slot.getTemplate();
+        var template = _slotTemplate(slot);
         window.showMessage('已取消 ' + (template ? template.name : '物品') + ' 的待售标记', 'info');
     }
     return true;
@@ -1712,7 +1778,7 @@ function equipItemFromInventory(uid) {
     // F-7 重构：用 ItemInstance.canBeEquipped 统一守卫（之前手写散落 3 处）
     if (typeof slot.canBeEquipped === 'function' && !slot.canBeEquipped()) return false;
 
-    const template = slot.getTemplate();
+    const template = _slotTemplate(slot);
     if (!template) return false;
     
     // 检查是否是装备类物品（兼容 type='equipment' 和 type='weapon'/'armor'/'accessory'）
@@ -1755,7 +1821,7 @@ function equipItemFromInventory(uid) {
     }
     
     // 从背包移除（或减少数量）
-    slot.removeCount(1);
+    _slotRemoveCount(slot, 1);
     if (slot.count <= 0) {
         inventory.slots[inventory.slots.indexOf(slot)] = null;
     }
@@ -2026,10 +2092,11 @@ function showDiscardConfirm(uid) {
     // F-7 重构：用 ItemInstance.canBeDiscarded 统一守卫
     if (typeof slot.canBeDiscarded === 'function' && !slot.canBeDiscarded()) return;
 
-    const template = slot.getTemplate();
-    if (!template) return;
-    
-    if (confirm(`确定要丢弃 ${template.name} ×${slot.count} 吗？此操作不可恢复！`)) {
+    // DES-65：物品表上查无此物的格子（旧档死格子）以前在这一行直接 return——
+    // 用不了、卖不掉、又丢不掉，永久占一格行囊。丢东西不需要认识它，照样给出口。
+    const template = _slotTemplate(slot);
+    const label = template ? template.name : ((slot.name || '这一格来历不明的东西') + '（物品表上查无此物）');
+    if (confirm(`确定要丢弃 ${label} ×${slot.count || 1} 吗？此操作不可恢复！`)) {
         // 从背包移除
         const index = inventory.slots.indexOf(slot);
         if (index >= 0) {
@@ -2064,7 +2131,13 @@ function _updateCurrencyUIImpl() {
 
 // ============ 存档（v10.5 增加 markedForSale 字段） ============
 function saveInventory() {
-    localStorage.setItem('xianxia_inventory', JSON.stringify({
+    // 第一百四十四批：原先是**裸 localStorage.setItem**（全函数无 try、无 catch、无守卫）。
+    // 浏览器存储配额一满（各模块小档加起来很容易满），这一行直接抛给调用方
+    // ——而 saveInventory 的调用方遍布全仓（每次改动背包都调它），
+    // 玩家看到的是「背包里的东西重载后不见了」，**且一句提示都没有**。
+    // v20.87 早就把这条规矩写在 auto-save.js:39 了（「玩家以为存上了实际丢了是最坏情况」），
+    // 只是没接到各模块的小档上。规矩的单一 owner 现在是 window.saveToStorage（js/global-utils.js）。
+    window.saveToStorage('xianxia_inventory', JSON.stringify({
         slots: inventory.slots.map(s => s ? {
             uid: s.uid,
             templateId: s.templateId,
@@ -2329,7 +2402,7 @@ function executeBatchSell() {
         var uid = selection[si];
         var slot = inventory.slots.find(function(s) { return s && s.uid === uid; });
         if (!slot) continue;
-        var template = slot.getTemplate();
+        var template = _slotTemplate(slot);
         if (!template) continue;
         if (template.price <= 0) continue;
         // 检查是否收藏
@@ -2447,10 +2520,14 @@ window._addItemRaw = addItem;
 window.addItem = function(templateId, count) {
     // B2：使用 _addItemRaw 而非裸 addItem，避免 ES6 默认参数作用域导致函数名解析到自身
     var result = window._addItemRaw(templateId, count);
-    if (result && typeof window.showItemObtainAnimation === 'function') {
-        try { window.showItemObtainAnimation(templateId, count || 1); } catch (e) {}
+    // 第一百三十六批（真 Chrome 屏证查出）：飘字原先念的是「要加几条」，不是「落进包里几条」——
+    // 掷 4 收 1 那一竿，右上角老实念「鲤鱼 x1（另 3 条脱手时跑了——）」，屏幕正中却飘「+2 鲤鱼」。
+    // _addItemRaw 的返回值本就是实际入袋数（第八十二波口径），故以它为准；一件没收就不飘字也不撒花。
+    var 实收 = typeof result === 'number' ? result : 0;
+    if (实收 > 0 && typeof window.showItemObtainAnimation === 'function') {
+        try { window.showItemObtainAnimation(templateId, 实收); } catch (e) {}
     }
-    if (result && typeof window.showEffect === 'function') {
+    if (实收 > 0 && typeof window.showEffect === 'function') {
         try { window.showEffect('item_get'); } catch (e) {}
     }
     return result;
@@ -2458,6 +2535,70 @@ window.addItem = function(templateId, count) {
 // B2：对象方法别名（crafting 曾调 inventory.addItem）
 inventory.addItem = window.addItem;
 window.addItemToInventory = window.addItem; // 唯一全局背包入库入口
+
+// DES-90（第一百二十八批）：发奖回执要说「没带走」时问这一支——模板缺失不许再怪给行囊
+// DES-96（第一百三十八批）：说话手分两层。底下这对吃**显式快照**（发货那一站当场抄下的账），
+// 上面这对只是「读当下全局账」的薄封装——全局账一条，两次入袋后前一笔的缘由就没了，
+// 所以凡「先发货、后拼串」「一问多件」的点位一律改吃快照。
+function failTextFor(reason, label) {
+    if (reason === 'no_template') {
+        return (label || '那件东西') + '在百宝册上查无此号——是这件东西没有名目，不是你的行囊满了。';
+    }
+    if (reason === 'bag_full') return '行囊已满，先腾个格子再来。';
+    return '';
+}
+window.addItemFailTextFor = failTextFor;
+window.addItemFailText = function (label) {
+    return failTextFor(window.addItemFailReason, label);
+};
+
+// DES-90（第一百三十五批）：半包那一族（玩家已收进一部分）问这一支——账上没落笔时不许由视图层自己断言满包
+function reasonTextFor(reason, label) {
+    if (reason === 'no_template') {
+        return (label || '那件东西') + '在百宝册上查无此号——是这件东西没有名目，不是你的行囊满了。';
+    }
+    if (reason === 'bag_full') return '行囊已满，先腾个格子再来。';
+    return '没能落进你的行囊。';
+}
+window.addItemReasonTextFor = reasonTextFor;
+window.addItemReasonText = function (label) {
+    return reasonTextFor(window.addItemFailReason, label);
+};
+
+// DES-97（第一百三十八批）：半截话专用。凡「（另 N 件…）」这类把缘由钉在句子中间的点位，
+// 吃上面那几支句尾带圆点的说话手就会漏出「再来。，」「行囊。）」这种破句（今日实机屏上就有）。
+// 这一支只出从句、不出句号，并且认**一堆货的账**（传数组）：全同一笔才点名，
+// 掺了别的缘由就说「各件缘由不一」（不报件数，免得拿组数冒充件数），一条账没落笔就回空串由站点自己收口。
+function failPhraseFor(reason, label) {
+    if (Array.isArray(reason)) {
+        var 只此一笔 = null, 不一 = false;
+        (reason || []).forEach(function (r) {
+            r = r || '没落账';
+            if (只此一笔 === null) 只此一笔 = r;
+            else if (r !== 只此一笔) 不一 = true;
+        });
+        if (只此一笔 === null) return '';
+        // 「不一」要先问：一堆里只要有一笔落了账、又有一笔没落账，那就不是一件事，
+        // 拿没落账当哑巴会让后一笔的缘由替整堆说话（顺序一变就换个说法，那是假话）。
+        if (不一) return '各件缘由不一';
+        if (只此一笔 === '没落账') return '';
+        return failPhraseFor(只此一笔, label);
+    }
+    if (reason === 'no_template') return (label || '那件东西') + '在百宝册上查无此号';
+    if (reason === 'bag_full') return '行囊已满，先腾个格子再来';
+    return '';
+}
+window.addItemFailPhraseFor = failPhraseFor;
+window.addItemReasonPhraseFor = function (reason, label) {
+    return failPhraseFor(reason, label) || '没能落进你的行囊';
+};
+// 薄封装一对：读当下全局账（与上面那对快照支的分工，同 addItemFailText／TextFor 那一层）
+window.addItemFailPhrase = function (label) {
+    return failPhraseFor(window.addItemFailReason, label);
+};
+window.addItemReasonPhrase = function (label) {
+    return (window.addItemFailReason ? failPhraseFor(window.addItemFailReason, label) : '') || '没能落进你的行囊';
+};
 
 // ============ 第八十三波·实例账：按快照原样归还原物 ============
 // EconomyTransaction.addSnapshot 与商铺回购早就在调这个口，但它从来没被实现——
@@ -2535,6 +2676,12 @@ window.clearInventoryFilters = clearInventoryFilters;   // v21.x：空态/脚注
 window.toggleFavorite = toggleFavorite;
 window.isFavorite = isFavorite;
 window.getFilteredSlots = getFilteredSlots;
+// v24 UI-02：筛子／尺子／「谁把东西筛没了」这三样一并导出——商店货架读的就是背包这一本账
+window._slotTemplate = _slotTemplate;
+window._slotRemoveCount = _slotRemoveCount;
+window.matchesInventoryFilter = matchesInventoryFilter;
+window.compareInventoryEntries = compareInventoryEntries;
+window.inventoryFilterLabels = _invFilterLabels;
 window.toggleBatchSellMode = toggleBatchSellMode;
 window.toggleBatchSellSelection = toggleBatchSellSelection;
 window.executeBatchSell = executeBatchSell;

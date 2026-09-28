@@ -254,7 +254,7 @@
             else live.push(n);
         }
         html += '<p class="text-xs font-bold text-amber-200 mb-1">' + (ruined ? '🧑‍🤝‍🧑 散落江湖（' + live.length + '）' : '🧑‍🤝‍🧑 在世同门（' + live.length + '）') + '</p>';
-        html += '<div class="bg-gray-900/60 rounded p-2 mb-2 max-h-44 overflow-y-auto">';
+        html += '<div class="bg-gray-900/60 rounded p-2 mb-2">';
         html += live.length ? live.slice(0, 20).map(function (n) {
             return '<p class="text-xs text-gray-400 py-0.5 border-b border-gray-700/40">' + n.name
                 + ' · ' + effAge(n) + '岁 · ' + rankWord(n)

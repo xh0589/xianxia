@@ -850,21 +850,26 @@ function executeAction(action, resultMsgs, facilityId) {
                     { itemId: 'spirit_grass', count: 3 },
                     { itemId: 'spirit_stone', count: 50 }
                 ];
-            let added = 0;
             const gotTxt = [];
+            let 少收 = 0;
+            let 实收合 = 0;
             materials.forEach(m => {
                 if (typeof window.addItem === 'function') {
-                    const ok = window.addItem(m.itemId, m.count);
-                    if (ok) added++;
+                    // DES-72 同族：addItem 报的是实收件数，旧写法只当布尔用、上屏念开价
+                    const got = Number(window.addItem(m.itemId, m.count)) || 0;
+                    实收合 += got;
+                    if (got < m.count) 少收 += (m.count - got);
                     const nm = (window.itemById && window.itemById[m.itemId] && window.itemById[m.itemId].name) || m.itemId;
-                    gotTxt.push(nm + 'x' + m.count);
+                    gotTxt.push(nm + 'x' + got);
                 }
             });
-            resultMsgs.push(`・获得物资: ` + gotTxt.join(', '));
+            // DES-90（第一百三十九批）：账上没落笔时不许由站点断言满包（工坊物资属机构交付，用③形，括号内不带句号）
+            resultMsgs.push(`・获得物资: ` + gotTxt.join(', ') + (少收 > 0 ? `（另 ${少收} 件：` + ((typeof window.addItemReasonPhrase === 'function' && window.addItemReasonPhrase('工坊的物资')) || '这一件没能交到你手上') + `）` : ''));
             // 改造批 · 守恒来路做实：本派地标工坊干出来的活，产出半数入公库（编年偶尔记一笔「弟子捐工」）
             try {
                 if (facilityId && String(facilityId).indexOf('fx_') === 0 && window.SectGov && window.SectGov.titheWorkshop) {
-                    var _tTotal = materials.reduce(function (sum, m) { return sum + (Number(m.count) || 0); }, 0);
+                    // DES-83：抽成只能按玩家真领到的件数算——旧写法按开价合计抽，等于门派替没出袋的货记账
+                    var _tTotal = 实收合;
                     var _tithe = window.SectGov.titheWorkshop(_tTotal);
                     if (_tithe > 0) resultMsgs.push('・半数入公库（材料+' + _tithe + '）——门里记你一功');
                 }
@@ -999,11 +1004,12 @@ function useFacility(facilityId, opts) {
         if (visitsToday >= 2) {
             // 第三次起：以冒犯尊长论处，逐次加重
             const fine = 10 * (visitsToday - 1);
+            const sitMin = 30;   // 真账那一笔：架去思过推出去的分钟数——处罚的时长回执由它生成，别再嘴硬多加一倍
             const dsPen = window.discipleState || {};
             if (dsPen.contribution != null) dsPen.contribution = Math.max(0, dsPen.contribution - fine);
-            try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '被守卫架去思过'); } catch (e) {}
+            try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(sitMin, '被守卫架去思过'); } catch (e) { console.warn('[静默失败] js/sects/sect-facilities.js:1010 · 思过时辰：架去思过的禁足时长本该走掉，这里没接住，玩家会察觉时间没扣', e && e && e.message); }
             if (window.showMessage) {
-                window.showMessage('你又硬闯大殿，被守卫架了出来——以冒犯尊长论处：罚扣贡献' + fine + '点，禁足思过半个时辰！', 'error');
+                window.showMessage('你又硬闯大殿，被守卫架了出来——以冒犯尊长论处：罚扣贡献' + fine + '点，禁足思过' + (window.formatShichen ? window.formatShichen(sitMin) : sitMin + '分钟') + '！', 'error');
             }
             facilityState.dailyUsage['sect_leader'] = visitsToday + 1;
             updateFacilityUI();
@@ -1043,20 +1049,23 @@ function useFacility(facilityId, opts) {
     }
 
     // v18.6 门派工坊研习：领料/制作用途附带工匠指点——8小时窗内制作灵石费×0.6
+    // 第十二波 · 门中炉火：炼丹房/锻造坊开炉——8小时窗内对应制作成功率+8%（crafting.js 消费）
+    // 两处同用一个窗口：分钟数只此一枚，牌面念的时长一律由它折出来（时辰走 formatShichen，1 时辰 = 120 分钟），
+    // 不许再各写各的字面量——旧炉火句的时辰数是口算的，比真账大一倍（DES-54 时辰对账）
+    var CRAFT_BUFF_MINUTES = 480;
     if (CRAFT_WORKSHOPS[facilityId]) {
         var wsNow = getGameMinute();
-        window._craftDiscountUntil = wsNow + 480;
-        resultMsgs.push('・🛠️ 师傅看你勤快，多教了两手省钱门路——8小时内制作灵石费用六折。');
-        if (!quiet && window.showMessage) window.showMessage('🛠️ 师傅看你勤快，多教了两手省钱门路——8小时内制作灵石费用六折。', 'info');
+        window._craftDiscountUntil = wsNow + CRAFT_BUFF_MINUTES;
+        resultMsgs.push('・🛠️ 师傅看你勤快，多教了两手省钱门路——' + (CRAFT_BUFF_MINUTES / 60) + '小时内制作灵石费用六折。');
+        if (!quiet && window.showMessage) window.showMessage('🛠️ 师傅看你勤快，多教了两手省钱门路——' + (CRAFT_BUFF_MINUTES / 60) + '小时内制作灵石费用六折。', 'info');
     }
 
-    // 第十二波 · 门中炉火：炼丹房/锻造坊开炉——8小时窗内对应制作成功率+8%（crafting.js 消费）
     if (facilityId === 'sect_alchemy_room' || facilityId === 'sect_forge_room') {
         var isForge = facilityId === 'sect_forge_room';
-        window._sectCraftBuff = { kind: isForge ? 'forging' : 'pilfer', until: getGameMinute() + 480 };
+        window._sectCraftBuff = { kind: isForge ? 'forging' : 'pilfer', until: getGameMinute() + CRAFT_BUFF_MINUTES };
         var fireText = isForge
-            ? '・🔥 炉温上来了，锤感正顺——8个时辰内锻造成功率见长。'
-            : '・⚗️ 丹炉养好了火——8个时辰内炼丹成功率见长。';
+            ? '・🔥 炉温上来了，锤感正顺——' + (window.formatShichen ? window.formatShichen(CRAFT_BUFF_MINUTES) : CRAFT_BUFF_MINUTES + '分钟') + '内锻造成功率见长。'
+            : '・⚗️ 丹炉养好了火——' + (window.formatShichen ? window.formatShichen(CRAFT_BUFF_MINUTES) : CRAFT_BUFF_MINUTES + '分钟') + '内炼丹成功率见长。';
         resultMsgs.push(fireText);
         if (!quiet && window.showMessage) window.showMessage(fireText, 'info');
     }
@@ -1411,7 +1420,7 @@ window.sectLibBrowse = function (artId) {
     var ins = libInsights();
     if (!ins[artId]) ins[artId] = { heard: true, m: 0, lastDay: 0 }; // v15.7 修复：翻阅不占参悟日——lastDay 置 0 使当日即可首参
     else { ins[artId].heard = true; }
-    try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '藏经阁翻阅'); } catch (e) {}
+    try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '藏经阁翻阅'); } catch (e) { console.warn('[静默失败] js/sects/sect-facilities.js:1423 · 阁中翻阅时辰：在藏经阁翻功法的时辰本该走掉，这里没接住，玩家会察觉时间没扣', e && e && e.message); }
     if (window.showMessage) window.showMessage('你翻阅了《' + art.name + '》——' + (art.desc || '') + '（可在阁中参悟以提升掌握度）', 'info');
     if (typeof window.growLifeSkill === 'function') window.growLifeSkill('学识', 1, { reason: '阁中读书' }); // v20.94 熟能生巧
     window.openSectLibraryPanel();
@@ -1462,7 +1471,7 @@ window.sectLibStudy = function (artId) {
     var before = m;
     rec.m = Math.min(100, Math.round((m + gain) * 10) / 10);
     rec.lastDay = today;
-    try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(t.studyMinutes, '藏经阁参悟'); } catch (e) {}
+    try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(t.studyMinutes, '藏经阁参悟'); } catch (e) { console.warn('[静默失败] js/sects/sect-facilities.js:1474 · 阁中参悟时辰：在藏经阁参悟功法的时辰本该走掉，这里没接住，玩家会察觉时间没扣', e && e && e.message); }
     var msg = '参悟《' + art.name + '》：掌握度 ' + before + '% → ' + rec.m + '%（本次+' + gain + (blessed ? '，师父指点翻倍' : '') + (halved ? '，神识不足进度减半' : '') + '）';
     if (typeof window.growLifeSkill === 'function') window.growLifeSkill('学识', 1, { reason: '阁中参悟' }); // v20.94 熟能生巧
     if (before < 100 && rec.m >= 100) msg += ' 🎉 功法大成！威力全额发挥';
@@ -1481,7 +1490,9 @@ window.sectLibCopy = function (artId) {
     var price = art.copyPrice || LIB_TIER_COPYPRICE[t.tier];
     if ((ds.contribution || 0) < price) { if (window.showMessage) window.showMessage('门派贡献不足（需' + price + '，当前' + (ds.contribution || 0) + '）', 'error'); return; }
     if (typeof window.addItem !== 'function') { if (window.showMessage) window.showMessage('背包系统未就绪', 'error'); return; }
-    if (!window.addItem(artId, 1)) { if (window.showMessage) window.showMessage('背包装不下抄本了', 'error'); return; }
+    // DES-90（第一百三十九批）：这一档问不到原因账，站点不许自己断言「背包装不下」。
+    // 贡献在下一行才扣，所以这一句可以照实说「原样不动」——只讲事实，不讲原因。
+    if (!window.addItem(artId, 1)) { if (window.showMessage) window.showMessage('抄本没能领到，贡献原样不动。', 'error'); return; }
     ds.contribution -= price;
     if (typeof window.saveSectData === 'function') window.saveSectData();
     if (window.showMessage) window.showMessage('花' + price + '贡献请出《' + art.name + '》抄本一册（研读可助参悟，威能仍看掌握度）', 'success');
@@ -1515,9 +1526,10 @@ window.sectLibRequestTransmit = function (artId) {
     var ins = libInsights();
     if (ins && !ins[artId]) ins[artId] = { heard: true, m: 0, lastDay: 0 };   // 亲传即「已阅」——口授心传，回来即可参悟
     if (leader && typeof leader.changeAffection === 'function') { try { leader.changeAffection(3); } catch (e) {} }
-    try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(240, '掌门亲传'); } catch (e) {}
+    var mins = 240;   // 真账那一笔：祖师堂前口授推出去的分钟数——受礼的时长回执由它生成，别再往上翻倍
+    try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(mins, '掌门亲传'); } catch (e) { console.warn('[静默失败] js/sects/sect-facilities.js:1530 · 亲传时辰：祖师堂前口授的时辰本该走掉，这里没接住，玩家会察觉时间没扣', e && e && e.message); }
     if (typeof window.saveSectData === 'function') window.saveSectData();
-    if (window.showMessage) window.showMessage('📜 ' + ((leader && leader.name) || '掌门') + '屏退左右，于祖师堂前口授《' + art.name + '》要诀——四个时辰，一字不落。「阁中无册，册在你心里。传你，是信你。」（贡献-' + price + '，掌门好感+3）', 'success');
+    if (window.showMessage) window.showMessage('📜 ' + ((leader && leader.name) || '掌门') + '屏退左右，于祖师堂前口授《' + art.name + '》要诀——' + (window.formatShichen ? window.formatShichen(mins) : mins + '分钟') + '，一字不落。「阁中无册，册在你心里。传你，是信你。」（贡献-' + price + '，掌门好感+3）', 'success');
     if (window.gameLog && window.gameLog.add) window.gameLog.add('掌门亲传《' + art.name + '》——镇派神功自此有你的份。', 'success');
     window.openSectLibraryPanel();
 };

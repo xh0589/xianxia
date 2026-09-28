@@ -47,7 +47,7 @@ W.timeSystem = {
 W.gameLog = { add: function (t) { state.logs.push(String(t)); } };
 W.showMessage = function (t) { state.msgs.push(String(t)); };
 W.showModal = function (title, body) { state.modal = { title: title, body: body }; };
-W.addItem = function () { return true; };
+W.addItem = function (id, n) { return n || 1; };   // 桩：回实收件数
 W.saveSectData = function () { state.saved = (state.saved || 0) + 1; };
 W.sectsData = {};
 W.discipleState = { isInSect: true, sectId: '丐帮', rank: 2, rankName: '长老', contribution: 5000, artInsights: {} };

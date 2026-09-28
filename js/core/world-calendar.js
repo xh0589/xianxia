@@ -25,7 +25,8 @@
         'auction',            // 拍卖（坊市日/皇家）
         'sect_event',         // 宗门事件
         'world_event',        // 世界事件（5 类）
-        'dungeon_window',     // 秘境窗口（v18.8 §5 P1-6 留口）
+        'dungeon_window',     // 秘境窗口（v18.8 §5 P1-6 留口；v24 起由 dungeon-dynamic 登记关窗日）
+        'festival',           // 节日常历（v24·DES-26：上元/七夕/中秋/除夕，一年四场定日子）
         'npc_appointment',    // NPC 约定（掌门召见/道侣约会/拜师仪式）
         'tribulation',        // 天劫准备期
         'sect_tournament',    // 宗门大比/小比（P0-4 留口）

@@ -54,6 +54,13 @@ global.localStorage = {
     key: function (i) { return Object.keys(store)[i] || null; },
     get length() { return Object.keys(store).length; }
 };
+    // 【第一百四十四批】本沙箱自建 localStorage、未加载 global-utils.js ⇒ window.saveToStorage 缺席。
+    // 生产码各存档键已统一接到那个 owner，这里补一个同形的桩：**转手调本沙箱自己的 setItem**，
+    // 以免本套里「桩的 setItem 有没有被调到」这类探针失真。
+    global.saveToStorage = function (k, v) {
+        try { global.localStorage.setItem(k, v); return true; } catch (e) { return false; }
+    };
+
 var ABS_DAY = 1;
 global.timeSystem = {
     gameTime: { totalMinutes: 600 },
@@ -130,7 +137,11 @@ var appSrc = src('js/app.js');
 var herbSeg = appSrc.slice(appSrc.indexOf('let _herbNoRoom'), appSrc.indexOf('采集完成：一无所获'));
 assert(herbSeg.indexOf('window.addItem(r.item, count)') >= 0, 'B1 采药走正式入袋 API');
 assert(herbSeg.indexOf('inventory.slots[i] = {') < 0 && herbSeg.indexOf('slot.count += count') < 0, 'B2 直写裸格子的老路连根拔掉');
-assert(herbSeg.indexOf('行囊塞不下') >= 0, 'B3 装不下如实报（不再谎称全部采到手）');
+// B3（第一百三十八批跟着改口径，只升不降）：缘由由**这一件自己的账**说话，且吃句尾不带圆点的从句支
+assert(herbSeg.indexOf('没能落进你的行囊') >= 0 && herbSeg.indexOf('addItemFailPhraseFor') >= 0, 'B3 装不下如实报（不再谎称全部采到手；缘由问从句说话手）');
+assert(/_herbNoRoom\.push\(\{[^\n]*账:/.test(herbSeg) && herbSeg.indexOf('window.addItemFailReason') >= 0, 'B3b 账在入袋当场抄下来跟着这件走（出循环再读全局那一条，早被别人的发货刷空了）');
+var 草药代码 = herbSeg.split('\n').map(function (l) { var i = l.indexOf('//'); return i >= 0 ? l.slice(0, i) : l; }).join('\n');
+assert(草药代码.indexOf('行囊已满') < 0, 'B3c 采药这一屏自己不许念「行囊已满」——那是说话手的话，得有账才敢念（比的是代码，注释里那句是旧错话的引文）');
 var invSrc = src('js/inventory.js');
 assert(invSrc.indexOf('function _slotTemplate(slot)') >= 0, 'B4 渲染链有模板守卫（裸格子回查模板库，不再抛错白屏）');
 assert(invSrc.indexOf('if (slotData.uid) instance.uid = slotData.uid;') >= 0, 'B5 读档 uid 条件覆盖（裸格子不再把新 uid 覆盖回 undefined）');
@@ -231,7 +242,7 @@ var bbSeg = esSrc.slice(esSrc.indexOf('// 扣钱（P1-10'), esSrc.indexOf('// �
 assert((bbSeg.match(/currentCharData/g) || []).length >= 2, 'F4 回购扣款灵石/铜钱两线都双写');
 var wanderSeg = appSrc.slice(appSrc.indexOf('function buyWanderItem'), appSrc.indexOf('function buyWanderItem') + 2200);
 assert(wanderSeg.indexOf('dm.deductSpiritStones(price)') >= 0, 'F5 游商扣款走统一双写口（不再二选一）');
-assert(wanderSeg.indexOf('行囊塞不下这件货') >= 0 && wanderSeg.indexOf('dm.addSpiritStones(price)') >= 0, 'F6 游商满包退钱（不再白收灵石塞裸格子）');
+assert(wanderSeg.indexOf('addItemFailText') >= 0 && wanderSeg.indexOf('dm.addSpiritStones(price)') >= 0, 'F6 游商满包退钱（不再白收灵石塞裸格子；货没落袋的缘由问原因账）');
 
 // ==================== G · 医馆/客栈/药铺 ====================
 console.log('\n[G] 医馆先诊后收钱，客栈牌面说实话，药铺不卖死货');

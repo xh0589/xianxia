@@ -453,9 +453,10 @@
             try {
                 if (!window.currentCharData || !window.npcManager) return;
                 var loc = window.currentCharData.location || ''; // P0-2规范字段（v13.5审查修正：currentLocation从未被赋值）
+                var B2locKey = String(loc).replace(/\s+/g, '');   // DES-57：城名两串写法（舆图带空格／NPC 账不带），认账前去空白
                 B2_NPC_IDS.forEach(function (nid) {
                     var npc = window.npcManager.getNPC(nid);
-                    if (npc && npc.location === loc) {
+                    if (npc && String(npc.location || '').replace(/\s+/g, '') === B2locKey) {
                         window.maybeAutoTriggerPersonalEvent(nid, 'daily', { finalEvents: [B2_FINAL_EVENTS[nid]] });
                     }
                 });

@@ -19,6 +19,7 @@
     <link rel="stylesheet" href="styles/panel-equipment.css">
     <link rel="stylesheet" href="styles/panel-house.css">
     <link rel="stylesheet" href="styles/panel-mail.css">
+    <link rel="stylesheet" href="styles/panel-shop.css">
     <link rel="stylesheet" href="styles/ui-craft.css">
     <style>
     /* v20.1 移动端适配：触屏友好 + 窄屏弹窗适配 */
@@ -190,8 +191,13 @@
         </div>
     </div>
 
+    <!-- v24·DES-28 落档状态位：● 未存档 / ✓ 已落档。文案与配色由 continue-save.js 整串覆写 className，
+         故此处不挂工具类；定位见 styles/ui-tokens.css 的 #continue-save-state（常驻右上角，不随面板切换消失） -->
+    <p id="continue-save-state"></p>
+
     <!-- ==================== 游戏世界界面 ==================== -->
-    <div id="game-world" class="max-w-7xl mx-auto h-[calc(100vh-2rem)] flex bg-gray-800 rounded-xl shadow-2xl border border-gray-700 overflow-hidden">
+    <!-- 宽度封顶在 styles/ui-craft.css 第 0 节（UI-18），此处不再挂 max-w-* -->
+    <div id="game-world" class="mx-auto h-[calc(100vh-2rem)] flex bg-gray-800 rounded-xl shadow-2xl border border-gray-700 overflow-hidden">
         <!-- 左侧导航栏 -->
         <div class="w-48 flex-shrink-0 bg-gray-900 border-r border-gray-700 flex flex-col">
             <div class="px-4 py-5 border-b border-gray-700 text-center">
@@ -242,11 +248,6 @@
                     <span class="text-lg mr-3">⚙️</span>设置
                 </div>
             </nav>
-            <div class="px-4 py-3 border-t border-gray-700">
-                <button onclick="backToCreation()" class="w-full text-sm text-gray-500 hover:text-yellow-500 transition py-2">
-                    ↩ 返回创建
-                </button>
-            </div>
         </div>
 
         <!-- 主内容区域 -->
@@ -431,8 +432,9 @@
                         <!-- 右侧：部位耐久列表 -->
                         <div class="flex-1">
                             <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
-                                <h3 class="text-yellow-500 font-bold mb-4 border-b border-gray-600 pb-2">🩻 躯体耐久</h3>
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-3" id="body-durability-list">
+                                <h3 class="text-yellow-500 font-bold mb-1 border-b border-gray-600 pb-2">🩻 躯体耐久</h3>
+                                <p class="text-xs text-gray-500 mb-3">部位 · 职司 → 受损影响</p>
+                                <div id="body-durability-list">
                                     <!-- 动态生成 -->
                                 </div>
                             </div>
@@ -657,7 +659,7 @@
                 <!-- 战斗日志 -->
                 <div>
                     <h3 class="text-lg font-bold text-purple-400 mb-2">战斗日志</h3>
-                    <div id="party-battle-log" class="max-h-40 overflow-y-auto bg-gray-800 p-2 rounded text-sm text-gray-300">
+                    <div id="party-battle-log" class="max-h-[28vh] overflow-y-auto bg-gray-800 p-2 rounded text-sm text-gray-300">
                     </div>
                 </div>
             </div>
@@ -671,7 +673,14 @@
                 
                 <div class="flex gap-4 flex-col lg:flex-row">
                     <!-- 左侧：地区/门派列表 -->
-                    <div class="lg:w-64 flex-shrink-0">
+                    <!-- 第九十六波·UI-09：这一栏从 w-64(256) 放到 19rem(304)。放的理由是量出来的，不是审美——
+                         可用宽 = 栏宽 − 扣项 91（卡内边距 26 ＋ 州界 px-3 24 ＋ 缩进 ml-3 12 ＋ 行内 px-2 16 ＋ 列表滚动条 13）。
+                         旧栏 256 → 可用只有 165（实机逐行量到，`.scratch/cc-width.out`），而城市行加了「介绍／前往」两枚明写标签后
+                         名字只剩 165−95＝70px，23 条里 11 条被劈成两行（断字病 UI-22/UI-24 同族）。
+                         新栏 304 → 可用 213，名字上限抬到 118：22 条回到单行，只剩「灵界·九天罡风带」(127) 那一行仍超——
+                         它按摆法整组钮折到第二行（折在名字与动作之间，名字内部永不劈），不是把它塞进一格里硬挤。
+                         栏宽与字号同为 rem，放大档等比涨，故这一档一次定死即可。 -->
+                    <div class="lg:w-[19rem] flex-shrink-0">
                         <div class="bg-gray-700/30 rounded-lg border border-gray-600 p-3">
                             <div class="flex items-center gap-2 mb-3 border-b border-gray-600 pb-2">
                                 <h3 class="text-sm font-bold text-yellow-500 flex-1" id="list-title">📍 地区列表</h3>
@@ -1107,7 +1116,7 @@
                             <div class="flex-1">
                                 <div class="bg-gray-700/20 rounded-lg border border-gray-600 p-3 overflow-x-auto">
                                     <svg id="random-map-svg" viewBox="0 0 640 360" class="w-full" style="min-height:360px;"></svg>
-                                    <div class="mt-3 text-xs text-gray-500" id="random-map-info">左键点远处地块 → 规划路线出发 · 右键看脚下细节 · 走过的路会记在心里 · 兽群商队也在赶路，撞上了当场了断</div>
+                                    <div class="mt-3 text-xs text-gray-500" id="random-map-info">左键点远处地块 → 规划路线出发 · 右键看脚下细节 · 走过的路会记在心里 · 兽群商队也在赶路，撞上了当场了断 · 云雾纹那一片还没踏足，走近了才看得清</div>
                                 </div>
                             </div>
                             <!-- 右：小地图 / 脚下 / 地标 -->
@@ -1359,6 +1368,12 @@
                         <p class="text-xs text-gray-600 mb-2" id="last-auto-save-time">上次自动保存: 尚无存档</p>
                         <div id="auto-save-slots" class="space-y-2"></div>
                     </div>
+                    <!-- UI-19③：这一枚原先常驻左栏导航底下，白占一格还把「设置」挤出矮窗首屏 -->
+                    <div class="border-t border-gray-600 pt-4 mt-4">
+                        <h4 class="text-sm font-bold text-gray-300 mb-2">↩ 返回登仙大典</h4>
+                        <button onclick="backToCreation()" class="text-xs px-3 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600">回到角色录入页</button>
+                        <p class="text-xs text-gray-600 mt-1">按下这一枚不替你落档。想回到此刻这一局，用录入页页头的「↩ 继续仙途」——它读的是最近落下的那一份。</p>
+                    </div>
                 </div>
 
                 <div class="bg-gray-700/30 p-6 rounded-lg border border-gray-600">
@@ -1426,6 +1441,7 @@
                                 <input type="checkbox" id="auto-save" checked onchange="toggleAutoSave(this.checked)" class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-600">
                             </label>
                             <p class="text-xs text-gray-600 mt-1">突破、飞升、转世时另有保底存档，不受此开关影响</p>
+                            <p class="text-xs text-gray-600 mt-1">世界时间每过一个时辰另有续档快照，只供标题页「继续仙途」回到最近一刻，不占存档槽、也不代替手动档</p>
                             <p class="text-xs text-gray-600 mt-1" id="last-save-time">上次保存: 尚无存档</p>
                         </div>
                         <!-- v20.3 难度设置（战斗难度 + 感情维系衰减） -->
@@ -1510,17 +1526,17 @@
                     <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
                         <h3 class="text-lg font-bold text-amber-400 mb-3">📜 布告委托</h3>
                         <p class="text-xs text-gray-500 mb-2">城里贴出来的活计，赏钱现结。</p>
-                        <div id="random-quest-list" class="space-y-2 max-h-72 overflow-y-auto"></div>
+                        <div id="random-quest-list" class="space-y-2"></div>
                     </div>
                 </div>
                 <div class="mt-6 bg-gray-700/30 p-4 rounded-lg border border-gray-600">
                     <h3 class="text-lg font-bold text-pink-400 mb-3">💬 故人心事</h3>
                     <p class="text-xs text-gray-500 mb-2">交情到了，才有人肯把心事托给你。</p>
-                    <div id="npc-quest-list" class="space-y-2 max-h-72 overflow-y-auto"></div>
+                    <div id="npc-quest-list" class="space-y-2"></div>
                 </div>
                 <div class="mt-6 bg-gray-700/30 p-4 rounded-lg border border-gray-600">
                     <h3 class="text-lg font-bold text-purple-400 mb-3">✅ 已完成任务</h3>
-                    <div id="completed-quest-list" class="space-y-1 max-h-48 overflow-y-auto"></div>
+                    <div id="completed-quest-list" class="space-y-2"></div>
                 </div>
             </div>
 
@@ -1533,7 +1549,8 @@
                 <div class="mt-6 bg-gray-700/30 p-4 rounded-lg border border-gray-600">
                     <h3 class="text-lg font-bold text-red-400 mb-3">⚔️ 当前冲突</h3>
                     <div id="active-conflicts" class="space-y-2">
-                        <p class="text-gray-500 text-sm">暂无冲突</p>
+                        <!-- 由 js/app.js renderFactionConflicts 产出：有仗就列两家的名号，没仗就给一张「为什么是空的」引导卡。
+                             此处此前写死一句「暂无冲突」且全仓零写方——真打起来的仗也永远显示「暂无」。 -->
                     </div>
                 </div>
             </div>
@@ -1617,12 +1634,10 @@
                 <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
                         <h3 class="text-lg font-bold text-cyan-400 mb-3">🌊 修炼与探索</h3>
-                        <p class="text-sm text-gray-400 mb-3">引导灵气、强化、隐藏商店、山贼巢穴。</p>
+                        <p class="text-sm text-gray-400 mb-3">引导灵气、强化、专属任务。（隐藏商店要看城中声望，走城市里的黑市）</p>
                         <div class="flex flex-wrap gap-2">
                             <button onclick="if(window.openGuideQiMiniGame)openGuideQiMiniGame();else if(window.guideQiCultivation)guideQiCultivation();" class="bg-cyan-700 hover:bg-cyan-600 text-white px-3 py-2 rounded text-sm">🌊 引导灵气</button>
                             <button onclick="if(window.openEnhancementHall)openEnhancementHall();else if(window.openForgingShop)openForgingShop();" class="bg-orange-700 hover:bg-orange-600 text-white px-3 py-2 rounded text-sm">⚒️ 铁匠强化</button>
-                            <button onclick="if(window.openBanditDen)openBanditDen();else if(window.showMessage)showMessage('尚未发现巢穴','info');" class="bg-red-800 hover:bg-red-700 text-white px-3 py-2 rounded text-sm">🏴 黑风寨</button>
-                            <button onclick="if(window.openHiddenShop)openHiddenShop();" class="bg-purple-700 hover:bg-purple-600 text-white px-3 py-2 rounded text-sm">🏪 隐藏商店</button>
                             <button onclick="if(window.openSpecialQuests)openSpecialQuests();" class="bg-blue-700 hover:bg-blue-600 text-white px-3 py-2 rounded text-sm">📋 专属任务</button>
                         </div>
                         <p id="lifespan-display" class="text-xs text-gray-500 mt-3">⌛ 寿元</p>
@@ -1655,20 +1670,22 @@
     </div>
 
     <div id="battle-modal" class="fixed inset-0 flex items-center justify-center bg-black/70 z-50 hidden">
-        <div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-3xl w-full max-h-[90vh] overflow-y-auto mx-4">
+        <div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-3xl w-full max-h-[90vh] overflow-hidden mx-4 flex flex-col">
+            <!-- UI-20：读数一叠会滚，要按的那一叠钉在台面（滚区/钉区之分见 styles/ui-craft.css 第 11 节） -->
+            <div id="battle-readout">
             <h2 class="text-2xl font-bold text-yellow-500 mb-4">⚔️ 战斗</h2>
             <div id="battle-status" class="flex justify-between mb-4 gap-4">
                 <div id="battle-player-status" class="text-left flex-1 bg-gray-700/50 p-3 rounded">
                     <p class="text-white font-bold" id="battle-player-name">玩家</p>
                     <div class="flex items-center gap-2 mt-1">
-                        <span class="text-sm"><span class="text-green-400">耐久:</span> <span id="battle-player-hp">0/0</span></span>
+                        <span class="text-sm"><span class="text-green-400">要害:</span> <span id="battle-player-hp">0/0</span></span>
                         <button onclick="toggleBattleBodyView()" class="text-xs bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-2 py-0.5 rounded">👁️ 查看人体</button>
                     </div>
                 </div>
                 <div id="battle-enemy-status" class="text-right flex-1 bg-gray-700/50 p-3 rounded">
                     <p class="text-white font-bold" id="battle-enemy-name">敌人</p>
                     <div class="flex items-center gap-2 mt-1 justify-end">
-                        <span class="text-sm"><span class="text-red-400">耐久:</span> <span id="battle-enemy-hp">0/0</span></span>
+                        <span class="text-sm"><span class="text-red-400">要害:</span> <span id="battle-enemy-hp">0/0</span></span>
                         <button onclick="toggleEnemyBodyView()" class="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-0.5 rounded">👁️ 查看敌人</button>
                     </div>
                 </div>
@@ -1724,6 +1741,15 @@
                     </div>
                 </div>
             </div>
+            <!-- ===== 第一百四十二批 · DES-85 尾：护甲耐久状态区 =====
+                 这段容器**一直缺失**：js/app.js 的 _updateArmorUI()（:3565）完整实现了
+                 「头/身/手/腿/脚 ＋ 耐久百分比 ＋ 三色分档」的渲染，但它
+                 `document.getElementById('battle-armor-status')` 拿到的永远是 null，
+                 于是每次调用都在 `if (!container) return;` 处退出——
+                 **护甲耐久写了 22 行渲染代码，玩家一次都没见过。**
+                 数据侧是齐的（inventory.js 的 getArmorStatus，耐久上限 200），
+                 所以这是「本来就有、只是容器掉了」，不是新增功能。挂在伤情区旁边。 -->
+            <div id="battle-armor-status" class="mb-2 text-xs"></div>
             <!-- 队友状态栏（有队员时显示） -->
             <div id="battle-party-status" class="hidden mb-2">
                 <div class="text-xs text-gray-400 mb-1">👥 队伍成员</div>
@@ -1731,21 +1757,27 @@
                     <!-- 动态生成 -->
                 </div>
             </div>
-            <!-- 第九十四波 · 见招拆招：对面摆出姿态时的应对面板（时间轴停着等你挑，由 JS 动态填充） -->
-            <div id="battle-prompt-panel">
-            </div>
             <!-- 第九十二波 · 行动条面板：全员一条时间轴，攒满 100 出手（由 JS 动态填充） -->
             <div id="battle-timeline-bars" class="mb-2">
             </div>
-            <div id="battle-log" class="bg-gray-700/50 p-3 rounded h-32 overflow-y-auto text-sm text-gray-300 mb-2">
+            <div id="battle-log" class="bg-gray-700/50 p-3 rounded h-[22vh] min-h-[128px] overflow-y-auto text-sm text-gray-300 mb-2">
                 <!-- 战斗日志 -->
+            </div>
+            </div><!-- /#battle-readout -->
+            <div id="battle-foot">
+            <!-- 第九十四波 · 见招拆招：对面摆出姿态时的应对面板（UI-20：这一叠是要按的，钉在台面，不许留在滚区里） -->
+            <div id="battle-prompt-panel">
+            </div>
+            <!-- UI-10 · 待决回执条：敌人摆出姿态时说明「这一手先答完才轮到这里」（显隐见 styles/ui-craft.css 第 10 节） -->
+            <div id="battle-actions-hold-tip" class="text-xs text-yellow-500 mb-1">
+                ⏸ 先答这一手，其余待命——上面应对条里挑一条；「🩻 查看伤势」不费回合，随时可看。
             </div>
             <div id="battle-actions" class="flex flex-wrap gap-1 mb-2">
                 <!-- 部位选择按钮由JS动态生成 -->
             </div>
             <!-- ===== 机体扩展v8.0：医疗行动按钮 ===== -->
-            <div id="battle-medical-actions" class="hidden mb-2">
-                <div class="text-xs text-gray-400 mb-1">🩺 医疗行动（消耗1回合）：</div>
+<div id="battle-medical-actions" class="mb-2">
+<div class="text-xs text-gray-400 mb-1">🩺 医疗行动（消耗1回合）：</div>
                 <div class="flex flex-wrap gap-1 mb-2">
                     <button onclick="battleMedicalAction('bandage')" class="text-xs bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded" title="稳定度+40">🩹 包扎</button>
                     <button onclick="battleMedicalAction('hemostatic')" class="text-xs bg-purple-700 hover:bg-purple-600 text-white px-2 py-1 rounded" title="外出血减半，内出血停止">💊 止血药</button>
@@ -1753,7 +1785,8 @@
                     <button onclick="battleMedicalAction('willpower')" class="text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-2 py-1 rounded" title="疼痛-20">🧘 意志压制</button>
                 </div>
                 <!-- v4.2：使用背包中的医疗物品 -->
-                <div class="text-xs text-gray-400 mb-1">🎒 使用物品（消耗背包物品）：</div>
+                    <div class="text-xs text-gray-400 mb-1">🎒 使用物品（消耗背包物品）：</div>
+                    <div class="text-xs text-gray-500 mb-1">　护身符与增益符不占回合；爆裂符、定身符等进攻类符只在你自己的回合用得出来，用了那一回合就过去。</div>
                 <div id="battle-medical-items" class="flex flex-wrap gap-1">
                     <!-- 由JS动态生成 -->
                 </div>
@@ -1765,7 +1798,7 @@
             <!-- v4.2：伤口详情面板 -->
             <div id="battle-wound-panel" class="hidden mb-2 bg-gray-800/50 rounded p-2 text-xs border border-gray-600">
                 <div class="text-gray-400 font-bold mb-1">🩻 伤势详情</div>
-                <div id="battle-wound-content" class="max-h-40 overflow-y-auto">
+                <div id="battle-wound-content">
                     <!-- 由JS动态生成 -->
                 </div>
             </div>
@@ -1773,9 +1806,10 @@
                 <p class="text-xl font-bold" id="battle-result-text"></p>
                 <button onclick="closeBattle()" class="mt-2 bg-yellow-600 hover:bg-yellow-500 px-6 py-2 rounded text-gray-900 font-bold">继续</button>
             </div>
+            </div><!-- /#battle-foot -->
 
             <!-- ===== 人体查看覆盖层（默认隐藏） ===== -->
-            <div id="battle-body-view" class="hidden mt-4 border-t border-gray-600 pt-4" style="min-height:200px;">
+            <div id="battle-body-view" class="hidden mt-4 border-t border-gray-600 pt-4">
                 <div class="flex justify-between items-center mb-2">
                     <h4 class="text-yellow-500 font-bold" id="body-view-title">🧍 玩家躯体状态</h4>
                     <div class="flex gap-2">
@@ -1904,6 +1938,8 @@
     <!-- 第0层：全局工具函数（必须先于所有其他文件加载，解决跨文件依赖） -->
     <script defer src="js/core/error-guard.js"></script><!-- v20.87 全局异常兜底：最先加载，任何脚本报错都有提示不再静默 -->
     <script defer src="js/global-utils.js"></script>
+    <!-- UI-12：公共空态件（各面板的「为什么空＋下一步」引导卡），须在任何渲染面板的脚本之前 -->
+    <script defer src="js/core/empty-state.js"></script>
     <script defer src="js/core/balance-config.js"></script>
     <script defer src="js/core/state-registry.js"></script>
     <script defer src="js/core/panel-lifecycle.js"></script>
@@ -1992,6 +2028,7 @@
     <script defer src="js/core/world-calendar-ui.js"></script>
     <script defer src="js/core/dao-bridge.js"></script><!-- v20.24 道侣名册的桥：结契落笔/旧档补票/道侣相约（依赖 world-calendar.js） -->
     <script defer src="js/core/festival-bridge.js"></script><!-- v20.28 节日的帖：四节定点、每位道侣各一帖、一夜只陪一人（依赖 world-calendar/dao-bridge） -->
+    <script defer src="js/core/festival-calendar.js"></script><!-- v24·DES-26 节日常历：把四节登记进世界日历（依赖 world-calendar + festival-bridge 的 FESTIVAL_DEFS） -->
     <!-- v19.0 P0-3 批次 C：年度宗门目标 5 选 1（依赖 sects-system / sect-internal） -->
     <script defer src="js/sects/sect-year-goal.js"></script>
     <!-- v19.1 P0-4：宗门大比与同门竞争（依赖 sect-year-goal 的 addTournamentWin 钩） -->
@@ -2133,10 +2170,9 @@
     <script defer src="js/npcs/jealousy-assembly.js"></script>
     <script defer src="js/npcs/jealousy-collective.js"></script>
     <script defer src="js/relations-panel.js"></script>
-    <!-- 飞鸽传书系统 v12.0 -->
+    <!-- 飞鸽传书系统 v12.0（骨架样式在 styles/panel-mail.css，不再运行时注入） -->
     <script defer src="js/mail-system.js"></script>
     <script defer src="js/mail-system-ui.js"></script>
-    <script defer src="js/mail-system-styles.js"></script>
 
     <!-- 第9层：门派系统 -->
     <script defer src="js/sects/sects-system.js"></script>
@@ -2193,6 +2229,7 @@
     <script defer src="js/extensions/formation-system.js"></script>
     <script defer src="js/extensions/puppet-system.js"></script>
     <script defer src="js/extensions/dungeon-dynamic.js"></script>
+    <script defer src="js/map/special-places.js"></script><!-- 第一百一十一波 特殊地点册：黑风寨这类「得先打听才知道有没有」的地方改从舆图地区列表进出，不再挂活动页 -->
     <script defer src="js/extensions/resource-points.js"></script>
     <script defer src="js/extensions/market-dynamic.js"></script>
     <script defer src="js/extensions/beast-ecosystem.js"></script>
@@ -2258,6 +2295,7 @@
     <script defer src="js/sects/sect-doom.js"></script>
     <script defer src="js/world/solar-terms.js"></script>
     <script defer src="js/core/auto-save.js"></script>
+    <script defer src="js/core/continue-save.js"></script><!-- v24·DES-28 续档快照：世界一动就重写 xianxia_save，「继续仙途」不再要玩家先想起按保存 -->
     <script defer src="js/quest/main-storyline-arc.js"></script>
     <!-- v25.0：终局主线《灵气之尽》（推倒重写 · 旧 endgame-* 五模块已删；设计见 主线大纲·灵气之尽.md，文本见 详稿·第一批） -->
     <script defer src="js/quest/qi-world.js"></script>

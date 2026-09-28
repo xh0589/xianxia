@@ -32,9 +32,9 @@
     function internal(sect) { return (W.SECT_INTERNAL && W.SECT_INTERNAL[sect]) || null; }
     function mySect() { try { var d = W.discipleState; return d && d.isInSect ? (d.sectName || d.sectId) : null; } catch (e) { return null; } }
     function dip() { return W.SECT_DIPLOMACY_STATE || null; }
-    function save() { try { if (typeof W.saveSectDiplomacy === 'function') W.saveSectDiplomacy(); } catch (e) {} }
+    function save() { try { if (typeof W.saveSectDiplomacy === 'function') W.saveSectDiplomacy(); } catch (e) { console.warn('[静默失败] js/sects/sect-diplomacy-world.js:35 · 外交关系存档：结盟/仇怨/通商的账没存上，读档后两家关系打回原形，玩家的外交努力全白费', e && e.message); } }
     function chron(sect, text) {
-        try { if (W.SectGov && W.SectGov.chronicle) { W.SectGov.chronicle(sect, text); return; } } catch (e) {}
+        try { if (W.SectGov && W.SectGov.chronicle) { W.SectGov.chronicle(sect, text); return; } } catch (e) { console.warn('[静默失败] js/sects/sect-diplomacy-world.js:37 · 门派编年：山门被破/兴兵踏破这种大事没写进编年史，江湖上查无此事，玩家的血战白打', e && e.message); }
         var it = internal(sect);
         if (!it) return;
         if (!it.chronicle) it.chronicle = [];
@@ -254,7 +254,7 @@
         save();
         // 观战的人：亲眼看过，江湖上就有你的一席之地（名望/街谈/无主辎重）
         if (witnessed) {
-            try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 2); } catch (eF) {}
+            try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 2); } catch (eF) { console.warn('[静默失败] js/sects/sect-diplomacy-world.js:257 · 观战名望：亲眼看完这一仗的名望没加上，茶棚里那句「那就是你」成了空话', eF && eF.message); }
             street('茶棚里说那场山门大战，说得最细的是个亲眼看过的人——「我在对面山坡上站的，从头看到尾。」满棚的人都凑过去听。（那就是你：名望+2）');
             log('👁️ 你在对面山坡看完了这一仗：' + report[1] + '（名望+2——茶棚里的段子，从此有你一份）', 'success');
             if (Math.random() < 0.3) {
@@ -262,7 +262,7 @@
                 try {
                     if (W.XianXia && W.XianXia.DataManager && W.XianXia.DataManager.addSpiritStones) W.XianXia.DataManager.addSpiritStones(loot);
                     else if (W.inventory && W.inventory.currency) W.inventory.currency.spiritStones = (Number(W.inventory.currency.spiritStones) || 0) + loot;
-                } catch (eL) {}
+                } catch (eL) { console.warn('[静默失败] js/sects/sect-diplomacy-world.js:265 · 观战捡辎重：场边那批灵石没入账，日志却照报「捡了灵石X」，玩家以为拿到了', eL && eL.message); }
                 log('🎒 散场时，山道边的乱石堆里滚着几件没人认领的辎重——仗打完，死人堆里的东西没主了。你捡了灵石' + loot + '。（来路：战损折掉的那四成里，散落在外的无主之物）', 'info');
             }
         }
@@ -273,7 +273,7 @@
         if (!p) { if (typeof W.showMessage === 'function') W.showMessage('眼下山下没有点兵的。', 'info'); return false; }
         if (p.witnessed) { if (typeof W.showMessage === 'function') W.showMessage('你已经在对面山坡占了位置——等着开打就是。', 'info'); return false; }
         p.witnessed = true;
-        try { if (typeof W.advanceTime === 'function') W.advanceTime(120); } catch (e) {}
+        try { if (typeof W.advanceTime === 'function') W.advanceTime(120); } catch (e) { console.warn('[静默失败] js/sects/sect-diplomacy-world.js:276 · 观战赶路：赶到山坡的半日脚程没走掉，开打那天你人还在路上，全程看不成', e && e.message); }
         log('👁️ 你赶到「' + p.def + '」山门外的对面山坡——「' + p.atk + '」的营火就在山下，磨刀声顺着风飘上来。守山的弟子看见你，没拦：看热闹的人，两边都不杀。（耗半日脚程；开打那天，你会看到全程）', 'warning');
         return true;
     };
@@ -357,7 +357,7 @@
         }
         var ws = wars().slice().reverse();
         html += '<p class="text-xs font-bold text-amber-200 mb-1">🔥 近来战事</p>';
-        html += '<div class="bg-gray-900/60 rounded p-2 mb-2 max-h-36 overflow-y-auto">' + (ws.length ? ws.map(function (w, wi) {
+        html += '<div class="bg-gray-900/60 rounded p-2 mb-2">' + (ws.length ? ws.map(function (w, wi) {
             var head = w.rescue
                 ? '「' + w.winner + '」出兵相援「' + w.rescue + '」·击退「' + w.loser + '」' + (w.winner === w.atk ? '' : '（援军失利，围未解）')
                 : '「' + w.winner + '」踏破「' + w.loser + '」山门' + (w.winner === w.atk ? '' : '（守方反杀）');

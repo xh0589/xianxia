@@ -190,17 +190,23 @@ function _gatherHerbs(res) {
     var luck = 1 + (res.output || 10) / 30; // output 20 → luck≈1.67
     var count = 1 + (Math.random() < 0.35 ? 1 : 0); // 多数1株，少数2株
     var gained = {};
+    var 没带走 = 0, 药账 = [];
     for (var k = 0; k < count; k++) {
         var hid = _rollFromPool(_HERB_POOL, luck);
-        gained[hid] = (gained[hid] || 0) + 1;
-        if (typeof window.addItem === 'function') window.addItem(hid, 1);
+        // DES-72 同族：addItem 报的是行囊实收数，旧写法把掷中的株数当成进囊的株数念
+        var got = typeof window.addItem === 'function' ? (Number(window.addItem(hid, 1)) || 0) : 1;
+        if (got <= 0) { 没带走++; 药账.push(typeof window.addItem === 'function' ? (window.addItemFailReason || null) : null); continue; }
+        gained[hid] = (gained[hid] || 0) + got;
     }
     var names = [];
     for (var gid in gained) {
         var nm = (window.itemById && window.itemById[gid]) ? window.itemById[gid].name : gid;
         names.push(nm + '×' + gained[gid]);
     }
-    if (window.showMessage) window.showMessage('你在【' + (res.name || '药圃') + '】采得：' + names.join('、') + '。', 'success');
+    if (window.showMessage) window.showMessage(names.length
+        ? '你在【' + (res.name || '药圃') + '】采得：' + names.join('、') + '。' + (没带走 > 0 ? '另 ' + 没带走 + ' 株：' + ((typeof window.addItemFailPhraseFor === 'function' && (window.addItemFailPhraseFor(药账, '这一园的药草') || '没能落进你的行囊')) || '没能带走') + '。' : '')
+        // DES-90（第一百三十九批）：账上没落笔时不许猜缘由、不许把内部名漏给玩家（药圃属门派设施，与同函数半包支同用④形，从句支不带句号）
+        : '你在【' + (res.name || '药圃') + '】采了一趟，一株也没能带走：' + ((typeof window.addItemFailPhraseFor === 'function' && (window.addItemFailPhraseFor(药账, (window.itemById && window.itemById[hid] ? window.itemById[hid].name : hid)) || '没能落进你的行囊')) || '这一件仍留在库里'), names.length ? 'success' : 'warning');
     if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
     return true;
 }
@@ -218,17 +224,23 @@ function _gatherOre(res) {
     var luck = 1 + (res.output || 10) / 25;
     var count = 1 + (Math.random() < 0.3 ? 1 : 0);
     var gained = {};
+    var 没带走 = 0, 矿账 = [];
     for (var k = 0; k < count; k++) {
         var oid = _rollFromPool(_ORE_POOL, luck);
-        gained[oid] = (gained[oid] || 0) + 1;
-        if (typeof window.addItem === 'function') window.addItem(oid, 1);
+        // DES-72 同族：addItem 报的是行囊实收数
+        var got = typeof window.addItem === 'function' ? (Number(window.addItem(oid, 1)) || 0) : 1;
+        if (got <= 0) { 没带走++; 矿账.push(typeof window.addItem === 'function' ? (window.addItemFailReason || null) : null); continue; }
+        gained[oid] = (gained[oid] || 0) + got;
     }
     var names = [];
     for (var gid in gained) {
         var nm = (window.itemById && window.itemById[gid]) ? window.itemById[gid].name : gid;
         names.push(nm + '×' + gained[gid]);
     }
-    if (window.showMessage) window.showMessage('你在【' + (res.name || '矿脉') + '】采得：' + names.join('、') + '。', 'success');
+    if (window.showMessage) window.showMessage(names.length
+        ? '你在【' + (res.name || '矿脉') + '】采得：' + names.join('、') + '。' + (没带走 > 0 ? '另 ' + 没带走 + ' 块：' + ((typeof window.addItemFailPhraseFor === 'function' && (window.addItemFailPhraseFor(矿账, '这一趟的矿') || '没能落进你的行囊')) || '没能带走') + '。' : '')
+        // DES-90（第一百三十九批）：账上没落笔时不许猜缘由、不许把内部名漏给玩家（矿脉属门派设施，与同函数半包支同用④形，从句支不带句号）
+        : '你在【' + (res.name || '矿脉') + '】凿了一趟，一块也没能带走：' + ((typeof window.addItemFailPhraseFor === 'function' && (window.addItemFailPhraseFor(矿账, (window.itemById && window.itemById[oid] ? window.itemById[oid].name : oid)) || '没能落进你的行囊')) || '这一件仍留在库里'), names.length ? 'success' : 'warning');
     if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
     return true;
 }
@@ -260,9 +272,10 @@ function _spendStones(n) {
 // ---- 静室（personal）：闭门静坐养真气，约束是时辰 ----
 function _restInChamber(res) {
     var cd = window.currentCharData;
+    var mins = 120;   // 真账那一笔：静室小坐推出去的分钟数——回执的时长由它生成，改数即改口，文案不再自说自话
     cd.qi = Math.min(Number(cd.maxQi) || 100, (cd.qi || 0) + 25);
-    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(120, '静室小坐');
-    if (window.showMessage) window.showMessage('你在【' + (res.name || '静室') + '】掩上门坐了两个时辰，真气缓缓回涨（+25）。', 'success');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(mins, '静室小坐');
+    if (window.showMessage) window.showMessage('你在【' + (res.name || '静室') + '】掩上门坐了' + (window.formatShichen ? window.formatShichen(mins) : mins + '分钟') + '，真气缓缓回涨（+25）。', 'success');
     if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
     return true;
 }
@@ -279,9 +292,10 @@ function _withDaoCompanion(res) {
         return false;
     }
     var cd = window.currentCharData;
+    var mins = 60;   // 真账那一笔：陪道侣坐出去的分钟数，回执的时长由它生成
     cd.tempering = (cd.tempering || 0) + 8;
-    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '陪伴道侣');
-    if (window.showMessage) window.showMessage('你买了灵果点心，与道侣在【' + (res.name || '景致处') + '】坐了一个时辰。心平气和，历练+8。', 'success');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(mins, '陪伴道侣');
+    if (window.showMessage) window.showMessage('你买了灵果点心，与道侣在【' + (res.name || '景致处') + '】坐了' + (window.formatShichen ? window.formatShichen(mins) : mins + '分钟') + '。心平气和，历练+8。', 'success');
     if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
     return true;
 }
@@ -309,8 +323,9 @@ function _drillMilitary(res) {
     cd.energy -= 20;
     if (window.discipleState) { window.discipleState.contribution = (window.discipleState.contribution || 0) + 15; try { window.sectLedgerNote && window.sectLedgerNote(15, '武备处操练'); } catch (e) {} }
     cd.tempering = (cd.tempering || 0) + 5;
-    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(120, '操练');
-    if (window.showMessage) window.showMessage('你在【' + (res.name || '武备处') + '】卖力操练了半个时辰，执事记了贡献+15，手上也有了准头（历练+5）。', 'success');
+    var mins = 120;   // 真账那一笔：操练推出去的分钟数，回执的时长由它生成
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(mins, '操练');
+    if (window.showMessage) window.showMessage('你在【' + (res.name || '武备处') + '】卖力操练了' + (window.formatShichen ? window.formatShichen(mins) : mins + '分钟') + '，执事记了贡献+15，手上也有了准头（历练+5）。', 'success');
     if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
     return true;
 }
@@ -347,8 +362,12 @@ function _studyFormation(res) {
     }
     cd.qi -= 20;
     cd.tempering = (cd.tempering || 0) + 10;
-    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(90, '参悟阵图');
-    if (window.showMessage) window.showMessage('你在【' + (res.name || '阵法平台') + '】对着阵图坐了三个时辰，气路理清了几条，历练+10。', 'success');
+    var mins = 90;   // 真账那一笔：观图入定推出去的分钟数
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(mins, '参悟阵图');
+    // 这一处刻意不调 formatShichen：那把尺对非整除的数会回落成现代单位（念出来就是「坐了XX分钟」），
+    // 泡在气氛句里刺眼；改口「大半个时辰」——说的是比半个时辰多、比一个时辰少，只小不大，与真账同一笔。
+    // 改上面那枚数时记得回来看这一句（[CS] 段拿真账对质过它）。
+    if (window.showMessage) window.showMessage('你在【' + (res.name || '阵法平台') + '】对着阵图坐了大半个时辰，气路理清了几条，历练+10。', 'success');
     if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
     return true;
 }
@@ -378,9 +397,12 @@ function _exploreArea(res) {
         // 材料（灵药或矿石随机）
         var pool = Math.random() < 0.5 ? _HERB_POOL : _ORE_POOL;
         var id = _rollFromPool(pool, 1.2);
-        if (typeof window.addItem === 'function') window.addItem(id, 1);
+        // DES-72 同族：addItem 报的是行囊实收数，旧写法闭眼念「×1」
+        var got = typeof window.addItem === 'function' ? (Number(window.addItem(id, 1)) || 0) : 1;
         var nm = (window.itemById && window.itemById[id]) ? window.itemById[id].name : id;
-        if (window.showMessage) window.showMessage('你在【' + (res.name || '秘境') + '】探索，拾得：' + nm + '×1。', 'success');
+        if (window.showMessage) window.showMessage(got > 0
+            ? '你在【' + (res.name || '秘境') + '】探索，拾得：' + nm + '×' + got + '。'
+            : '你在【' + (res.name || '秘境') + '】探索，拾得' + nm + '——没能带走：' + ((typeof window.addItemFailText === 'function' && window.addItemFailText(nm)) || '这一件先还留在原处。'), got > 0 ? 'success' : 'warning');
     } else if (roll < 0.75) {
         // 灵石
         var ss = 3 + Math.floor(Math.random() * 5);

@@ -37,9 +37,13 @@
                 if (!loc) return;
                 if (document.querySelector && document.querySelector('.personal-event-modal')) return;
                 var cands = [];
+                // DES-57：城名两串写法（舆图「帝都 · 长安」／事件表「帝都·长安」），认账前去空白
+                var placeKeyOf = function (s) { return String(s || '').replace(/\s+/g, ''); };
+                var locKey = placeKeyOf(loc);
                 Object.keys(D.events).forEach(function (eid) {
                     var ev = D.events[eid];
-                    if (!ev || !ev.autoTrigger || ev.autoTrigger.location !== loc) return;
+                    if (!ev || !ev.autoTrigger) return;
+                    if (placeKeyOf(ev.autoTrigger.location) !== locKey) return;
                     if (typeof window.hasEventTriggered === 'function' && window.hasEventTriggered(eid)) return;
                     var npc = window.npcManager.getNPC ? window.npcManager.getNPC(ev.npcId) : null;
                     if (!npc) return;

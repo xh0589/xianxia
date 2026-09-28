@@ -53,6 +53,45 @@
         }
     } catch (e) {}
 
+    function _收阵石() {
+        if (typeof W.giveWithReceipt === 'function') return W.giveWithReceipt(HALF_STONE.id, 1, { quiet: true });
+        if (typeof W.addItem !== 'function') return { got: 1, count: 1, name: HALF_STONE.name };
+        var 得 = 0;
+        try { 得 = Number(W.addItem(HALF_STONE.id, 1)) || 0; } catch (e) {}
+        return { got: 得, count: 1, name: HALF_STONE.name };
+    }
+    function _石在册() {
+        try { if (typeof W._countInventoryItem === 'function') return W._countInventoryItem(HALF_STONE.id) > 0; } catch (e) {}
+        try { if (typeof W.hasItem === 'function') return !!W.hasItem(HALF_STONE.id); } catch (e) {}
+        return false;
+    }
+    function _石没处放(收) {
+        // DES-90（第一百三十九批）：半块阵眼灵石是一次性剧情道具。
+        // ⚠️ DES-97：本 helper 的返回值被 `_石话` 拼进**括号中段**，所以必须吃**从句支**（不带句号）。
+        // 原来这里吃的是句尾带圆点的 addItemFailText，账真落笔时屏上会念成
+        // 「…再来。这一回它没能跟你走。」——句号钉在句子中间，是破句。
+        // 第一百三十八批的 E4 棘轮没抓到它：E4 只看 addItem*Text( 紧后面跟什么，**看不穿 helper 的边界**。
+        // ⚠️ 问不到账时回**空串**（「问不到就别编」）：前后两句已经把这事说完了，
+        // 这里再塞一句只会重复成「…它没有跟你走这一回它没能跟你走。」——本批自己造的蠢话，当场撤回。
+        // 调用点用 `缘由 ? '——' + 缘由 : ''` 决定要不要接这一段，两档都读得通、都不破句。
+        return (typeof W.addItemFailPhrase === 'function' && W.addItemFailPhrase((收 && 收.name) || '')) || '';
+    }
+    function _石话(石) {
+        if (石) {
+            if (石.got > 0) return '<span class="text-amber-200">（得关键道具「半块阵眼灵石」——它认得你）</span>';
+            // DES-90（第一百三十九批）：R1 不许断言「没处放」，只说事实。
+            // 缘由从句支来（不带句号），有没有都由这一句决定接不接——两档读数：
+            //   有账：「（石头递到你面前，你手里却没接住——行囊已满，先腾个格子再来，这一回它没能跟你走。）」
+            //   没账：「（石头递到你面前，你手里却没接住，这一回它没能跟你走。）」
+            // 句号只在这一句末尾收口一处 ⇒ 两档都不破句、也不重复。
+            var _缘由 = _石没处放(石);
+            return '<span class="text-red-300">（石头递到你面前，你手里却没接住' + (_缘由 ? '——' + _缘由 : '') + '，这一回它没能跟你走。）</span>';
+        }
+        return _石在册()
+            ? '<span class="text-gray-400">（那半块「阵眼灵石」还在你囊中。）</span>'
+            : '<span class="text-gray-400">（那半块灵石如今不在你囊中。）</span>';
+    }
+
     // ---- 章节注册 main_011~018 ----
     function q(id, title, desc, flag) {
         return {
@@ -486,6 +525,8 @@
         var f = flags();
         var first = !f['qi_surge1_done'];
         scene('c13_surge');
+        // 阵眼灵石只在这一夜发一次；发没发进囊要认实收（DES-72），模态里那句「得」才有账可依
+        var 石 = (first && yuGuarded()) ? _收阵石() : null;
         var body = para('🎁 当夜宿营，义士们围着你的火堆坐了一圈。');
         body += chenHelped()
             ? para('陈五久先开口，把那卷磨破的手札塞进你手里：「三百年的陈账。给还能往前走的人。」<span class="text-gray-400">（三百年卡关所悟入体：修为大补）</span>')
@@ -493,13 +534,12 @@
         body += liuHelped()
             ? para('柳四娘赶来一车伤药：「全村凑的。别问够不够——我们只有这些。」')
             : para('伤药是义士们各掏各的凑的，一样满车。');
-        if (yuGuarded()) body += para('虞松子最后起身，从怀里捧出小半块灵石——七霞派阵眼剩下的那半块：「阵守不住了。石头跟着能打仗的人走。」<span class="text-amber-200">（得关键道具「半块阵眼灵石」——它认得你）</span>');
+        if (yuGuarded()) body += para('虞松子最后起身，从怀里捧出小半块灵石——七霞派阵眼剩下的那半块：「阵守不住了。石头跟着能打仗的人走。」' + _石话(石));
         body += btns([btn('🔥 收下——这一夜的账，你记下了', 'window.qiSurge1Done()')]);
         if (first) {
             f['qi_surge1_done'] = true;
             essence(2000);
             fame(25);
-            if (yuGuarded() && typeof W.addItem === 'function') { try { W.addItem('qi_half_array_stone', 1); } catch (e) {} }
             log('📜 义士来投的消息当夜传开——追抽脉人的那个，不再是孤身一人了。（名望大涨；名册页添新名字；修为大补——数额不入文案，账在身上）', 'success');
         }
         modal('🎁 暴涨 · 义士来投', body);

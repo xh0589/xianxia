@@ -16,7 +16,8 @@
         { key: 'auction', label: '下次拍卖（坊市）' },
         { key: 'world_event', label: '下次世界事件' },
         { key: 'sect_event', label: '下次宗门事件' },
-        { key: 'dungeon_window', label: '下次秘境窗口' }
+        { key: 'dungeon_window', label: '下次秘境窗口关窗' },
+        { key: 'festival', label: '下次节令（庙会）' }
     ];
 
     function getSpiritStones() {
@@ -108,13 +109,14 @@
         var sum = global.WorldCalendar.summarizeRange(startDay, endDay);
         if (!sum || !sum.items || !sum.items.length) return '闭关期间世界无重大事件。';
         // 4 类聚合
-        var buckets = { market: [], sect: [], world: [], npc: [], other: [] };
+        var buckets = { market: [], sect: [], world: [], npc: [], festival: [], other: [] };
         for (var i = 0; i < sum.items.length; i++) {
             var it = sum.items[i];
             if (it.category === 'auction') buckets.market.push(it);
             else if (it.category === 'sect_event' || it.category === 'sect_meeting' || it.category === 'sect_tournament') buckets.sect.push(it);
             else if (it.category === 'world_event' || it.category === 'dungeon_window') buckets.world.push(it);
             else if (it.category === 'npc_appointment') buckets.npc.push(it);
+            else if (it.category === 'festival') buckets.festival.push(it);
             else buckets.other.push(it);
         }
         var lines = ['🪷 闭关' + (endDay - startDay) + '日（第 ' + startDay + ' 天 → 第 ' + endDay + ' 天）期间：'];
@@ -126,6 +128,7 @@
         if (buckets.market.length) lines.push('• 坊市：' + describe(buckets.market, ''));
         if (buckets.sect.length) lines.push('• 宗门：' + describe(buckets.sect, ''));
         if (buckets.world.length) lines.push('• 世界：' + describe(buckets.world, ''));
+        if (buckets.festival.length) lines.push('• 节令：' + describe(buckets.festival, ''));
         if (buckets.npc.length) lines.push('• NPC：' + describe(buckets.npc, ''));
         if (buckets.other.length) lines.push('• 其他：' + describe(buckets.other, ''));
         // v20.0：出关看行情——所在地丹药/药材/矿材/法器 贱/平/贵 + 时价乘数

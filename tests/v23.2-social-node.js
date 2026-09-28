@@ -44,7 +44,16 @@ function read(rel) { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); }
     ok(/function confirmBuyQuantity[\s\S]{0,600}showMessage/.test(inv) && !/function confirmBuyQuantity[\s\S]{0,600}alert\(/.test(inv), 'A17 买入弹窗的系统腔 alert 清除');
     const es = read('js/enhanced-shop.js');
     ok(/buyFromEnhancedShop[\s\S]{0,700}notePlayerTrade\(itemId, 1, true\)/.test(es), 'A18 商店买入推动行情');
-    ok(/executeSell[\s\S]{0,3000}notePlayerTrade\(template\.id \|\| quote\.itemId, quote\.quantity, false\)/.test(es), 'A19 卖出同样动行情（一城抛货该行当就该松）');
+    // 【第一百四十二批·按「钉法」把定长窗 3000 改成函数边界】原窗是定长 3000 字，而同一批给
+    // executeSell 补了「扣物→发钱」的 try/catch 与退货分支（约 1400 字），把 notePlayerTrade
+    // 挤出窗外 ⇒ 假红。这道闸的要求是「卖出也动行情、且在同一个函数里」，不是「必须落在 3000 字内」。
+    // 改成切到下一个 function 边界：要求一字未松，函数再长也不会假红。
+    const sellIdx = es.indexOf('executeSell');
+    const sellEnd = es.indexOf('\n    function ', sellIdx + 10) > 0
+        ? es.indexOf('\n    function ', sellIdx + 10) : sellIdx + 8000;
+    const sellSeg = es.slice(sellIdx, sellEnd);
+    ok(/executeSell/.test(es) && sellSeg.indexOf('notePlayerTrade(template.id || quote.itemId, quote.quantity, false)') >= 0,
+        'A19 卖出同样动行情（一城抛货该行当就该松；取样窗按函数边界切，同款改钉）');
 
     const b2 = read('js/city-facilities/facility-batch2.js');
     ok(b2.indexOf('au_bid2') < 0, 'A20 拍卖行三段写死剧本拆除');

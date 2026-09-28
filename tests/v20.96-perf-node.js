@@ -132,8 +132,24 @@ console.log('\n[Q4] 此前的封顶还在');
     ok(/BATTLE_LOG_MAX = 200/.test(appSrc) && /slice\(-BATTLE_LOG_MAX\)/.test(appSrc), 'Q4 战斗日志 200 条封顶仍在');
     var partySrc = loadScript('js/party-system.js');
     ok(/battleLog\.length > 100/.test(partySrc), 'Q4 队伍战报封顶仍在');
-    var glSrc = appSrc.slice(0, 2000);
-    ok(/maxEntries: 100/.test(glSrc) && /children\.length > 20/.test(glSrc), 'Q4 全局日志账本 100 条、屏显 20 条的旧闸仍在');
+  var glSrc = appSrc.slice(0, 2000);
+  // 【第一百四十二批·按「钉法」拆成两枚，判据未松】原闸是一行：
+  //   /maxEntries: 100/ && /children\.length > 20/
+  // 后半截守的是「屏显 20 条封顶」——而那整段 DOM 分支**是死的**：
+  // `document.getElementById('game-log')` 全仓零命中（页面没有这个 id），
+  // 所以 `children.length > 20` 那行**从来没有被执行过**。
+  // ⚠️ 也就是说：这道闸一直绿着，让人以为「日志屏显封顶在册」，而那功能**从来没通过**。
+  // 这才是本批真正要记的事——**一道护住了死代码的闸，比没有闸更坏**。
+  // 现在拆开：内存封顶（真在册）继续守；屏显那半截改成守「死分支已摘干净、且不许复活」。
+  var 内存封顶 = /maxEntries: 100/.test(glSrc);
+  var 屏显死枝 = /children\.length > 20/.test(glSrc);
+  var 已摘干净 = /DES-85/.test(glSrc) && !/getElementById\(['"]game-log['"]\)/.test(appSrc);
+  ok(内存封顶, 'Q4a 全局日志账本 100 条封顶仍在（内存侧，真在册）');
+  ok(!屏显死枝 && 已摘干净,
+      'Q4b 屏显 20 条封顶那半截已随死分支摘除，且不许复活：'
+      + 'children.length>20 仍出现=' + 屏显死枝 + '、DES-85 说明在=' + /DES-85/.test(glSrc)
+      + '、getElementById("game-log") 残留=' + /getElementById\(['"]game-log['"]\)/.test(appSrc)
+      + '（⚠️ 旧闸守的是死代码，那功能从未通过——本条才是它该守的东西）');
 })();
 
 // ==================== 结果 ====================

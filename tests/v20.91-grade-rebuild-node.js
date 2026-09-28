@@ -47,7 +47,7 @@ var addedItems = [];
 W.addItem = function (id, n) {
     W.inventory.slots.push({ templateId: id, count: n || 1 });
     addedItems.push(id);
-    return true;
+    return n || 1;   // 桩：回实收件数
 };
 
 vm.createContext(W);
@@ -124,7 +124,8 @@ console.log('\n[Q3] 逻辑接线');
     var invSrc = loadScript('js/inventory.js');
     ok(/QUALITIES: \['all', 'PIN9', 'PIN8', 'PIN7', 'PIN6', 'PIN5', 'PIN4', 'PIN3', 'PIN2', 'PIN1', 'UNIQUE'\]/.test(invSrc), 'Q3 背包品质筛选该收全十档');
     ok(/QUALITY_RANK = \{ PIN9:1/.test(invSrc) && /UNIQUE:10/.test(invSrc), 'Q3 背包排序该认十档序');
-    ok(/normalizeQuality\(t\.quality\)/.test(invSrc), 'Q3 品质筛选该折算旧串再比对');
+    // 认「折算后再比对」这件事，不认变量名（v24 把判定抽成 matchesInventoryFilter(template) 后参数改了名）
+    ok(/normalizeQuality\([^)]*\.quality\)/.test(invSrc), 'Q3 品质筛选该折算旧串再比对');
     ok(/PIN1:'一品', UNIQUE:'特殊'/.test(invSrc), 'Q3 品质名表该有新档');
     var htmlSrc = loadScript('仙侠.html');
     var btns = (htmlSrc.match(/data-quality="PIN\d"/g) || []).length + (htmlSrc.match(/data-quality="UNIQUE"/g) || []).length;

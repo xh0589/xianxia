@@ -97,7 +97,7 @@ console.log('\n[Q3] 气运通电：机缘更勤');
     W.currentEquipment = {};
     W.itemById = {};
     W.allItems = [];
-    W.addItem = function () { return true; };
+    W.addItem = function (id, n) { return n || 1; };   // 桩：回实收件数
     W.getLifeSkill = function () { return 0; };
     W.getEquippedItem = function () { return null; };
     W.locationSystem = { getCurrentLocation: function () { return cd.location; } };

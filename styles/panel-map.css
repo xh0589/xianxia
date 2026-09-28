@@ -311,7 +311,9 @@
 }
 #panel-map .x-map-cols {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(216px, 1fr));
+    /* 为装下文字而设的列宽下限一律写成 max(px, rem)：根 16px（标准档）时 13.5rem 恰等于 216px，一像素不变；
+       「大／特大」档文字跟手变宽（UI-23），下限也跟着长，否则又折行。与同文件 .rep-gates 同一支笔。 */
+    grid-template-columns: repeat(auto-fit, minmax(max(216px, 13.5rem), 1fr));
     gap: 10px 18px;
     align-content: start;
 }
@@ -460,4 +462,184 @@
     #panel-map #region-list {
         max-height: 42vh;
     }
+}
+
+/* ---------- 8. 城市名册：分组手风琴（UI-03） ----------
+   城市面板挂在 #panel-map 下，但取不到时会落到 #game-world（见 location-system.js 的兜底），
+   所以这一节一律锁 #city-panel 这颗 id，不靠 #panel-map 当祖先。
+   名册那一扇 max-h-[50vh] overflow-y-auto 留着：47 处设施摊平会把整页顶到八屏；
+   折叠之后这一窗基本滚不动了，但它仍是「按视口定高」那一条，不违高度一支笔。 */
+
+/* 常去三铺置顶（UI-03②）：摆在滚窗外面，所以不用吸顶也在眼前。
+   这里本来写的是 grid `auto repeat(auto-fill, minmax(96px, 1fr))`（与下面那五枚解锁门同一支笔），
+   实机量到**这条声明被整机丢掉**：computed 的 grid-template-columns 只剩一列 1419px，三枚胶囊竖着摊成三行、
+   每行通栏，快捷条吃掉 147px 把名册顶出首屏。当场手写同一串到同一枚节点上照样丢，
+   而去掉开头那枚 `auto`（或改 max-content）就解析成 13 列——所以病在「裸 auto 轨道 + repeat()」这一串写法上，
+   不是浏览器太旧。改成 hug 内容的换行 flex：三枚共占一行（41px），窄窗自行换行，也不留十条空轨。
+   左边一枚 3px 金条做「这是快捷入口」的区分，整枚涂金就跟名册里那 54 枚黄按钮抢强调位了。 */
+#city-panel .city-quick {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+#city-panel .city-quick__label {
+    flex: 0 0 auto;
+    padding-right: 2px;
+    font-size: var(--x-fs-xs);
+    color: var(--x-muted);
+}
+#city-panel .city-quick__chip {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 6px 10px;
+    border: 1px solid #3f4b5c;
+    border-left: 3px solid var(--x-gold-deep);
+    border-radius: 6px;
+    background: #2b3441;
+    color: var(--x-text);
+    font-family: inherit;
+    font-size: var(--x-fs-sm);
+    line-height: var(--x-lh-tight);
+    text-align: left;
+    cursor: pointer;
+}
+#city-panel .city-quick__chip:hover {
+    border-color: var(--x-gold);
+    border-left-color: var(--x-gold);
+    background: #333d4c;
+}
+#city-panel .city-quick__icon {
+    flex: 0 0 auto;
+}
+
+#city-panel .city-group {
+    border: 1px solid #3f4b5c;
+    border-radius: 8px;
+    background: rgba(17, 24, 39, .55);
+    overflow: hidden;
+}
+/* summary 用了 flex，浏览器自带的三角就没了——自己画一枚，方向跟着 open 翻 */
+#city-panel .city-group__sum {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 8px 10px;
+    /* 吸顶时底下那排卡正从字缝里穿过去，故标题必须自带底色，不能是透明的 */
+    background: #2b3441;
+    border-bottom: 1px solid #3f4b5c;
+    color: var(--x-text-2);
+    font-size: var(--x-fs-sm);
+    font-weight: 700;
+    line-height: var(--x-lh-tight);
+    cursor: pointer;
+    list-style: none;
+}
+#city-panel .city-group__sum::-webkit-details-marker {
+    display: none;
+}
+#city-panel .city-group__sum::before {
+    content: '▸';
+    color: var(--x-gold);
+}
+#city-panel .city-group[open] > .city-group__sum::before {
+    content: '▾';
+}
+#city-panel .city-group[open] > .city-group__sum {
+    color: var(--x-text);
+}
+#city-panel .city-group__count {
+    margin-left: auto;
+    font-size: var(--x-fs-xs);
+    font-weight: 400;
+    color: var(--x-muted);
+}
+#city-panel .city-group__body {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+}
+/* 折上的一组：卡身整截退出布局。<details> 本来的隐藏被上面那条 display:flex 盖掉了
+   （实机量到「折着的组」里首张卡仍有 68px 高）——收起就得自己写，否则默认全折只是个样子。 */
+#city-panel .city-group:not([open]) > .city-group__body {
+    display: none;
+}
+
+/* 城情卡里那五枚「解锁门」：与信件窗的载具卡同一支笔——等宽分格、两行（名目＋价目），
+   能用描金、不能用只把边框压虚并把差什么写成可读的红字，绝不拿 opacity 把原因一起淡掉。
+   改前这五枚各涂一色（紫/蓝/黄/灰/红）却都点不动，颜色只添乱、不报信。
+   ⚠ 第一百三十六批：这一段原先全部锁在 `#city-panel` 里，可同一支 getReputationPanelHtml
+   会渲染进**两个宿主**——城市面板的 #city-rep-mini，和活动页的 #reputation-panel（仙侠.html:1631）。
+   真窗口量过：活动页那一宿主里 .rep-gates 算出来是 display:block、五枚是 UA 的 inline-block，
+   网格／描边／两行／禁用那支红字全没落上（读数 .scratch/probe-136-repstyle-改前.stdout.txt）。
+   组件长什么样由组件自己说，不靠某个宿主赏饭——故去掉 #city-panel 前缀。 */
+.rep-gates {
+    display: grid;
+    /* 列宽下限取自实机量尺（.scratch/v24-AX-gates.mjs ax3，四档视口同一数）：最宽那枚「需声望 10,000（万人敬仰）」
+       单行自然宽 160 + 卡内边距 21.6 = 181.6px。原先的 140px 撑不住它：1920 档五枚里四枚把括号里的档名劈成两截
+       （「德高望／重）」），1366 档五枚全劈。
+       auto-fill 另有一病：它照样开出没人站的轨道，1920 档行尾空着 634px（容器 1419，五枚只吃掉 785）。
+       改 auto-fit——没人站的轨道收起来，五枚铺满这一行；同文件 .x-map-cols 早就是这么写的。
+       落单那枚不会被拉长：auto-fit 只收「所有行都空着」的轨道，最后一行缺格仍只占一格（与 panel-mail.css 那条「落单只占一格」不冲突）。
+       ⚠ 这个下限是**按字宽量的**，所以它必须跟着字号档长大：写成 max(186px, 11.625rem)——
+       根 16px（标准档）时 11.625×16 恰为 186px，**标准档一个像素不变**；而「特大」档（根 20px，UI-23 之后字号真会跟手）
+       同一枚字量到 204＋21.6 = **225.6px**（探针 -ax5.out，四档视口同一数），186 就又不够了：1024 档五枚里有四枚折成两行。
+       11.625rem 在特大档＝232.5px，容得下这 225.6。 */
+    grid-template-columns: repeat(auto-fit, minmax(max(186px, 11.625rem), 1fr));
+    gap: 8px;
+}
+.rep-gate {
+    appearance: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid #4b5563;
+    border-radius: 6px;
+    background: #2b3441;
+    color: var(--x-text);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.rep-gate:hover:not(:disabled) { border-color: var(--x-gold); }
+.rep-gate-on {
+    border-color: var(--x-gold);
+    background: rgba(251, 191, 36, .16);
+}
+.rep-gate__name {
+    font-size: var(--x-fs-sm);
+    font-weight: 700;
+    line-height: var(--x-lh-tight);
+}
+.rep-gate__brief {
+    font-size: var(--x-fs-xs);
+    line-height: var(--x-lh-tight);
+    color: var(--x-muted);
+}
+/* 档名整块不劈：门槛数字与「（受欢迎）」之间可以换行，括号里那几个字不许再被切成「受欢／迎）」。
+   列宽下限已按今日的字量过，这一条是防「日后档名改长」又把闸顶开。 */
+.rep-gate__tier { white-space: nowrap; }
+.rep-gate:disabled {
+    border-style: dashed;
+    background: rgba(31, 41, 55, .6);
+    cursor: not-allowed;
+}
+.rep-gate:disabled .rep-gate__name { color: var(--x-muted); }
+.rep-gate:disabled .rep-gate__brief { color: #fca5a5; }
+.rep-donate-note {
+    margin: 8px 0 0;
+    font-size: var(--x-fs-xs);
+    line-height: var(--x-lh-tight);
+    color: var(--x-muted);
 }

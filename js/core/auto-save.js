@@ -151,7 +151,8 @@ function loadAutoSaveSlot(index) {
     var name = (slot.meta && slot.meta.charName) || slot.charName || '自动存档';
     if (!confirm('确定要加载自动存档「' + name + '」吗？当前进度将丢失。')) return;
     // 同步写入 xianxia_save（作为最近档备份）后走标准载入流程
-    try { localStorage.setItem('xianxia_save', JSON.stringify(slot.state)); } catch (e) {}
+    // 第一百四十四批：原式是 `try { … } catch (e) {}`。接入 saveToStorage 后那层 catch 成为死支（单源自己吞异常、返回布尔、从不抛）——留着它等于假装还有一层守卫。已拆。
+    window.saveToStorage('xianxia_save', JSON.stringify(slot.state));
     if (typeof loadSaveData === 'function') {
         loadSaveData(slot.state);
     } else if (typeof window.loadSaveData === 'function') {

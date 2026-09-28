@@ -284,7 +284,7 @@
         // 三波全守住
         try { if (typeof W.sectPowerWarMod === 'function') W.sectPowerWarMod(dm.sect, true); } catch (e) {}
         try { if (typeof W.sectPowerWarMod === 'function') W.sectPowerWarMod(dm.foe, false); } catch (e2) {}
-        try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 10); } catch (e3) {}
+        try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 10); } catch (e3) { console.warn('[静默失败] js/sects/sect-doom.js:287 · 灭门之战记名气：这一笔fame没接住，玩家会察觉的损失在此', e3 && e3 && e3.message); }
         setRel(dm.sect, dm.foe, Math.min(-90, (relOf(dm.sect, dm.foe) || -90) - 10));
         cancelDoom('三波攻势全被打退——「' + dm.foe + '」的压山长老在阵前站了半晌，收兵。山还在。（战绩落座次，名望+10，编年记「山还在」）');
         chron(dm.sect, '破山之战：三波攻势，一日打退。山门楼的旗被打穿了七个洞，但没有倒——山还在。');
@@ -726,7 +726,7 @@
         if (!rem || !rem.visited) { msg('先回旧址看看——起土要在废墟上起。', 'warning'); return; }
         if (!borrow) {
             if (playerStones() < 500) { msg('行囊里凑不出五百灵石。', 'error'); return; }
-            try { if (W.inventory && W.inventory.currency) W.inventory.currency.spiritStones = Math.max(0, (Number(W.inventory.currency.spiritStones) || 0) - 500); } catch (eP) {}
+            try { if (W.inventory && W.inventory.currency) W.inventory.currency.spiritStones = Math.max(0, (Number(W.inventory.currency.spiritStones) || 0) - 500); } catch (eP) { console.warn('[静默失败] js/sects/sect-doom.js:729 · 遗徒重建收五百灵石：这一笔灵石没接住，玩家会察觉的损失在此', eP && eP && eP.message); }
         } else {
             var d = dip();
             var lender = null;
@@ -809,7 +809,7 @@
                 // 第十七波：开创人重立山门——弟子档不动（他是掌门，不是弟子），钱落宗库真账，旧人携旧腰牌归门
                 try { if (W.PSectWorld && W.PSectWorld.onRevive) W.PSectWorld.onRevive(sect, rv); } catch (ePR) {}
                 rem.revived = day;
-                try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 20); } catch (eF2) {}
+                try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 20); } catch (eF2) { console.warn('[静默失败] js/sects/sect-doom.js:812 · 开山记名气：这一笔fame没接住，玩家会察觉的损失在此', eF2 && eF2 && eF2.message); }
                 modal('🏮 开山', para('香火重新升起来的时候，是你亲手把幡挂回杆顶的。风一吹，展开——这回是全的。')
                     + para('三位老相识站在阶下，腰牌还挂在各自腰上。旧腰牌没有换新——那是纪念品。')
                     + para('<span class="text-xs text-gray-500">（宗门重立：重建的钱与老相识的贺礼尽数入库，声望记「重立山门·首功」，名望+20。座次从残破重新爬起。）</span>'));
@@ -821,7 +821,7 @@
                 d.rank = rem._rankSaved != null ? rem._rankSaved : (d._remnantRank != null ? d._remnantRank : 4);
                 d.rankName = d._remnantRankName || d.rankName || '长老';
                 try { if (typeof W.sectAddContribution === 'function') W.sectAddContribution(100, '重立山门·首功'); } catch (eC) {}
-                try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 20); } catch (eF) {}
+                try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 20); } catch (eF) { console.warn('[静默失败] js/sects/sect-doom.js:824 · 开山记名气：这一笔fame没接住，玩家会察觉的损失在此', eF && eF && eF.message); }
                 rem.revived = day;
                 var leaderLine = wasExiled
                     ? '香火重新升起来的时候，' + leaderName(sect) + '把祖师牌位放回大殿正中，转身看着山门下的新弟子。「我们家，倒过一回。」她说，「所以我们比谁都清楚——山，不是门派。人，才是。」'
@@ -842,8 +842,8 @@
         var debt = (rv && rv.debt) || (rem && rem.debt);
         if (!debt) { msg('不欠账了。', 'info'); return; }
         if (playerStones() < debt.amt) { msg('行囊里凑不出' + debt.amt + '灵石。', 'error'); return; }
-        try { if (W.inventory && W.inventory.currency) W.inventory.currency.spiritStones = Math.max(0, (Number(W.inventory.currency.spiritStones) || 0) - debt.amt); } catch (eP2) {}
-        try { var di = internal(debt.sect); if (di) di.resources = (Number(di.resources) || 0) + debt.amt; } catch (e) {}
+        try { if (W.inventory && W.inventory.currency) W.inventory.currency.spiritStones = Math.max(0, (Number(W.inventory.currency.spiritStones) || 0) - debt.amt); } catch (eP2) { console.warn('[静默失败] js/sects/sect-doom.js:845 · 遗债还清扣五百灵石：这一笔灵石没接住，玩家会察觉的损失在此', eP2 && eP2 && eP2.message); }
+        try { var di = internal(debt.sect); if (di) di.resources = (Number(di.resources) || 0) + debt.amt; } catch (e) { console.warn('[静默失败] js/sects/sect-doom.js:846 · 遗债还清退宗门库房：这一笔resources没接住，玩家会察觉的损失在此', e && e && e.message); }
         chron(debt.sect, '「' + debt.sect + '」借给遗徒重建山门的五百灵石，还清了——两讫，情分还在。');
         if (rv) rv.debt = null;
         if (rem) rem.debt = null;

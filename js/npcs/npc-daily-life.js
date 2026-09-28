@@ -8,7 +8,7 @@ function getNPCActivityDescription(npc) {
     if (!npc) return '';
     var activity = npc.state?.currentActivity || '空闲';
     var location = npc.state?.location || npc.location || '未知';
-    var mood = npc.state?.mood || 50;
+    var mood = npc.state?.mood ?? 50;
     var moodStr = mood > 70 ? '心情不错' : (mood < 30 ? '情绪低落' : '平静');
     return npc.name + '（' + moodStr + '）在' + location + '【' + activity + '】';
 }
@@ -52,8 +52,8 @@ function checkNPCMeetings() {
                     }
                 }
                 // 轻微影响情绪
-                if (group[0].state) group[0].state.mood = Math.min(100, (group[0].state.mood || 50) + 1);
-                if (group[1].state) group[1].state.mood = Math.min(100, (group[1].state.mood || 50) + 1);
+                if (group[0].state) group[0].state.mood = Math.min(100, (group[0].state.mood ?? 50) + 1);
+                if (group[1].state) group[1].state.mood = Math.min(100, (group[1].state.mood ?? 50) + 1);
             }
         }
     }

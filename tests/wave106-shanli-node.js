@@ -74,8 +74,8 @@ global.updateCharacterStatus = function () {};
 var newDayHandlers = [];
 global.EventBus = { emit: function () {}, on: function (ev, fn) { if (ev === 'newDay') newDayHandlers.push(fn); } };
 var addedItems = [];
-global.addItem = function (id, n) { addedItems.push([id, n]); return true; };
-global.addItemToInventory = function (id, n) { addedItems.push([id, n]); return true; };
+global.addItem = function (id, n) { addedItems.push([id, n]); return n || 1; };   // 桩：回实收件数
+global.addItemToInventory = function (id, n) { addedItems.push([id, n]); return n || 1; };   // 第一百三十批：桩按真源口径回实收件数
 global.growLifeSkill = function () {};
 global.addProfessionExp = function () {};
 global.getLifeSkill = function () { return 0; };

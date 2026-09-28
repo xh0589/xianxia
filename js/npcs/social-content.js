@@ -222,7 +222,7 @@
                 ]));
             }
             lines.push('发完牢骚，' + ta(npc) + '看起来痛快多了。（心情+3）');
-            if (npc.state) npc.state.mood = Math.min(100, (npc.state.mood || 50) + 3);
+            if (npc.state) npc.state.mood = Math.min(100, (npc.state.mood ?? 50) + 3);
             return lines.join('\n');
         }
     };
@@ -590,7 +590,7 @@
             if (c.aff) { if (typeof npc.changeAffection === 'function') npc.changeAffection(c.aff); else rel(npc, 'affection', c.aff, -100, 100); }
             if (c.favor && typeof npc.changeFavor === 'function') npc.changeFavor(c.favor);
             if (c.trust) rel(npc, 'trust', c.trust, 0, 100);
-            if (c.mood && npc.state) npc.state.mood = Math.max(0, Math.min(100, (npc.state.mood || 50) + c.mood));
+            if (c.mood && npc.state) npc.state.mood = Math.max(0, Math.min(100, (npc.state.mood ?? 50) + c.mood));
             if (c.calmStress && npc.state) npc.state.stress = Math.max(0, (npc.state.stress || 0) * 0.7);
             if (typeof npc.recordPlayerAction === 'function') npc.recordPlayerAction('followup_' + subId, c.kind || 'positive'); // 未知动作→纯impressions计数，不动好感基线
         } catch (e) {}
@@ -1007,7 +1007,7 @@
             if (pre) text = pre + '\n' + text;
             window.showMessage(text, 'info');
             spendMinutes(FU_INTEL[opts.subId] ? 20 : 30, FU_INTEL[opts.subId] ? '打听消息' : '深谈'); // v15.6 一场谈话就是花时间
-            if (opts.mood && npc.state) npc.state.mood = Math.max(0, Math.min(100, (npc.state.mood || 50) + opts.mood));
+            if (opts.mood && npc.state) npc.state.mood = Math.max(0, Math.min(100, (npc.state.mood ?? 50) + opts.mood));
             markTalked(npcId, opts.subId); // v15.6：登记今日已谈（复读分流依据）
             try { maybeBystanderChime(npc); } catch (eBc2) {} // v18.3 旁观者插话
             try { offerFollowup(npcId, npc, opts.subId); } catch (e) {} // v15.0：成功路径才提供追问（每日每题一次）

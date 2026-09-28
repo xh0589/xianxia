@@ -40,7 +40,23 @@
         if (!f['qi_street'] || !f['qi_street'].push) f['qi_street'] = [];
         f['qi_street'].push({ day: absDay(), text: text });
     }
-    function addItem(id) { if (typeof W.addItem === 'function') { try { W.addItem(id, 1); } catch (e) {} } }
+    function addItem(id) {
+        // DES-72（第一百三十批）：旧写法把实收数丢在地上，日志照念「得某物」——囊里到底有没有不管
+        if (typeof W.giveWithReceipt === 'function') return W.giveWithReceipt(id, 1, { quiet: true });
+        var 名 = (W.itemById && W.itemById[id] && W.itemById[id].name) || id;
+        if (typeof W.addItem !== 'function') return { got: 1, count: 1, name: 名 };
+        var 得 = 0; try { 得 = Number(W.addItem(id, 1)) || 0; } catch (e) { console.warn('[静默失败] js/quest/qi-arc3.js:48 · 叩门取酒发货：这一笔发货没接住，玩家会察觉的损失在此', e && e && e.message); }
+        return { got: 得, count: 1, name: 名 };
+    }
+    function 收着话(收, 许话, 没着话) {
+        if (收 && 收.got > 0) return 许话;
+        // DES-90（第一百三十九批）：两坛酒都是一次性剧情 ⇒ 词表②。
+        // ⚠️ DES-97：本 helper 的返回值被 `:363`／`:366` 拼进「（…<此句>）」的**括号中段**，
+        // 所以必须吃**从句支**（不带句号）。原来这里吃句尾带圆点的 addItemFailText，
+        // 账真落笔时屏上念成「…你手里却没接住：行囊已满，先腾个格子再来。）」——「。）」是破句。
+        // 第一百三十八批的 E4 棘轮同样看不穿 helper 边界，是本批补上的。
+        return 没着话 + '：' + ((typeof W.addItemFailPhrase === 'function' && W.addItemFailPhrase((收 && 收.name) || '')) || '它没有跟你走');
+    }
     // 批C · 日子流：营生进出都是真灵石（单一口径：DataManager 优先，回落 inventory.currency）
     function stonesGet() {
         try { if (W.XianXia && W.XianXia.DataManager && W.XianXia.DataManager.getSpiritStones) return Number(W.XianXia.DataManager.getSpiritStones()) || 0; } catch (e) {}
@@ -125,7 +141,7 @@
     // ---- 面板按钮（枢纽面板调用；锁「去」不锁「不去」）----
     var SCENE_LABEL = {
         h01: '衰减的日子', h02: '黄昏 · 敲门声', k1: '第一回 · 盟帖', k2: '第二回 · 灯下',
-        k2_battle: '护送路上 · 伏兵', k3: '第三回 · 屋顶', h04: '枯竭年代 · 上', h05: '枯竭年代 · 下', h06: '灵气之尽那夜'
+        k2_battle: '护送路上 · 伏兵', k2b: '门缝下的信', k3: '第三回 · 屋顶', h04: '枯竭年代 · 上', h05: '枯竭年代 · 下', h06: '灵气之尽那夜'
     };
     // 境界门：用全序（含真仙/金仙/飞升）——getRealmTier 对飞升后境界按炼气处理，会误锁
     function realmIdx(r) {
@@ -166,6 +182,7 @@
         var sc = flags()['qi_h_scene'];
         if (!sc) { if (typeof W.openQiEndgamePanel === 'function') W.openQiEndgamePanel(); return; }
         if (sc === 'k2_battle') { _escortBattle(); return; }
+        if (sc === 'k2b') _k2b();
         if (sc === 'h01') _h01();
         else if (sc === 'h02') _h02();
         else if (sc === 'k1') _k1();
@@ -300,7 +317,7 @@
             street('说书人添了新段子《灯下客》：某把剑没有出鞘，三百口人自己走了夜路。没人问那把剑是谁家的——问的人，自己心里有数。');
             log('🚪 你没开门。你在门里坐了一夜，听见门外的咳嗽声到天亮才走。第二天，《灯下客》的段子满城都是。说书人不点名，你听完了全场。（人心簿重笔；账单页会有一行：那盏灯没还）', 'warning');
         }
-        _k3();
+        _k2b();
     };
     W._qiSettleExtraB = function (win, beat) {
         if (beat === 'hu_escort') {
@@ -312,7 +329,7 @@
                 W.addQiGrace('灯下三百口：你护送他们过了噬骨佣军地界，一个没少。老掌门给你立了块长生牌——没问过你要不要。');
                 street('三百口人南迁，一个没少。有人说是有把剑陪了半日。剑是谁家的，没人说——长生牌上刻着呢。');
                 log('🕯️ 佣军的伏兵被打散了。三百口人平平安安到了南边。临别老掌门朝你长揖到底，什么也没说——三个月后你听说，南边的村口多了一块长生牌，牌上刻的是你的姓。（终战兑现：南边来的人，会为你走一千里）', 'success');
-                _k3();
+                _k2b();
             } else {
                 scene('k2_battle');
                 say('💔 佣军的灵绳弩箭把你围住了。老掌门拼死把你拖了出来——队伍还没动身，他们在等你。（回面板可再战）', 'warning');
@@ -322,6 +339,38 @@
         // 批四追随线的剧情战继续往下分流
         if (typeof W._qiSettleExtraC === 'function') { try { W._qiSettleExtraC(win, beat); } catch (e) {} }
     };
+    // ============ 忽-03b 门缝下的信（main_052b，二幕中段镜像桩） ============
+    // 挂入「历书小决策」节奏位：第二回叩门（灯下）之后、第三回叩门（屋顶）之前。
+    // 同一封信，两种命运：对抗线的人答了她，无视线的人连拆都不拆——跨线对照，正是这个桩的意义。
+    function _k2b() {
+        if (flags()['qi_knock2b']) { _k3(); return; }
+        scene('k2b');
+        modal('✉️ 门缝下的信', para('灯下那一夜过后第七天，你的门缝底下多了一封信。')
+            + para('没有火漆，没有落款，信封薄得像只有一页。你对着灯照了照——里头确实只有一页。')
+            + para('拆开：页上一个字也没有。只有一道线，从纸顶画到纸尾，越画越细，末端散成毛边——历书角上那道灵气线，跟它是一个画法。落笔极稳；收笔那一下，纸背都透了墨。')
+            + para('你捏着这张纸站了一会儿。灶上的水开了。')
+            + btns([
+                btn('📩 举到灯前，再看一遍', 'window.qiLetterChoice(\'look\')'),
+                btn('🪟 原样折好，压在枕头底下', 'window.qiLetterChoice(\'pillow\')'),
+                btn('🔥 烧了——门缝里进来的东西，不问来历', 'window.qiLetterChoice(\'burn\')')
+            ]));
+    }
+    W.qiLetterChoice = function (c) {
+        _close();
+        var f = flags();
+        if (f['qi_knock2b']) { _k3(); return; }
+        f['qi_knock2b'] = c;
+        record('qi_knock2b_' + c, '三回叩门');
+        if (c === 'look') {
+            log('📩 你举到灯前，看第三遍才发现：线尾的毛边里，掐着一个针尖大的孔。圆的，掐得很正。你不知道那是什么——她也没打算让你知道。你把信折好收起，此后每年翻出来看一次，孔还是那个孔。（搁浅列：一封信拆了三遍。终幕兑现：账单呈上那日，「存疑」一栏压底的就是它——针孔的事，她当面说，或者一辈子不说。）', 'info');
+        } else if (c === 'pillow') {
+            log('🪟 信压在枕头底下，一压半年。纸角起了毛——跟那道线的毛边一个样。有几夜你睡不沉：不是信硌的，是那道线在纸里爬。你到底没拆第二遍——拆过一遍的信，再拆，就是问了。（搁浅列：一封信，启而复封。终幕兑现：账单「未启」栏，压的就是它——墨透了纸背，日子透了历书。）', 'info');
+        } else {
+            log('🔥 火苗舔上去，纸卷了一下，像躲。烧完了，灰是灰，线是线——那道线的形状，你记住了。（恩列一笔：烧信的人，本座见过。烧完还记得信上画了什么的——头一回见。注：不答，也是答。）', 'info');
+        }
+        _k3();
+    };
+
     function _k3() {
         if (flags()['qi_knock3']) { _finishH03(); return; }
         scene('k3');
@@ -347,12 +396,13 @@
         f['qi_knock3'] = c;
         record('qi_knock3_' + c, '三回叩门');
         if (c === 'wine') {
-            addItem('qi_her_wine');
+            var 得酒 = addItem('qi_her_wine');
             if (typeof W.addQiHeartBond === 'function') W.addQiHeartBond(20, '屋顶接了她的酒');
-            log('🍶 你上了屋顶。她不劝你入伙，不怪你不问世事——你们就坐着，一坛酒喝到见底，说的全是不要紧的话：米价、瓦上的猫、她小时候镇上那个面摊。天亮前她晃了晃空坛子：「灵气之尽那夜，本座在脉尽头。你来，就有你一份。」她把新满的一坛塞给你，跳下屋顶走了。（交心账一笔；得「她的一坛酒」——终战她等你、替你挡一波；酒坛带进结局）', 'success');
+            log('🍶 你上了屋顶。她不劝你入伙，不怪你不问世事——你们就坐着，一坛酒喝到见底，说的全是不要紧的话：米价、瓦上的猫、她小时候镇上那个面摊。天亮前她晃了晃空坛子：「灵气之尽那夜，本座在脉尽头。你来，就有你一份。」她把新满的一坛塞给你，跳下屋顶走了。（交心账一笔；' + 收着话(得酒, '得「她的一坛酒」——终战她等你、替你挡一波；酒坛带进结局', // DES-90（第一百三十九批）：R1 不许断言「没处放」，只改断言原因那几个字，叙事语气与长度量级不动
+'那坛「她的一坛酒」她照塞了，你手里却没接住') + '）', 'success');
         } else {
-            addItem('qi_window_wine');
-            log('🪟 你关了窗，吹了灯，躺下装睡。瓦上的声音坐了很久，没有敲窗，没有骂你。天快亮时，你听见轻轻一声：「也罢。日子人过日子，本座不怪。」脚步声没了。早上窗台上多了一坛酒，没有字条。你没喝，也一直没舍得扔。（得「窗台的酒坛」——不飞升那日，它会换成新的）', 'info');
+            var 得坛 = addItem('qi_window_wine');
+            log('🪟 你关了窗，吹了灯，躺下装睡。瓦上的声音坐了很久，没有敲窗，没有骂你。天快亮时，你听见轻轻一声：「也罢。日子人过日子，本座不怪。」脚步声没了。早上窗台上多了一坛酒，没有字条。你没喝，也一直没舍得扔。（' + 收着话(得坛, '得「窗台的酒坛」——不飞升那日，它会换成新的', '窗台上那坛「窗台的酒坛」你到底没舍得往行囊里搁') + '）', 'info');
         }
         _finishH03();
     };
@@ -603,6 +653,7 @@
                 + '（第三幕开启：汇流——血海坝下，她在等你）', 'danger');
         } else {
             log('🚶 你没有去。那一夜天边的云是红的，红了整整一夜，第二天早上，天地之间安静得像一口空井——她把要做的事做完了。你烧水、煮茶、扫院子，做最后一代仙人，把日子过下去。窗台上那坛酒还在。（结局「不飞升·旁观」已入档——终幕汇流时，账单一并呈上）', 'info');
+            log('修仙的人占了天下的万一，修不成的占了九成九。九成九的人过的也是日子——娶妻、生火、葬人、过年。你不过是回到他们中间去，替自己记一笔：谁的账，谁认。', 'info');
         }
     };
 

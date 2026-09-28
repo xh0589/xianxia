@@ -94,6 +94,25 @@
         return null;
     }
     function isFestivalDay() { return !!todayFestival(); }
+    // COPY-04：庙会一年只开这一日，所以「明日请早」指的是一条不存在的明天。回绝要说得出下一场的真日子，
+    // 而这一本历不在摊上重造——吃 festival-calendar 的 nextFestival（DES-26 起日历里真登记着四场节）。
+    // 历法不在位就一个字也不说，别拿猜的补。
+    function nextFair() {
+        try {
+            var FC = window.FestivalCalendar;
+            if (!FC || typeof FC.nextFestival !== 'function') return null;
+            var d = absDay();
+            if (!d) return null;
+            var nf = FC.nextFestival(d + 1);
+            if (!nf || !(nf.dueDay > d)) return null;
+            return { key: nf.key, name: nf.name, dueDay: nf.dueDay, inDays: nf.dueDay - d };
+        } catch (e) {}
+        return null;
+    }
+    function nextFairSentence() {
+        var nf = nextFair();
+        return nf ? '下一场' + nf.name + '在 ' + nf.inDays + ' 日后。' : '';
+    }
 
     // ============ 小工具 ============
     function charData() { return window.currentCharData || null; }
@@ -102,6 +121,8 @@
         return (charData() && charData().location) ||
             (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || '';
     }
+    // DES-57：城名两串写法（舆图转发的 cityName 带空格「帝都 · 长安」，角色账里是「帝都·长安」）——认账前先取键
+    function pkCity(s) { return String(s == null ? '' : s).replace(/\s+/g, ''); }
     function inCity() {
         var loc = city();
         if (!loc) return false;
@@ -149,6 +170,40 @@
     function spendTime(min, why) {
         try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(min, why); } catch (e) {}
     }
+    // ============ 回执要说实话（DES-27） ============
+    // 统一通道自 DES-38 起已按差值报数，但 `settle` 在缺通道时还有一条直写兜底（下面那几行 `Math.min`），
+    // 而庙会的说法是「摊前这一句只报本摊这一笔的进账」——所以仍旧前后各读一次、拿差值说话，
+    // 两条路径（走通道／直写兜底）都在同一把尺下。
+    var GAIN_LABEL = { copper: '铜钱', energy: '精力', mood: '心境', karma: '因果' };
+    function snapshot() {
+        var c = charData();
+        if (!c) return null;
+        var s = {};
+        for (var k in GAIN_LABEL) s[k] = Number(c[k] || 0);
+        return s;
+    }
+    function gainNote(before, spec) {
+        var c = charData();
+        if (!before || !c) return '';
+        var parts = [];
+        for (var k in GAIN_LABEL) {
+            var want = Number(spec[k] || 0);
+            if (!want) continue;
+            var got = Number(c[k] || 0) - before[k];
+            if (want > 0) {
+                parts.push(got >= want ? GAIN_LABEL[k] + '+' + want
+                    : GAIN_LABEL[k] + '已达上限，实得+' + Math.max(0, got));
+            } else {
+                parts.push(GAIN_LABEL[k] + got);
+            }
+        }
+        return parts.join('、');
+    }
+    // 读不到账就整句不说，别在屏上留一对空括号
+    function gainParen(before, spec) {
+        var n = gainNote(before, spec);
+        return n ? '（' + n + '）' : '';
+    }
     function refresh() { try { if (window.updateCharacterStatus) window.updateCharacterStatus(); } catch (e) {} }
     // 第九十五波·NEW-35：放河灯/吃小吃/看花灯的结算只出一句播报，摊前没有后续可点的窗——
     // 流程终点软收庙会面板，别把「已收的场」留在屏上（灯谜有带「回庙会」按钮的结果窗，那个不收）
@@ -157,10 +212,36 @@
         var c = charData();
         return !!c && Number(c[flag]) === absDay() && absDay() > 0;
     }
-    function markToday(flag) { var c = charData(); if (c) c[flag] = absDay(); }
+    function markToday(flag) { var c = charData(); if (c) { c[flag] = absDay(); syncStallLine(); } }
     function meta() {
         var f = todayFestival();
         return f ? (FEST_META[f.key] || FEST_META.shangyuan) : null;
+    }
+    // 今年逛过的摊，按庙会窗里那四枚钮的同一本账读（不另立标记）
+    function usedStalls() {
+        var m = meta() || {};
+        var done = [];
+        if (usedToday('_fairRiddleDay')) done.push('猜灯谜');
+        if (usedToday('_fairLanternDay')) done.push('放河灯');
+        if (usedToday('_fairFoodDay')) done.push('吃' + (m.food || '节令小吃'));
+        if (usedToday('_fairWatchDay')) done.push('看花灯');
+        return done;
+    }
+    // 摊口那一行的话：一摊没逛时给空串（调用方按空串折起来）
+    function stallLine() {
+        var done = usedStalls();
+        if (done.length >= 4) return '今年四摊都已逛过——' + (nextFairSentence() || '摊子明年今日再搭起来。');
+        return done.length ? '今年已逛：' + done.join(' · ') : '';
+    }
+    // 用完一摊就地改这一行。不重画整张城建名册——那会把玩家翻开的手风琴组全折回去
+    function syncStallLine() {
+        try {
+            var el = document.getElementById('festival-fair-used');
+            if (!el) return;
+            var t = stallLine();
+            el.textContent = t;
+            el.classList.toggle('hidden', !t);
+        } catch (e) {}
     }
 
     // ============ 城市面板的庙会摊（非节日静默，不占地方） ============
@@ -168,12 +249,14 @@
         try {
             var f = todayFestival();
             if (!f) return '';
-            if (cityName && city() && cityName !== city()) return '';
+            if (cityName && city() && pkCity(cityName) !== pkCity(city())) return '';
             var m = FEST_META[f.key] || FEST_META.shangyuan;
+            var 已逛 = stallLine();
             return '<h4 class="text-sm font-bold text-amber-400 mb-2">' + (m.icon || '🏮') + ' ' + f.name + ' · 庙会正开</h4>' +
                 '<div class="p-2 bg-amber-900/30 rounded mb-2 border border-amber-700">' +
                 '<p class="text-xs text-amber-200/80 mb-2">' + f.name + '，城里搭起了庙会摊——灯谜、河灯、节令小吃，一年就这一日。</p>' +
                 '<button onclick="openFestivalFair()" class="w-full text-left text-sm text-amber-300 hover:text-amber-200">🏮 去逛庙会（猜灯谜 · 放河灯 · 吃' + (m.food || '节令小吃') + ' · 看花灯）</button>' +
+                '<p id="festival-fair-used" class="text-xs text-amber-200/60 mt-1' + (已逛 ? '' : ' hidden') + '">' + 已逛 + '</p>' +
                 '</div>';
         } catch (e) { return ''; }
     }
@@ -181,15 +264,15 @@
     // ============ 庙会本体 ============
     function open() {
         var f = todayFestival();
-        if (!f) { say('今日不是节令——庙会的棚子还没搭起来，散了。', 'info'); return false; }
+        if (!f) { say('今日不是节令——庙会的棚子还没搭起来，散了。' + nextFairSentence(), 'info'); return false; }
         var m = FEST_META[f.key] || FEST_META.shangyuan;
         var btn = 'class="w-full p-3 rounded mb-2 text-left text-sm text-white hover:opacity-90"';
         var html = '<p class="text-sm text-gray-300 mb-3">' + m.scene + '</p>';
-        html += '<button onclick="FestivalFair.act(\'riddle\')" ' + btn.replace('p-3', 'bg-amber-700 p-3') + '>🏮 猜灯谜（免费 · 猜中掌柜送彩，长见识养心境）' + (usedToday('_fairRiddleDay') ? '　✅ 今日已猜' : '') + '</button>';
-        html += '<button onclick="FestivalFair.act(\'lantern\')" ' + btn.replace('p-3', 'bg-rose-800 p-3') + '>🕯️ 放河灯（' + CFG.LANTERN_COPPER + ' 铜钱 · 寄一段思念，积一分因果）' + (usedToday('_fairLanternDay') ? '　✅ 今日已放' : '') + '</button>';
-        html += '<button onclick="FestivalFair.act(\'food\')" ' + btn.replace('p-3', 'bg-orange-800 p-3') + '>🍡 吃' + (m.food || '节令小吃') + '（' + CFG.FOOD_COPPER + ' 铜钱 · 精力+' + CFG.FOOD_EN + ' 心境+' + CFG.FOOD_MOOD + '）' + (usedToday('_fairFoodDay') ? '　✅ 今日已尝' : '') + '</button>';
-        html += '<button onclick="FestivalFair.act(\'watch\')" ' + btn.replace('p-3', 'bg-indigo-800 p-3') + '>🎆 看花灯（免费 · 凑个热闹，心境+' + CFG.WATCH_MOOD + '）' + (usedToday('_fairWatchDay') ? '　✅ 今日已看' : '') + '</button>';
-        html += '<p class="text-[11px] text-gray-500 mt-1">庙会一年只开这一日——铜钱只花不赚，换来的是心气与念想。</p>';
+        html += '<button onclick="FestivalFair.act(\'riddle\')" ' + btn.replace('p-3', 'bg-amber-700 p-3') + '>🏮 猜灯谜（免费 · 猜中掌柜送彩，长见识养心境）' + (usedToday('_fairRiddleDay') ? '　✅ 今年已猜' : '') + '</button>';
+        html += '<button onclick="FestivalFair.act(\'lantern\')" ' + btn.replace('p-3', 'bg-rose-800 p-3') + '>🕯️ 放河灯（' + CFG.LANTERN_COPPER + ' 铜钱 · 寄一段思念，积一分因果）' + (usedToday('_fairLanternDay') ? '　✅ 今年已放' : '') + '</button>';
+        html += '<button onclick="FestivalFair.act(\'food\')" ' + btn.replace('p-3', 'bg-orange-800 p-3') + '>🍡 吃' + (m.food || '节令小吃') + '（' + CFG.FOOD_COPPER + ' 铜钱 · 精力+' + CFG.FOOD_EN + ' 心境+' + CFG.FOOD_MOOD + '）' + (usedToday('_fairFoodDay') ? '　✅ 今年已尝' : '') + '</button>';
+        html += '<button onclick="FestivalFair.act(\'watch\')" ' + btn.replace('p-3', 'bg-indigo-800 p-3') + '>🎆 看花灯（免费 · 凑个热闹，心境+' + CFG.WATCH_MOOD + '）' + (usedToday('_fairWatchDay') ? '　✅ 今年已看' : '') + '</button>';
+        html += '<p class="text-[11px] text-gray-500 mt-1">庙会一年只开这一日——铜钱只花不赚，换来的是心气与念想。' + nextFairSentence() + '</p>';
         if (typeof window.showModal === 'function') { window.showModal((m.icon || '🏮') + ' ' + f.name + ' · 庙会', html); return true; }
         say('🏮 今日' + f.name + '，城里正开庙会。');
         return true;
@@ -197,7 +280,7 @@
 
     function act(kind) {
         var f = todayFestival();
-        if (!f) { say('庙会的棚子已经拆了——节过完了。', 'info'); return; }
+        if (!f) { say('庙会的棚子已经拆了——节过完了。' + nextFairSentence(), 'info'); return; }
         switch (kind) {
             case 'riddle': askRiddle(); break;
             case 'lantern': doLantern(); break;
@@ -209,7 +292,7 @@
 
     // —— 猜灯谜：谜面按城+日定死，对错是定数（零骰） ——
     function askRiddle() {
-        if (usedToday('_fairRiddleDay')) { say('🏮 今日这盏灯谜你已经猜过了——掌柜的谜库一年就这么几盏，明日请早。', 'info'); return; }
+        if (usedToday('_fairRiddleDay')) { say('🏮 今年这盏灯谜你已经猜过了——掌柜的谜库一年就这么几盏。' + nextFairSentence(), 'info'); return; }
         var r = todayRiddle();
         var html = '<p class="text-sm text-gray-300 mb-1">灯摊掌柜指着走马灯下的一盏纱灯，灯面上写着一行谜：</p>' +
             '<p class="text-base text-amber-300 my-3">「' + r.q + '」</p>' +
@@ -223,8 +306,8 @@
     }
     function answer(idx) {
         var f = todayFestival();
-        if (!f) { say('庙会的棚子已经拆了。', 'info'); return; }
-        if (usedToday('_fairRiddleDay')) { say('🏮 今日这盏灯谜你已经猜过了。', 'info'); return; }
+        if (!f) { say('庙会的棚子已经拆了。' + nextFairSentence(), 'info'); return; }
+        if (usedToday('_fairRiddleDay')) { say('🏮 今年这盏灯谜你已经猜过了。' + nextFairSentence(), 'info'); return; }
         // 第八十二波·FIX-04：先锁定玩家实际看到的这道题，再推进耗时——
         // 旧序是 耗时→取题→判题，答题耗时跨午夜后取到次日新题，按新题判旧答案（答对判错）
         var r = todayRiddle();
@@ -244,55 +327,64 @@
                     '<button onclick="openFestivalFair()" class="w-full p-2 rounded text-sm bg-amber-700 hover:bg-amber-600 text-white">↩️ 回庙会接着逛</button>');
             } else say('🏮 灯谜猜中了！（' + winNote + '）', 'success');
         } else {
-            settle({ mood: CFG.RIDDLE_LOSE_MOOD });
+            var loseSpec = { mood: CFG.RIDDLE_LOSE_MOOD };
+            var loseBefore = snapshot();
+            settle(loseSpec);
             refresh();
-            var right_ans = r.opts[r.ans];
+            var rightAns = r.opts[r.ans];
+            var loseNote = gainParen(loseBefore, loseSpec);
             if (typeof window.showModal === 'function') {
                 window.showModal('🏮 猜灯谜 · 差一层', '<p class="text-sm text-gray-300 mb-2">你报了谜底，掌柜笑着摇头，把纱灯转了个面：「再想想——」到底没舍得叫你空手走，点了谜底。</p>' +
-                    '<p class="text-xs text-amber-300 mb-3">谜底是「' + right_ans + '」。' + r.why + '</p>' +
-                    '<p class="text-xs text-gray-400 mb-3">没猜中也不亏——听掌柜讲谜底，比猜中还长见识。（心境+' + CFG.RIDDLE_LOSE_MOOD + '）</p>' +
+                    '<p class="text-xs text-amber-300 mb-3">谜底是「' + rightAns + '」。' + r.why + '</p>' +
+                    '<p class="text-xs text-gray-400 mb-3">没猜中也不亏——听掌柜讲谜底，比猜中还长见识。' + loseNote + '</p>' +
                     '<button onclick="openFestivalFair()" class="w-full p-2 rounded text-sm bg-amber-700 hover:bg-amber-600 text-white">↩️ 回庙会接着逛</button>');
-            } else say('🏮 灯谜没猜中，掌柜点了谜底：是「' + right_ans + '」。（心境+' + CFG.RIDDLE_LOSE_MOOD + '）');
+            } else say('🏮 灯谜没猜中，掌柜点了谜底：是「' + rightAns + '」。' + loseNote);
         }
     }
 
     // —— 放河灯 ——
     function doLantern() {
-        if (usedToday('_fairLanternDay')) { say('🕯️ 今日你已经放过一盏河灯了——心意到了就好，不必多放。', 'info'); return; }
+        if (usedToday('_fairLanternDay')) { say('🕯️ 今年你已经放过一盏河灯了——心意到了就好，不必多放。' + nextFairSentence(), 'info'); return; }
         var m = meta();
-        var r = settle({ copper: -CFG.LANTERN_COPPER, mood: CFG.LANTERN_MOOD, karma: CFG.LANTERN_KARMA });
+        var spec = { copper: -CFG.LANTERN_COPPER, mood: CFG.LANTERN_MOOD, karma: CFG.LANTERN_KARMA };
+        var before = snapshot();
+        var r = settle(spec);
         if (!r.ok) { say('🕯️ 一盏河灯要 ' + CFG.LANTERN_COPPER + ' 铜钱——你摸遍口袋没凑出来，摊主也不催，只把灯往你这边推了推。', 'warning'); return; }
         markToday('_fairLanternDay');
         spendTime(CFG.LANTERN_MIN, '庙会放河灯');
         refresh();
-        say('🕯️ ' + (m ? m.lantern : '你把河灯放进水里，看它载着一点光顺流漂远。') + '（心境+' + CFG.LANTERN_MOOD + '、因果+' + CFG.LANTERN_KARMA + (r.note ? '；' + r.note : '') + '）', 'success');
+        say('🕯️ ' + (m ? m.lantern : '你把河灯放进水里，看它载着一点光顺流漂远。') + gainParen(before, spec), 'success');
         softClose();
     }
 
     // —— 节令小吃 ——
     function doFood() {
-        if (usedToday('_fairFoodDay')) { say('🍡 今日已经尝过节令小吃——摊主笑道：「这个点儿的货卖完喽，明日赶早。」', 'info'); return; }
+        if (usedToday('_fairFoodDay')) { say('🍡 今年已经尝过节令小吃——摊主笑道：「这个点儿的货卖完喽。」' + nextFairSentence(), 'info'); return; }
         var m = meta();
-        var r = settle({ copper: -CFG.FOOD_COPPER, mood: CFG.FOOD_MOOD });
+        // 精力这一笔原先在 settle 之外另起一次直写（一笔账两副笔），现并回同一次结算：
+        // 通道里 `p.energy = Math.min(maxEnergy, …)` 与这里原样同式，截顶由 gainNote 说实话
+        var spec = { copper: -CFG.FOOD_COPPER, mood: CFG.FOOD_MOOD, energy: CFG.FOOD_EN };
+        var before = snapshot();
+        var r = settle(spec);
         if (!r.ok) { say('🍡 一份' + (m ? m.food : '小吃') + '要 ' + CFG.FOOD_COPPER + ' 铜钱——摊主的勺子停在锅上，等你摸钱。', 'warning'); return; }
         markToday('_fairFoodDay');
-        var c = charData();
-        if (c) c.energy = Math.max(0, Math.min(Number(c.maxEnergy) || 100, Number(c.energy != null ? c.energy : 0) + CFG.FOOD_EN));
         spendTime(CFG.FOOD_MIN, '庙会吃小吃');
         refresh();
-        say('🍡 ' + (m ? m.foodDesc : '一份节令小吃下肚，热气从胃里漫开。') + '（精力+' + CFG.FOOD_EN + '、心境+' + CFG.FOOD_MOOD + (r.note ? '；' + r.note : '') + '）', 'success');
+        say('🍡 ' + (m ? m.foodDesc : '一份节令小吃下肚，热气从胃里漫开。') + gainParen(before, spec), 'success');
         softClose();
     }
 
     // —— 看花灯 ——
     function doWatch() {
-        if (usedToday('_fairWatchDay')) { say('🎆 花灯你已经看过了——灯还是那些灯，再看就该收摊喽。', 'info'); return; }
+        if (usedToday('_fairWatchDay')) { say('🎆 花灯你今年已经看过了——灯还是那些灯，再看就该收摊喽。' + nextFairSentence(), 'info'); return; }
         var m = meta();
-        settle({ mood: CFG.WATCH_MOOD });
+        var spec = { mood: CFG.WATCH_MOOD };
+        var before = snapshot();
+        settle(spec);
         markToday('_fairWatchDay');
         spendTime(CFG.WATCH_MIN, '庙会看花灯');
         refresh();
-        say('🎆 ' + (m ? m.watch : '满街花灯看得人眼花缭乱，你在灯下站了半晌，心里那点烦闷被灯光泡软了。') + '（心境+' + CFG.WATCH_MOOD + '）', 'success');
+        say('🎆 ' + (m ? m.watch : '满街花灯看得人眼花缭乱，你在灯下站了半晌，心里那点烦闷被灯光泡软了。') + gainParen(before, spec), 'success');
         softClose();
     }
 
@@ -319,6 +411,8 @@
         FEST_META: FEST_META,
         todayFestival: todayFestival,
         isFestivalDay: isFestivalDay,
+        nextFair: nextFair,
+        nextFairSentence: nextFairSentence,
         todayRiddle: todayRiddle,
         inCity: inCity,
         panelHtml: panelHtml,

@@ -44,7 +44,7 @@ function makeWorld(opts) {
         getRealmTier: function (r) { var i = realmOrder.indexOf(r); return i < 0 ? 6 : i; },
         addFame: function (n) { W._fame = (W._fame || 0) + (n || 0); },
         gainCultivationBonus: function (n) { W._essence = (W._essence || 0) + (n || 0); },
-        addItem: function (id) { (W._items = W._items || []).push(id); return true; },
+        addItem: function (id, n) { (W._items = W._items || []).push(id); return n || 1; },   // 桩：回实收件数
         itemById: {}, allItems: [], materials: [],
         timeSystem: { getAbsoluteDay: function () { return day; }, onNewDaySubscribe: function (fn) { (W._dayHooks = W._dayHooks || []).push(fn); } },
         startBattle: function (e) { W._lastEnemy = e; return { _stub: true }; },
@@ -112,6 +112,14 @@ var W1 = makeWorld({ realm: '渡劫', gender: 'male' });
     W1.qiResumeIgnore();
     W1.settleQiBattle(true, 'hu_escort');
     ok(W1.eventFlags['qi_knock2'] === 'escort' && W1.qiLedgerProbe().graces.some(e => e.text.indexOf('灯下三百口') >= 0), 'N10 护送胜=恩列长生牌一笔+终战还命预告');
+    // 【第一百四十三批·按「钉法」补一步推进，判据未松】护送胜之后，原先直接落到叩门③屋顶。
+    // 第一百四十三批在「叩门②灯下」与「叩门③屋顶」之间插入了新桩「门缝下的信」（main_052b，
+    // 外包 B3 批），qi-arc3.js 的两条入桩路径都改为先调 _k2b()：`:320`（qiKnock2Choice 首次作答）
+    // 与 `:332`（_qiSettleExtraB 护送胜）。信答完（qiLetterChoice）才继续到 _k3() 屋顶。
+    // ⇒ 原 N11 在护送胜之后**立刻**去量屋顶文本，量到的是信、不是屋顶 ⇒ 假红。
+    // **N11 要守的判据一个字未松**（「叩门③屋顶邀酒换皮定稿」仍在），只是要先答完信再量。
+    ok(W1._overlays.join('').indexOf('门缝') >= 0, 'N10b 护送胜之后先落在新桩「门缝下的信」（不直接跳屋顶）');
+    W1.qiLetterChoice('look');
     var roofText = W1._overlays.join('');
     ok(roofText.indexOf('小没良心的，陪本座去一趟') >= 0 && roofText.indexOf('本座要动最后一条脉了') >= 0, 'N11 叩门③屋顶邀酒换皮定稿（男版+新动机）');
     var hb0 = W1.qiHeartBondProbe();
@@ -145,6 +153,10 @@ var W2 = makeWorld({ realm: '大乘', gender: 'female' });
     ok(W2.qiLedgerProbe().hearts.length === hearts0 + 2, 'N20 退回盟帖=人心簿一笔');
     W2.qiKnock2Choice('closed');
     ok(W2._logs.join('').indexOf('灯下客') >= 0 && W2.qiStreetProbe().some(s => s.text.indexOf('灯下客') >= 0), 'N21 关门=《灯下客》说书段（街谈载体）');
+    // 【第一百四十三批·按「钉法」补一步推进，判据未松】同 N11：qiKnock2Choice 之后先落
+    // 新桩「门缝下的信」（main_052b，外包 B3 批），答完信才到屋顶。N22 的判据原样，只是量测点后移。
+    ok(W2._overlays.join('').indexOf('门缝') >= 0, 'N21b 关门之后先落在新桩「门缝下的信」（不直接跳屋顶）');
+    W2.qiLetterChoice('pillow');
     ok(W2._overlays.join('').indexOf('见了本座连窗都不关') >= 0 && W2._overlays.join('').indexOf('一路人，送本座一程') >= 0, 'N22 屋顶女版换皮定稿（年龄铁设定：无撒娇腔）');
     W2.qiKnock3Choice('window');
     ok(W2._items.indexOf('qi_window_wine') >= 0 && W2._logs.join('').indexOf('窗台上多了一坛酒') >= 0, 'N23 关窗=窗台留酒（不飞升变体伏件）');

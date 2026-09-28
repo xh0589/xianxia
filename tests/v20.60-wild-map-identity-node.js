@@ -80,7 +80,7 @@ global.timeSystem = {
     onNewDaySubscribe: function () {}
 };
 
-global.addItemToInventory = function () { return true; };
+global.addItemToInventory = function (id, n) { return n || 1; };   // 第一百三十批：桩按真源口径回实收件数
 global.updateCharacterStatus = function () {};
 global.updateCurrencyUI = function () {};
 global.getEffectiveMax = function () { return 100; };

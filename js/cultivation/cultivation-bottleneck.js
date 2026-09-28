@@ -100,8 +100,8 @@ const BOTTLENECK_SOLUTIONS = [
             if (window.showMessage) window.showMessage('你强行运转真气，不顾一切地冲击瓶颈！', 'warning');
             var charData = window.currentCharData;
             if (charData) {
-                charData.energy = Math.max(0, (charData.energy || 100) - 20);
-                charData.qi = Math.max(0, (charData.qi || 100) - 20);
+                charData.energy = Math.max(0, (charData.energy ?? 100) - 20);
+                charData.qi = Math.max(0, (charData.qi ?? 100) - 20);
             }
             if (window.timeSystem) window.timeSystem.advanceTime(120, '强行突破');
             var success = Math.random() < 0.2;
@@ -210,7 +210,7 @@ function executeBottleneckSolution(solutionIndex) {
     // 检查需求
     if (sol.requires.energy) {
         var charData = window.currentCharData;
-        if (charData && (charData.energy || 100) < sol.requires.energy) {
+        if (charData && (charData.energy ?? 100) < sol.requires.energy) {
             if (window.showMessage) window.showMessage('精力不足（需要≥' + sol.requires.energy + '），请先休息恢复。', 'warning');
             return;
         }

@@ -166,7 +166,7 @@
             var p = char();
             if (p) {
                 p.qi = Math.max(0, num(p.qi) - 20);
-                p.health = Math.max(1, num(p.health || 1) - 15);
+                p.health = Math.max(1, num(p.health ?? 1) - 15);
             }
             log('讨债的堵在门口：你' + (taken > 0 ? '被划走身上全部 ' + taken + ' 灵石' : '身无分文') +
                 '，挨了推搡伤了元气（真气-20，伤-15）。欠款仍记在账上，明日他们还会来。', 'danger');

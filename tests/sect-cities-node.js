@@ -84,7 +84,7 @@ function makeSandbox(opts) {
         sectAddContribution: function (n, r) { stt.contrib += n; stt.contribReason = r; },
         sectPassiveTrain: function () {},
         applyBuff: function () { stt.buffed = true; },
-        addItem: function (id, n) { stt.addItem = { id: id, n: n }; },
+        addItem: function (id, n) { stt.addItem = { id: id, n: n }; return n || 1; },   // 第一百三十批：桩按真源口径回实收件数
         consumeItem: function (id, n) { stt.consumed = id; return true; },
         itemById: { 'mat_lingzhi': { name: '灵芝', price: 40 } },
         inventory: { currency: { spiritStones: 0 }, slots: [{ templateId: 'mat_lingzhi', count: 2, getTemplate: function () { return { name: '灵芝', price: 40 }; } }] },

@@ -56,6 +56,8 @@
         return (cd() && cd().location) ||
             (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || '';
     }
+    // DES-57：城名两串写法（舆图转发的 cityName 带空格「帝都 · 长安」，角色账里是「帝都·长安」）——认账前先取键
+    function pkCity(s) { return String(s == null ? '' : s).replace(/\s+/g, ''); }
     function absDay() {
         try {
             if (window.WorldCalendar && typeof window.WorldCalendar.day === 'number' && window.WorldCalendar.day > 0) return Math.floor(window.WorldCalendar.day);
@@ -178,7 +180,7 @@
         var j = JOBS[l.job];
         var d = absDay();
         if (!d) { say('💼 天上没钟，铺面不开工。', 'info'); return false; }
-        if (l.city !== city()) { say('💼 你的差事在' + l.city + '——这儿没你的岗。', 'info'); return false; }
+        if (pkCity(l.city) !== pkCity(city())) { say('💼 你的差事在' + l.city + '——这儿没你的岗。', 'info'); return false; }
         if (Number(l.lastWorkDay) === d) { say('💼 今日这工你已经上过了——东家不兴一天使两遍。', 'info'); return false; }
         var c = cd();
         if (Number(c.energy) < j.energy) { say('💼 精力不够上工（要 ' + j.energy + '）——东家看你脸色，劝你歇一日。', 'warning'); return false; }
@@ -231,15 +233,15 @@
         try {
             var ct = cityName || city();
             var l = ledger();
-            var here = (city() === ct);
-            if (l && l.city === ct) {
+            var here = (pkCity(city()) === pkCity(ct));
+            if (l && pkCity(l.city) === pkCity(ct)) {
                 var j = JOBS[l.job];
                 var workedToday = here && Number(l.lastWorkDay) === absDay();
                 return '<div class="p-2 bg-sky-900/20 rounded border border-sky-800/50">' +
                     '<button onclick="CityJobs.open()" class="w-full text-left text-sm text-sky-300 hover:text-sky-200">' +
                     j.icon + ' 差事：' + j.name + '（工钱一日 ' + wageOf(l.job) + ' 铜' + (workedToday ? ' · 今日已上工' : ' · 今日未上工') + '）</button></div>';
             }
-            if (cityName && city() && cityName !== city()) return '';
+            if (cityName && city() && pkCity(cityName) !== pkCity(city())) return '';
             if (!jobsHere(ct).length) return '';
             return '<div class="p-2 bg-sky-900/20 rounded border border-sky-800/50">' +
                 '<button onclick="CityJobs.open()" class="w-full text-left text-sm text-sky-300 hover:text-sky-200">💼 寻个差事（城里的长活——铺子伙计、蒙馆代课、医馆帮手、更夫巡夜，按日领钱）</button></div>';
@@ -252,7 +254,7 @@
         if (l) {
             var j = JOBS[l.job];
             var ri = raiseInfo(l.job);
-            var home = l.city === city();
+            var home = pkCity(l.city) === pkCity(city());
             var bossR = bossAddr(l.job, l.city);
             html += '<p class="text-sm text-gray-300 mb-2">' + j.icon + ' 你在<b class="text-sky-300">' + l.city + '</b>当着「' + j.name + '」' + (bossR ? '（东家' + bossR + '）' : '') + '。</p>' +
                 '<p class="text-xs text-gray-500 mb-3">工钱一日 ' + wageOf(l.job) + ' 铜（已做 ' + ri.shifts + ' 个工' +

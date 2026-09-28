@@ -46,8 +46,16 @@ console.log('\n[C] 天道福报与机缘：有骰、有额顶、不刷屏');
     ok(karma.includes('roll < 0.15') && karma.includes('addSpiritStones(10)'), 'C1 善报是每日一骰的一成半、十枚封顶（路人赠礼有名目）');
     ok(karma.includes('karma >= 50'), 'C2 福报只落给积了善业的——不是人人有份的印钞机');
     const ev = src('js/event-system.js');
-    const iAdd = ev.indexOf('addSpiritStones(amount)');
-    ok(iAdd >= 0 && ev.slice(Math.max(0, iAdd - 1500), iAdd).match(/amount|机缘|拾得|赠/), 'C3 事件拾遗有金额有名目（一次性机缘）');
+    // 第三十一波立这条时钉的字面是 `addSpiritStones(amount)`。第一百一十九波 DES-59 把「先拼中文串、
+    // 再 parseInt 从文案里抠回数字」改成记录制，那支笔现在是 `addSpiritStones(r.count)`——
+    // 闸的原意一个字没改：灵石进账要数得清口子上有几处、额度写在账上、并且躲在掷骰后面。
+    const 口 = (ev.match(/addSpiritStones\(/g) || []).length;
+    ok(口 === 1, 'C3a 事件里的灵石口子仍只有一支（现读 ' + 口 + ' 处，全走 applyTreasureRewards）');
+    const iAdd = ev.indexOf('addSpiritStones(r.count)');
+    ok(iAdd >= 0 && ev.slice(Math.max(0, iAdd - 1500), iAdd).match(/spiritStones|机缘|拾得|赠/), 'C3b 事件拾遗有金额有名目（一次性机缘）');
+    const 额 = (ev.match(/currency: 'spiritStones', count: (\d+)/g) || []);
+    ok(额.length >= 3 && 额.every(s => /count: \d+/.test(s)), 'C3c 额度写在账上、不从文案里抠（现读 ' + 额.length + ' 笔：' + 额.join(' / ') + '）');
+    ok(/Math\.random\(\) < 0\.\d+\)\s*\{\s*loot\.push\(\{ currency: 'spiritStones'/.test(ev), 'C3d 掉落灵石仍压在掷骰后面（不是点击回本机）');
 }
 
 console.log('\n[D] 资产产出类：灵脉日产有涨落、有夜袭，不是点击回本机');

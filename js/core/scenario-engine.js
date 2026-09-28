@@ -81,7 +81,14 @@ const scenarioEngine = {
             if (!applied || applied.success === false) {
                 var reasonMap = {
                     spiritStones: '灵石不足', copper: '铜钱不足',
-                    inventory_full_or_invalid_item: '背包空间不足或物品无效',
+                    // DES-85 尾（第一百四十二批）：三个键替掉原来那个一名两义的
+                    // `inventory_full_or_invalid_item`。原键把「行囊满」和「物品模板查无此号」
+                    // 糊成一句「背包空间不足或物品无效」——玩家看完不知道自己该干什么。
+                    // 现在按 reward-service 落下来的真因分话：满包让他腾格子，
+                    // 查无此号是配置错（该报障，不是玩家的错），其余归「这一笔没接住」。
+                    bag_full: '行囊满了，腾出格子再取',
+                    item_no_template: '这一件在百宝册上查无此号（是我们的疏漏，不是你的问题）',
+                    inventory_failed: '这一笔没能落进行囊，事由待查',
                     qi: '真气不足', energy: '精力不足', health: '生命不足',
                     transaction_unavailable: '经济事务模块未加载',
                     no_character: '角色状态未初始化',
@@ -460,7 +467,8 @@ const scenarioEngine = {
 
     // 存档
     save: function() {
-        try { localStorage.setItem('xianxia_scenario_progress', JSON.stringify(this.progress)); } catch(e) {}
+    // 第一百四十四批：原式是 `try { … } catch (e) {}`。接入 saveToStorage 后那层 catch 成为死支（单源自己吞异常、返回布尔、从不抛）——留着它等于假装还有一层守卫。已拆。
+        window.saveToStorage('xianxia_scenario_progress', JSON.stringify(this.progress));
     },
     load: function() {
         try {

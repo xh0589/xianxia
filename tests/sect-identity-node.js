@@ -46,7 +46,7 @@ function makeWorld(opts) {
         currentCharData: { combatSkills: {} },
         showMessage: function (m) { msgs.push(String(m)); },
         gameLog: { add: function (m) { logs.push(String(m)); } },
-        addItem: function (id, n) { (W._added = W._added || []).push({ id: id, n: n }); return true; },
+        addItem: function (id, n) { (W._added = W._added || []).push({ id: id, n: n }); return n || 1; },   // 桩：回实收件数
         updateInventoryUI: function () {},
         sectAddContribution: function (n, reason) {
             var d = W.discipleState; if (!d) return 0;

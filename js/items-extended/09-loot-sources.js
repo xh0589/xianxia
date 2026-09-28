@@ -90,7 +90,7 @@ const CHEST_LOOT = {
     rare: {
         items: ['pill_big_recovery', 'pill_qi_gather', 'pill_energy_return', 'mat_refined_iron', 'mat_dark_iron',
                 'mat_thousand_lingzhi', 'mat_snow_lotus', 'wpn_dark_iron_sword', 'arm_chain_mail',
-                'pill_body_foundation', 'pill_diamond', 'tal_fireball', 'art_sword_basic', 'spec_enhance_stone', 'spec_transfer_stone'],
+                'pill_body_foundation', 'tal_fireball', 'art_sword_basic', 'spec_enhance_stone', 'spec_transfer_stone'], // DES-91：原列有 'pill_diamond'，全仓仅此一见、百宝册查无，掷中即发不出货
         count: [1, 2],
         spiritStones: [20, 80]
     },
@@ -107,21 +107,38 @@ const CHEST_LOOT = {
 };
 
 // ============ 打开宝箱 ============
+// DES-91（第一百二十九批）：旧写法先掷骰再问表——池里混进查无此物的号时照掷，addItem 一件也发不出，
+//   屏上却已有一句「你找到了宝物」（且开完箱什么也不念）。故掷之前先对一遍百宝册，落袋问实收。
 function openChest(chestType) {
     const table = CHEST_LOOT[chestType];
     if (!table) return;
-    
-    const itemId = table.items[Math.floor(Math.random() * table.items.length)];
+
+    const lib = window.itemById;
+    const pool = lib ? table.items.filter(function (id) { return !!lib[id]; }) : table.items.slice();
+    if (!pool.length) return null; // 整池都是虚标货：这箱开不出东西，如实别演
+
+    const itemId = pool[Math.floor(Math.random() * pool.length)];
     const count = table.count[0] + Math.floor(Math.random() * (table.count[1] - table.count[0] + 1));
     const stones = table.spiritStones[0] + Math.floor(Math.random() * (table.spiritStones[1] - table.spiritStones[0] + 1));
-    
+
+    let got = 0;
     if (window.inventory) {
-        window.inventory.addItem(itemId, count);
+        got = Number(window.inventory.addItem(itemId, count)) || 0;
         window.inventory.currency.spiritStones = (window.inventory.currency.spiritStones || 0) + stones;
     }
-    
+
     const itemName = window.itemById?.[itemId]?.name || itemId;
-    return { itemId, count, stones, itemName };
+    if (typeof window.showMessage === 'function') {
+        window.showMessage(got >= count
+            ? '📦 开箱得了 ' + itemName + '×' + got + '，另得灵石 ' + stones + '。'
+            : (got > 0
+                ? '📦 箱里是 ' + itemName + '×' + count + '，行囊只塞得下 ' + got + '/' + count + ' 件，余下的留在箱里；灵石 ' + stones + ' 已收入。'
+                : '📦 箱里的 ' + itemName + '×' + count + ' 一件也没能带走：'
+                  + ((typeof window.addItemFailText === 'function' && window.addItemFailText(itemName)) || '它没有跟你走。') // DES-90（第一百三十九批）：开箱是一次性的，②形·句尾位带句号、另起一句的形状保留
+                  + '（灵石 ' + stones + ' 已收入。）'),
+            got >= count ? 'success' : 'warning');
+    }
+    return { itemId, count, stones, itemName, got: got, poolSize: pool.length };
 }
 
 // ============ 获取扩展战斗掉落 ============

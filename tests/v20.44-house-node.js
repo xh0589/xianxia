@@ -27,7 +27,9 @@ function makeWorld(stones) {
         localStorage: { getItem: function () { return null; }, setItem: function () {}, removeItem: function () {} },
         inventory: { currency: { spiritStones: stones != null ? stones : 10000 }, slots: [], maxSlots: 30 },
         showMessage: function (m) { msgs.push(String(m)); },
-        addItem: function (id, n) { added.push({ id: id, n: n }); },
+        // 第八十二波起真 window.addItem 回的是「实收件数」；第一百二十三批·DES-72 之后
+        // 洞府那侧要读这个数，故桩子照契约回报（不返 ⇒ 调用方按「一件没收着」处理）
+        addItem: function (id, n) { added.push({ id: id, n: n }); return n; },
         updateCurrencyUI: function () {}, renderHouseStatus: function () {},
         addProfessionExp: function () {}, getLifeSkill: function () { return 0; },
         getAbsoluteDay: function () { return state.day; },

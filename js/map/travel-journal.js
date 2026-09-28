@@ -87,6 +87,14 @@
         return true;
     }
 
+    // 只读问一句：这笔一次性账落过没有（图鉴要查「亲至」，别让它自己伸手进 _travel）
+    // 走的是纯读路——问不出账时不许在角色数据上凭空长出 _travel（那会跟着存档走）
+    function hasMark(key) {
+        const cd = charData();
+        if (!cd || !key || !cd._travel || !cd._travel.marks) return false;
+        return !!cd._travel.marks[key];
+    }
+
     // 初至一域（建图时调用，零随机零漂移）
     function noteRegion(region) {
         const cd = charData();
@@ -166,6 +174,7 @@
         noteLandmark: noteLandmark,
         noteStep: noteStep,
         markOnce: markOnce,
+        hasMark: hasMark,
         summary: summary,
         render: render,
         travelTitle: travelTitle,

@@ -16,7 +16,7 @@ function reincarnate() {
     var cd = window.currentCharData;
     if (!cd) { if (window.showMessage) window.showMessage('请先创建角色', 'warning'); return false; }
     // 必须处于残魂态或已死（避免活着就转）
-    if (!_inSoulState() && (cd.health || 100) > 0) {
+    if (!_inSoulState() && (cd.health ?? 100) > 0) {
         if (window.showMessage) window.showMessage('肉身尚健，未到转世之时。', 'warning');
         return false;
     }

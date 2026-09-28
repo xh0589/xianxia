@@ -227,12 +227,18 @@
             if (entries.length === 0) {
                 html += '<p class="text-xs text-gray-500 mt-1">尚未收录——去世界里走走就有了。</p>';
             } else {
-                html += '<div class="mt-1 space-y-0.5 max-h-32 overflow-y-auto">';
+                html += '<div class="mt-1 space-y-0.5">';
+                var shown = 0;
                 entries.slice(0, 30).forEach(function (e) {
                     var nm = (e.info && (e.info.name || e.info.title)) || e.itemId;
-                    html += '<p class="text-xs text-gray-300">· ' + nm + (e.count > 1 ? ' <span class="text-gray-500">×' + e.count + '</span>' : '') + '</p>';
+                    if (shown < 8) {
+                        html += '<p class="text-xs text-gray-300">· ' + nm + (e.count > 1 ? ' <span class="text-gray-500">×' + e.count + '</span>' : '') + '</p>';
+                        shown++;
+                    }
                     markSeen(c.id, e.itemId);
                 });
+                var unlisted = Math.min(entries.length, 30) - shown;
+                if (unlisted > 0) html += '<p class="text-xs text-gray-500 mt-0.5">…另有 ' + unlisted + ' 条未列（此处每类只摆头 ' + shown + ' 条）</p>';
                 html += '</div>';
             }
             html += '</div>';

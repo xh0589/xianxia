@@ -208,9 +208,11 @@ var visLeak = null;
     if (latin.test(v)) visLeak = visLeak || s;
 });
 assert(visLeak === null, 'E5 心境账话术零拉丁（漏: ' + visLeak + '）');
-// 老账未动
 var satSrc = fs.readFileSync(path.join(ROOT, 'js/core/satiety.js'), 'utf8');
-assert(satSrc.indexOf('c.mood = Math.max(0, (c.mood || 50) - 5);') >= 0, 'E6 饥饿掉心境的老账一字未动（写入方各归各）');
+// 老账未动：饥饿掉心境这一笔仍只在 satiety.js 里写（本波不自建心境账）。
+// 2026-09-24 同日 [AP] 收口把它的读法从 `|| 50` 换成 `?? 50`（0 是合法心境，不许先兜成 50 再扣），故钉新串。
+assert(satSrc.indexOf('c.mood = Math.max(0, (c.mood ?? 50) - 5);') >= 0 && satSrc.indexOf('(c.mood || 50)') < 0,
+    'E6 饥饿掉心境的老账仍归 satiety.js 写、且读的是空值判存在那一把尺（旧 || 写法不许回来）');
 var rsSrc = fs.readFileSync(path.join(ROOT, 'js/core/reward-service.js'), 'utf8');
 assert(rsSrc.indexOf('mood: signedInt(spec.mood)') >= 0, 'E7 统一结算的心境键原样（六十五波的老账）');
 var wcSrc = fs.readFileSync(path.join(ROOT, 'js/core/world-calendar.js'), 'utf8');

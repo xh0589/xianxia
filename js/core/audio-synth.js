@@ -74,7 +74,8 @@ function playSfx(name) { if (SFX[name]) SFX[name](); }
 
 function setMuted(m) {
     _muted = !!m;
-    try { localStorage.setItem('xianxia_sfx_muted', _muted ? '1' : '0'); } catch (e) {}
+    // 第一百四十四批：原式是 `try { … } catch (e) {}`。接入 saveToStorage 后那层 catch 成为死支（单源自己吞异常、返回布尔、从不抛）——留着它等于假装还有一层守卫。已拆。
+    window.saveToStorage('xianxia_sfx_muted', _muted ? '1' : '0');
 }
 
 function isMuted() { return _muted; }

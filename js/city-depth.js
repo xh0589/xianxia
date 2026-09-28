@@ -40,9 +40,31 @@
     function dm() { return (global.XianXia && global.XianXia.DataManager) || null; }
     function addTime(min, why) { if (global.timeSystem && global.timeSystem.advanceTime) { try { global.timeSystem.advanceTime(min, why); } catch (e) {} } }
     function grantItem(itemId, n) {
-        if (typeof global.addItem === 'function') return !!global.addItem(itemId, n || 1);
-        if (global.addItemToInventory) { global.addItemToInventory(itemId, n || 1); return true; }
-        return false;
+        n = Math.max(1, Math.floor(Number(n) || 1));
+        var 名 = (global.itemById && global.itemById[itemId] && global.itemById[itemId].name) || itemId;
+        if (typeof global.giveWithReceipt === 'function') return global.giveWithReceipt(itemId, n, { quiet: true });
+        var 得 = 0;
+        if (typeof global.addItem === 'function') 得 = Number(global.addItem(itemId, n)) || 0;
+        else if (global.addItemToInventory) 得 = Number(global.addItemToInventory(itemId, n)) || 0;
+        // 没有入库通道的世界按全数认（与 giveWithReceipt 同口径），别凭空造一次「没收到」
+        else 得 = n;
+        // DES-96：账当场抄进收据——全局那条会被下一次入袋刷掉
+        return { got: 得, count: n, name: 名, reason: global.addItemFailReason || null };
+    }
+    // DES-90：没接住的原因要说真话——满包与查无此号是两回事
+    // DES-96（第一百三十八批）：缘由跟着这一笔走，且半包要问半包那支持牌手（账上半包不落笔，问错支就落回「行囊已满」）
+    function 货没处放(收) {
+        var 名 = (收 && 收.name) || '';
+        var 说 = (收 && 收.got > 0) ? global.addItemReasonPhraseFor : global.addItemFailPhraseFor;
+        // ⚠️ DES-97：本 helper 的返回值被 `:103`／`:172`／`:232`／`:234` 拼进「…：<此句>」的**句子中段**（
+        //   103：'…灵石原样退回：' + 货没处放(收) ；172：'…又缩回土里：' + 货没处放(剑) ；
+        //   232：'…另 N 枚没能带走：' + 货没处放(丹) ；234：'…一枚也没落到你手里：' + 货没处放(丹)），
+        // 所以必须吃**从句支**（不带句号）。原来吃的是句尾带圆点的 addItemReasonTextFor／addItemFailTextFor／addItemFailText，
+        // 账真落笔时屏上念成「…灵石原样退回：行囊已满，先腾个格子再来。」——
+        // 句号钉在「：」之后，是破句。
+        // 第一百三十八批的 E4 棘轮同样看不穿 helper 边界，是本批补上的。
+        if (typeof 说 === 'function') return 说(收 && 收.reason, 名) || '没能落进你的行囊';
+        return (typeof global.addItemFailPhrase === 'function' && global.addItemFailPhrase(名)) || '没能落进你的行囊';
     }
     // 真源扣灵石：不足返回 false 并提示（不静默）
     function payStones(n, what) {
@@ -79,12 +101,13 @@
         var w = list && list[idx];
         if (!w) return false;
         if (!payStones(w.price, '买下「' + w.name + '」')) return false;
-        if (!grantItem(w.id, 1)) {
+        var 收 = grantItem(w.id, 1);
+        if (!收.got) {
             // 背包放不下则原路退款（不白扣钱）
             var d = dm();
             if (d && typeof d.addSpiritStones === 'function') d.addSpiritStones(w.price);
             else cd().spiritStones = num(cd().spiritStones) + w.price;
-            msg('背包放不下，「' + w.name + '」只好留柜上，灵石原样退回。', 'warning');
+            msg('「' + w.name + '」没能落进你手里，只好留柜上，灵石原样退回：' + 货没处放(收), 'warning');
             return false;
         }
         addTime(10, '逛街采买');
@@ -152,7 +175,8 @@
             if (PROGRESS.swordIntent < 8) { msg('剑意尚浅（需 8），剑身看都不看你。', 'warning'); return false; }
             var prob = clamp((PROGRESS.swordIntent - 8) * 5 + 10, 5, 80);
             if (rngOf(opts)() * 100 < prob) {
-                if (!grantItem('wpn_dark_iron_sword', 1)) { msg('背包放不下，古剑嗡了一声缩回土里。', 'warning'); return false; }
+                var 剑 = grantItem('wpn_dark_iron_sword', 1);
+                if (!剑.got) { msg('古剑出了泥，你却没能接住它——它嗡了一声又缩回土里：' + 货没处放(剑), 'warning'); return false; } // DES-90（第一百三十九批）：古剑是一次性内容，②形；原「你却腾不出手接」断言容量违反 R1，改为只陈述没接住
                 PROGRESS.hasAncientSword = true;
                 PROGRESS.swordIntent = clamp(PROGRESS.swordIntent + 2, 0, SWORD_CAP);
                 msg('🗡️ 古剑出泥，嗡鸣认主！剑意 +2。', 'success');
@@ -205,10 +229,17 @@
                 PROGRESS.trialBest = Math.max(PROGRESS.trialBest, next);
                 c.essence = num(c.essence) + 30 + next * 5;
                 if (typeof global.addFame === 'function') global.addFame(1 + Math.floor(next / 3));
-                if (next % 5 === 0 && grantItem('vitality_pill', 2)) {
-                    msg('🏮 过第 ' + next + ' 层！塔中赐药两枚，真元大涨（第 ' + next + ' 层）。', 'success');
-                } else {
+                if (next % 5 !== 0) {
                     msg('🏮 过第 ' + next + ' 层，塔梯在你面前加长了一截。', 'success');
+                } else {
+                    var 丹 = grantItem('vitality_pill', 2);
+                    if (丹.got >= 丹.count) {
+                        msg('🏮 过第 ' + next + ' 层！塔中赐药两枚，真元大涨（第 ' + next + ' 层）。', 'success');
+                    } else if (丹.got > 0) {
+                        msg('🏮 过第 ' + next + ' 层！塔中赐药，你接住 ' + 丹.got + '/' + 丹.count + ' 枚，另 ' + (丹.count - 丹.got) + ' 枚没能带走：' + 货没处放(丹), 'warning');
+                    } else {
+                        msg('🏮 过第 ' + next + ' 层！塔中赐药两枚，一枚也没落到你手里：' + 货没处放(丹), 'warning');
+                    }
                 }
                 if (global.updateStatusPanel) global.updateStatusPanel();
                 return { success: true, floor: next, prob: prob };

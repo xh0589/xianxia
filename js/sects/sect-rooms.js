@@ -232,7 +232,7 @@
     // 坐诊帮手：医药底子弟子的帮工（练功底+门里记功）
     W.doSectClinicHelp = function () {
         var d = ds(); if (!d) return false;
-        try { if (W.timeSystem && W.timeSystem.advanceTime) W.timeSystem.advanceTime(120, '医馆帮工'); } catch (e) {}
+        try { if (W.timeSystem && W.timeSystem.advanceTime) W.timeSystem.advanceTime(120, '医馆帮工'); } catch (e) { console.warn('[静默失败] js/sects/sect-rooms.js:235 · 医馆帮工耗时：研药的半日时辰没走掉，日程对不上', e && e.message); }
         train('heal');
         try { if (typeof W.sectAddContribution === 'function') W.sectAddContribution(5, '医馆坐诊帮手'); } catch (e) {}
         var lines = [
@@ -264,7 +264,7 @@
             ];
             try { rumor = POOL[Math.floor((W.timeSystem.getAbsoluteDay() || 0)) % POOL.length]; } catch (e) { rumor = POOL[0]; }
         }
-        var line = '🍲 一顿热饭下肚，饭气养人（体魄+3 心境+2，半日）。席间听见——' + rumor.replace(/^👂[^：]*：/, '');
+        var line = '🍲 一顿热饭下肚，饭气养人（体魄+3 意志+2，半日）。席间听见——' + rumor.replace(/^👂[^：]*：/, '');
         // 丐帮「百耳通街」：耳朵长在墙根，多听一条
         try {
             if (typeof W.sectPassiveHas === 'function' && W.sectPassiveHas('ears')) {

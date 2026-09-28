@@ -72,7 +72,7 @@ global.updateCharacterStatus = function () {};
 global.updateNPCStatus = function () {};
 var newDayHandlers = [];
 global.EventBus = { emit: function () {}, on: function (ev, fn) { if (ev === 'newDay') newDayHandlers.push(fn); } };
-global.addItem = function () { return true; };
+global.addItem = function (id, n) { return n || 1; };   // 桩：回实收件数
 var advanced = [];
 var _day = 200;
 global.getAbsoluteDay = function () { return _day; };

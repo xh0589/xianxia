@@ -10,11 +10,11 @@ class PartyMember {
         this.level = npcData.level || 1;
         this.realm = npcData.realm || '炼气';
         this.layer = npcData.layer || 1;
-        this.health = npcData.health || 100;
+        this.health = npcData.health ?? 100;
         this.maxHealth = npcData.maxHealth || 100;
-        this.qi = npcData.qi || 50;
+        this.qi = npcData.qi ?? 50;
         this.maxQi = npcData.maxQi || 50;
-        this.energy = npcData.energy || 100;
+        this.energy = npcData.energy ?? 100;
         this.maxEnergy = npcData.maxEnergy || 100;
         
         // 属性
@@ -317,12 +317,12 @@ function recruitNPC(npcId) {
     
     // 创建队伍成员（从NPC的combat/主属性/战斗技能读取）
     // 血量：从npc.state.health读取当前生命，maxHealth根据境界推导
-    var npcHealth = npc.state?.health || 100;
+    var npcHealth = npc.state?.health ?? 100;
     var realmHpMap = { '凡人': 80, '炼气': 100, '筑基': 150, '金丹': 250, '元婴': 400, '化神': 600 };
     var realmName = npc.combat?.realm || '炼气';
     var baseHp = realmHpMap[realmName] || 100;
     var npcMaxHealth = baseHp + (npc.combat?.layer || 1) * 10;
-    var npcQi = Math.min(npc.state?.qi || 50, npcMaxHealth);
+    var npcQi = Math.min(npc.state?.qi ?? 50, npcMaxHealth);
     var npcMaxQi = npcMaxHealth;
     const member = new PartyMember({
         id: npcId,
@@ -605,7 +605,17 @@ function updatePartyUI() {
         membersList.innerHTML = '';
         
         if (partyData.members.length === 0) {
-            membersList.innerHTML = '<p class="text-gray-500 text-sm">暂无队员</p>';
+            membersList.innerHTML = xEmptyHtml({
+                fill: true,
+                title: '队伍里还没有人',
+                why: '伙伴不会自己跟上——要在对话里当面开口，而那颗【👥 招募入队】的按钮要好感满 50 才会露出来。',
+                next: '下一步：常去找哪位说得来的修士问候、详谈、赠礼，把好感养到 50 以上再请他同行。',
+                hints: [
+                    '当前一队最多 ' + getEffectiveMaxMembers() + ' 人'
+                        + (isPartyUnlimited() ? '（设置页「难度设置」里已解除人数上限）' : '；上限可在设置页「难度设置」里解除。'),
+                    '战死的人会记进下方「阵亡名录」，名录上的名字好感再满也请不回来。'
+                ]
+            });
         } else {
             partyData.members.forEach(member => {
                 const memberElement = createMemberElement(member);
@@ -888,7 +898,12 @@ function unequipMemberSlot(memberId, slot) {
     if (!member || !member.equipment || !member.equipment[slot]) return;
     var it = member.equipment[slot];
     if (it.templateId && typeof window.addItem === 'function') {
-        window.addItem(it.templateId, 1);
+        // DES-82：addItem 报的是行囊实收件数。旧写法把返回值丢在地上、delete 照执行 ⇒ 满包时这件装备当场蒸发
+        var 收下 = Number(window.addItem(it.templateId, 1)) || 0;
+        if (!收下) {
+            showMessage(it.name + ' 这一件没落进你的行囊，先留在' + member.name + '身上——' + ((typeof window.addItemFailText === 'function' && window.addItemFailText(it.name)) || '这一件还在他身上。'), 'warning');
+            return;
+        }
     }
     delete member.equipment[slot];
     savePartyData();
@@ -930,7 +945,14 @@ function assignBagItemToMember(memberId, slot, uid) {
     var t = inst.getTemplate ? inst.getTemplate() : (window.itemById ? window.itemById[inst.templateId] : null);
     // 该槽已有装备则先放回背包
     if (member.equipment && member.equipment[slot] && member.equipment[slot].templateId && typeof window.addItem === 'function') {
-        window.addItem(member.equipment[slot].templateId, 1);
+        // DES-82：换下的旧件要真落进背包才准动新件——旧写法丢返回值，满包时旧件被摘走却没处放，玩家净亏一件
+        var 旧件 = member.equipment[slot];
+        var 收旧 = Number(window.addItem(旧件.templateId, 1)) || 0;
+        if (!收旧) {
+            showMessage('换下来的「' + (旧件.name || '旧装备') + '」没能落进你的行囊——先别换：' + ((typeof window.addItemFailText === 'function' && window.addItemFailText(旧件.name || '旧装备')) || '这一件还在他身上。'), 'warning');
+            showMemberEquipModal(memberId);
+            return;
+        }
     }
     // 从背包移除（按UID）
     try {
@@ -1221,7 +1243,7 @@ function syncWithWorld() {
                 if (npc.combat.layer) m.layer = npc.combat.layer;
                 grew.push(m.name + '（' + (m.realm || '') + ' ' + (m.level || 1) + ' 级）');
             }
-        } catch (e) {}
+} catch (e) { console.warn('[静默失败] js/party-system.js:961 · 队员装备取物：给队员 equip 那件装备前先从背包里取出来，这里没接住，玩家会察觉装备没戴上', e && e && e.message); }
     });
     if (grew.length) {
         savePartyData();

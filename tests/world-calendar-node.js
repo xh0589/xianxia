@@ -352,8 +352,9 @@ WorldCalendar.consumeDue(1);
 var sum25 = WorldCalendar.summarizeRange(0, 10);
 assert(sum25.items.length === 200, 'log 自动截断至 200');
 
-// 26. category 白名单包含 10 个
-assert(WorldCalendar.allowedCategories.length === 10, 'allowedCategories 10 个');
+// 26. category 白名单：v24·DES-26 加节日常历 'festival' → 11 类
+assert(WorldCalendar.allowedCategories.length === 11, 'allowedCategories 11 个');
+assert(WorldCalendar.allowedCategories.indexOf('festival') >= 0, 'festival 在册（节日常历有类目可登记）');
 
 // 27. 完整存档：StateRegistry.exportAll/importAll 链路
 resetCal();

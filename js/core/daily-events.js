@@ -44,10 +44,31 @@ function _deAddCopper(n) {
 
 function _deAddItem(id, count) {
     count = count || 1;
-    if (typeof window.addItem === 'function') {
-        try { window.addItem(id, count); return true; } catch (e) {}
-    }
-    return false;
+    // DES-72（第一百三十批）：旧写法只要 window.addItem 在就一律 return true——实收几件从不问，买货那一头于是钱货两讫个空
+    var 名 = (window.itemById && window.itemById[id] && window.itemById[id].name) || id;
+    if (typeof window.giveWithReceipt === 'function') return window.giveWithReceipt(id, count, { quiet: true });
+    if (typeof window.addItem !== 'function') return { got: count, count: count, name: 名 };  // 没有入库通道的世界按全数认
+    try { return { got: Number(window.addItem(id, count)) || 0, count: count, name: 名 }; } catch (e) { return { got: 0, count: count, name: 名 }; }
+}
+function _de原因(收) {
+    // 满包／查无此号分流（DES-90）：不许一律怪给玩家的格子
+    // DES-90（第一百三十九批）：问不到账时不许由站点断言满包；本函数是通用回退、拿不准归属，选④兜底
+    // ⚠️ DES-97（第一百三十九批）：本 helper 的返回值被 `:59`／`:510` 拼进**句子中段与括号内**——
+    //   `:59`（在 `_de货没处放` 里）：'…只好原样退回去：' + _de原因(收)  ⇒ 中段位
+    //   `:510`：'…这一条没能装进行囊（' + _de原因(收) + '）' + '，你顺手就地换了铜钱。'  ⇒ 括号内
+    //   所以必须吃**从句支**（不带句号）。原来吃的是句尾带圆点的 addItemFailText，
+    //   账真落笔时屏上会念成「…行囊已满，先腾个格子再来。这一笔没记上…」或「（…行囊已满，先腾个格子再来。）」——
+    //   句号钉在句子中间／括号前面，是破句。第一百三十八批的 E4 棘轮只看 addItem*Text( 紧后面跟什么，
+    //   看不穿 helper 的边界；这一处是本批补上的。
+    return (typeof window.addItemFailPhrase === 'function' && window.addItemFailPhrase(收.name)) || '没能落进你的行囊';
+}
+function _de货没处放(收) {
+    return '这一份 ' + 收.name + '×' + 收.count + ' 没能落到你手里，只好原样退回去：' + _de原因(收);
+}
+function _de付灵石(n) {
+    if (window.inventory && window.inventory.currency) window.inventory.currency.spiritStones -= n;
+    else if (window.currentCharData) window.currentCharData.spiritStones = (window.currentCharData.spiritStones || 0) - n;
+    if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI();
 }
 
 function _deAddContribution(n, reason) {
@@ -219,17 +240,15 @@ var DAILY_EVENT_LIST = [
                         _deMsg('灵石不足，小贩白了你一眼。', 'warning');
                         return;
                     }
-                    // 扣除灵石（使用inventory优先）
-                    if (window.inventory && window.inventory.currency) {
-                        window.inventory.currency.spiritStones -= 8;
-                    } else if (window.currentCharData) {
-                        window.currentCharData.spiritStones = (window.currentCharData.spiritStones || 0) - 8;
+                    // DES-86（第一百三十批）：柜台规矩——先验货落袋，再付钱。旧写法先扣 8 灵石、货却没问实收
+                    var 收 = _deAddItem('mat_lingzhi', 1);
+                    if (!收.got) 收 = _deAddItem('mat_spirit_grass', 1);
+                    if (!收.got) {
+                        _deMsg('小贩揭开筐盖：' + _de货没处放(收), 'warning');
+                        return;
                     }
-                    // 使用真实存在的物品 ID
-                    if (!_deAddItem('mat_lingzhi', 1)) {
-                        _deAddItem('mat_spirit_grass', 1);
-                    }
-                    _deMsg('你买下一捆灵草，塞进储物袋。', 'success');
+                    _de付灵石(8);
+                    _deMsg('你花 8 灵石买下一捆 ' + 收.name + '×' + 收.got + '，塞进储物袋。', 'success');
                 }
             },
             {
@@ -244,14 +263,14 @@ var DAILY_EVENT_LIST = [
                             _deMsg('还是买不起……', 'warning');
                             return;
                         }
-                        // 扣除灵石
-                        if (window.inventory && window.inventory.currency) {
-                            window.inventory.currency.spiritStones -= 4;
-                        } else if (window.currentCharData) {
-                            window.currentCharData.spiritStones = (window.currentCharData.spiritStones || 0) - 4;
+                        // DES-86（第一百三十批）：先验货再付钱——旧写法扣了 4 灵石却不问货落没落袋
+                        var 收 = _deAddItem('mat_spirit_grass', 1);
+                        if (!收.got) {
+                            _deMsg('你伸手去接，' + _de货没处放(收) + '小贩耸耸肩：「那这捆我先替你收着。」', 'warning');
+                            return;
                         }
-                        _deAddItem('mat_spirit_grass', 1);
-                        _deMsg('小贩咬牙成交：「就这一回！」', 'success');
+                        _de付灵石(4);
+                        _deMsg('小贩咬牙成交：「就这一回！」你花 4 灵石得手 ' + 收.name + '×' + 收.got + '。', 'success');
                     } else {
                         _deMsg('小贩不屑：「不买走开，别耽误生意。」', 'info');
                     }
@@ -357,7 +376,7 @@ var DAILY_EVENT_LIST = [
                         _deMsg('班头上下打量你，伸手一摊：「' + (noto > 60 ? '通缉画影上可有你半张脸——' : '') + '宵禁前夜游，酒钱 ' + fine + ' 灵石。」你掏了 ' + fine + ' 灵石才走脱。', 'warning');
                     } else {
                         _deMsg('你掏不出 ' + fine + ' 灵石的酒钱，被扭进城西铺子拘了一宿，天亮才放人——饿得前胸贴后背。', 'error');
-                        if (window.currentCharData) window.currentCharData.health = Math.max(1, (window.currentCharData.health || 1) - 10);
+                        if (window.currentCharData) window.currentCharData.health = Math.max(1, (window.currentCharData.health ?? 1) - 10);
                     }
                     if (r.action === 'detain') {
                         if (window.currentCharData) window.currentCharData.qi = Math.max(0, (window.currentCharData.qi || 0) - (r.qi || 15));
@@ -429,8 +448,11 @@ var DAILY_EVENT_LIST = [
                 text: '采摘',
                 effect: function() {
                     _deAdvance(5, '采药');
-                    if (!_deAddItem('mat_lingzhi', 1)) _deAddItem('mat_spirit_grass', 1);
-                    _deMsg('你小心采下灵草，收入囊中。', 'success');
+                    // DES-72（第一百三十批）：旧写法丢了返回值——「收入囊中」照念
+                    var 收 = _deAddItem('mat_lingzhi', 1);
+                    if (!收.got) 收 = _deAddItem('mat_spirit_grass', 1);
+                    _deMsg(收.got > 0 ? '你小心采下 ' + 收.name + '×' + 收.got + '，收入囊中。'
+                        : '你小心采下那一株，' + _de货没处放(收), 收.got > 0 ? 'success' : 'warning');
                 }
             },
             {
@@ -489,11 +511,12 @@ var DAILY_EVENT_LIST = [
                     _deAdvance(25, '钓鱼');
                     if (Math.random() < 0.7) {
                         // 使用真实存在的食物 ID
-                        if (!_deAddItem('food_roast_meat', 1)) {
+                        var 收 = _deAddItem('food_roast_meat', 1);
+                        if (!收.got) {
                             _deAddCopper(2);
-                            _deMsg('钓上鲜鱼，就地换了点铜钱。（铜钱+2）', 'success');
+                            _deMsg('鱼竿一沉，你钓上一条肥鱼——这一条没能装进行囊（' + _de原因(收) + '）' + '，你顺手就地换了铜钱。（铜钱+2）', 'warning');
                         } else {
-                            _deMsg('鱼竿一沉，你钓上一条肥鱼。', 'success');
+                            _deMsg('鱼竿一沉，你钓上一条肥鱼，就地烤了。（' + 收.name + '×' + 收.got + ' 入囊）', 'success');
                         }
                     } else {
                         _deMsg('两手空空，只赚到片刻清闲。', 'info');
@@ -533,18 +556,22 @@ var DAILY_EVENT_LIST = [
                     // 根据货币矫正.txt：修仙者交易用灵石，检查spiritStones
                     var stones = window.inventory ? (window.inventory.currency && window.inventory.currency.spiritStones) : 0;
                     stones = stones || (window.currentCharData && window.currentCharData.spiritStones) || 0;
-                    if (stones >= 6 && Math.random() < 0.5) {
-                        // 扣除灵石
-                        if (window.inventory && window.inventory.currency) {
-                            window.inventory.currency.spiritStones -= 6;
-                        } else if (window.currentCharData) {
-                            window.currentCharData.spiritStones = (window.currentCharData.spiritStones || 0) - 6;
-                        }
-                        _deAddItem('pill_qi_gather', 1);
-                        _deMsg('你用 6 灵石换得一枚聚气丹。', 'success');
-                    } else {
-                        _deMsg('对方摇头：「此行并无余货。」', 'info');
+                    if (stones < 6) {
+                        _deMsg('你数了数袋里的灵石，不够 6 枚——对方看在眼里，没有接话。', 'info');
+                        return;
                     }
+                    if (Math.random() >= 0.5) {
+                        _deMsg('对方摇头：「此行并无余货。」', 'info');
+                        return;
+                    }
+                    // DES-86（第一百三十批）：先验货落袋再付钱——旧写法扣了 6 灵石、丹却没问进没进
+                    var 收 = _deAddItem('pill_qi_gather', 1);
+                    if (!收.got) {
+                        _deMsg('你伸手去接那枚 ' + 收.name + '，' + _de货没处放(收) + '对方摆摆手：「这 6 灵石我原样收回。」', 'warning');
+                        return;
+                    }
+                    _de付灵石(6);
+                    _deMsg('你用 6 灵石换得 ' + 收.name + '×' + 收.got + '。', 'success');
                 }
             },
             {
@@ -834,7 +861,7 @@ function initDailyEvents() {
 
 function saveDailyEventState() {
     try {
-        localStorage.setItem('xianxia_daily_events', JSON.stringify({
+        window.saveToStorage('xianxia_daily_events', JSON.stringify({
             lastTriggerTotalMin: dailyEventState.lastTriggerTotalMin,
             lastById: dailyEventState.lastById,
             history: (dailyEventState.history || []).slice(-30)
@@ -865,12 +892,15 @@ function resolveDailyLocation(location, ctx) {
             if (loc && typeof loc === 'string' && loc.length > 0) {
                 // 检查 mapData 中是否有这个城市
                 var md = window.mapData || {};
+                // DES-57：mapData 的起始城写作「帝都 · 长安」（带空格），新开局的初值却写「帝都·长安」——两边都去空白再比
+                var locKey = String(loc).replace(/\s+/g, '');
                 var cityFound = false;
                 for (var r in md) {
-                    if (md[r].cities && md[r].cities.indexOf && md[r].cities.indexOf(loc) >= 0) {
-                        cityFound = true;
-                        break;
+                    var cs = (md[r] && md[r].cities) || [];
+                    for (var ci = 0; ci < cs.length; ci++) {
+                        if (String(cs[ci]).replace(/\s+/g, '') === locKey) { cityFound = true; break; }
                     }
+                    if (cityFound) break;
                 }
                 inCity = cityFound;
             }

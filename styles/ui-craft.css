@@ -5,31 +5,71 @@
      3) 1920 屏上整页只占 1280，左右各 320px 死黑
    选择器一律带面板 id：Tailwind 运行时注入的 <style> 排在 head 末尾，同特异度会盖过来。 */
 
-/* ---------- 0. 宽屏：让页面吃满 16:9，而不是居中一条 1280 的窄带 ---------- */
+/* ---------- 0. 宽屏：让页面吃满 16:9，而不是居中一条窄带 ----------
+   UI-18：这一支笔此前是两根——HTML 上的 `max-w-7xl`（<1536px 时生效，1280px）与下面这条
+   1460px 封顶（≥1536px 生效）。逻辑桌面 2048 CSS px（物理 2560×1440 ÷125% 缩放）下
+   只占 71% 宽，左右各 ≈294px 死黑。现收成一条、不分档，`max-w-7xl` 已从元素上撤下：
+   1720px 封顶够 16:9 用，再宽由 100% 兜住（body 自带 p-4 → 窄屏仍是满幅减 32px）。 */
 
-@media (min-width: 1536px) {
-    #game-world {
-        max-width: min(1460px, 100%);
-    }
+#game-world {
+    max-width: min(1720px, 100%);
 }
 
 /* ---------- 1. 人物 · 状态九宫格 ----------
-   九张卡挤在 grid-cols-4 里：境界卡带五个入口按钮，245px 宽排不下只能折两行，
-   于是整行被顶到 203px 高，精力/心情卡里各留 131px 空洞；第九张「日程」还孤零零占一列。
-   改成 12 栏按信息密度分宽窄：三条计量条各 2 栏，境界卡 6 栏（按钮排得下一行），
-   第二行五张快捷卡 3+2+3+2+2 凑满 12 栏，孤卡消失。 */
+   本文件初版（界面整改 P2）的旧账（留着是因为它解释了「等高」这一支为什么还在）：
+   九张卡挤在 grid-cols-4 里，境界卡带五个入口按钮排不下只能折两行，整行被顶到 203px 高。
+   当时改成 12 栏按信息密度分宽窄：三条计量条各 2 栏、境界卡 6 栏同处一行。
+
+   第五十八批·UI-05：那一行仍是「一张高卡绑架同排」——境界卡有五行字加一排钮（内容实高 148px），
+   同排的精力／心情只有 59px，于是各被拉出 89px 空洞（占卡内 60.2%），真气卡 66px（44.7%）；
+   内容居中只是把一个洞劈成上下两半，洞还在（1500×800 标准档实机读数，探针 .scratch/v24-CE-cards.mjs）。
+   现把行拆开：三条计量条各 4 栏自占一行（行轨只由最高的真气卡定 → 108px），境界卡整幅一行、内部改横排
+   （173px → 约 60px）。**撤的不是等高，是绑架**：底边仍齐，剩下的洞只是内容真实差（≤23px）。
+   顺带收掉 UI-24①：计量卡内宽从 149px 涨到约 350px，「境界提供50真气上限」那行说明（特大档单行 146px）
+   再没有折成两行的余地——改前 1366×768 特大档实测盒宽 121／自然宽 146，劈成「境界提供50真气上／限」。 */
 
 @media (min-width: 768px) {
     #panel-character #sub-status > .grid {
         grid-template-columns: repeat(12, minmax(0, 1fr));
     }
 
-    #panel-character #sub-status > .grid > :nth-child(-n+3) { grid-column: span 2; }
-    #panel-character #sub-status > .grid > :nth-child(4) { grid-column: span 6; }
+    #panel-character #sub-status > .grid > :nth-child(-n+3) { grid-column: span 4; }
+    #panel-character #sub-status > .grid > :nth-child(4) { grid-column: span 12; }
     #panel-character #sub-status > .grid > :nth-child(5) { grid-column: span 3; }
     #panel-character #sub-status > .grid > :nth-child(6) { grid-column: span 2; }
     #panel-character #sub-status > .grid > :nth-child(7) { grid-column: span 3; }
     #panel-character #sub-status > .grid > :nth-child(n+8) { grid-column: span 2; }
+}
+
+/* 窄屏档（768~959）：上面那套 12 栏分宽的前提是「内容列够宽」，这一带不成立。
+   实测（探针 .scratch/v24-CJ-narrow.mjs，768×1024）：左侧导航是 `w-48`＝12rem，标准档吃 192px、
+   特大档吃 240px，于是内容列只有 410px（特大）／483px（标准）——span 4 的一张计量卡剩 126px，
+   扣掉卡内 padding＋border 的 32px 只给到 94px，而「境界提供50真气上限」特大档自然宽 146px ⇒ 折两行
+   ⇒ 真气卡自己定下 157 的行轨，精力／心情两张各陪出 52px 空洞（41.5%，正是 UI-05② 那一格）。
+   第三行的快捷卡更窄（span 2 只有 53px），「🕐 时间」连标准档都折成两行（盒 42／自然 50）。
+   ⇒ 窄档不再分宽：计量三张各占一行、快捷卡两张一行（末张整幅），谁的内容高谁自己长。
+   上限 960 的来由：卡宽 ≥ 146＋32＝178 才不折行，而卡宽(V) ＝ (V−358−32)/3 ⇒ V ≥ 924，取整到 960 留余量。
+   与上面那一档同特异度，靠源序取胜（写在后面）。 */
+@media (min-width: 768px) and (max-width: 959px) {
+    #panel-character #sub-status > .grid > :nth-child(-n+3) { grid-column: span 12; }
+    #panel-character #sub-status > .grid > :nth-child(n+5) { grid-column: span 6; }
+    #panel-character #sub-status > .grid > :nth-child(9) { grid-column: span 12; }
+}
+
+/* 960~1279 这一段单独给快捷卡定栏数（UI-24① 另一族，任务 #78）：上面 959 那道闸是按「计量卡说明不折行」
+   量的（卡宽 ≥ 146＋32 ⇒ V ≥ 924），**不是按快捷卡量的**——六十三批刻意没动这一段。
+   实机（探针 .scratch/v24-CO9-quickcards.mjs，特大档，读数 .scratch/v24-CO9-quickcards-{pre,post,w1024,w1088,in1080,out1280,post1088,post960std}.out）：
+   · 960：span 2 的三张卡盒宽 85／内宽只有 53，而「🕐 时间」「👥 队伍」自然宽 63、「📅 日程」62、「无拍卖」54
+     ⇒ **四处劈成逐字竖排**（「🕐时／间」），五张卡全被撑到 245 高；
+   · 1024：内宽 64 对需宽 63 ＝ **只剩 1px 余量**（刀刃，改日换个 emoji 就复发）；
+   · 1088：内宽 75 够标签了，却把「第1天 黎明」那一行劈成「黎／明」（实测 盒 45／需 40 × 2 行）；
+     **改后复量 1088：折行 0 处、卡宽 232／内宽 201** ⇒ 它落进这道闸，次行劈字与标签劈字同一笔一起治掉，不是残债；
+   · 1280 起：span 2 卡宽 138／内宽 107，标签与次行都真放得下 ⇒ 闸留在 Tailwind 那道真实断点上。
+   ⇒ 这一段把五张快捷卡改成 4＋4＋4／6＋6（960 处卡宽 190／内宽 158 与 294／263），两行都齐幅、不留空栏。
+   不直接把上面的闸抬到 1279 是因为那一刀会把计量三张也打回整幅一行，960 以上明明放得下三张。 */
+@media (min-width: 960px) and (max-width: 1279px) {
+    #panel-character #sub-status > .grid > :nth-child(n+5) { grid-column: span 4; }
+    #panel-character #sub-status > .grid > :nth-child(n+8) { grid-column: span 6; }
 }
 
 /* 卡片内容竖向居中：等高保留（底边齐），但内容不再顶着上沿、下面空一片。
@@ -40,6 +80,19 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
+}
+
+/* 境界卡整幅一行后，竖排五行改横排：标签·境界名·真元·历练·绝技·五枚入口钮顺着读，
+   装不下仍按整块折（flex-wrap 折在「一枚控件／一句短读数」的界上，与 UI-22／UI-09 同一支笔）。
+   那三处 Tailwind 的 mt-1/mt-2/mb-1 在行内会把某一项顶偏 4px，故 margin 归零、间距只由 gap 一支笔给；
+   特异度（2 id + 2 class）高于 .mt-1，压得住。 */
+#panel-character #sub-status > .grid > :nth-child(4) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+}
+#panel-character #sub-status > .grid > :nth-child(4) > * {
+    margin: 0;
 }
 
 /* 九宫格里的按钮全是「打开某个面板」的快捷入口，彼此没有主次；
@@ -56,32 +109,45 @@
     border-color: #6b7280;
 }
 
-/* ---------- 2. 中文断字：部位名不许被腰斩，说明文字让位 ---------- */
+/* ---------- 2. 躯体耐久：列数跟名册自己的宽度走，说明文字可折行不可裁字 ---------- */
 
-#body-durability-list > div {
+/* 断点量的是视口，这一块量的是容器：左栏 SVG 固定 224px，名册实际只剩
+   1024 档 459px／1366 档 802px／1920 档 1187px —— 用视口断点必然对不上。 */
+#body-durability-list {
+    display: grid;
+    /* 380px 按「部位名＋说明可折行不可裁字」量得，故它随字号档一起长大：
+       23.75rem 在根 16px 恰等于 380px（标准档不变），「大／特大」档字变宽则同步抬（UI-23）。 */
+    grid-template-columns: repeat(auto-fill, minmax(max(380px, 23.75rem), 1fr));
+    gap: 12px;
+    align-items: start;
+}
+
+#body-durability-list .body-part-row {
     gap: 10px;
 }
 
-#body-durability-list > div > div:first-child {
+/* 「脑 神识中枢 → 智力与意志」整段是文字，宁可折行也不许截尾 */
+#body-durability-list .body-part-text {
     flex: 1 1 auto;
     min-width: 0;
 }
 
-/* 部位名（脑/眼/下颌/丹田…）是标识，宁可挤掉说明也不能折字 */
-#body-durability-list > div > div:first-child > span:first-child {
+/* 部位名（脑/眼/下颌/丹田…）是标识，不许被腰斩 */
+#body-durability-list .body-part-name {
     flex: 0 0 auto;
     white-space: nowrap;
 }
 
-#body-durability-list > div > div:first-child > span:last-child {
+#body-durability-list .body-part-desc {
+    flex: 1 1 auto;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    word-break: keep-all;
+    overflow-wrap: break-word;
 }
 
 /* 右侧「进度条 + 数值 + 完好」是读数的整体，永远不参与压缩 */
-#body-durability-list > div > div:last-child {
+#body-durability-list .body-part-gauge {
     flex: 0 0 auto;
 }
 
@@ -183,3 +249,145 @@
 /* 洞府四列窄卡实测把「另享 灵植×1.2 · 炼器×1.1」断在词中，「×1.2」孤零零掉到下一行。
    只包读数本体，「 · 」留在 span 外，所以照样能在分隔符处折行。 */
 .x-nb { white-space: nowrap; }
+
+/* ---------- 9. 公共空态件（UI-12）----------
+   一套话三句：为什么是空的 → 差在哪 → 下一步做什么。产出方是 js/core/empty-state.js。
+   此前只有任务页有这份样式（`.qg-empty`，私有），其余面板的空态是一句「暂无 X」——
+   既解释不了也带不了路（禁止设计.md#2 要求「锁就亮锁、写清楚为什么锁」）。
+   `--fill` 给短面板（功法／日程／队伍／势力实测只占可用高 29%~64%，下半页一片死背景）：
+   卡自己长到半屏，把空态摆在正中，而不是让「空」这件事看起来像没加载完。
+   当年（UI-02／DES-33）这张卡只在 #game-world 里有样式，于是往选择器前缀补了 :is() 名单，
+   把挂在 body 上的两处弹窗（商店 #shop-modal-overlay、竞技台 .x-arena-modal）挨个登记进去——
+   **它补的是「已知的弹窗」，不是「弹窗这一类」**，所以第三处一出现就又是裸文字。
+   ⚠ 第一百三十七批（DES-95）：**那串宿主白名单整个拆掉了**。它是一份「谁记得登记谁才有衣服穿」的名单——
+   实测全仓 17 处产出点里，落在名单内的 15 处（含商店／竞技台两处 body 弹窗）好好的，
+   而**门派任务**那一窗（`js/sects/sects-system.js:862-902`：`document.body.appendChild` 且不带这三个标记）
+   两张空态卡（`:754` 没有在办的差事／`:785` 可接的差事）就渲染成了**没边框、没字号层次的裸文字**。
+   这张卡是**共用件**、类名 `x-empty*` 全仓独此一家、产出方自己不带任何 Tailwind 兜底类
+   （`js/core/empty-state.js:26-40`）——所以它**本就不该知道自己在哪个宿主里**。
+   以后新增 body 模态不必再来这张名单上挂号。 */
+
+.x-empty {
+    padding: 14px 14px 15px;
+    border: 1px dashed #4b5563;
+    border-radius: 10px;
+    background: rgba(31, 41, 55, .55);
+}
+
+.x-empty--fill {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: clamp(240px, 46vh, 480px);
+    padding: 20px;
+}
+
+.x-empty__title {
+    margin: 0 0 5px;
+    font-size: var(--x-fs-base);
+    font-weight: 700;
+    line-height: var(--x-lh-tight);
+    color: var(--x-text);
+}
+
+.x-empty__why,
+.x-empty__hint {
+    margin: 0 0 4px;
+    font-size: var(--x-fs-sm);
+    line-height: 1.65;
+    color: var(--x-muted);
+}
+
+.x-empty__next {
+    margin: 0 0 4px;
+    font-size: var(--x-fs-sm);
+    font-weight: 700;
+    line-height: 1.6;
+    color: var(--x-gold);
+}
+
+.x-empty__hint { font-size: var(--x-fs-xs); color: var(--x-dim); }
+
+/* ---------- 10. 见招拆招待决期间：动作区不能只是「看着还能点」（UI-10）----------
+   敌人摆出姿态（撒石灰／装死）时时间轴整个停住等应答（js/battle.js:2451），
+   可此前只有应对面板出现，下面三十来枚招式／部位／家什钮照常亮着——点了没反应也不说为什么。
+   一支笔两件事：`x-battle-hold`（由 js/app.js 的 updateBattleUI 按 _pendingPrompt 挂／摘）
+   既把动作区和医疗面板按下，又把按钮跟前的回执条亮出来。
+   「🩻 查看伤势」是纯看、不吃回合，故意留在可点一侧。
+   战斗弹窗在 #game-world 之外，故前缀用 html + #battle-modal；id 级已压过 Tailwind 运行时注入的样式，不需 !important。 */
+html #battle-modal #battle-actions-hold-tip { display: none; }
+html #battle-modal.x-battle-hold #battle-actions-hold-tip { display: block; }
+
+html #battle-modal.x-battle-hold #battle-actions,
+html #battle-modal.x-battle-hold #battle-medical-actions {
+    opacity: .4;
+    filter: grayscale(.45);
+    pointer-events: none;
+}
+
+/* ---------- 11. 战斗卡三段：会滚的是读数，钉住的是要按的（UI-20）----------
+   改前整张卡只有一个 `max-h-[90vh] overflow-y-auto`：1500×760 下内容 931px 装进 681px 的窗，
+   卡片又停在滚动顶部（滚态 0/250），于是从第一手起「选择攻击部位」那一排钮就在视口外——
+   掉出 143px；1150×660 掉出 216px，一枚都不在屏上（读数 .scratch/v24-Z2-longlog-d.out）。
+   一支笔收成三段：#battle-readout（要害尺／生理条／队伍／时间轴／日志）自己滚，
+   #battle-foot（见招拆招应对条／出手钮／医疗／查看伤势／结算屏）钉在台面，
+   「👁️ 查看人体」那一叠排在台面之后、自己带滚窗，只许缩不许把钮顶走。
+   谁该被挤（复验读数 .scratch/v24-AB-battlecard-a.out）：三段都想要地方，而 1150×660 一档
+   台面自己就占掉 351/543。人体那一叠原先写着 inline `min-height:200px`、不参与压缩，
+   于是挤压全落在滚区上——摊开人体时滚区压到 65px（1500×760）乃至 0px（1150×660），
+   要害尺与日志整叠消失。它展示的本就是台面里「🩻 查看伤势」那份冗余读数，且开合由玩家自己点，
+   所以地板给滚区（96px＝战斗标题＋两把要害尺露脸），人体叠改成可缩、自己内滚。
+   真放不下时溢出的是卡片最底下那层详情（钮在台面、台面排在它前面），不是钮。 */
+html #battle-modal #battle-readout {
+    flex: 1 1 auto;
+    min-height: 96px;
+    overflow-y: auto;
+}
+
+/* 台面也会被摊长（「🩻 查看伤势」一开就是 40vh）：给它上限并内滚——
+   内滚的起点正是要按的那一排，越往下滚越是读，不会把钮挤到屏外 */
+html #battle-modal #battle-foot {
+    flex: 0 0 auto;
+    max-height: 62vh;
+    overflow-y: auto;
+}
+
+html #battle-modal #battle-body-view {
+    flex: 0 1 auto;
+    min-height: 96px;
+    max-height: 40vh;
+    overflow-y: auto;
+}
+
+/* 台面内部也照同一支笔分「读」与「按」（第三遍实机撞出来的洞：读数 .scratch/v24-AB-battlecard-c.out 第 29 行）。
+   一次「见招拆招」待决把应对条摊到 245px，台面内容 596px 撑破 62vh 帽 → 台面自己内滚，
+   而滚窗停在顶部（滚态 0/187），于是出手那一排被台面裁掉 85px——钮在卡内却看不见，等于 UI-20 没修完。
+   让位次序按「此刻按得动的赢」定：平时动作区不许缩，应对条／伤势面板可缩自滚；
+   待决时动作区本就灰着按不动（上面第 4 节已 pointer-events:none），反过来由它让位、应对条钉住。 */
+html #battle-modal #battle-foot {
+    display: flex;
+    flex-direction: column;
+}
+
+html #battle-modal #battle-actions,
+html #battle-modal #battle-medical-actions {
+    flex: 0 0 auto;
+}
+
+html #battle-modal #battle-prompt-panel,
+html #battle-modal #battle-wound-panel {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+html #battle-modal.x-battle-hold #battle-prompt-panel {
+    flex: 0 0 auto;
+}
+
+html #battle-modal.x-battle-hold #battle-actions,
+html #battle-modal.x-battle-hold #battle-medical-actions {
+    flex: 0 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}

@@ -76,9 +76,9 @@ mockWindow.itemById = {
 };
 var _uid = 0;
 mockWindow.addItem = function (id, n) {
-    if (mockWindow.__bagAccept === false) return false;
+    if (mockWindow.__bagAccept === false) return 0;   // 桩：满包＝实收 0 件
     bag.slots.push({ uid: ++_uid, templateId: id, count: n || 1 });
-    return true;
+    return n || 1;
 };
 mockWindow.addReputation = function () {};
 mockWindow.updateCurrencyUI = function () {};

@@ -164,6 +164,7 @@ load('js/core/reward-service.js');
 load('js/core/scenario-engine.js');
 load('js/city-facilities/facility-batch2.js');
 load('js/reputation-system.js');
+load('js/core/empty-state.js');   // 货架筛空时空态卡走公共件（与 仙侠.html 的加载次序一致）
 load('js/enhanced-shop.js');
 load('js/enhancement.js');
 load('js/crafting/alchemy-compound.js');
@@ -510,11 +511,53 @@ var sc6 = softCloseCalls;
 global.FestivalFair.act('food');
 eq(softCloseCalls, sc6 + 1, 'K14 吃节令小吃结算终点软收面板');
 // K15 灯谜彩头账只拼一次
+global.currentCharData.mood = 40;   // 心境设在余量内：这一条测的是「拼几次」，不是「印几」
 modalCalls.length = 0;
 var riddle = global.FestivalFair.todayRiddle();
 global.FestivalFair.answer(riddle.ans);
 var rHtml = modalCalls.length ? modalCalls[modalCalls.length - 1].html : '';
 eq((rHtml.match(/心境\+8/g) || []).length, 1, 'K15 灯谜中奖彩头文本只拼一次（不再「心境+8、学识+2；心境+8、学识+2」）');
+// K15b 心境触顶那一格：回执念进账、不念开价（DES-38 第四十一次自修，走的是同一个调用点）
+global.currentCharData.mood = 100;
+global.currentCharData._fairRiddleDay = undefined;
+modalCalls.length = 0;
+var riddle2 = global.FestivalFair.todayRiddle();
+global.FestivalFair.answer(riddle2.ans);
+var rHtml2 = modalCalls.length ? modalCalls[modalCalls.length - 1].html : '';
+eq((rHtml2.match(/心境已达上限，实得\+0/g) || []).length, 1, 'K15b 心境已满：彩头只拼一次、且照实报「心境已达上限，实得+0」（旧版此处印开价「心境+8」）');
+assert((rHtml2.match(/心境\+8/g) || []).length === 0, 'K15c 触顶那一屏再无「心境+8」这个比账多印的数');
+// K15d~f 灯谜「猜错」那一支同尺（DES-42ⅱ：旧版丢掉 settle 返回值、屏上照印常量「（心境+2）」）
+global.currentCharData.mood = 100;
+global.currentCharData._fairRiddleDay = undefined;
+modalCalls.length = 0;
+var riddleLose = global.FestivalFair.todayRiddle();
+global.FestivalFair.answer((riddleLose.ans + 1) % riddleLose.opts.length);
+var rHtmlLose = modalCalls.length ? modalCalls[modalCalls.length - 1].html : '';
+var rTitleLose = modalCalls.length ? modalCalls[modalCalls.length - 1].title : '';
+assert(rTitleLose.indexOf('差一层') >= 0, 'K15d 这一手走到的确实是「猜错」那一支');
+eq((rHtmlLose.match(/心境已达上限，实得\+0/g) || []).length, 1,
+    'K15e 猜错那一屏也拿差值说话（改前此处印常量「（心境+2）」而账上一分不进）');
+assert(!/心境\+2/.test(rHtmlLose), 'K15f 触顶猜错的那一屏再无手拼的「心境+2」');
+eq(global.currentCharData.mood, 100, 'K15g 账本同读：心境仍在 100，屏与账一字不差');
+// K15h~j 没有弹窗时的兜底那一支（DES-42ⅱ 尾巴：旧版此处同样印常量，且改后若漏改一处引用就是 ReferenceError）
+global.currentCharData.mood = 100;
+global.currentCharData._fairRiddleDay = undefined;
+var _sm = global.showModal;
+global.showModal = undefined;
+msgs.length = 0;
+var lostThrew = null;
+try {
+    var rl = global.FestivalFair.todayRiddle();
+    global.FestivalFair.answer((rl.ans + 1) % rl.opts.length);
+} catch (e) {
+    lostThrew = String(e && e.message);
+}
+global.showModal = _sm;
+eq(lostThrew, null, 'K15h 无弹窗时「猜错」兜底话术不抛错（该支引用了改动过的局部变量）');
+var loseSay = msgs.filter(function (x) { return x.m.indexOf('灯谜没猜中') >= 0; });
+eq(loseSay.length, 1, 'K15i 无弹窗时也有一句正经回执');
+assert(loseSay.length === 1 && loseSay[0].m.indexOf('心境已达上限，实得+0') >= 0 && !/心境\+2/.test(loseSay[0].m),
+    'K15j 兜底那支也拿差值说话（改前印常量「（心境+2）」而账上一分不进）');
 // K16 工曹署承揽终点
 dayVal = 2;
 global.currentCharData.qi = 100;

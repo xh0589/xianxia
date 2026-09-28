@@ -348,17 +348,23 @@
         // 极品出炉成双：同款多一件（可赠可卖）
         var outCount = Math.max(1, recipe.result.count || 1) + (quality.id === 'imperial' ? 1 : 0);
         // 落物品到背包
-        var addedOk = true;
+        // DES-72 同族：addResultItem 报的是行囊**实收件数**，旧写法只判真假 ⇒「成双」那句可以凭空说
+        var addedGot = outCount;
         if (typeof window.addResultItem === 'function') {
-            addedOk = window.addResultItem(templateId, outCount);
+            addedGot = Number(window.addResultItem(templateId, outCount)) || 0;
         }
-        if (!addedOk) {
+        if (!addedGot) {
             if (cd && recipe.qiCost) cd.qi = (cd.qi || 0) + recipe.qiCost;
             // v23.0 炉没开成，材料原路退回
+            var _rf = null;
             if (window.compoundMat && typeof window.compoundMat.refund === 'function') {
-                try { window.compoundMat.refund(_forgMats); } catch (eRf) {}
+                try { _rf = window.compoundMat.refund(_forgMats); } catch (eRf) {}
             }
-            return { ok: false, reason: 'inventory-full' };
+            return {
+                ok: false, reason: 'inventory-full',
+                failReason: (typeof window.addItemFailReason === 'string') ? window.addItemFailReason : null,
+                refundBack: _rf ? _rf.back : null, refundAsked: _rf ? _rf.asked : null
+            };
         }
         // 时间推进
         if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
@@ -383,7 +389,7 @@
                 _moduleState.preferTags[tagAff] = (_moduleState.preferTags[tagAff] || 0) + 1;
             }
         } catch (e) {}
-        return { ok: true, itemId: templateId, name: finalName, affixes: finalAffixes, combatBonus: finalCombatBonus, imprint: isImprint, quality: quality, score: qr.score, count: outCount };
+        return { ok: true, itemId: templateId, name: finalName, affixes: finalAffixes, combatBonus: finalCombatBonus, imprint: isImprint, quality: quality, score: qr.score, count: addedGot, asked: outCount };
     }
 
     // ============== 7. 模块级状态（StateRegistry 兼容） ==============

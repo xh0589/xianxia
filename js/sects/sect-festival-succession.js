@@ -86,7 +86,7 @@
             buff('sect_festival_feast', { constitution: 3, willpower: 2 }, 72);
             done[act] = true;
             advance(120, '大典宴');
-            log('🍶 大典宴摆了三百桌。你和同门挤在一桌，酒过三巡，平日里严肃的师叔讲起了他年轻时的糗事。（体魄心境增益三日）', 'success');
+            log('🍶 大典宴摆了三百桌。你和同门挤在一桌，酒过三巡，平日里严肃的师叔讲起了他年轻时的糗事。（体魄意志增益三日）', 'success');
         }
         f[yearKey()] = done;
         if (done.incense && done.feast && (!done.honor)) { /* 不强制齐——想来几节来几节 */ }

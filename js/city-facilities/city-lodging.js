@@ -32,6 +32,8 @@
         return (cd() && cd().location) ||
             (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || '';
     }
+    // DES-57：城名两串写法（舆图转发的 cityName 带空格「帝都 · 长安」，角色账里是「帝都·长安」）——认账前先取键
+    function pkCity(s) { return String(s == null ? '' : s).replace(/\s+/g, ''); }
     function absDay() {
         try {
             if (window.WorldCalendar && typeof window.WorldCalendar.day === 'number' && window.WorldCalendar.day > 0) return Math.floor(window.WorldCalendar.day);
@@ -83,7 +85,7 @@
         return v;
     }
     function tier() { var l = ledger(); return l ? TIERS[l.tier] : null; }
-    function atHome() { var l = ledger(); return !!(l && l.city === city()); }
+    function atHome() { var l = ledger(); return !!(l && pkCity(l.city) === pkCity(city())); }
     function daysToDue() {
         var l = ledger();
         if (!l) return 0;
@@ -144,7 +146,7 @@
     // ============ 晨间（住在自己赁的城里，心气落得慢） ============
     function morning() {
         var l = ledger();
-        if (!l || l.city !== city()) return;   // 人在外头，屋空着——租金照缴，心气没人接
+        if (!l || pkCity(l.city) !== pkCity(city())) return;   // 人在外头，屋空着——租金照缴，心气没人接
         var t = TIERS[l.tier];
         settle({ mood: t.morning });
     }
@@ -153,7 +155,7 @@
     function nap() {
         var l = ledger();
         if (!l) { say('🏠 你没赁屋——客栈的床是按夜算钱的。', 'info'); return false; }
-        if (l.city !== city()) { say('🏠 你的家在' + l.city + '——这儿没你的床。', 'info'); return false; }
+        if (pkCity(l.city) !== pkCity(city())) { say('🏠 你的家在' + l.city + '——这儿没你的床。', 'info'); return false; }
         var t = TIERS[l.tier];
         var c = cd();
         var maxE = Number(c.maxEnergy) || 100;
@@ -181,10 +183,10 @@
     function panelHtml(cityName) {
         try {
             if (!innCityOk(cityName)) return '';
-            if (cityName && city() && cityName !== city()) return '';
+            if (cityName && city() && pkCity(cityName) !== pkCity(city())) return '';
             var l = ledger();
             var line;
-            if (l && l.city === (cityName || city())) {
+            if (l && pkCity(l.city) === pkCity(cityName || city())) {
                 var t = TIERS[l.tier];
                 line = t.icon + ' ' + t.name + '（月钱 ' + t.rent + ' 灵石' + (daysToDue() > 0 ? '，还有 ' + daysToDue() + ' 天到期' : '') + '）';
             } else if (l) {
@@ -203,7 +205,7 @@
         var html = '';
         if (l) {
             var t = TIERS[l.tier];
-            var home = l.city === city();
+            var home = pkCity(l.city) === pkCity(city());
             html += '<p class="text-sm text-gray-300 mb-2">' + t.icon + ' 你在<b class="text-emerald-300">' + l.city + '</b>赁着' + t.name + '。</p>' +
                 '<p class="text-xs text-gray-500 mb-3">月钱 ' + t.rent + ' 灵石（到期自动缴' + (daysToDue() > 0 ? '，还有 ' + daysToDue() + ' 天' : '') + '）。' +
                 (home ? '住在家里，每日晨间心境+' + t.morning + '——行脚磨心气，有家的人落得慢。' : '人不在' + l.city + '，屋空着——租金照缴，晨间的心境没人接。') + '</p>';

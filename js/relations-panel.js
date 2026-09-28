@@ -36,8 +36,10 @@ function renderRelationsPanel() {
     var activeFilter = RELATIONS_ACTIVE_FILTERS;
     if (activeFilter.sameLocation) {
         var playerLoc = window.currentCharData?.location || '';
-        if (playerLoc) {
-            allNPCs = allNPCs.filter(function(npc) { return npc.location === playerLoc; });
+        // DES-57：城名两串写法（舆图「帝都 · 长安」／NPC 账「帝都·长安」），认账前去空白
+        var locKey = String(playerLoc || '').replace(/\s+/g, '');
+        if (locKey) {
+            allNPCs = allNPCs.filter(function (npc) { return String(npc.location || '').replace(/\s+/g, '') === locKey; });
         }
     }
     if (activeFilter.canInteract) {
@@ -154,7 +156,7 @@ function renderRelationsPanel() {
         var loc = npc.location || '未知';
         var occupation = npc.occupation || '未知';
         var icon = npc.appearance?.icon || '👤';
-        var mood = npc.state?.mood || 50;
+        var mood = npc.state?.mood ?? 50;
         var npcSect = getNPCSect(npc);
 
         // 好感度等级

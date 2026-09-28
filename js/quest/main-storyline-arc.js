@@ -200,7 +200,7 @@ function settleMainStoryBoss(victory) {
                 window.gameLog.add('💔 你败于「' + run.def.name + '」之手，重伤倒地。魔修冷笑而去，等你再来。', 'danger');
             }
             if (cd) {
-                cd.health = Math.max(1, Math.floor((cd.health || 100) * 0.2));
+                cd.health = Math.max(1, Math.floor((cd.health ?? 100) * 0.2));
                 cd.qi = 0;
                 cd.energy = 0;
             }

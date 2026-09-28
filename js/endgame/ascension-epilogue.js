@@ -30,7 +30,12 @@ function onAscension() {
 function dailyIncenseFeedback() {
     try {
         var cd = window.currentCharData;
-        if (!cd || cd.realm !== '飞升') return;
+        // DES-92（第一百三十二批）：等值判门会把更高的那一境拒掉——金仙证道之后每日香火反倒归零，
+        // 而同文件天界切磋（:69）、回入尘世（:96）认的都是「飞升或金仙」。门就是「至少飞升」。
+        var 是仙 = (typeof window.realmAtLeast === 'function')
+            ? window.realmAtLeast(cd && cd.realm, '飞升')
+            : (cd && (cd.realm === '飞升' || cd.realm === '金仙'));
+        if (!cd || !是仙) return;
         var inc = cd.incense || 0;
         if (inc <= 0) return;
         // 真元产出 = 信徒数*0.5 + 随机波动；香火是飞升后主要修炼来源

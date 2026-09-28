@@ -237,15 +237,13 @@ function participateWorldEvent(eventId) {
     var action = def.participate.action;
 
     if (action === 'seek_treasure') {
-        // 第一百零九波 · 一份账：天降异宝一场只寻一次——此前按钮无状态，
-        // 5 天窗口里每次只花 60 分钟就能再赌一件筑基丹/陨铁，可以刷上百次
+        // 第一百零九波 · 一份账：天降异宝一场只寻一次——此前按钮无状态，5 天窗口里每次只花 60 分钟就能再赌一件筑基丹/陨铁，可以刷上百次
+        // DES-86：这道闸门挪到结局再落——旧写法先把 sought 烧掉再掷骰，掷中了却装不下时，这一场的异宝直接凭空消失
         var _ta = activeWorldEvents[eventId];
         if (_ta && _ta.sought) {
             if (window.showMessage) window.showMessage('✨ 这道金光你已寻过了——空谷余音也散了，等下一场异宝降世吧。', 'info');
             return false;
         }
-        if (_ta) _ta.sought = true;
-        try { saveWorldEvents(); } catch (eSave) {}
         // 寻宝：高概率给物品；v20.0 灵狐加成
         var loot = ['spec_transfer_stone', 'mat_meteorite', 'pill_foundation', 'mat_purple_gold', 'wpn_dark_iron_sword'];
         var chance = 0.7;
@@ -254,12 +252,21 @@ function participateWorldEvent(eventId) {
                 chance += window.BeastEcosystem.getActiveBeastBuff('treasure') || 0;
             }
         } catch (eTrea) {}
-        if (Math.random() < chance) {
+        var _寻中 = Math.random() < chance;
+        if (_寻中) {
             var item = loot[Math.floor(Math.random() * loot.length)];
-            if (typeof window.addItem === 'function') window.addItem(item, 1);
+            var _宝收 = (typeof window.addItem === 'function') ? (Number(window.addItem(item, 1)) || 0) : 1;
+            if (!_宝收) {
+                // DES-90（第一百三十九批）：黑话串换词表 ②（sought 已烧 ⇒ 这一场不会再有）
+                if (window.showMessage) window.showMessage('✨ 宝光落进你手里——可它又滑回了金光中，这一场还算数。' + ((typeof window.addItemFailText === 'function' && window.addItemFailText((window.itemById && window.itemById[item] ? window.itemById[item].name : item))) || '它没有跟你走。'), 'warning');
+                if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '寻宝');
+                return true;
+            }
+            if (_ta) { _ta.sought = true; try { saveWorldEvents(); } catch (eSave) {} }
             if (window.showMessage) window.showMessage('✨ 寻得异宝！', 'success');
             if (window.showEffect) window.showEffect('item_get');
         } else {
+            if (_ta) { _ta.sought = true; try { saveWorldEvents(); } catch (eSave) {} }
             if (window.showMessage) window.showMessage('搜寻许久，只见空谷余音…', 'info');
         }
         if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '寻宝');
@@ -274,10 +281,18 @@ function participateWorldEvent(eventId) {
         if (typeof window.startBattle === 'function') {
             window.startBattle('beast_tide');
         } else if (window.showMessage) {
-            window.showMessage('🐾 你奋勇清剿兽潮！', 'success');
-            if (typeof window.addItem === 'function') {
-                window.addItem('mat_demon_beast_core', 2 + Math.floor(Math.random() * 3));
-            }
+            // DES-72（第一百三十批）：旧写法丢了返回值——「奋勇清剿」那句念完，这几枚兽丹到底进没进囊，屏上从不提
+            var 颗 = 2 + Math.floor(Math.random() * 3);
+            var 丹 = typeof window.giveWithReceipt === 'function'
+                ? window.giveWithReceipt('mat_demon_beast_core', 颗, { quiet: true })
+                : (typeof window.addItem === 'function'
+                    ? { got: Number(window.addItem('mat_demon_beast_core', 颗)) || 0, count: 颗, name: (window.itemById && window.itemById['mat_demon_beast_core'] && window.itemById['mat_demon_beast_core'].name) || '妖兽内丹', reason: window.addItemFailReason || null }
+                    : null);
+            window.showMessage('🐾 你奋勇清剿兽潮！' + (丹 ? (丹.got > 0
+                ? '剖出 ' + 丹.name + '×' + 丹.got + (丹.got < 丹.count ? '（另 ' + (丹.count - 丹.got) + ' 枚留在了场上：' + ((typeof window.addItemReasonPhraseFor === 'function' && window.addItemReasonPhraseFor(丹.reason, 丹.name)) || '没能带走') + '）' : '')
+                : '那几枚 ' + 丹.name + ' 一件也没能带走：'
+                  + ((typeof window.addItemFailText === 'function' && window.addItemFailText(丹.name)) || '它没有跟你走。')
+                ) : ''), 'success');
             if (window.currentCharData) {
                 window.currentCharData.tempering = (window.currentCharData.tempering || 0) + 150;
             }
@@ -308,8 +323,21 @@ function participateWorldEvent(eventId) {
         if (window.currentCharData) {
             window.currentCharData.tempering = (window.currentCharData.tempering || 0) + 200;
         }
-        if (typeof window.addItem === 'function' && Math.random() < 0.4) {
-            window.addItem('spec_transfer_stone', 1);
+        // DES-72（第一百三十批）：这一枚战利品旧写法全程静默，连丢返回值都无人知道——捡没捡到、搁不搁得下，屏上一个字没有
+        if (Math.random() < 0.4) {
+            var 捡 = typeof window.giveWithReceipt === 'function'
+                ? window.giveWithReceipt('spec_transfer_stone', 1, { quiet: true })
+                : (typeof window.addItem === 'function'
+                    ? { got: Number(window.addItem('spec_transfer_stone', 1)) || 0, count: 1, name: (window.itemById && window.itemById['spec_transfer_stone'] && window.itemById['spec_transfer_stone'].name) || '传送石' }
+                    : null);
+            if (捡 && window.showMessage) {
+                window.showMessage(捡.got > 0
+                    ? '⚔️ 阵后收拾战场，捡得 ' + 捡.name + '×' + 捡.got + '。'
+                    // DES-90（第一百三十九批）：「又放回地上」是代码真做的事，留着；「怀里搁不下」是断言，撤。
+                    : '⚔️ 阵后拾起一枚 ' + 捡.name + '，又放回地上：'
+                      + ((typeof window.addItemFailText === 'function' && window.addItemFailText(捡.name)) || '这一件先还留在原处。'),
+                    捡.got > 0 ? 'success' : 'warning');
+            }
         }
         if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(90, '正邪大战');
         return true;
@@ -399,7 +427,7 @@ function getBeastTideDetailHtml() {
 
 // 存档
 function saveWorldEvents() {
-    try { localStorage.setItem('xianxia_world_events', JSON.stringify(activeWorldEvents)); } catch (e) {}
+    try { localStorage.setItem('xianxia_world_events', JSON.stringify(activeWorldEvents)); } catch (e) { console.warn('[静默失败] js/world-events.js:430 · 世界事件存档：异宝寻没寻到、兽潮打没打完全没存上，读档后这场天降异宝等于从没发生过', e && e.message); }
 }
 function loadWorldEvents() {
     try {
@@ -420,8 +448,8 @@ function loadWorldEvents() {
 function resetWorldEventsState() {
     Object.keys(activeWorldEvents).forEach(function (k) { delete activeWorldEvents[k]; });
     Object.keys(cityTempModifiers).forEach(function (k) { delete cityTempModifiers[k]; });
-    try { saveWorldEvents(); } catch (e) {}
-    try { saveCityTempModifiers(); } catch (e2) {}
+    try { saveWorldEvents(); } catch (e) { console.warn('[静默失败] js/world-events.js:451 · 世界事件清账落盘：新局的空账没存上，旧档的世界事件原样留在本地存储里，读档后旧天象又糊在新角色身上', e && e.message); }
+    try { saveCityTempModifiers(); } catch (e2) { console.warn('[静默失败] js/world-events.js:452 · 城市修正清账落盘：新局的空账没存上，旧档的城池 Buff 原样留在本地存储里，读档后旧加成又糊在新角色身上', e2 && e2.message); }
 }
 
 // 时间系统集成：EventBus 是唯一新式边界，不再覆盖 timeSystem.onNewDay。
@@ -449,7 +477,7 @@ function loadCityTempModifiers() {
     } catch (e) {}
 }
 function saveCityTempModifiers() {
-    try { localStorage.setItem('xianxia_city_temp', JSON.stringify(cityTempModifiers)); } catch (e) {}
+    try { localStorage.setItem('xianxia_city_temp', JSON.stringify(cityTempModifiers)); } catch (e) { console.warn('[静默失败] js/world-events.js:480 · 城市临时修正存档：城池 Buff 没存上，读档后本该有的加成原样丢掉', e && e.message); }
 }
 function getGameDaySafe() {
     if (typeof window.getAbsoluteDay === 'function') {

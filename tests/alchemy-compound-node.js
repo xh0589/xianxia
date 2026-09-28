@@ -20,7 +20,8 @@ var mockWindow = {
         pill_qi_powder: { name: '补气散', maxStack: 99 },
         pill_big_recovery: { name: '大还丹', maxStack: 99 }
     },
-    addItem: function (id, cnt) { return true; },
+    // 第八十二波契约：addItem／addResultItem 返回的是行囊**实收件数**（不是布尔）
+    addItem: function (id, cnt) { return cnt || 1; },
     addResultItem: function (id, cnt) { return mockWindow.addItem(id, cnt); },
     getLifeSkill: function (k) { return mockWindow.currentCharData.lifeSkills[k] || 0; },
     getCurrentCharData: function () { return mockWindow.currentCharData; },

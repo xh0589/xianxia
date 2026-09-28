@@ -230,7 +230,7 @@
         var html = '<div class="text-left">';
         html += '<p class="text-sm text-gray-300 mb-2">灶上正热。坐下吃一顿——饭气养人，桌上还能听见同门与山下的闲话。</p>';
         html += '<button onclick="window.doCanteenMeal()" class="w-full bg-amber-700 hover:bg-amber-600 text-white text-sm p-2 rounded mb-2">🍲 用膳（耗贡献5，得饭气增益+听一句街谈）</button>';
-        html += '<p class="text-[11px] text-gray-500">饭气：半日内体魄与心境略增；街谈：膳堂是消息最杂的地方，有时一句话能省下你三天脚程。</p>';
+        html += '<p class="text-[11px] text-gray-500">饭气：半日内体魄与意志略增；街谈：膳堂是消息最杂的地方，有时一句话能省下你三天脚程。</p>';
         html += '</div>';
         modal('🍚 膳堂 · 用膳', html);
     };
@@ -244,7 +244,7 @@
             if (qs && qs.length) rumor = qs[qs.length - 1].text;
         } catch (e) {}
         if (!rumor) rumor = CANTEEN_RUMORS[absDay() % CANTEEN_RUMORS.length];
-        var line = '🍲 一顿热饭下肚，饭气养人（体魄+3 心境+2，半日）。' + (rumor.indexOf('👂') === 0 ? '隔壁桌在说：' + rumor.replace(/^👂[^：]*：/, '') : '席间听见——' + rumor);
+        var line = '🍲 一顿热饭下肚，饭气养人（体魄+3 意志+2，半日）。' + (rumor.indexOf('👂') === 0 ? '隔壁桌在说：' + rumor.replace(/^👂[^：]*：/, '') : '席间听见——' + rumor);
         log(line, 'info'); msg(line, 'success');
         return true;
     };

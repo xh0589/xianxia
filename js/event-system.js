@@ -41,7 +41,7 @@ const randomEvents = [
                 text: '打开宝箱', 
                 effect: function() {
                     const loot = generateTreasureLoot();
-                    showMessage(`你打开了宝箱，获得了：${loot}`, 'success');
+                    showMessage(`你打开了宝箱，获得了：${lootLedgerText(loot) || '什么都没有'}`, 'success');
                     applyTreasureRewards(loot);
                 }
             },
@@ -68,7 +68,7 @@ const randomEvents = [
                 text: '进入山洞探索', 
                 effect: function() {
                     const loot = generateCaveLoot();
-                    showMessage(`你在山洞中找到了：${loot}`, 'success');
+                    showMessage(`你在山洞中找到了：${lootLedgerText(loot) || '一无所获'}`, 'success');
                     applyTreasureRewards(loot);
                 }
             },
@@ -190,8 +190,13 @@ const randomEvents = [
                 id: 'collect', 
                 text: '采集灵芝', 
                 effect: function() {
-                    addItemToInventory('ginseng', 1);
-                    showMessage('你成功采集了千年灵芝！', 'success');
+                    // DES-72（第一百三十批）：旧写法丢了返回值，还把「千年人参」念成灵芝——百宝册上这号就叫千年人参
+                    var 收 = typeof window.giveWithReceipt === 'function'
+                        ? window.giveWithReceipt('ginseng', 1, { quiet: true })
+                        : { got: Number(addItemToInventory('ginseng', 1)) || 0, count: 1, name: (window.itemById && window.itemById['ginseng'] && window.itemById['ginseng'].name) || '千年人参' };
+                    if (收.got > 0) showMessage('你成功采集了 ' + 收.name + '×' + 收.got + '！', 'success');
+                    else showMessage('你采下了 ' + 收.name + '，这一株却没能带进囊：'
+                        + ((typeof window.addItemFailText === 'function' && window.addItemFailText(收.name)) || '这一件先还留在原处。'), 'warning'); // DES-90（第一百三十九批）：采撷点可再来，问不到账时不许站点断言满包，改用①形
                 }
             },
             { 
@@ -374,8 +379,13 @@ const randomEvents = [
                 id: 'store', 
                 text: '收集一些带走', 
                 effect: function() {
-                    addItemToInventory('spirit_water', 1);
-                    showMessage('你收集了一瓶灵泉。', 'success');
+                    // DES-72（第一百三十批）：旧写法丢了返回值——「收集了一瓶灵泉」照念，囊里进没进不管
+                    var 收 = typeof window.giveWithReceipt === 'function'
+                        ? window.giveWithReceipt('spec_spring_water', 1, { quiet: true })
+                        : { got: Number(addItemToInventory('spec_spring_water', 1)) || 0, count: 1, name: (window.itemById && window.itemById['spec_spring_water'] && window.itemById['spec_spring_water'].name) || '灵泉水' };
+                    if (收.got > 0) showMessage('你收集了 ' + 收.name + '×' + 收.got + '。', 'success');
+                    else showMessage('你舀起一瓶 ' + 收.name + '，这一瓶却没能带进囊：'
+                        + ((typeof window.addItemFailText === 'function' && window.addItemFailText(收.name)) || '这一件先还留在原处。'), 'warning'); // DES-90（第一百三十九批）：灵泉可再来，①形
                 }
             }
         ],
@@ -488,6 +498,15 @@ function triggerRandomEvent(forceChance) {
 
 // ============ 检查境界是否达到要求 ============
 function isRealmAtLeast(currentRealm, targetRealm) {
+    // DES-92（第一百三十二批）：「谁比谁高」只问全局那把尺（js/global-utils.js 的 window.realmIndex）。
+    //   本文件这张表排在「渡劫」就断，于是飞升／金仙在 minRealm 那道门上一律判不够格——
+    //   修到顶端的人反倒一桩高阶奇遇也刷不出来。门牌认不出 ⇒ 放行；玩家境界认不出 ⇒ 不够格。
+    if (typeof window.realmIndex === 'function') {
+        var t = window.realmIndex(targetRealm);
+        if (t < 0) return true;
+        return window.realmIndex(currentRealm) >= t;
+    }
+    // 真源没就绪时才吃这张本地表（第一百三十批起的棘轮基线里已计入，是特意留的回落，别当漏网再抄一张）
     const realmOrder = ['炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'];
     const currentIndex = realmOrder.indexOf(currentRealm);
     const targetIndex = realmOrder.indexOf(targetRealm);
@@ -571,7 +590,8 @@ function handleEventChoice(eventId, choiceId) {
     // 战斗类选择提高山贼/兽潮关联
     if (event.type === 'battle' || (event.id && event.id.indexOf('bandit') >= 0)) {
         setFlag('bandit_ambushed');
-        if (typeof window.unlockBanditDenQuest === 'function') window.unlockBanditDenQuest();
+        // 第一百一十一波：此处原有 unlockBanditDenQuest()——打一架就「解锁巢穴」，而那两枚旗全仓无人读。
+        // 得知一处地方改走特殊地点册（探监／官道脚印／酒肆传闻），挨过劫只是认得脚印的前提。
     }
     if (choiceId === 'fight' || choiceId === 'challenge') {
         setFlag('recent_combat_victory');
@@ -611,61 +631,65 @@ function findEventById(eventId) {
 }
 
 // ============ 生成宝藏掉落 ============
+// 掉落是 { id | currency, count } 记录，不是中文串：旧版先拼「疗伤丹 x3」再按名字正则反解回奖励，
+// 正是强制规则第 5 条禁止的方向，且已经因此静默失灵三处（玄铁剑／御剑只出声不入库、
+// 妖兽内丹喂的是查无此物的 beast_core、灵石数额要从文案里抠数字）。
 function generateTreasureLoot() {
     const loot = [];
-    
+
     // 随机获得物品
     if (Math.random() < 0.5) {
-        loot.push('疗伤丹 x3');
+        loot.push({ id: 'vitality_pill', count: 3 });
     }
     if (Math.random() < 0.3) {
-        loot.push('灵石 x50');
+        loot.push({ currency: 'spiritStones', count: 50 });
     }
     if (Math.random() < 0.1) {
-        loot.push('玄铁剑');
+        loot.push({ id: 'iron_sword', count: 1 });
     }
-    
-    return loot.length > 0 ? loot.join(', ') : '什么都没有';
+
+    return loot;
 }
 
 // ============ 生成山洞掉落 ============
 function generateCaveLoot() {
     const loot = [];
-    
+
     if (Math.random() < 0.4) {
-        loot.push('灵石 x100');
+        loot.push({ currency: 'spiritStones', count: 100 });
     }
     if (Math.random() < 0.3) {
-        loot.push('筑基丹 x1');
+        loot.push({ id: 'foundation_pill', count: 1 });
     }
     if (Math.random() < 0.2) {
-        loot.push('妖兽内丹 x3');
+        loot.push({ id: 'mat_demon_beast_core', count: 3 });
     }
     if (Math.random() < 0.1) {
-        loot.push('御剑');
+        loot.push({ id: 'flying_sword', count: 1 });
     }
-    
-    return loot.length > 0 ? loot.join(', ') : '古老的遗迹，一无所获';
+
+    return loot;
+}
+
+// 掉落账念给人看的那一行：名字现取物品表，不再另存一份手抄名
+function lootLedgerText(loot) {
+    return (loot || []).map(r => lootNameOf(r) + ' x' + r.count).join(', ');
+}
+
+function lootNameOf(r) {
+    if (r.currency === 'spiritStones') return '灵石';
+    return (window.itemById && window.itemById[r.id]) ? window.itemById[r.id].name : r.id;
 }
 
 // ============ 应用宝藏奖励 ============
-function applyTreasureRewards(lootText) {
-    if (lootText === '什么都没有' || lootText === '古老的遗迹，一无所获') return;
-    
-    const items = lootText.split(', ');
-    items.forEach(item => {
-        if (item.includes('疗伤丹')) {
-            addItemToInventory('vitality_pill', 3);
-        } else if (item.includes('灵石')) {
-            const amount = parseInt(item.match(/\d+/)[0]);
-            addSpiritStones(amount);
-        } else if (item.includes('筑基丹')) {
-            addItemToInventory('foundation_pill', 1);
-        } else if (item.includes('玄铁剑') || item.includes('御剑')) {
-            showMessage(`获得了武器：${item}`, 'success');
-        } else if (item.includes('妖兽内丹')) {
-            addItemToInventory('beast_core', 3);
+function applyTreasureRewards(loot) {
+    (loot || []).forEach(r => {
+        if (r.currency === 'spiritStones') {
+            if (typeof addSpiritStones === 'function') addSpiritStones(r.count);
+            return;
         }
+        const added = typeof addItemToInventory === 'function' ? addItemToInventory(r.id, r.count) : 0;
+        if (!added) showMessage(lootNameOf(r) + ' 只能留在原地。' + ((typeof window.addItemFailText === 'function' && window.addItemFailText(lootNameOf(r))) || '这一件先还留在原处。'), 'warning');
     });
 }
 
@@ -685,8 +709,14 @@ function triggerMasterEncounter(masterType) {
                 showMessage('老者被你诚意打动，传授你一门功法！', 'success');
                 learnRandomSkill();
             } else {
-                showMessage('老者赠你一枚丹药后飘然而去。', 'success');
-                addItemToInventory('qi_recovery_pill', 3);
+                // DES-72＋DES-89（第一百三十批）：旧写法先念「赠你丹药」再裸发奖且丢了返回值——报喜先于发货
+                var 收 = typeof window.giveWithReceipt === 'function'
+                    ? window.giveWithReceipt('qi_recovery_pill', 3, { quiet: true })
+                    : { got: Number(addItemToInventory('qi_recovery_pill', 3)) || 0, count: 3, name: (window.itemById && window.itemById['qi_recovery_pill'] && window.itemById['qi_recovery_pill'].name) || '聚气丹', reason: window.addItemFailReason || null };
+                showMessage('老者赠你丹药后飘然而去。' + (收.got > 0
+                    ? '入手 ' + 收.name + '×' + 收.got + (收.got < 收.count ? '（另 ' + (收.count - 收.got) + ' 枚留在了石上：' + ((typeof window.addItemReasonPhraseFor === 'function' && window.addItemReasonPhraseFor(收.reason, 收.name)) || '没能落进你的行囊') + '）' : '')
+                    : '那 ' + 收.count + ' 枚 ' + 收.name + ' 一件也没能带走：'
+                      + ((typeof window.addItemFailText === 'function' && window.addItemFailText(收.name)) || '这一件先还留在原处。')), 'success'); // DES-90（第一百三十九批）：高人赠药可再来，①形
             }
             break;
         case 'observe':
@@ -710,7 +740,7 @@ function enterSecretRealm() {
             { msg: '你发现了一本上古功法！', action: () => learnRandomSkill() },
             { msg: '你遇到了一只守护兽，展开战斗！', action: () => startSecretRealmBattle() },
             { msg: '你找到了一处灵泉，恢复了状态！', action: () => restoreAll(100) },
-            { msg: '你在秘境深处发现了宝藏！', action: () => applyTreasureRewards('灵石 x200, 筑基丹 x1') }
+            { msg: '你在秘境深处发现了宝藏！', action: () => applyTreasureRewards([{ currency: 'spiritStones', count: 200 }, { id: 'foundation_pill', count: 1 }]) }
         ];
         
         const event = events[Math.floor(Math.random() * events.length)];
@@ -723,7 +753,17 @@ function enterSecretRealm() {
 function triggerFoxEncounter() {
     const responses = [
         { text: '灵狐说："前方有危险，请小心。"', effect: () => setFlag('fox_warning') },
-        { text: '灵狐赠你一颗丹药后消失了。', effect: () => addItemToInventory('vitality_pill', 1) },
+        { text: '灵狐张口吐出一颗丹药，随后消失了。', effect: () => {
+            // DES-72＋DES-89（第一百三十批）：旧写法先念「赠你丹药」再裸发奖、丢了返回值——报喜先于发货
+            var 收 = typeof window.giveWithReceipt === 'function'
+                ? window.giveWithReceipt('vitality_pill', 1, { quiet: true })
+                : { got: Number(addItemToInventory('vitality_pill', 1)) || 0, count: 1, name: (window.itemById && window.itemById['vitality_pill'] && window.itemById['vitality_pill'].name) || '回春丹' };
+            showMessage(收.got > 0
+                ? '你拾起它：' + 收.name + '×' + 收.got + '。'
+                : '那颗 ' + 收.name + ' 只好看着它留在草间：'
+                  + ((typeof window.addItemFailText === 'function' && window.addItemFailText(收.name)) || '它没有跟你走。'), // DES-90（第一百三十九批）：灵狐赠药是一次性剧情，②形
+                收.got > 0 ? 'success' : 'warning');
+        } },
         { text: '灵狐与你嬉戏片刻后离去。', effect: () => gainExp(50) }
     ];
     
@@ -798,7 +838,7 @@ function gainExp(amount) {
 // ============ 扣除生命值 ============
 function takeDamage(amount) {
     if (!window.currentCharData) return;
-    currentCharData.health = Math.max(0, (currentCharData.health || 100) - amount);
+    currentCharData.health = Math.max(0, (currentCharData.health ?? 100) - amount);
     showMessage(`受到 ${amount} 点伤害`, 'error');
     updateStatusPanel();
 }

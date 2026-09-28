@@ -106,7 +106,7 @@ assert('御剑在位面内也飞不出去', (function () {
 // ==================== P4 位面营生 ====================
 console.log('\n[P4] 位面营生');
 var added = [];
-global.addItem = function (id, n) { added.push({ id: id, n: n }); };
+global.addItem = function (id, n) { added.push({ id: id, n: n }); return n || 1; };   // 桩：回实收件数
 global.startBattle = function (e) { battles.push(e); };
 global.enterPlane('灵界');
 var qiBefore = global.currentCharData.qi;

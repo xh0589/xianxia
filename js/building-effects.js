@@ -60,7 +60,7 @@ buildingEffectsRegistry['shop'] = {
         const realId = idMap[itemId] || itemId;
         let added = false;
         if (typeof window.addItem === 'function') added = !!window.addItem(realId, 1);
-        else if (window.addItemToInventory) { window.addItemToInventory(realId, 1); added = true; }
+        else if (window.addItemToInventory) { added = (Number(window.addItemToInventory(realId, 1)) || 0) > 0; } // DES-72 副账收口（第一百二十七批）：兜底支同样问实收，不许硬写 added = true
         if (!added) {
             showMessage('背包已满或物品无效', 'error');
             return false;
@@ -518,7 +518,9 @@ buildingEffectsRegistry['spring'] = {
         var _got = 0;
         if (typeof window.addItem === 'function') _got = Number(window.addItem('spec_spring_water', 1)) || 0;
         if (!_got) {
-            showMessage('行囊塞满了，连一瓶水都放不下——腾出格子再来汲水。', 'error');
+            // DES-90（第一百三十九批）：R2 泉眼可再来，但不许向玩家承诺「改日再来」——
+            // 旧句尾巴那句「腾个格子再来汲水。」是拿一句好听话换玩家的耐心，撤掉。
+            showMessage('这一瓶水没能落进你的行囊：' + ((typeof window.addItemFailText === 'function' && window.addItemFailText('泉水')) || '这一件先还留在原处。'), 'error');
             return false;
         }
         currentCharData.energy -= 10;
@@ -676,12 +678,14 @@ buildingEffectsRegistry['tavern'] = {
             showMessage(`做东需${cost}铜钱`, 'error'); return false;
         }
         const myLoc = (window.currentCharData && window.currentCharData.location) || null;
+        // DES-57：城名两串写法（舆图「帝都 · 长安」／NPC 账「帝都·长安」），认账前去空白
+        const myLocKey = String(myLoc || '').replace(/\s+/g, '');
         let pool = [];
-        if (myLoc && window.npcManager && typeof window.npcManager.getAllNPCs === 'function') {
+        if (myLocKey && window.npcManager && typeof window.npcManager.getAllNPCs === 'function') {
             const all = window.npcManager.getAllNPCs() || [];
             for (let i = 0; i < all.length; i++) {
                 const n = all[i];
-                if (n && !n.isDead && !n.isMissing && n.location === myLoc) pool.push(n);
+                if (n && !n.isDead && !n.isMissing && String(n.location || '').replace(/\s+/g, '') === myLocKey) pool.push(n);
             }
         }
         if (!pool.length) {
@@ -783,6 +787,12 @@ function generateTavernIntel() {
         var echoCity = (window.currentCharData && window.currentCharData.location) || '';
         var echo = window.qiStreetTavernLine(echoCity);
         if (echo) return echo;
+    }
+    // 第一百一十一波（用户裁决：酒肆这类消息口子要真能换来地点）：册子里还有待得知的地方时，
+    // 三巡过后有机会听见一句实在的传闻——听见了就当场标上舆图（句里已带这句回执，不再另弹一条）
+    if (window.SpecialPlaces && typeof window.SpecialPlaces.rollRumor === 'function') {
+        const placeLine = window.SpecialPlaces.rollRumor();
+        if (placeLine) return placeLine;
     }
     if (window.NPCLife && typeof window.NPCLife.getRumorLog === 'function') {
         const log = window.NPCLife.getRumorLog(30) || [];

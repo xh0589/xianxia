@@ -402,7 +402,7 @@
         f['qi_anchor_day'] = absDay() || 1;
         record('qi_route_' + r);
         try {
-            if (typeof W.qiJournalNote === 'function') W.qiJournalNote('灵气之尽', '有人在抽天下的脉。她公示了期限：三年后的今日，天下最后一缕灵气入海。你选的路——' + (r === 'oppose' ? '对抗' : (r === 'ignore' ? '无视' : '追随')) + '。');
+            if (typeof W.qiJournalNote === 'function') W.qiJournalNote('灵气之尽', '灵脉是天道收租的管道。有人在拆管道——她公示了期限：三年后的今日，天下最后一缕灵气入海。你选的路——' + (r === 'oppose' ? '对抗' : (r === 'ignore' ? '无视' : '追随')) + '。');
             if (typeof W.qiCodexNote === 'function') W.qiCodexNote('qi_lingqizhijin', '灵气之尽', '灵脉是天道收租的管道。有人在拆管道——她公示：三年后的今日，天下最后一缕灵气入海。');
         } catch (e) {}
         if (typeof W.qiSetStage === 'function') W.qiSetStage(1);

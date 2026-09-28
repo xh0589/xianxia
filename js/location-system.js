@@ -57,6 +57,12 @@ const BUILDING_TYPES = {
     SALT_IRON_OFFICE: { id: 'salt_iron_office', name: '盐铁局', icon: '🧂', color: 'text-cyan-300', category: 'office' }
 };
 
+// ============ 常去三铺（v24 UI-03②）============
+// 名册按分类摆开是 10 组、47 处，买药／配装／修器这三趟回回要跑的门却和「盐铁局」平起平坐，
+// 排在滚窗深处。这里只记**哪三铺置顶**（建筑 id），名字、图标一律回读 BUILDING_TYPES——
+// 快捷条不是另一套设施清单，只是同一份清单换了个摆法。
+const COMMON_SERVICE_BUILDING_IDS = ['shop', 'medicine_shop', 'forging'];
+
 
 // ============ 城市数据（v6.0 增强版 - 16城市差异化） ============
 // v21.4 千城千面：19 座人间城的建筑清单按城市性格重裁——衙门只在有官府的地方开，
@@ -442,7 +448,7 @@ function enterCity(cityName) {
     // 第一百零七波：同伴跟着你走——哪条路进的城都一样，人到齐才算到（此前只有 app.js 的老进城口同步）
     try { if (window.partySystem && typeof window.partySystem.syncPartyLocationToPlayer === 'function') window.partySystem.syncPartyLocationToPlayer(cityName); } catch (eParty) {}
     
-    showMessage(`来到了 ${cityName}：${city.desc}`, 'info');
+    showMessage(`来到了${cityName}：${city.desc}`, 'info');
     // v25.0《灵气之尽》：枯脉城城景三段式叠加（读真实枯脉旗与档位，未枯城静默）
     try {
         if (typeof window.qiCityOverlay === 'function') {
@@ -475,14 +481,24 @@ function checkAccessRequirement(requirement, playerRealm, playerLayer) {
     if (requirement === 'all') return true;
 
     const realmOrder = ['炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'];
+    // DES-92（第一百三十二批）：本函数旧写法只认自己抄的这 9 档——渡劫之上还有飞升、金仙（js/cultivation/cultivation.js
+    //   的 REALM_UNIQUE_EFFECTS 里排着），那两档 indexOf 得 -1、又被夹回最低档，**飞升修士反而进不了「金丹以上」的城**。
+    //   改借全局那把尺；认不出的境界名仍夹到炼气（旧口径，别在这儿挪动别的判定）。
+    var _境尺 = (typeof window.realmIndex === 'function')
+        ? window.realmIndex
+        : function (名) { return realmOrder.indexOf(名); };
+    function _境序(名) {
+        var i = _境尺(名);
+        return i < 0 ? _境尺('炼气') : i;   // 回落也在这把尺上取，免得两档口径混用
+    }
     var req = String(requirement || '').replace(/\s+/g, '');
     var m = req.match(/^(炼气|筑基|金丹|元婴|化神|炼虚|合体|大乘|渡劫)(?:([一二三四五六七八九十\d]+)层)?/);
     if (!m) return true;   // 认不出的门槛字样：放行，别把人锁死
-    var requiredRealmIndex = realmOrder.indexOf(m[1]);
+    var requiredRealmIndex = _境序(m[1]);
     var CN_LAYER = { '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10 };
     var requiredLayer = m[2] ? (CN_LAYER[m[2]] || parseInt(m[2], 10) || 1) : 1;
 
-    var playerRealmIndex = realmOrder.indexOf(playerRealm);
+    var playerRealmIndex = _境序(playerRealm);
     if (playerRealmIndex < 0) playerRealmIndex = 0;
     if (playerRealmIndex < requiredRealmIndex) return false;
     if (playerRealmIndex === requiredRealmIndex && (playerLayer || 1) < requiredLayer) return false;
@@ -530,8 +546,9 @@ function renderCityBuildings(cityName) {
     const metaEl = document.getElementById('city-panel-meta');
     if (metaEl) {
         var tags = [];
-        if (city.specialties) tags = tags.concat(city.specialties.map(function(s) { return '<span class="px-2 py-0.5 bg-yellow-900/40 text-yellow-300 rounded">特产:' + s + '</span>'; }));
-        if (city.accessLevel && city.accessLevel !== 'all') tags.push('<span class="px-2 py-0.5 bg-red-900/40 text-red-300 rounded">门槛:' + city.accessLevel + '</span>');
+        // COPY-03：「特产:」从前是每张牌各印一遍（三张牌三个前缀），现提到行头只说一次，牌面只列名。
+        if (city.specialties && city.specialties.length) tags.push('<span class="px-2 py-0.5 text-gray-400">本城特产：</span>' + city.specialties.map(function(s) { return '<span class="px-2 py-0.5 bg-yellow-900/40 text-yellow-300 rounded">' + s + '</span>'; }).join(' '));
+        if (city.accessLevel && city.accessLevel !== 'all') tags.push('<span class="px-2 py-0.5 bg-red-900/40 text-red-300 rounded">门槛：' + city.accessLevel + '</span>');
         tags.push('<span class="px-2 py-0.5 bg-gray-700 text-gray-300 rounded">设施 ' + (city.buildings ? city.buildings.length : 0) + ' 处</span>');
         metaEl.innerHTML = tags.join(' ');
     }
@@ -570,23 +587,47 @@ function renderCityBuildings(cityName) {
             if (!grouped[c]) grouped[c] = [];
             grouped[c].push(buildingType);
         });
+        // v24 UI-03：47 处设施一路铺下去要在滚窗里滚 8 屏，光有标题等于给长队立路牌。
+        // 改手风琴——每组一个 <details>，标题报「几处」且能点合，展开时标题吸顶。
+        // 默认全折起：首屏实测量过，摊开第一组（商业 11 处＝828px）就把 465px 的窗塞满，
+        // 组名只剩一个可看，「先看清这座城有多大」这一步反而丢了。全折时十个组名同屏，
+        // 「能点」这条线索交给名册上方那行提示（city-roster-hint）与标题上的「N 处」。
+        let groupCount = 0;
+        let cardCount = 0;
+        // v24 UI-03②：常去三铺提到滚窗上方那一排，下面的组里就不再重复摆同一张卡。
+        const quick = getCommonServiceBuildings(city);
+        const quickIds = quick.map(function (bt) { return bt.id; });
         Object.keys(cats).forEach(function(c) {
             if (!grouped[c] || !grouped[c].length) return;
-            const h = document.createElement('div');
-            h.className = 'text-xs font-bold text-gray-400 mt-2 mb-1';
-            h.textContent = cats[c];
-            buildingList.appendChild(h);
-            grouped[c].forEach(function(buildingType) {
-                buildingList.appendChild(createBuildingElement(buildingType.id, buildingType));
-            });
+            const inGroup = grouped[c].filter(function (bt) { return quickIds.indexOf(bt.id) < 0; });
+            if (!inGroup.length) return;
+            buildingList.appendChild(createBuildingGroup(cats[c], inGroup, false));
+            groupCount++;
+            cardCount += inGroup.length;
         });
-        // 未分类
+        // 没归进上面那些类的建筑：也要有个标题领着头，别散着摆在名册末尾当没名没姓的野卡
+        const strays = [];
         Object.keys(grouped).forEach(function(c) {
             if (cats[c]) return;
-            grouped[c].forEach(function(buildingType) {
-                buildingList.appendChild(createBuildingElement(buildingType.id, buildingType));
-            });
+            grouped[c].forEach(function (bt) { if (quickIds.indexOf(bt.id) < 0) strays.push(bt); });
         });
+        if (strays.length) {
+            buildingList.appendChild(createBuildingGroup('📦 其他', strays, false));
+            groupCount++;
+            cardCount += strays.length;
+        }
+        const quickBar = document.getElementById('city-quick-bar');
+        if (quickBar) quickBar.innerHTML = cityQuickBarHTML(quick);
+        const rosterHint = document.getElementById('city-roster-hint');
+        if (rosterHint) {
+            // 总数照旧报这座城有几处（含置顶那几铺）——玩家数的是门，不是摆法
+            const totalCards = cardCount + quick.length;
+            rosterHint.innerHTML = (groupCount || quick.length)
+                ? '<span class="text-yellow-500 font-bold">📜 ' + totalCards + ' 处设施分 ' + groupCount + ' 组收纳</span>' +
+                  '<span class="text-gray-500">（点组名摊开，一次只看一组，不必滚到底）</span>' +
+                  (quick.length ? '<span class="text-gray-500">｜常去 ' + quick.length + ' 铺已置顶，不在组里重复摆</span>' : '')
+                : '';
+        }
         
         // 添加特殊功能
         if (city.specialFeatures && city.specialFeatures.length > 0) {
@@ -696,7 +737,10 @@ function createCityPanel() {
         <div id="city-panel-meta" class="mb-4 text-xs text-gray-500 flex flex-wrap gap-2"></div>
         <div id="city-rep-mini" class="mb-3"></div>
         
-        <div id="city-building-list" class="space-y-2 mb-4 max-h-[50vh] overflow-y-auto">
+        <div id="city-roster-hint" class="mb-2 text-xs"></div>
+        <div id="city-quick-bar"></div>
+        
+        <div id="city-building-list" class="space-y-2 mb-4 max-h-[70vh] overflow-y-auto">
             <p class="text-gray-500 text-sm text-center">选择一个城市开始探索</p>
         </div>
         
@@ -705,6 +749,59 @@ function createCityPanel() {
     `;
     
     return panel;
+}
+
+// ============ 常去三铺：这座城有哪几铺能置顶 ============
+// 只报这座城市真有的那几铺（缺的绝不补一枚点不开的牌），顺序照名单走，不按分类表。
+function getCommonServiceBuildings(city) {
+    const ids = (city && city.buildings) || [];
+    const picked = [];
+    COMMON_SERVICE_BUILDING_IDS.forEach(function (id) {
+        if (ids.indexOf(id) < 0) return;
+        const bt = Object.values(BUILDING_TYPES).find(function (b) { return b.id === id; });
+        if (bt) picked.push(bt);
+    });
+    return picked;
+}
+
+// 快捷条那一排：每枚钮走的是名册里同一扇正门 useBuilding，不另开一条路。
+function cityQuickBarHTML(buildingTypes) {
+    if (!buildingTypes || !buildingTypes.length) return '';
+    return '<div class="city-quick">' +
+        '<span class="city-quick__label">常去</span>' +
+        buildingTypes.map(function (bt) {
+            return '<button type="button" onclick="useBuilding(\'' + bt.id + '\')" class="city-quick__chip">' +
+                '<span class="city-quick__icon">' + bt.icon + '</span>' + bt.name + '</button>';
+        }).join('') +
+        '</div>';
+}
+
+// ============ 创建建筑分组（可折叠手风琴） ============
+// 标题上必须报得出「这一组有几处」——玩家决定是否点开之前，唯一的线索就是这个数。
+function createBuildingGroup(label, buildingTypes, open) {
+    const group = document.createElement('details');
+    group.className = 'city-group';
+    if (open) group.open = true;
+
+    const sum = document.createElement('summary');
+    sum.className = 'city-group__sum';
+    const name = document.createElement('span');
+    name.className = 'city-group__name';
+    name.textContent = label;
+    const cnt = document.createElement('span');
+    cnt.className = 'city-group__count';
+    cnt.textContent = buildingTypes.length + ' 处';
+    sum.appendChild(name);
+    sum.appendChild(cnt);
+    group.appendChild(sum);
+
+    const body = document.createElement('div');
+    body.className = 'city-group__body';
+    buildingTypes.forEach(function (buildingType) {
+        body.appendChild(createBuildingElement(buildingType.id, buildingType));
+    });
+    group.appendChild(body);
+    return group;
 }
 
 // ============ 创建建筑元素 ============
@@ -843,8 +940,13 @@ function useBuilding(buildingId) {
         markBuildingUsed(buildingId);
         return;
     }
-    if (buildingId === 'arena' && window.startBattle) {
-        window.startBattle('training_dummy');
+    if (buildingId === 'arena') {
+        // v24 复验修正：城建列表的「前往」走的是本函数，app.js executeFacilityAction 里的竞技场分支
+        // 是永不命中的兜底——于是正门一直把「竞技场」开成木人桩（牌子写切磋，台上是个桩）。
+        // 木人桩归演武场（building-effects 的 training），此处先上台前看榜，榜上自带「开始切磋」。
+        var arenaSys = window.ArenaSystem;
+        if (arenaSys && typeof arenaSys.showRanking === 'function') arenaSys.showRanking();
+        else if (typeof window.showMessage === 'function') window.showMessage('竞技场暂时无人当值（比武系统未加载）', 'warning');
         markBuildingUsed(buildingId);
         return;
     }
@@ -1053,7 +1155,13 @@ window._palaceGift = function(city) {
 };
 window._palaceSneak = function(city) {
     if (Math.random() < 0.4) {
-        if (typeof window.addItem === 'function') window.addItem('spec_map_fragment', 1);
+        // DES-86 同族（第一百二十七批）：这一支的彩头只有这一份残片——旧写法丢返回值又照立旗，满包时残片没到手、这座城市却从此不再让你探
+        var _残片收 = (typeof window.addItem === 'function') ? (Number(window.addItem('spec_map_fragment', 1)) || 0) : 1;
+        if (_残片收 <= 0) {
+            // DES-90（第一百三十九批）：宫城秘图是一次性的，旧句却承诺「腾个格子再来」——那是骗人，撤。
+            if (window.showMessage) window.showMessage('你摸到一份密图残片——它却没能跟你走：' + ((typeof window.addItemFailText === 'function' && window.addItemFailText('密图残片')) || '它没有跟你走。'), 'warning');
+            return;
+        }
         if (window.showMessage) window.showMessage('你摸到一份密图残片！', 'success');
         if (typeof window.setFlag === 'function') window.setFlag('palace_secret_' + city);
     } else {
@@ -1080,20 +1188,37 @@ window._prisonVisit = function() {
     if (!_gate('prison_visit', 1, '狱卒拦住你：「今儿已经探过了，明儿再来吧。」')) return;
     _gateMark('prison_visit');
     if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '探监');
-    // 第九十五波·NEW-08：探监换来的是一条能解锁黑风寨委托的实情——一闪而过的 toast 会漏看，改成留得住的弹窗
+    // 第一百一十一波（用户裁决）：探监听来的是一条能上图的实情——黑风寨归特殊地点册记账
+    var learned = window.SpecialPlaces.discover('heifeng_zhai', 'prison', { silent: true });
+    var receipt;
+    if (learned.newly) {
+        receipt = '（黑风寨已标上舆图：去「九州舆图」的地区列表里寻它。）';
+    } else if (learned.reason === 'scrapped') {
+        // 这一支返回的对象没有 status（记号已被玩家抹掉，册子里压根没有它）——
+        // 改前这里印「眼下是undefined」，还谎称「早在你的舆图上」。
+        receipt = '（这地方你已把记号自己抹了，眼下是废址——一句闲话不能让它在舆图上凭空长回来。）';
+    } else {
+        receipt = '（这话他已说过一回——黑风寨早在你的舆图上，眼下是' + (learned.status || '不明') + '。）';
+    }
+    // 第九十五波·NEW-08：探监换来的是一条留得住的实情，一闪而过的 toast 会漏看，故话仍在窗里说
     if (typeof window.showModal === 'function') {
         window.showModal('⛓️ 探监', '<p class="text-sm text-gray-300">你贴近栅栏，塞过去半块干粮。犯人四下张望，压低了嗓子：</p>'
             + '<p class="text-sm text-yellow-300 mt-2">「城外山贼的巢穴……在<b>黑风寨</b>。他们抢来的货，都堆在那儿。」</p>'
-            + '<p class="text-xs text-gray-500 mt-2">（记下了一条线索，或可寻到差事。）</p>');
-    } else if (window.showMessage) window.showMessage('犯人低语：城外山贼巢穴在「黑风寨」……', 'info');
-    if (typeof window.setFlag === 'function') window.setFlag('know_bandit_den');
-    if (typeof window.unlockBanditDenQuest === 'function') window.unlockBanditDenQuest();
+            + '<p class="text-xs text-gray-500 mt-2">' + receipt + '</p>');
+    } else if (window.showMessage) window.showMessage('犯人低语：城外山贼巢穴在「黑风寨」……' + receipt, 'info');
 };
 window._prisonBribe = function(city) {
     if (!_gate('prison_bribe', 1, '狱卒把袖子一拢：「今儿的买卖做完了，明儿请早。」')) return;
+    var _手头 = (window.inventory && window.inventory.currency && window.inventory.currency.spiritStones) || 0;
+    if (_手头 < 100) { _hardStop('灵石不足（需 100，手头 ' + _手头 + '）'); return; }
+    // DES-72 副账收口（第一百二十七批）：与 js/building-effects.js 的 buy() 同一条柜台规矩——货没进囊就不收钱，也不烧当天这一趟
+    var _钥匙收 = (typeof window.addItem === 'function') ? (Number(window.addItem('spec_key', 1)) || 0) : 1;
+    if (_钥匙收 <= 0) {
+        if (window.showMessage) window.showMessage('狱卒把钥匙递过来，你两手空空腾不出地方接——他耸耸肩收了回去：「银子先别掏，明儿带上个空袋子。」', 'warning');
+        return;
+    }
     if (!_payOrFail(100, 0)) return;
     _gateMark('prison_bribe');
-    if (typeof window.addItem === 'function') window.addItem('spec_key', 1);
     if (window.showMessage) window.showMessage('狱卒塞给你一把旧钥匙', 'success');
 };
 window._prisonBreak = function(city) {
@@ -1120,7 +1245,7 @@ function enterHuafang(city) {
     if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '画舫酒席');
     if (window.currentCharData) {
         window.currentCharData.tempering = (window.currentCharData.tempering || 0) + _roll(20, 40);
-        window.currentCharData.mood = Math.min(100, (window.currentCharData.mood || 50) + _roll(8, 12));
+        window.currentCharData.mood = Math.min(100, (window.currentCharData.mood ?? 50) + _roll(8, 12));
     }
     var rep = _roll(5, 10);
     if (Math.random() < 0.15) {
@@ -1190,8 +1315,9 @@ function enterTrialTower(city) {
     if (typeof window.startBattle === 'function') window.startBattle('dungeon_guard');
     else {
         if (window.currentCharData) window.currentCharData.tempering = (window.currentCharData.tempering || 0) + 100;
-        if (typeof window.addItem === 'function') window.addItem('pill_foundation', 1);
-        if (window.showMessage) window.showMessage('试炼有所收获', 'success');
+        // DES-72 副账收口（第一百二十七批）：历练是真磨出来的，那枚丹进没进囊得问行囊
+        var _试炼丹收 = (typeof window.addItem === 'function') ? (Number(window.addItem('pill_foundation', 1)) || 0) : 1;
+        if (window.showMessage) window.showMessage(_试炼丹收 > 0 ? '试炼有所收获' : '试炼有所收获——那枚丹药只好留在原地，没能带走：' + ((typeof window.addItemFailText === 'function' && window.addItemFailText('那枚丹药')) || '这一件先还留在原处。'), _试炼丹收 > 0 ? 'success' : 'warning');
     }
     if (typeof window.setFlag === 'function') window.setFlag('trial_done_' + city);
 }
@@ -1199,8 +1325,13 @@ function enterTrialTower(city) {
 function visitHerbGarden(city) {
     if (typeof window.gatherHerbs === 'function') window.gatherHerbs();
     else if (typeof window.addItem === 'function') {
-        window.addItem('mat_lingzhi', 1 + Math.floor(Math.random() * 2));
-        if (window.showMessage) window.showMessage('采得灵药', 'success');
+        var _掷 = 1 + Math.floor(Math.random() * 2);
+        // DES-72 同族：addItem 报实收，旧写法丢返回值⇒满包时一株没进也念「采得灵药」
+        var _收 = Number(window.addItem('mat_lingzhi', _掷)) || 0;
+        if (window.showMessage) window.showMessage(
+            _收 > 0 ? '采得灵药 ×' + _收 + (_收 < _掷 ? '（另 ' + (_掷 - _收) + ' 株：' + ((typeof window.addItemReasonPhrase === 'function' && window.addItemReasonPhrase('灵药')) || '没能带走') + '）' : '')
+                : '一株灵药也没能带走——' + ((typeof window.addItemFailText === 'function' && window.addItemFailText('灵药')) || '这一件先还留在原处。'),
+            _收 > 0 ? 'success' : 'warning');
     }
 }
 
@@ -1209,7 +1340,12 @@ function visitTribulationPlatform(city) {
     var realm = (cd && cd.realm) || '';
     var tier = (typeof window.getRealmTier === 'function') ? window.getRealmTier(realm) : 0;
     // v20.0 1.1：渡劫期满 → 触发天劫战（多波雷劫+心魔劫+护法）；此前只弹文案
-    if (tier >= 9 && typeof window.triggerHeavenlyTribulation === 'function') {
+    // 第一百四十二批：原判 `tier >= 9`。9 本身是对的（REALM_ORDER 里「渡劫」下标正好 9，
+    // 与 heavenly-tribulation.js:19 的 `tier < 9` 两道门一致），**不是门槛写错**——
+    // 错的是 `>=`：并尺之后 REALM_ORDER 有 12 境，「飞升」=10、「金仙」=11，
+    // 于是**已飞升／成仙的人回到渡劫台会再被劈一次**。第一百三十三批把这登记为待裁，
+    // 本批按「天劫只属于渡劫期」收紧到 `tier === 9`，两处同步（`heavenly-tribulation.js:19` 同改）。
+    if (tier === 9 && typeof window.triggerHeavenlyTribulation === 'function') {
         window.triggerHeavenlyTribulation();
         return;
     }
@@ -1236,8 +1372,12 @@ function enterDragonVault(city) {
     // v23.0 龙宫宝库一日一探、耗气抗龙威（旧版可无限连抽龙鳞）
     if (!_gate('dragon_vault', 1, '宝库龙威未散，你的神魂还需歇一歇——明日再来。')) return;
     var realm = (window.currentCharData && window.currentCharData.realm) || '炼气';
-    var order = ['炼气','筑基','金丹','元婴','化神','炼虚','合体','大乘','渡劫'];
-    if (order.indexOf(realm) < order.indexOf('金丹')) {
+    // DES-92（第一百三十二批）：尺只此一把。旧写法自抄 9 档，飞升／金仙 indexOf 得 -1，
+    //   反倒被当成「金丹以下」拒在门外，还念出一句假话。
+    var _境尺 = (typeof window.realmIndex === 'function')
+        ? window.realmIndex
+        : function (名) { return ['炼气','筑基','金丹','元婴','化神','炼虚','合体','大乘','渡劫'].indexOf(名); };
+    if (_境尺(realm) < _境尺('金丹')) {
         if (window.showMessage) window.showMessage('龙威压迫，金丹以下难以深入', 'warning');
         return;
     }
@@ -1245,8 +1385,9 @@ function enterDragonVault(city) {
     _gateMark('dragon_vault');
     if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '探龙宫宝库');
     if (Math.random() < 0.5) {
-        if (typeof window.addItem === 'function') window.addItem('mat_dragon_scale', 1);
-        if (window.showMessage) window.showMessage('取得龙鳞！', 'success');
+        // DES-72 副账收口（第一百二十七批）：「取得龙鳞」以前只看骰子不看行囊；真气与当日名额照付（同第一百二十六批第 7 条那一族，待裁）
+        var _龙鳞收 = (typeof window.addItem === 'function') ? (Number(window.addItem('mat_dragon_scale', 1)) || 0) : 1;
+        if (window.showMessage) window.showMessage(_龙鳞收 > 0 ? '取得龙鳞！' : '龙鳞眼看它从指缝滑回宝堆——这一趟白花了真气与今日名额。' + ((typeof window.addItemFailText === 'function' && window.addItemFailText('龙鳞')) || '这一件先还留在原处。'), _龙鳞收 > 0 ? 'success' : 'warning');
     } else {
         if (typeof window.startBattle === 'function') window.startBattle('beast');
         else if (window.showMessage) window.showMessage('守护兽苏醒，你被迫退出', 'error');
@@ -1261,7 +1402,7 @@ function enterVolcanoCave(city) {
     if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '探查火山洞');
     var cd = window.currentCharData;
     if (cd && Math.random() < 0.25) {
-        cd.health = Math.max(1, (cd.health || 100) - 8);
+        cd.health = Math.max(1, (cd.health ?? 100) - 8);
         if (window.showMessage) window.showMessage('🔥 一股岩浆热浪扑面，灼伤了皮肤！（健康-8）', 'warning');
         if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
     }
@@ -1288,8 +1429,9 @@ function enterPoisonCave(city) {
             if (window.showMessage) window.showMessage('你中了毒！', 'error');
         }
     } else if (typeof window.addItem === 'function') {
-        window.addItem('mat_demon_beast_core', 1);
-        if (window.showMessage) window.showMessage('取得毒核材料', 'success');
+        // DES-72 同族：念实收，不念「拿到手」
+        var _毒收 = Number(window.addItem('mat_demon_beast_core', 1)) || 0;
+        if (window.showMessage) window.showMessage(_毒收 > 0 ? '取得毒核材料' : '毒核这一趟没带走：' + ((typeof window.addItemFailText === 'function' && window.addItemFailText('毒核')) || '这一件先还留在原处。'), _毒收 > 0 ? 'success' : 'warning');
     }
 }
 
@@ -1320,8 +1462,11 @@ function enterRuinEntrance(city) {
     if (typeof window.setFlag === 'function') window.setFlag('ruin_explored_' + city);
     if (Math.random() < 0.5 && typeof window.startBattle === 'function') window.startBattle('dungeon_guard');
     else if (typeof window.addItem === 'function') {
-        window.addItem('mat_meteorite', 1);
-        if (window.showMessage) window.showMessage('搜得陨铁', 'success');
+        // DES-72 同族：精力与今日名额在前、陨铁在后——没落袋就不能念「搜得」
+        var _铁收 = Number(window.addItem('mat_meteorite', 1)) || 0;
+        if (window.showMessage) window.showMessage(
+            _铁收 > 0 ? '搜得陨铁' : '陨铁没带走，这一趟白走了（精力与今日次数已花掉）：' + ((typeof window.addItemFailText === 'function' && window.addItemFailText('陨铁')) || '这一件先还留在原处。'),
+            _铁收 > 0 ? 'success' : 'warning');
     }
 }
 
@@ -1336,7 +1481,7 @@ function visitIceTower(city) {
         var cd = window.currentCharData;
         var scarred = cd._iceTowerPerm || 0;
         var chill = 10 + scarred * 8; // 寒毒入骨一层，蚀体便重一分
-        cd.health = Math.max(1, (cd.health || 100) - chill);
+        cd.health = Math.max(1, (cd.health ?? 100) - chill);
         var perm = false;
         if (Math.random() < 0.12 / (1 + scarred)) {
             perm = true;
@@ -1379,8 +1524,9 @@ window._swordComprehend = function() {
 window._swordPull = function() {
     if (window.CityDepth) return window.CityDepth.swordPull();
     if (Math.random() < 0.25) {
-        if (typeof window.addItem === 'function') window.addItem('wpn_dark_iron_sword', 1);
-        if (window.showMessage) window.showMessage('古剑认可了你！', 'success');
+        // DES-72 副账收口（第一百二十七批）：剑认不认可你是一回事，带不带得走是另一回事
+        var _剑冢收 = (typeof window.addItem === 'function') ? (Number(window.addItem('wpn_dark_iron_sword', 1)) || 0) : 1;
+        if (window.showMessage) window.showMessage(_剑冢收 > 0 ? '古剑认可了你！' : '古剑认可了你，它又落回剑冢、没能跟你走——' + ((typeof window.addItemFailText === 'function' && window.addItemFailText('古剑')) || '这一件先还留在原处。'), _剑冢收 > 0 ? 'success' : 'warning');
     } else {
         if (window.showMessage) window.showMessage('剑身不动，反震得你虎口发麻', 'info');
     }
@@ -1410,7 +1556,7 @@ function visitDaoistTemple(city) {
     var daoGain = _roll(15, 30);
     if (window.showMessage) window.showMessage('道观清幽，心神安定（心情+15，真元+' + daoGain + '，香火10灵石）', 'success');
     if (window.currentCharData) {
-        window.currentCharData.mood = Math.min(100, (window.currentCharData.mood || 50) + 15);
+        window.currentCharData.mood = Math.min(100, (window.currentCharData.mood ?? 50) + 15);
         window.currentCharData.essence = (window.currentCharData.essence || 0) + daoGain;
     }
     if (typeof window.addReputation === 'function') window.addReputation(city, 5);
@@ -1560,8 +1706,11 @@ function getCityAccessLevel(cityName) {
 
 // 获取城市所属地区
 function getCityRegion(cityName) {
+    // DES-57：mapData 的起始城写作「帝都 · 长安」（带空格），传进来的多是「帝都·长安」——两边去空白再比
+    const key = String(cityName || '').replace(/\s+/g, '');
+    if (!key) return null;
     for (const [region, data] of Object.entries(window.mapData || {})) {
-        if (data.cities && data.cities.includes(cityName)) {
+        if (data.cities && data.cities.some(c => String(c).replace(/\s+/g, '') === key)) {
             return region;
         }
     }
@@ -1575,7 +1724,13 @@ window.getCityBonus = getCityBonus; // B5：声望等模块直接调用
 window.locationSystem = {
     initLocationSystem,
     saveLocationData,
-    enterCity,
+    // DES-81：四本模块把进城钩子挂在 window.enterCity 上（本文件的城市氛围／sect-roster 腰牌／sect-cities 城头幡号＋分舵麻烦／sect-identity 修罗宫注视），
+    // 而真实赶路走的是本对象的 enterCity——旧写法在导出时抓住包装前的原函数，四道钩子一处都不响。
+    // 改为按当下的 window.enterCity 派发：未被包装时它就等于原函数（直接回落，不递归），被串上钩子后谁后挂的都算数。
+    enterCity: function (cityName) {
+        var door = (typeof window.enterCity === 'function' && window.enterCity !== enterCity) ? window.enterCity : enterCity;
+        return door(cityName);
+    },
     renderCityBuildings,
     useBuilding,
     closeCityPanel,
@@ -1867,6 +2022,10 @@ const CITIZEN_GOSSIP = [
 ];
 
 // ============ 城市市民状态 ============
+// 第一百二十三批 DES-77 同族：第 70 行那张城市表是经典脚本的顶层 const，不挂 window，
+// 而下面 generateCitizensForCity 读的是 window.cityData ⇒ 恒 undefined、直接 return []，
+// 于是「街上没有看到什么人」成了永远的答复，市民系统从未真的跑过一回。
+window.cityData = cityData;
 var cityCitizens = {};
 
 // 生成市民
@@ -2061,11 +2220,14 @@ function ensureSectPanel() {
 }
 
 // ============ 进入门派（v8.6 三层访问体系） ============
+// 第一百一十四波 DES-10：进门派唯一的口子是地区列表那一行（js/app.js 的 travelToSectFromList），
+// 脚程的账（时辰／精力）在那一支笔里结，这里只管进门——所以必须如实回话：
+// 查无此宗回 false（调用方据此一分不扣），真进了山门回 true。
 function enterSect(sectName) {
     const sect = window.sectsData?.[sectName];
     if (!sect) {
         if (typeof showMessage === 'function') showMessage('门派不存在', 'error');
-        return;
+        return false;
     }
     
     currentSect = sectName;
@@ -2105,7 +2267,8 @@ function enterSect(sectName) {
         if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 100);
     
-    if (typeof showMessage === 'function') showMessage('🏛️ 来到了 ' + sectName, 'info');
+    if (typeof showMessage === 'function') showMessage('🏛️ 来到了' + sectName, 'info');
+    return true;
 }
 
 // ============ 关闭门派面板 ============

@@ -25,6 +25,25 @@
     function mySect() { var d = ds(); return (d && d.isInSect && (d.sectName || d.sectId)) || null; }
     function addC(n, r) { try { if (typeof W.sectAddContribution === 'function') return W.sectAddContribution(n, r); } catch (e) {} var d = ds(); if (d) d.contribution = (Number(d.contribution) || 0) + n; return d && d.contribution; }
     function spendC(n, r) { try { if (typeof W.sectSpendContribution === 'function') return W.sectSpendContribution(n, r); } catch (e) {} var d = ds(); if (!d || (Number(d.contribution) || 0) < n) return false; d.contribution -= n; return true; }
+    // DES-72（第一百三十批）：支取公库得认实收——旧写法把入库的返回值丢在地上，货没进囊账却先扣了
+    function 支收(id, n) {
+        if (typeof W.giveWithReceipt === 'function') return W.giveWithReceipt(id, n, { quiet: true });
+        var 得 = 0; try { 得 = Number(W.addItem(id, n)) || 0; } catch (e) { console.warn('[静默失败] js/sects/sect-governance.js:31 · 宗门发货：这一笔发货没接住，玩家会察觉的损失在此', e && e && e.message); }
+        return { got: 得, count: n, name: (W.itemById && W.itemById[id] && W.itemById[id].name) || id, reason: W.addItemFailReason || null };
+    }
+    // DES-96（第一百三十八批）：缘由跟着这一笔走——库里两笔连发时，旧写法拿铁矿的招牌去配甘草的账
+    function 支原因(收) {
+        var 名 = (收 && 收.name) || '';
+        // ⚠️ DES-97（第一百三十九批）：本 helper 的返回值被 `:454`／`:455`／`:475` 三个调用点全部拼进**句子中段**——
+        //   `:454`：'…一份也没进囊——' + 铁.name + '：' + 支原因(铁)
+        //   `:455`：+ 草.name + '：' + 支原因(草) + '这一笔没记上，四十贡献原样退你。'
+        //   `:475`：'…你一件也没接住：' + 支原因(丹) + '这一笔没记上，六十贡献原样退你。'
+        //   所以必须吃**从句支**（不带句号）。原来吃的是句尾带圆点的 addItemFailText / addItemFailTextFor，
+        //   账真落笔时屏上会念成「…行囊已满，先腾个格子再来。这一笔没记上…」——句号钉在句子中间，是破句。
+        //   第一百三十八批的 E4 棘轮只看 addItem*Text( 紧后面跟什么，看不穿 helper 的边界；这一处是本批补上的。
+        if (typeof W.addItemFailPhraseFor === 'function') return W.addItemFailPhraseFor(收 && 收.reason, 名) || '没能落进你的行囊';
+        return (typeof W.addItemFailPhrase === 'function' && W.addItemFailPhrase(名)) || '没能落进你的行囊';
+    }
     function stones() {
         try { if (W.XianXia && W.XianXia.DataManager && W.XianXia.DataManager.getSpiritStones) return Number(W.XianXia.DataManager.getSpiritStones()) || 0; } catch (e) {}
         return (W.inventory && W.inventory.currency && Number(W.inventory.currency.spiritStones)) || 0;
@@ -167,7 +186,7 @@
             },
             home: function () {
                 try { if (typeof W.applyBuff === 'function') W.applyBuff('fxb_sect_feast', { willpower: 3 }, 24); } catch (e) {}
-                log('🍶 门中开大典，你与同门同席——浊酒一碗，心里的火旺了。（心境增益一日）', 'success');
+                log('🍶 门中开大典，你与同门同席——浊酒一碗，心里的火旺了。（意志增益一日）', 'success');
             }
         },
         {
@@ -435,11 +454,19 @@
         if (!it) return false;
         if ((Number(it.material) || 0) < 15) { msg('库里材料不足十五份——巧妇难为无米之炊。', 'warning'); return false; }
         if (!spendC(40, '支取公库·材料')) { msg('支取要四十贡献——不够。', 'error'); return false; }
+        var 铁 = 支收('iron_ore', 4);
+        var 草 = 支收('mat_liquorice', 4);
+        if (铁.got <= 0 && 草.got <= 0) {
+            addC(40, '支取公库·材料退单（货没处放）');
+            msg('📦 管事开了库房，可这两份货一份也没进囊——' + 铁.name + '：' + 支原因(铁)
+                + 草.name + '：' + 支原因(草) + '这一笔没记上，四十贡献原样退你。', 'warning');
+            return false;
+        }
         it.material -= 15;
-        try {
-            if (typeof W.addItem === 'function') { W.addItem('iron_ore', 4); W.addItem('mat_liquorice', 4); }
-        } catch (e) {}
-        msg('📦 管事开了库房，拨给你铁矿四份、甘草四份。（材料-15，贡献-40）', 'success');
+        msg('📦 管事开了库房，拨给你' + 铁.name + (铁.got ? 铁.got + '份' : '没接住') + '、'
+            + 草.name + (草.got ? 草.got + '份' : '没接住')
+            + ((铁.got < 4 || 草.got < 4) ? '（另 ' + ((4 - 铁.got) + (4 - 草.got)) + ' 份留在库里：' + ((typeof W.addItemReasonPhrase === 'function' && W.addItemReasonPhrase('库房的材料')) || '没能带走') + '）' : '')
+            + '。（材料-15，贡献-40）', 'success');
         return true;
     }
     function drawPill(sect) {
@@ -449,9 +476,16 @@
         if (!it) return false;
         if ((Number(it.pill) || 0) < 10) { msg('药房的存货不足十炉——' + leaderName(sect) + '的话你记着：谁也不许当糖豆吃。', 'warning'); return false; }
         if (!spendC(60, '支取公库·丹药')) { msg('支取要六十贡献——不够。', 'error'); return false; }
+        var 丹 = 支收('pill_qi_gather', 2);
+        if (丹.got <= 0) {
+            addC(60, '支取公库·丹药退单（货没处放）');
+            msg('💊 药房的柜子拉开了，可这两瓶' + 丹.name + '你一件也没接住：' + 支原因(丹) + '这一笔没记上，六十贡献原样退你。', 'warning');
+            return false;
+        }
         it.pill -= 10;
-        try { if (typeof W.addItem === 'function') W.addItem('pill_qi_gather', 2); } catch (e) {}
-        msg('💊 药房拨给你聚气丹两瓶，管事在册子上记了你的名。（丹药-10，贡献-60）', 'success');
+        msg('💊 药房拨给你' + 丹.name + ' ' + 丹.got + ' 瓶'
+            + (丹.got < 2 ? '（另 ' + (2 - 丹.got) + ' 瓶留在库里：' + ((typeof W.addItemReasonPhrase === 'function' && W.addItemReasonPhrase(丹.name)) || '没能带走') + '）' : '')
+            + '，管事在册子上记了你的名。（丹药-10，贡献-60）', 'success');
         return true;
     }
 
@@ -485,7 +519,7 @@
         // 编年
         var ch = (it.chronicle || []).slice(-8).reverse();
         html += '<p class="text-xs font-bold text-amber-200 mb-1">📜 门中政事（近来）</p>';
-        html += '<div class="bg-gray-900/60 rounded p-2 mb-2 max-h-40 overflow-y-auto">';
+        html += '<div class="bg-gray-900/60 rounded p-2 mb-2">';
         html += ch.length ? ch.map(function (c) { return '<p class="text-xs text-gray-400 py-1 border-b border-gray-700/40">第' + c.day + '日 · ' + c.text + '</p>'; }).join('') : '<p class="text-xs text-gray-500">近来无事——门派的日子也是一天一天过的。</p>';
         html += '</div>';
         // 改造批 · 商路插块（sect-trade：有涉及本门的商路队正在集结时，押运入口在这里）

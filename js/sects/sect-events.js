@@ -52,16 +52,26 @@ const SECT_EVENTS_POOL = {
         desc: function(sectName) { return '弟子在' + sectName + '后山发现了一处古修洞府！'; },
         effect: function(sectName) {
             var ds = window.discipleState || {};
-            if (ds.isInSect && ds.sectId === sectName) {
+            var 本派 = !!(ds.isInSect && ds.sectId === sectName);
+            var 分宝 = '';
+            if (本派) {
                 ds.contribution = (ds.contribution || 0) + 50;
-                if (typeof window.addItem === 'function') {
+                // DES-72（第一百三十批）：旧写法丢了返回值，回执照念常量「获得材料」；囊里进没进、进的是哪一件，从不问
+                if (typeof window.giveWithReceipt === 'function' || typeof window.addItem === 'function') {
                     var treasures = ['mat_spirit_stone', 'mat_lingzhi', 'mat_dark_iron', 'pill_qi_gather'];
-                    window.addItem(treasures[Math.floor(Math.random() * treasures.length)], 1);
+                    var tid = treasures[Math.floor(Math.random() * treasures.length)];
+                    var 收 = typeof window.giveWithReceipt === 'function'
+                        ? window.giveWithReceipt(tid, 1, { quiet: true })
+                        : { got: Number(window.addItem(tid, 1)) || 0, count: 1, name: (window.itemById && window.itemById[tid] && window.itemById[tid].name) || tid, reason: window.addItemFailReason || null };
+                    分宝 = 收.got > 0 ? '，分得' + 收.name + '×' + 收.got
+                        : '，那一份' + 收.name + '一件也没进囊（'
+                          // DES-90（第一百三十九批）：问不到账时不许由站点断言满包
+                          + ((typeof window.addItemFailPhraseFor === 'function' && window.addItemFailPhraseFor(收.reason, 收.name)) || '没能落进你的行囊') + '）';
                 }
             }
             var data = getSectInternal(sectName);
             if (data) { data.morale = Math.min(100, (data.morale || 50) + 10); data.resources = (data.resources || 100) + 50; }
-            return '贡献 +50，获得材料，士气 +10，资源 +50';
+            return (本派 ? '贡献 +50' + 分宝 : '你不在' + sectName + '，这桩宝藏与你无份') + '，士气 +10，资源 +50';
         },
         minMorale: 0, maxMorale: 100
     },
@@ -100,11 +110,18 @@ const SECT_EVENTS_POOL = {
         type: 'external', icon: '🎪', name: '云游商人',
         desc: function(sectName) { return '一位云游商人来到' + sectName + '，出售稀有物品。'; },
         effect: function(sectName) {
-            if (typeof window.addItem === 'function') {
+            // DES-72（第一百三十批）：这一桩的唯一彩头就是那件货，旧写法丢了返回值、回执念常量
+            if (typeof window.giveWithReceipt === 'function' || typeof window.addItem === 'function') {
                 var goods = ['pill_spring_recovery', 'mat_meteorite', 'tal_fireball', 'food_roasted_meat'];
-                window.addItem(goods[Math.floor(Math.random() * goods.length)], 1);
+                var gid = goods[Math.floor(Math.random() * goods.length)];
+                var 收 = typeof window.giveWithReceipt === 'function'
+                    ? window.giveWithReceipt(gid, 1, { quiet: true })
+                    : { got: Number(window.addItem(gid, 1)) || 0, count: 1, name: (window.itemById && window.itemById[gid] && window.itemById[gid].name) || gid, reason: window.addItemFailReason || null };
+                return 收.got > 0 ? '入手 ' + 收.name + '×' + 收.got
+                    : '想搭手买一件 ' + 收.name + '，一件也没带上（'
+                      + ((typeof window.addItemFailPhraseFor === 'function' && window.addItemFailPhraseFor(收.reason, 收.name)) || '这一件没能交到你手上') + '）';
             }
-            return '获得随机物品一件';
+            return '商人去了，你两手空空，什么也没落下';
         },
         minMorale: 0, maxMorale: 100
     },
@@ -178,11 +195,14 @@ const SECT_EVENTS_POOL = {
                 data.resources = (data.resources || 100) + 30;
             }
             var ds = window.discipleState || {};
-            if (ds.isInSect && ds.sectId === sectName) {
+            var _肉 = 0, _肉该 = 0, _在场 = !!(ds.isInSect && ds.sectId === sectName);
+            if (_在场) {
                 ds.contribution = (ds.contribution || 0) + 20;
-                if (typeof window.addItem === 'function') window.addItem('food_roasted_meat', 2);
+                // DES-72 副账收口（第一百二十七批）：庆典那两块以前丢返回值——玩家一口没吃着，回执里连提都不提
+                _肉该 = 2;
+                _肉 = (typeof window.addItem === 'function') ? (Number(window.addItem('food_roasted_meat', 2)) || 0) : 2;
             }
-            return '全派士气 +25，资源 +30，贡献 +20';
+            return '全派士气 +25，资源 +30，贡献 +20' + (_肉 > 0 ? '，烤肉 ×' + _肉 : (_肉该 ? '（灶上的烤肉你两块也没能带走：' + ((typeof window.addItemFailPhrase === 'function' && window.addItemFailPhrase('灶上的烤肉')) || '这一件先还留在原处') + '）' : ''));
         },
         minMorale: 0, maxMorale: 100
     },

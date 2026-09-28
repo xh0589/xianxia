@@ -378,6 +378,16 @@ function getWoundSeverityDescription(severity) {
     return '致命';
 }
 
+// ============ 伤口深度档位 ============
+// 深度 0 是合法值：battle.js 的 createWound 只在严重度 ≥15 时才起「表层」这一档，
+// 所以浅伤压根没有深度档。旧写法 ['','表层',…][depth] || ('深度'+depth) 把这个合法值
+// 当成「没翻译」印成了裸「深度0」。（区间照 battle.js:447-452 原样抄，两处若改须同改。）
+const WOUND_DEPTH_LABELS = { 0: '未及深层', 1: '表层', 2: '中等', 3: '深部', 4: '贯穿' };
+function getWoundDepthLabel(depth) {
+    const d = Math.round(depth || 0);
+    return WOUND_DEPTH_LABELS[d] || ('深度' + d);
+}
+
 // ============ 意识状态名称 ============
 function getConsciousnessStateName(value) {
     if (value >= 71) return 'alert';
@@ -465,6 +475,7 @@ window.validatePhysiologyConfig = validatePhysiologyConfig;
 window.getInternalBleedDescription = getInternalBleedDescription;
 window.getExternalBleedDescription = getExternalBleedDescription;
 window.getWoundSeverityDescription = getWoundSeverityDescription;
+window.getWoundDepthLabel = getWoundDepthLabel;
 window.getConsciousnessStateName = getConsciousnessStateName;
 window.getConsciousnessStateLabel = getConsciousnessStateLabel;
 window.getCriticalTimerMinutes = getCriticalTimerMinutes;

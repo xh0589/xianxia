@@ -83,6 +83,13 @@ function extractFn(name) {
 var fnTravel = extractFn('travelToCityFromList');
 var fnTeleport = extractFn('teleportToCity');
 var fnTeleportUI = extractFn('showTeleportUI');
+// 第一百一十四波 DES-10：路上那笔账（30 分钟／5 精力）搬进了城市行与门派行共用的脚程笔，
+// 单抠 travelToCityFromList 会 ReferenceError——两支得一起装，才是浏览器里那个样子。
+// 第一百一十七波 DES-51：又多了共用的「同地判定」一支（原地踏步不收脚程），三支一起装。
+var fnFoot = extractFn('chargeFootJourney');
+var fnSameGround = extractFn('footJourneyLedgerHere');
+vm.runInThisContext(fnSameGround);
+vm.runInThisContext(fnFoot);
 vm.runInThisContext(fnTravel);
 vm.runInThisContext(fnTeleport);
 vm.runInThisContext(fnTeleportUI);
@@ -134,10 +141,26 @@ assert(timeCalls.length === 0, '门槛城被拦下不扣时间');
 assert(global.currentCharData.energy === 100, '门槛城被拦下不扣精力');
 assert(global.locationSystem.getCurrentLocation() === '洛水城', '被拦下人留在原地');
 
-// 无门槛城照常
+// 无门槛城照常（DES-51 后必须从别的城出发才叫「照常进」：
+//   人已在洛水城再点洛水城那一行，正是本批要治的原地踏步收脚程——旧写法恰好踩在病上跑的绿，
+//   断言语义不动（无门槛城从列表进去照报抵达、照结脚程），只把出发地挪到长安）
+global.locationSystem.enterCity('帝都·长安');
+global.currentCharData.energy = 100;
 messages.length = 0; timeCalls.length = 0;
 global.travelToCityFromList('洛水城', '中州');
 assert(global.locationSystem.getCurrentLocation() === '洛水城' && hasMsg('来到了洛水城'), '无门槛城照常进');
+assert(timeCalls.some(function (x) { return x.m === 30; }) && global.currentCharData.energy === 95,
+    '异城那一趟仍结 30 分钟＋5 精力（DES-51 只免「原地踏步」那一笔，一个数字都没改）');
+
+// DES-51：已经站在洛水城里，再点列表里洛水城那一行的「前往」
+messages.length = 0; timeCalls.length = 0;
+global.travelToCityFromList('洛水城', '中州');
+assert(!hasMsg('来到了'), '同城点「前往」不播抵达（真 enterCity 那支笔没被走到）');
+assert(!hasMsg('跋涉'), '同城点「前往」不播跋涉句');
+assert(timeCalls.length === 0, '同城点「前往」不推时辰');
+assert(global.currentCharData.energy === 95, '同城点「前往」不扣精力');
+assert(global.locationSystem.getCurrentLocation() === '洛水城', '同城点「前往」人当然还在原地');
+assert(hasMsg('不必再赶路'), '同城那一击不是死钮：给一句回执');
 
 // ==================== G1b 门槛解析（「XX以上」旧版恒放行） ====================
 console.log('\n[G1b] 门槛解析');
@@ -209,7 +232,10 @@ assert(r4 === true && opened.indexOf('东荒') >= 0, '人间跨境照常走疆�
 // ==================== G5 源码哨兵 ====================
 console.log('\n[G5] 源码哨兵');
 assert(fnTravel.indexOf('getPlaneOf') >= 0, 'travelToCityFromList 带位面闸门');
-assert(fnTravel.indexOf('enterCity(cityName)') < fnTravel.indexOf('advanceTime'), '先进城后结账（enterCity 在 advanceTime 之前）');
+assert(fnTravel.indexOf('enterCity(cityName)') < fnTravel.indexOf('chargeFootJourney(cityName)'),
+    '先进城后结账（enterCity 在结账那一支之前；第一百一十四波把账记进共用脚程笔，这条次序不许变）');
+assert(fnTravel.indexOf('advanceTime') < 0 && /advanceTime\(30, '前往' \+ destName\)/.test(fnFoot),
+    '路上那本账只有一支笔：城市行体内不再自己 advanceTime（数额与句式随搬家原样带走）');
 assert(fnTeleport.indexOf('getPlaneOf') >= 0, 'teleportToCity 带位面闸门');
 assert(fnTeleportUI.indexOf('getPlaneOf') >= 0, 'showTeleportUI 过滤位面地点');
 var wmSrc = fs.readFileSync(path.join(ROOT, 'js/map/world-map.js'), 'utf8');

@@ -60,9 +60,13 @@ for (var ri = 0; ri < REALMS.length; ri++) {
 }
 ok(mono, 'A10 每个境界内逐层严格递增');
 // 与 getRealmTier（sect-join-flow.js）口径一致：同一张境界表
+// DES-92（第一百三十三批）：这里原来钉的是 sect-join-flow.js 里**手抄的那份十档表**——
+//   牌面照着它算门槛，而它排在「渡劫」就断，飞升/金仙被折回炼气。表已删，序只认全局那一把尺。
+//   本套仍只钉源码两条；十二境逐名对账在 tests/wave133-realm-tier-single-scale-node.js B 段。
 var sjf = loadScript('js/sects/sect-join-flow.js');
-ok(sjf.indexOf("'凡人', '炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'") >= 0,
-    'A11 境界表与 getRealmTier 同源同序');
+ok(sjf.indexOf("'凡人', '炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'") < 0,
+    'A11a 境界档位不再自带抄表');
+ok(/window\.realmIndex\(/.test(sjf), 'A11b 档位改借那一把尺（window.realmIndex）');
 
 // ============ B 无六维敌人兜底合成 ============
 ok(typeof W.synthesizeEnemyAttrs === 'function', 'B0 synthesizeEnemyAttrs 已导出');

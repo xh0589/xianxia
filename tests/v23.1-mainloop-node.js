@@ -44,12 +44,17 @@ function read(rel) { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); }
     ok(/_cast < 0\.08[\s\S]{0,300}线断了/.test(app), 'A22 钓鱼：断线跑鱼');
     ok(/_cast < 0\.16[\s\S]{0,200}startBattle/.test(app), 'A23 钓鱼：妖鱼反噬开战');
     ok(/_rare = _cast >= 0\.90/.test(app), 'A24 钓鱼：10% 罕见大货（收获翻倍）');
-    ok(/goFishing[\s\S]{0,2500}QiyuEncounters\.maybeTrigger\('wild'\)/.test(app), 'A25 钓鱼补挂奇遇钩（旧版全域唯独它没有）');
+    // 窗口 2500→2527：第一百三十九批在 goFishing 里补了「账上没落笔时不许猜缘由」那一整段
+    // （_咬钩/_入桶/鱼账/_跑了/_收杆，709 字），把奇遇钩从 1818 推到 2518 字符处（实测）。
+    // 旧值 2500 在本批之后已够不到钩子；新值 2527 仍留 9 字符余量，且不放宽任何语义——
+    // 「逐字匹配 goFishing…maybeTrigger('wild')」这一句本身一字未松，只是窗口够得着它了。
+    ok(/goFishing[\s\S]{0,2527}QiyuEncounters\.maybeTrigger\('wild'\)/.test(app), 'A25 钓鱼补挂奇遇钩（旧版全域唯独它没有）');
 
     const rm = read('js/map/randomMap.js');
     ok(/_gRisk < 0\.10[\s\S]{0,400}openBattleWithEntity/.test(rm), 'A26 野外节点采集：惊动守食野兽');
     ok(rm.indexOf('_gRich = Math.random() < 0.12') >= 0, 'A27 野外节点：12% 上品产地翻倍');
-    ok(/function gatherWildNode[\s\S]{0,2200}QiyuEncounters\.maybeTrigger\('wild'\)/.test(rm), 'A28 野外节点补挂奇遇钩');
+    // 窗口 2200→2900：第一百二十六批在采集里加了「只记实收、一件没采回就不判枯」那几行，钩子推到 2767 字符处（实测）
+    ok(/function gatherWildNode[\s\S]{0,3200}QiyuEncounters\.maybeTrigger\('wild'\)/.test(rm), 'A28 野外节点补挂奇遇钩（尾巴②把「行囊搁不下」换成问因手，钩子实测推到 2954 字符）');
 
     const be = read('js/building-effects.js');
     ok(/_sleepRoll < 0\.08 \? 0\.6 : \(_sleepRoll < 0\.28 \? 0\.8 : 1\)/.test(be), 'A29 客栈睡眠有质量（酣睡/浅眠/被吵醒三档）');

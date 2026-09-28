@@ -91,7 +91,7 @@ scenarioEngine.register('escort_office', {
             es_road: {
                 desc: '你押着镖车走了大半日，行至一片密林时，前方突然杀出一伙山贼！',
                 choices: [
-                    { text: '⚔️ 击退山贼！（真刀真枪，会输）', next: null, require: { qi: 40 }, effects: { time: 45, roll: {
+                    { text: '⚔️ 击退山贼！（一场硬仗，会输）', next: null, require: { qi: 40 }, effects: { time: 45, roll: {
                         prob: function() { var lv = (typeof window.getRealmTier === 'function') ? window.getRealmTier((window.currentCharData || {}).realm) : 1; return Math.max(0.35, Math.min(0.85, 0.45 + lv * 0.06)); },
                         win: { qi: -25, exp: 40, rep: 5, stones: 300, msg: '你把山贼杀得四散奔逃，镖车安全送达！获得300灵石和40历练！', msgType: 'success' },
                         lose: { qi: -60, health: -25, stones: 150, exp: 30, msg: '群贼围攻，你挂了彩才护住镖车。镖头扣了货损赔款，只拿到150灵石——但这场硬仗比银子值钱。', msgType: 'warning' }
@@ -151,7 +151,7 @@ scenarioEngine.register('arena_stage', {
                 ]
             },
             du_fight: {
-                desc: '你跃上斗法台，对面修士冷笑一声："又来一个送分的！"\n\n双方抱拳行礼，战斗开始！台下赌盘已经开了赔率。',
+                desc: '你跃上斗法台，对面修士冷笑一声："又来一个送分的！"\n\n双方抱拳行礼，台下赌盘已经开了赔率——几招之内便要见分晓。',
                 choices: [
                     { text: '💪 全力进攻（险中求胜）', next: null, require: { qi: 30 }, effects: { time: 10, roll: {
                         prob: function() { var lv = (typeof window.getRealmTier === 'function') ? window.getRealmTier((window.currentCharData || {}).realm) : 1; return Math.max(0.3, Math.min(0.8, 0.35 + lv * 0.06)); },
@@ -501,6 +501,10 @@ function _closeFacilitySoft() {
 }
 
 // 14. 工曹署（v20.22：查图纸照旧，另开真承揽——勘河修渠有工钱，贵地工钱随行情，也有栽下来的一天）
+// 第九十五波·NEW-34 口径收口：这一衙两笔耗时的真账只记在这里（单位：分钟，折法见 time-system 的 formatShichen）——
+//   上工落笔、牌面标价、查阅回执都吃同一枚数，改这里三处一起改口，不再有一支笔自己念时辰
+var WORKS_JOB_MINUTES = 40;
+var WORKS_LOOK_MINUTES = 10;
 function worksJobPay() { return Math.round(80 * (window.facilityBuyMod ? window.facilityBuyMod() : 1)); }
 function takeWorksJob() {
     var log = window.gameLog || { add: function() {} };
@@ -516,7 +520,7 @@ function takeWorksJob() {
     var res2 = window.RewardService.apply(eff, { source: 'works', city: (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || '' });
     if (!res2 || res2.success === false) { if (window.showMessage) window.showMessage('工钱交割未成。', 'warning'); return false; }
     log.add(eff.msg, eff.msgType);
-    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(40, '工曹署承揽');
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(WORKS_JOB_MINUTES, '工曹署承揽');
     if (window.updateStatusPanel) window.updateStatusPanel();
     _closeFacilitySoft();   // NEW-35：这一工干完了，柜台面板随流程收
     return true;
@@ -527,15 +531,15 @@ function openWorksBureau() {
     if (!p || (p.qi || 0) < 10) { log.add('卷宗库要点灵灯才看得清图纸，你真气不济，只好改日再来。', 'warning'); return; }
     p.qi -= 10;
     p.tempering = (p.tempering || 0) + 3;
-    log.add('你耗了10点真气提灯，在工曹署翻了一个时辰的图纸——水渠、灵脉、城墙，人情世故都在字缝里。历练+3。', 'info');
+    log.add('你耗了10点真气提灯，在工曹署翻了' + (window.formatShichen ? window.formatShichen(WORKS_LOOK_MINUTES) : WORKS_LOOK_MINUTES + '分钟') + '的图纸——水渠、灵脉、城墙，人情世故都在字缝里。历练+3。', 'info');
     if (window.timeSystem && window.timeSystem.advanceTime) {
-        window.timeSystem.advanceTime(10, '工曹署查阅');
+        window.timeSystem.advanceTime(WORKS_LOOK_MINUTES, '工曹署查阅');
     }
     // v20.22 承揽台（有弹窗才显式给选项，无则维持轻交互旧口径）
     if (typeof window.showModal === 'function') {
         window.showModal('🏗️ 工曹署·承揽台',
             '<p class="text-xs text-gray-400 mb-2">书吏指着墙上一排工牌："勘河八尺堤，去人就有力气换工钱——本城工钱现算 ' + worksJobPay() + ' 灵石，摔下来另说。"</p>' +
-            '<button onclick="takeWorksJob()" class="bg-stone-700 hover:bg-stone-600 text-xs px-3 py-2 rounded">🧱 承揽河工（真气20，约40时辰）</button>');
+            '<button onclick="takeWorksJob()" class="bg-stone-700 hover:bg-stone-600 text-xs px-3 py-2 rounded">🧱 承揽河工（真气20，约' + (window.formatShichen ? window.formatShichen(WORKS_JOB_MINUTES) : WORKS_JOB_MINUTES + '分钟') + '）</button>');
     }
 }
 
@@ -588,15 +592,17 @@ function saltSellSmuggler() {
     _closeFacilitySoft();   // NEW-35：引脱了手，柜台面板随流程收
     return true;
 }
+// 查阅核账的真账（分钟）：回执那句时长由它生成（口径见 time-system 的 formatShichen），不再一句里念两遍时辰
+var SALT_LOOK_MINUTES = 10;
 function openSaltIronOffice() {
     var log = window.gameLog || { add: function() {} };
     var p = window.currentCharData;
     if (!p || (p.qi || 0) < 10) { log.add('账山堆得比人高，没真气提灯你连第一页都翻不动。改日再来吧。', 'warning'); return; }
     p.qi -= 10;
     p.tempering = (p.tempering || 0) + 3;
-    log.add('你耗了10点真气核了半个时辰账——玄铁产量、灵盐流转，一个时辰的市井见识换历练+3。', 'info');
+    log.add('你耗了10点真气核了' + (window.formatShichen ? window.formatShichen(SALT_LOOK_MINUTES) : SALT_LOOK_MINUTES + '分钟') + '账——玄铁产量、灵盐流转，市井见识换历练+3。', 'info');
     if (window.timeSystem && window.timeSystem.advanceTime) {
-        window.timeSystem.advanceTime(10, '盐铁局查阅');
+        window.timeSystem.advanceTime(SALT_LOOK_MINUTES, '盐铁局查阅');
     }
     // v20.22 官盐引窗口；v20.23 盐路分官私两道：商会抽佣稳当，私盐行多给一成二但有官非
     if (typeof window.showModal === 'function') {

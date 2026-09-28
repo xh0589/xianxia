@@ -145,7 +145,7 @@
                 : { itemId: b.item, count: b.count };
             var r = pay({ stones: -fee, items: [giveItem] });
             if (!r || r.success === false) {
-                return { error: r && r.reason === 'spiritStones' ? '当金加息共 ' + fee + ' 灵石，手头不足' : '赎回未成（背包放不下，货仍在你柜上）' };
+                return { error: r && r.reason === 'spiritStones' ? '当金加息共 ' + fee + ' 灵石，手头不足' : '赎回未成（这一单没走通，货仍在你柜上）' };
             }
             var nm = itemName(b.item), oldLoan = b.loan;
             b.item = ''; b.count = 0; b.loan = 0; b.due = 0; b.snap = null;

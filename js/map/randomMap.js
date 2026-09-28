@@ -98,10 +98,11 @@ const POI_VARIANTS = {
         { key: 'nest', name: '兽居改洞', desc: '原是妖兽的窝，血腥气还没散', gainMul: 1.15, risk: { chance: 0.3, battle: 'beast' } }
     ],
     ruin: [
-        { key: 'heritage_hall', name: '古修洞府遗址', desc: '门庭塌了半边，残阵还在转', find: '从蒲团底下摸出前人没用完的储物', loot: ['mat_lingzhi', 'mat_refined_iron', 'mat_mithril'], risk: { chance: 0.35, hp: 8, msg: '残阵忽然一转，气劲扫过肩头。' } },
-        { key: 'battlefield', name: '战场遗址', desc: '折戟沉沙，入夜有亡魂夜哭', find: '从沙土里刨出几件没烂透的旧铁', loot: ['mat_iron_ore', 'mat_copper_ore', 'mat_refined_iron'], risk: { chance: 0.3, battle: 'undead' } },
-        { key: 'temple', name: '塌陷古观', desc: '殿顶塌了，神像缺了头', find: '供桌底下压着几样没烂的旧物', loot: ['pill_clarity', 'pill_energy_return', 'mat_lingzhi'], risk: { chance: 0.2, hp: 6, msg: '梁上灰土簌簌砸落，砸得人一激灵。' } },
-        { key: 'tomb', name: '无名古冢', desc: '封土被盗过一轮，剩些明器', find: '盗洞边上捡着几件剩下的明器', loot: ['mat_moon_stone', 'mat_sun_stone', 'mat_copper_ore'], risk: { chance: 0.28, battle: 'undead' } }
+        { key: 'heritage_hall', name: '古修洞府遗址', desc: '门庭塌了半边，残阵还在转', find: '从蒲团底下摸出前人没用完的储物', loot: ['mat_lingzhi', 'mat_refined_iron', 'mat_mithril'], digs: 3, risk: { chance: 0.35, hp: 8, msg: '残阵忽然一转，气劲扫过肩头。' } },
+        { key: 'battlefield', name: '战场遗址', desc: '折戟沉沙，入夜有亡魂夜哭', find: '从沙土里刨出几件没烂透的旧铁', loot: ['mat_iron_ore', 'mat_copper_ore', 'mat_refined_iron'], digs: 2, risk: { chance: 0.3, battle: 'undead' } },
+        { key: 'temple', name: '塌陷古观', desc: '殿顶塌了，神像缺了头', find: '供桌底下压着几样没烂的旧物', loot: ['pill_clarity', 'pill_energy_return', 'mat_lingzhi'], digs: 2, risk: { chance: 0.2, hp: 6, msg: '梁上灰土簌簌砸落，砸得人一激灵。' } },
+        // 牌面自己写着「封土被盗过一轮」——那它就真的只剩一轮可翻（存量由来历给，不是随手配的配额）
+        { key: 'tomb', name: '无名古冢', desc: '封土被盗过一轮，剩些明器', find: '盗洞边上捡着几件剩下的明器', loot: ['mat_moon_stone', 'mat_sun_stone', 'mat_copper_ore'], digs: 1, risk: { chance: 0.28, battle: 'undead' } }
     ],
     spring: [
         { key: 'eye', name: '灵泉眼', desc: '泉眼汩汩上涌，灵气最盛', gainMul: 1.0 },
@@ -923,6 +924,7 @@ function saveWildState() {
         grottoLoot: prev.grottoLoot || {},// v50 洞天遗宝：一洞一匣的开匣账
         nemesis: prev.nemesis || null,   // v51 具名响马宿敌：一域一个在世仇家（{name,wins,born,last}）
         notes: prev.notes || {},         // v52 粉笔笔记：'x,y' → 粉笔样 id
+        ruinDug: prev.ruinDug || {},     // DES-31 遗迹搜刮账：poiId → 已掘遍数（枯了就在世界里枯，换图重开也算）
         px: playerPos.x,
         py: playerPos.y
     };
@@ -930,7 +932,8 @@ function saveWildState() {
 
 function applyWildState(region) {
     // v20.89：新域默认坐标记 -1——此前默认 (0,0) 会把初次进域的人从出生点挪到地图角落
-    if (!wildState.regions[region]) wildState.regions[region] = { fog: '', dead: {}, gathered: {}, visited: {}, leySeen: {}, oasis: {}, pool: {}, grotto: {}, grottoUse: {}, grottoLoot: {}, nemesis: null, notes: {}, px: -1, py: -1 };
+    if (!wildState.regions[region]) wildState.regions[region] = { fog: '', dead: {}, gathered: {}, visited: {}, leySeen: {}, oasis: {}, pool: {}, grotto: {}, grottoUse: {}, grottoLoot: {}, ruinDug: {},   // DES-31 遗迹搜刮账
+        nemesis: null, notes: {}, px: -1, py: -1 };
     const st = wildState.regions[region];
     st.visited = st.visited || {};
     st.leySeen = st.leySeen || {};
@@ -941,6 +944,7 @@ function applyWildState(region) {
     st.grottoLoot = st.grottoLoot || {};   // v50 遗宝开匣账同样自动补空
     if (st.nemesis === undefined) st.nemesis = null;   // v51 仇家账老档自动补空（零迁移脚本）
     st.notes = st.notes || {};   // v52 粉笔笔记老档自动补空（同法）
+    st.ruinDug = st.ruinDug || {};   // DES-31 遗迹搜刮账老档自动补空（同法，零迁移脚本）
     if (!st) return;
     unpackFog(st.fog);
     // 已死的不再出现（uid 含坐标，重生成的实体位置序号稳定）
@@ -1520,6 +1524,14 @@ function updateMinimap() {
     mini.appendChild(svgEl('rect', { x: playerPos.x * s - 0.5, y: playerPos.y * s - 0.5, width: s + 1, height: s + 1, fill: '#fff' }));
 }
 
+// ============ 第六十二批 · UI-08①：黑着的那一片要说得出「这是没探过的雾」 ============
+// 立案读数（改良说明.md UI-08①，第六十一批实机同图量到）：视野 144 格里 **123 枚是 #0d1017 的纯色矩形**、
+// 「见过一面」那层（#0b1020）0 枚、图例六项里**没有「未探」**——同一块死黑既读成「地图边界」也读成「没画完」，
+// 而玩家刚看见「野狼群 东 7 格」，正该知道那 7 格路上哪一片还没踏足。
+// 这一处是**唯一写色者**：图例里那枚小样也从这里取色（两处各写一遍，就会出现「图例说的不是图上那一片」）。
+// 只动呈现——fog 的 0/1/2 三态账、revealAround 那支笔、onCellClick 的「未探不许点」一律不碰。
+const WILD_FOG_MIST = { base: '#0d1017', blob: '#243044', wisp: '#3a4761', tile: 96 };
+
 // ============ 主渲染 ============
 function renderMap(svgElement, map, viewX, viewY) {
     if (!svgElement || !map || !map.length) return;
@@ -1530,7 +1542,16 @@ function renderMap(svgElement, map, viewX, viewY) {
 
     const defs = svgEl('defs', {});
     defs.innerHTML = '<filter id="wild-glow" x="-50%" y="-50%" width="200%" height="200%">' +
-        '<feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>';
+        '<feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>' +
+        // 云雾纹：底色仍是那层黑，但上面浮三团云——「没画完」读成「没探过」。
+        // patternUnits 走 userSpaceOnUse（图上画的是绝对坐标），瓦片边长刻意取格子边长的非整数倍：
+        // 取 2 倍或 1 倍就会每格纹样一模一样，那又是另一种「没画完」。
+        '<pattern id="wild-fog-mist" patternUnits="userSpaceOnUse" width="' + WILD_FOG_MIST.tile + '" height="' + WILD_FOG_MIST.tile + '">' +
+        '<rect width="' + WILD_FOG_MIST.tile + '" height="' + WILD_FOG_MIST.tile + '" fill="' + WILD_FOG_MIST.base + '"/>' +
+        '<ellipse cx="26" cy="20" rx="22" ry="12" fill="' + WILD_FOG_MIST.blob + '" opacity="0.55"/>' +
+        '<ellipse cx="70" cy="46" rx="19" ry="10" fill="' + WILD_FOG_MIST.wisp + '" opacity="0.34"/>' +
+        '<ellipse cx="14" cy="74" rx="17" ry="9" fill="' + WILD_FOG_MIST.blob + '" opacity="0.42"/>' +
+        '</pattern>';
     svg.appendChild(defs);
 
     const startX = viewX, startY = viewY;
@@ -1549,7 +1570,7 @@ function renderMap(svgElement, map, viewX, viewY) {
             g.setAttribute('data-cx', x);
             g.setAttribute('data-cy', y);
             if (cell.fog === 0) {
-                g.appendChild(svgEl('rect', { x: x * size, y: y * size, width: size, height: size, fill: '#0d1017', opacity: 0.92 }));
+                g.appendChild(svgEl('rect', { x: x * size, y: y * size, width: size, height: size, fill: 'url(#wild-fog-mist)', opacity: 0.92 }));
             } else if (cell.fog === 1) {
                 g.appendChild(svgEl('rect', { x: x * size, y: y * size, width: size, height: size, fill: '#0b1020', opacity: 0.4 }));
             }
@@ -1613,10 +1634,10 @@ function _bindMapDelegation(svg) {
 }
 
 // ============ 右侧栏 ============
+// 第九十五波·NEW-34 口径：时辰只有一处算（1 时辰 = 120 分钟）；本函数不再自行 /60
 function fmtHours(minutes) {
-    if (minutes < 60) return Math.round(minutes) + ' 分钟';
-    const h = minutes / 60;
-    return (h % 1 === 0 ? h : h.toFixed(1)) + ' 个时辰';
+    if (window.formatShichen) return window.formatShichen(minutes);
+    return Math.max(0, Math.round(minutes || 0)) + ' 分钟';
 }
 
 function renderWildSidebar() {
@@ -1747,10 +1768,15 @@ function renderWildSidebar() {
     const legend = document.getElementById('wild-legend');
     if (legend) {
         const keys = ['PLAIN', 'FOREST', 'MOUNTAIN', (isFrozenNow() ? 'RIVER_ICE' : 'WATER'), 'ROAD', 'SPRING'];   // 冬天图例里水变冰
+        // 「未探」这一项从前没有：图上那片云雾纹因此无从对照（同一批把纯色黑格改成云雾纹，见 WILD_FOG_MIST）。
+        // 小样自己画一遍（不跨 svg 引 url(#wild-fog-mist)）：地图重画或整块隐藏时，那种引用会断——但三枚色值仍取同一处常量。
+        const 雾样 = '<span class="inline-flex items-center gap-0.5"><svg width="8" height="8" style="border-radius:2px;background:' + WILD_FOG_MIST.base + '">' +
+            '<ellipse cx="2.6" cy="3" rx="2.4" ry="1.6" fill="' + WILD_FOG_MIST.blob + '" opacity="0.6"/>' +
+            '<ellipse cx="6" cy="6.2" rx="2.1" ry="1.3" fill="' + WILD_FOG_MIST.wisp + '" opacity="0.5"/></svg>未探（雾里）</span>';
         legend.innerHTML = keys.map(k => {
             const t = WildTerrain.TERRAIN[k];
             return `<span class="inline-flex items-center gap-0.5"><i style="display:inline-block;width:8px;height:8px;background:${t.base};border-radius:2px;"></i>${t.name}</span>`;
-        }).join('');
+        }).join('') + 雾样;
     }
 }
 
@@ -1779,7 +1805,9 @@ function tileActions(cell) {
         }
         if (poi.type === 'market') out.push({ act: 'shop', label: '🛒 逛' + (poi.variantName || '坊市'), primary: true });
         if (poi.type === 'cave') out.push({ act: 'cultivate', label: '🧘 入' + (poi.variantName || '洞') + '修炼', primary: true });
-        if (poi.type === 'ruin') out.push({ act: 'explore', label: '🔍 探' + (poi.variantName || '遗迹') + '「' + poi.name + '」', primary: true });
+        if (poi.type === 'ruin') out.push(ruinIsDry(poi)
+            ? { act: 'explore', label: '🕳️ 翻' + ruinTitleOf(poi) + '——已被搜空（只剩瓦砾）' }
+            : { act: 'explore', label: '🔍 探' + ruinTitleOf(poi), primary: true });
         if (poi.type === 'landmark') out.push({ act: 'explore', label: '🔍 探索「' + poi.name + '」', primary: true });
         if (poi.type === 'spring') out.push({ act: 'spring', label: '⛲ 在' + (poi.variantName || '灵泉') + '汲灵（两个时辰）', primary: true });
         if (poi.type === 'resource') out.push({ act: 'harvest', label: '⛏️ 采撷「' + poi.name + '」', primary: true });
@@ -1849,6 +1877,25 @@ function onCellClick(x, y) {
     if (res.path.length === 1) { stepTo(x, y); wildTravel = null; return; }
     wildTravel = { path: res.path, cost: res.cost, targetName: (cell.poiId ? ((currentPois.find(p => p.id === cell.poiId) || {}).name) : null) || effTerrainOf(cell).name };
     renderMap(mapContainer, currentMap, viewportOffset.x, viewportOffset.y);
+}
+
+// 第六十一批 · UI-08②：「野外的动静」是耳朵听来的，不是眼睛看见的——它报了方位与格数，从前却不给出口，
+// 玩家要在一片黑格里自己瞄那一格（实测整行点下去虚线 0 枚、「出发」也不出现）。
+// 这一枚就是把瞄准的活接过来，但**不新开通路**：看得清就走 onCellClick 那一条路（预览＋「出发」逐格结时间精力账）；
+// 目标还在雾里则守 STRUCTURE.md:1235「迷雾未探明→提示」——不许隔雾定点，只准走到看得清的那半程边上。
+function gotoSensedTarget(x, y, label) {
+    const cell = currentMap[y] && currentMap[y][x];
+    if (!cell) { showMessage('那边看不真切。', 'warning'); return; }
+    if (cell.fog > 0) { onCellClick(x, y); return; }
+    const res = WildTerrain.findPath(currentMap.map(r => r.map(c => ({ t: seasonTerrainKey(c) }))), { x: playerPos.x, y: playerPos.y }, { x: x, y: y });
+    if (!res) { showMessage('那边过不去——四下无路。', 'warning'); return; }
+    let i = res.path.length - 1;
+    while (i > 0 && currentMap[res.path[i].y][res.path[i].x].fog === 0) i--;
+    if (i < 1) { showMessage('四下皆雾，往「' + (label || '那一边') + '」的那一步还看不真切——先朝边上走两步。', 'info'); return; }
+    const 边 = res.path[i];
+    // 步数不在这里念：侧栏「出发（N 步 · 约 X时辰）」那一支笔才是这本账的唯一写者（实测两处各算一遍就会给出不通的数）
+    showMessage('「' + (label || '那一边') + '」还在雾里——先画上看得清的那半程，走到雾边再定下一程。', 'info');
+    onCellClick(边.x, 边.y);
 }
 
 function centerViewport() {
@@ -1951,7 +1998,7 @@ function stepTo(x, y) {
         if (_carried) {
             // 第八十九波：坐骑驮着渡水——泅渡的精力账、硬撑的气血账都不记（翅膀和龟甲不费你的腿）
         } else if (_treading) {
-            _cdStep.energy = Math.max(0, (_cdStep.energy || 100) - WATERWALK_ENERGY);
+            _cdStep.energy = Math.max(0, (_cdStep.energy ?? 100) - WATERWALK_ENERGY);
         } else if (Number(_cdStep.energy != null ? _cdStep.energy : 100) < SWIM_GATE) {
             // 水中力竭：硬撑改烧气血（入水门槛拦得住岸上的人，拦不住已经在水里的人——但水会记账）
             harmChar(SWIM_FORCE_HP, 0, 0);
@@ -1960,10 +2007,10 @@ function stepTo(x, y) {
                 showMessage('🩸 气力不济还在水里硬撑——每划一步都在烧气血（每格 ' + SWIM_FORCE_HP + ' 点），快上岸或寻渡船。', 'warning');
             }
         } else {
-            _cdStep.energy = Math.max(0, (_cdStep.energy || 100) - SWIM_ENERGY);
+            _cdStep.energy = Math.max(0, (_cdStep.energy ?? 100) - SWIM_ENERGY);
         }
     } else if (!_aloft && (cell.terrain.moveCost || 1) >= 2 && _cdStep) {
-        _cdStep.energy = Math.max(0, (_cdStep.energy || 100) - 1);
+        _cdStep.energy = Math.max(0, (_cdStep.energy ?? 100) - 1);
     }
     // 第五十五波 · 泅渡湿衣损货：泅水浑身透湿、涉浅滩下半身湿；镖货跟着人过水（踏水/冰面/雇舟照旧不湿）
     // 第八十九波：坐骑驮着渡水的人也不湿——人在甲背上/风翼上，水花够不着
@@ -2171,13 +2218,47 @@ function lootText(pairs, fallbackKind) {
     });
     return parts.join('、');
 }
+// DES-72（第一百三十批）：产地那一袋产出旧写法丢返回值——满包也照念「得 X×N」。这一支逐枚问过实收再报账
+function _收产出(out) {
+    const 入 = {}, 缺 = [];
+    let 末账 = null;   // DES-96：整批落空时那句归因要用「这一笔自己的账」，不能回头读全局那条
+    Object.keys(out || {}).forEach(k => {
+        const 要 = Math.max(1, Number(out[k]) || 0);
+        let 进 = 要, 账 = null;
+        if (typeof window.giveWithReceipt === 'function') {
+            const 据 = window.giveWithReceipt(k, 要, { quiet: true });
+            进 = 据.got; 账 = 据.reason || null;
+        } else {
+            const 入袋 = (typeof window.addItemToInventory === 'function') ? window.addItemToInventory
+                : (typeof window.addItem === 'function') ? window.addItem : null;
+            if (入袋) { 进 = Number(入袋(k, 要)) || 0; 账 = window.addItemFailReason || null; }
+        }
+        if (进 > 0) 入[k] = 进;
+        if (进 < 要) { 缺.push({ id: k, 少: 要 - 进, 账: 账 }); 末账 = 账; }
+    });
+    return { 入: 入, 缺: 缺, 账: 末账 };
+}
+// DES-96/97（第一百三十八批）：一处短缺一笔账，且这一串是拼在括号里的半截话——
+// 只准吃「从句」那支持牌手（句尾不带圆点），问不到账就只报短缺本身，别由视图层定罪行囊。
+function 缘话(缺, 名目) {
+    if (!缺 || !缺.length) return '';
+    return (typeof window.addItemFailPhraseFor === 'function')
+        ? (window.addItemFailPhraseFor(缺.map(d => d.账), 名目) || '')
+        : '';
+}
+function _短缺话(缺) {
+    if (!缺 || !缺.length) return '';
+    var 话 = 缘话(缺, '这一处的出产');
+    return '（' + 缺.map(d => (itemNameOf(d.id) || '出产') + '×' + d.少).join('、') + ' 留在了原地'
+        + (话 ? '：' + 话 : '') + '）';
+}
 
 function gatherWildNode() {
     const row = currentMap[playerPos.y];
     const cell = row ? row[playerPos.x] : null;
     if (!cell || !cell.node || cell.node.regrowDay > currentDay()) return;
     advanceWildTime(30, '野外采集');
-    if (window.currentCharData) window.currentCharData.energy = Math.max(0, (window.currentCharData.energy || 100) - 6);
+    if (window.currentCharData) window.currentCharData.energy = Math.max(0, (window.currentCharData.energy ?? 100) - 6);
     // v23.1 采集有动静：药香兽腥都藏不住——一成概率惊动守食的野兽；撞上上品产地则收成翻倍
     var _gRisk = Math.random();
     if (_gRisk < 0.10 && typeof window.openBattleWithEntity === 'function') {
@@ -2191,19 +2272,34 @@ function gatherWildNode() {
     if (_gRich && window.showMessage) window.showMessage('✨ 这一片长势竟格外好——上品产地！', 'success');
     const bonus = ((typeof window.getWeatherGatheringBonus === 'function') ? window.getWeatherGatheringBonus() : 1) * (_gRich ? 2 : 1);
     const got = [];
+    var _落空 = 0;
     cell.node.items.forEach(id => {
         const n = Math.max(1, Math.round((1 + Math.random()) * bonus));
-        if (typeof window.addItemToInventory === 'function') { window.addItemToInventory(id, n); got.push({ id: id, n: n }); }
+        if (typeof window.addItemToInventory === 'function') {
+            // DES-86：只记行囊真收下的那几件——旧写法无条件 push 开价数，满包时照样念「采得 ×N」
+            const 收 = Number(window.addItemToInventory(id, n)) || 0;
+            if (收 > 0) got.push({ id: id, n: 收 });
+            else _落空 += n;
+        } else {
+            got.push({ id: id, n: n }); // 没有行囊通道的世界不拦（与 consume 同口径）
+        }
     });
-    cell.node.regrowDay = currentDay() + 3 + Math.floor(Math.random() * 4);
-    // 第三十四波：枯竭日落进本域存档（旧账只改内存格、saveWildState 原样抄回空的 gathered，读档后节点全复活可无限刷采）
-    try {
-        const _rst = wildState.regions[currentRegionForMap];
-        if (_rst) { _rst.gathered = _rst.gathered || {}; _rst.gathered[playerPos.x + ',' + playerPos.y] = cell.node.regrowDay; }
-    } catch (eGather) {}
+    // DES-86：一件没采回就不把这片判枯——旧写法无论落没落袋都记下枯竭日，玩家白跑一趟还毁了一处产地
+    if (got.length) {
+        cell.node.regrowDay = currentDay() + 3 + Math.floor(Math.random() * 4);
+        // 第三十四波：枯竭日落进本域存档（旧账只改内存格、saveWildState 原样抄回空的 gathered，读档后节点全复活可无限刷采）
+        try {
+            const _rst = wildState.regions[currentRegionForMap];
+            if (_rst) { _rst.gathered = _rst.gathered || {}; _rst.gathered[playerPos.x + ',' + playerPos.y] = cell.node.regrowDay; }
+        } catch (eGather) {}
+    }
     if (window.showMessage) {
         const kind = NODE_KIND_NAMES[cell.node.kind] || '药草';
-        window.showMessage(`🌿 采得 ${lootText(got, kind)}${bonus > 1.1 ? '（天象帮忙，收成不错）' : bonus < 0.9 ? '（天象不作美，收成打折）' : ''}`, 'success');
+        if (got.length) {
+            window.showMessage(`🌿 采得 ${lootText(got, kind)}${_落空 ? '（另 ' + _落空 + ' 份：' + ((typeof window.addItemReasonPhrase === 'function' && window.addItemReasonPhrase('这一片的药草')) || '没能带走') + '）' : ''}${bonus > 1.1 ? '（天象帮忙，收成不错）' : bonus < 0.9 ? '（天象不作美，收成打折）' : ''}`, _落空 ? 'warning' : 'success');
+        } else {
+            window.showMessage('🌿 这一片一株也没带回，它们还在原地。' + ((typeof window.addItemFailText === 'function' && window.addItemFailText('这一片的东西')) || '这一件先还留在原处。'), 'warning');
+        }
     }
     // v23.1 野外采集也挂奇遇钩（挖矿/采药都有，唯独这里漏了）
     if (window.QiyuEncounters && typeof window.QiyuEncounters.maybeTrigger === 'function') { try { window.QiyuEncounters.maybeTrigger('wild'); } catch (e) {} }
@@ -2311,7 +2407,7 @@ function meditateWild() {
     if (cell && cell.terrainKey === 'WATER' && !isFrozenNow()) { showMessage('🌊 踩水打坐定不下心——先上岸再说。', 'info'); return; }   // v47 冬天冰面是实地，照坐
     const qi = cell ? cell.qi : 1;
     advanceWildTime(60, '野外打坐');
-    if (window.currentCharData) window.currentCharData.energy = Math.max(0, (window.currentCharData.energy || 100) - 4);
+    if (window.currentCharData) window.currentCharData.energy = Math.max(0, (window.currentCharData.energy ?? 100) - 4);
     const gain = Math.round(8 * qi);
     healChar(0, 0, gain);
     if (isNightNow() && rollWildEncounter()) { renderWildSidebar(); return; }
@@ -3323,9 +3419,23 @@ function escortDeliverHere(cell) {
     const fame = e.long ? ESCORT_LONG_FAME : 1;
     try { if (window.RewardService && typeof window.RewardService.apply === 'function') window.RewardService.apply({ fame: fame }, { source: 'escort' }); } catch (err3) {}
     if (window.currentCharData) window.currentCharData._escort = null;
-    showMessage((e.long ? '📦 一车「' + e.cargo + '」稳稳卸进' : '📦 镖车稳稳停进') + placeName +
-        '——收货人验了封条' + (wetCut > 0 ? '，又捏了捏浸过水的货角，折去 ' + wetCut + ' 灵石' : '') + '，当场结清 ' + e.fee + ' 灵石。' +
-        (e.long ? '这趟跨域大镖，圆满。' : '这趟镖，圆满。') + '（名气 +' + fame + '）', 'success');
+        showMessage((e.long ? '📦 一车「' + e.cargo + '」稳稳卸进' : '📦 镖车稳稳停进') + placeName +
+            '——收货人验了封条' + (wetCut > 0 ? '，又捏了捏浸过水的货角，折去 ' + wetCut + ' 灵石' : '') + '，当场结清 ' + e.fee + ' 灵石。' +
+            (e.long ? '这趟跨域大镖，圆满。' : '这趟镖，圆满。') + '（名气 +' + fame + '）', 'success');
+        // 第一百四十二批：护送**真正完成**的兑付口在这里（钱已结、名气已入、cd._escort 已清），
+        // 但**从来没 emit 过 `escort:completed`**。
+        // 而 quest-system 的事件桥（quest-system.js:2160）恰恰在听它，`questObjectiveMatches`
+        // 也认 `{type:'escort'}` —— 于是 `sects-system.js:83` 的 `task_combat_3`「护送商队」
+        // （奖励贡献 100／点数 60／灵石 100）目标**永远不推进**。
+        // ⚠️ 选这里的理由：settleEscortRaid(win) 胜时**不清 _escort**（镖还在赶路，赢的只是打退截道的），
+        // 在那儿 emit 就是把「打完一场」冒充「护送完成」。送达才是完成。
+        try {
+            if (window.EventBus && typeof window.EventBus.emit === 'function') {
+                window.EventBus.emit('escort:completed', {
+                    target: '商队', cargo: e.cargo, toName: e.toName, long: !!e.long, fee: e.fee
+                });
+            }
+        } catch (eEscortEv) { if (window.console && console.error) console.error('[escort] 事件播报失败:', eEscortEv); }
     saveWildState();
     renderWildSidebar();
     return true;
@@ -3362,6 +3472,52 @@ function settleEscortRaid(win) {
 }
 window.settleEscortRaid = settleEscortRaid;
 
+// ============ 遗迹的搜刮存量（DES-31） ============
+// 一处遗迹的家底是**有限**的：翻过几遍就只剩瓦砾。旧版每次现抽一份战利品，等于一座无限提款机，
+// 唯一的约束只剩玩家自己的时辰与精力——而那两笔账付完照旧再造货。
+// 判据是「掘过几遍」，不是「今日第几次」：要枯就得在世界里枯，每日计数器是宪法明令禁止的人为配额。
+// 能翻几遍由各条遗迹自己的来历给（无名古冢的牌面写着「被盗过一轮」，它就真只剩一轮）。
+const RUIN_DIGS_DEFAULT = 2;   // 叫不出来历的无名遗迹：两遍
+
+function ruinStockOf(poi) {
+    return Number(poi && poi.variant && poi.variant.digs) || RUIN_DIGS_DEFAULT;
+}
+
+function ruinDugCount(poiId) {
+    const st = wildState.regions[currentRegionForMap];
+    return (st && st.ruinDug && Number(st.ruinDug[poiId])) || 0;
+}
+
+function ruinIsDry(poi) {
+    return !!poi && ruinDugCount(poi.id) >= ruinStockOf(poi);
+}
+
+// 图上的名字与来历名撞车时只报一次：「塌陷古观「塌陷古观」」这种叠字是机器念的
+function ruinTitleOf(poi) {
+    const vn = (poi && poi.variantName) || '遗迹';
+    const nm = poi && poi.name;
+    return (!nm || nm === vn) ? vn : vn + '「' + nm + '」';
+}
+
+// 掘过即记账：惊动了守灵、或者东西没拿稳，这一处也确实被翻过一遍了
+function noteRuinDug(poi) {
+    const st = wildState.regions[currentRegionForMap];
+    if (!st || !poi || !poi.id) return;
+    st.ruinDug = st.ruinDug || {};
+    st.ruinDug[poi.id] = ruinDugCount(poi.id) + 1;
+    saveWildState();
+}
+
+// DES-86：翻出来的东西一件没带走时，这一次翻动不算数——旧写法存量照抽、货却蒸发，等于拿玩家的真永久换假收获
+function 退还RuinDug(poi) {
+    const st = wildState.regions[currentRegionForMap];
+    if (!st || !st.ruinDug || !poi || !poi.id) return;
+    const 剩 = ruinDugCount(poi.id) - 1;
+    if (剩 <= 0) delete st.ruinDug[poi.id];
+    else st.ruinDug[poi.id] = 剩;
+    saveWildState();
+}
+
 function exploreWildRuin(poi) {
     // 有名有姓的地标走探索系统；无名遗迹按它的来历结账
     if (poi.type === 'landmark' && typeof window.exploreLandmark === 'function') {
@@ -3370,8 +3526,15 @@ function exploreWildRuin(poi) {
         renderWildSidebar();
         return;
     }
+    // 搜空了的遗迹不再收时辰与精力：牌面已写着「已被搜空」，再照扣一笔就是拿假账换玩家的真力气
+    if (ruinIsDry(poi)) {
+        showMessage(`🕳️ ${ruinTitleOf(poi)}早被人翻到底了——瓦砾堆里挑不出一件像样的。要货，得寻下一处。`, 'info');
+        renderWildSidebar();
+        return;
+    }
     advanceWildTime(60, '探索遗迹');
-    if (window.currentCharData) window.currentCharData.energy = Math.max(0, (window.currentCharData.energy || 100) - 10);
+    if (window.currentCharData) window.currentCharData.energy = Math.max(0, (window.currentCharData.energy ?? 100) - 10);
+    noteRuinDug(poi);
     const v = poi.variant || null;
     // 来历决定凶险：战场有亡魂、残阵会反噬、古观会掉灰
     if (v && v.risk && Math.random() < v.risk.chance) {
@@ -3401,14 +3564,27 @@ function exploreWildRuin(poi) {
     // 来历也决定出什么：古观出丹药经卷、古冢出明器、战场出残铁
     const pool = (v && v.loot) ? v.loot : ['mat_iron_ore', 'mat_copper_ore', 'mat_lingzhi', 'mat_refined_iron'];
     const found = [];
+    var _翻出落空 = 0;
     const rolls = 1 + Math.floor(Math.random() * 2);
     for (let i = 0; i < rolls; i++) {
         const id = pool[Math.floor(Math.random() * pool.length)];
         const n = 1 + Math.floor(Math.random() * 2);
-        if (typeof window.addItemToInventory === 'function') { window.addItemToInventory(id, n); found.push({ id: id, n: n }); }
+        if (typeof window.addItemToInventory === 'function') {
+            // DES-86：按实收记——旧写法丢返回值无条件 push，满包时也念「翻出 ×N」，存量还照样抽干
+            const 收 = Number(window.addItemToInventory(id, n)) || 0;
+            if (收 > 0) found.push({ id: id, n: 收 });
+            else _翻出落空 += n;
+        } else {
+            found.push({ id: id, n: n }); // 没有行囊通道的世界不拦（与采集同口径）
+        }
     }
+    if (!found.length && _翻出落空) 退还RuinDug(poi);
     const lead = v ? (v.name + '——' + (v.find || '翻出些旧物')) : '从瓦砾间翻出些旧物';
-    showMessage(`🏛️ ${lead}：${found.length ? lootText(found, '旧物') : '什么都没剩'}。`, 'success');
+    if (!found.length) {
+        showMessage(`🏛️ ${lead}——翻出来的东西${_翻出落空 ? _翻出落空 + ' 件掉回了瓦砾堆里' : '一件没带走'}：这一处还没翻到底。` + ((typeof window.addItemFailText === 'function' && window.addItemFailText('这一处的东西')) || '这一件先还留在原处。'), 'warning');
+    } else {
+        showMessage(`🏛️ ${lead}：${lootText(found, '旧物')}${_翻出落空 ? '（另 ' + _翻出落空 + ' 件：' + ((typeof window.addItemReasonPhrase === 'function' && window.addItemReasonPhrase('这处的旧物')) || '没能带走') + '）' : ''}。${ruinIsDry(poi) ? '这一处翻到底了——往后到此只剩瓦砾。' : ''}`, _翻出落空 ? 'warning' : 'success');
+    }
     renderWildSidebar();
 }
 
@@ -3432,11 +3608,20 @@ function harvestWildResource(poi) {
         const res = window.ResourcePoints.harvest(poi.refId);
         if (res && res.ok) {
             const out = res.output || {};
-            const parts = Object.keys(out).map(k => ({ id: k, n: out[k] }));
-            Object.keys(out).forEach(k => { if (typeof window.addItemToInventory === 'function') window.addItemToInventory(k, out[k]); });
-            showMessage(point.ownerSect === 'player'
-                ? `⛏️ 自家的产地敞开采，得 ${lootText(parts, '出产')}。`
-                : `⛏️ 以本门名义采撷，得 ${lootText(parts, '出产')}。`, 'success');
+            // DES-72（第一百三十批）：旧写法把入库的返回值丢在地上，满包也照念「得 X×N」
+            const 采 = _收产出(out);
+            const parts = Object.keys(采.入).map(k => ({ id: k, n: 采.入[k] }));
+            const 有货 = Object.keys(out).length;   // DES-96：一次货都没发过就不许拿行囊说事（与 _poachResource 的 keys.length 闸同一形）
+            showMessage(parts.length
+                ? (point.ownerSect === 'player'
+                    ? `⛏️ 自家的产地敞开采，得 ${lootText(parts, '出产')}。`
+                    : `⛏️ 以本门名义采撷，得 ${lootText(parts, '出产')}。`) + _短缺话(采.缺)
+                : (有货
+                    // DES-90（第一百三十九批）：账上没落笔时不许猜缘由（野药可再来，句尾位带句号）
+                    ? '⛏️ 这一铲子下去东西是有的，却一件也没进你的囊：'
+                      + (缘话(采.缺, '出产') || '这一件先还留在原处。')
+                    : '⛏️ 这一铲子下去是空的——这处产地眼下交不出货来。'),
+                parts.length ? 'success' : 'warning');
         } else {
             showMessage('⛏️ 这处产地本季已经采空了，等它缓缓。', 'info');
         }
@@ -3456,9 +3641,19 @@ function _poachResource(point) {
     } else {
         const out = window.ResourcePoints.calcYield(point) || {};
         const keys = Object.keys(out).slice(0, 2);
-        keys.forEach(k => { if (typeof window.addItemToInventory === 'function') window.addItemToInventory(k, Math.max(1, Math.floor(out[k] / 2))); });
-        const half = keys.map(k => ({ id: k, n: Math.max(1, Math.floor(out[k] / 2)) }));
-        showMessage(keys.length ? `⛏️ 趁无人捞了一把：${lootText(half, '出产')}。` : '⛏️ 什么都没捞着。', 'success');
+        const 开价 = {};
+        keys.forEach(k => { 开价[k] = Math.max(1, Math.floor(out[k] / 2)); });
+        // DES-72（第一百三十批）：旧写法丢了入库返回值，满包也照念「捞了一把：X×N」
+        const 捞 = _收产出(开价);
+        const half = Object.keys(捞.入).map(k => ({ id: k, n: 捞.入[k] }));
+        showMessage(half.length
+            ? `⛏️ 趁无人捞了一把：${lootText(half, '出产')}。` + _短缺话(捞.缺)
+            : (keys.length
+                // DES-90（第一百三十九批）：账上没落笔时不许猜缘由（遗迹翻找可再来，句尾位带句号）
+                ? '⛏️ 手底下是有东西的，可惜一件也没进囊：'
+                  + (缘话(捞.缺, '出产') || '这一件先还留在原处。')
+                : '⛏️ 什么都没捞着。'),
+            half.length ? 'success' : 'warning');
     }
 }
 
@@ -4295,7 +4490,8 @@ function renderWildLifeList() {
             name: band.name,
             cls: band.kind === 'pack' ? 'text-orange-400' : band.kind === 'caravan' ? 'text-amber-300' : 'text-sky-300',
             pos: d === 0 ? '就在脚下' : dirName(dx, dy) + ' ' + d + ' 格',
-            hot: d <= 1
+            hot: d <= 1,
+            gx: d === 0 ? undefined : m.x, gy: d === 0 ? undefined : m.y
         });
     });
     if (wildDrift) {
@@ -4308,7 +4504,9 @@ function renderWildLifeList() {
             name: wildDrift.spec.name,
             cls: 'text-gray-300',
             pos: inside ? '正罩着你' : dirName(dx, dy) + '那头',
-            hot: inside
+            hot: inside,
+            gx: inside ? undefined : Math.round(wildDrift.x + wildDrift.spec.w / 2),
+            gy: inside ? undefined : Math.round(wildDrift.y + wildDrift.spec.h / 2)
         });
     }
     // 第六十一波 · 搭伙账：跟着商队走，这笔账置顶（d=-1 排在所有动静前头）
@@ -4317,9 +4515,11 @@ function renderWildLifeList() {
     }
     el.innerHTML = rows.length
         ? rows.sort((a, b) => a.d - b.d).map(r =>
-            '<div class="flex justify-between items-center bg-gray-800/60 px-2 py-1 rounded border border-gray-700">' +
-            '<span class="text-xs ' + r.cls + '">' + r.icon + ' ' + r.name + '</span>' +
-            '<span class="text-[10px] ' + (r.hot ? 'text-red-400' : 'text-gray-500') + '">' + r.pos + '</span></div>').join('')
+            '<div class="flex items-center gap-1 bg-gray-800/60 px-2 py-1 rounded border border-gray-700">' +
+            '<span class="text-xs ' + r.cls + ' flex-1 min-w-0">' + r.icon + ' ' + r.name + '</span>' +
+            '<span class="text-[10px] shrink-0 ' + (r.hot ? 'text-red-400' : 'text-gray-500') + '">' + r.pos + '</span>' +
+            (r.gx === undefined ? '' : '<button data-act="life-goto" data-x="' + r.gx + '" data-y="' + r.gy + '" data-name="' + String(r.name).replace(/"/g, '') + '" class="text-xs shrink-0 bg-gray-700 hover:bg-gray-600 text-gray-200 px-1.5 py-0.5 rounded transition">' + (r.d === 1 ? '近前' : '过去看看') + '</button>') +
+            '</div>').join('')
         : '<p class="text-xs text-gray-500 text-center">四野安静，什么动静都没有。</p>';
 }
 
@@ -4452,6 +4652,7 @@ function bindWildSidebar() {
         const act = target.getAttribute('data-act');
         if (act === 'travel-go') confirmTravel();
         else if (act === 'travel-cancel') { wildTravel = null; renderMap(mapContainer, currentMap, viewportOffset.x, viewportOffset.y); }
+        else if (act === 'life-goto') gotoSensedTarget(+target.getAttribute('data-x'), +target.getAttribute('data-y'), target.getAttribute('data-name'));
         else if (act === 'poi-goto') gotoPoi(target.getAttribute('data-poi'));
         else if (act === 'ferry-goto') poiAction('ferry-goto', target.getAttribute('data-target'));
         else if (act === 'ferry-cancel') renderWildSidebar();
@@ -4643,16 +4844,28 @@ function isFedNow() {
     return Number(cd._fedUntil || 0) > fedMinutes();
 }
 // 酒楼点菜调这里（building-effects 把本城的菜话术递进来）；没人返回 false
+// 回执要说进账、不说开价：精力已满的一桌饭不能照印「精力+40」（DES-42④＝DES-38 原验收的「满精力吃饭」）。
+// 措辞与 js/core/reward-service.js 的 pushGain 同一把尺；封顶那把尺（getEffectiveMax）属 DES-40② 待裁决，此处一字未动。
+function gainWord(label, want, before, after) {
+    const got = Number(after) - Number(before);
+    if (got === want) return label + ' +' + want;
+    return label + (want > 0 ? '已达上限，实得+' : '已见底，实得') + got;
+}
 function makeFed(dishMsg) {
     const cd = window.currentCharData;
     if (!cd) return false;
     cd._fedUntil = fedMinutes() + MEAL_FED_MIN;
     let maxE = 100;
     try { if (typeof window.getEffectiveMax === 'function') maxE = Number(window.getEffectiveMax('energy')) || 100; } catch (eMax) {}
-    cd.energy = Math.min(maxE, Number(cd.energy != null ? cd.energy : maxE) + MEAL_EN);
+    const energyBefore = Number(cd.energy != null ? cd.energy : maxE);
+    cd.energy = Math.min(maxE, energyBefore + MEAL_EN);
     const maxH = Number(cd.maxHealth) || 100;
-    cd.health = Math.min(maxH, Number(cd.health != null ? cd.health : maxH) + MEAL_HP);
-    showMessage('🍚 ' + (dishMsg || '热汤热菜摆了一桌，吃得干干净净') + ' 精力 +' + MEAL_EN + '、气血 +' + MEAL_HP + '；饭劲饱腹四个时辰——赶路耗的精力，每格至多省回 1 点（耗多少省多少）。', 'success');
+    const healthBefore = Number(cd.health != null ? cd.health : maxH);
+    cd.health = Math.min(maxH, healthBefore + MEAL_HP);
+    showMessage('🍚 ' + (dishMsg || '热汤热菜摆了一桌，吃得干干净净') + ' ' +
+        gainWord('精力', MEAL_EN, energyBefore, cd.energy) + '、' +
+        gainWord('气血', MEAL_HP, healthBefore, cd.health) +
+        '；饭劲饱腹四个时辰——赶路耗的精力，每格至多省回 1 点（耗多少省多少）。', 'success');
     try { if (window.updateCharacterStatus) window.updateCharacterStatus(); } catch (eUI3) {}
     return true;
 }
@@ -4728,6 +4941,15 @@ window.wildMapApi = {
         FULL_FALLBACK: LORE_FULL_FALLBACK,
         ECHO_CFG: { HP: LORE_ECHO_HP, EN: LORE_ECHO_EN, QI: LORE_ECHO_QI, CAP: GROTTO_PER_REGION },
         echo: loreEchoCheck
+    },
+    // DES-31 遗迹搜刮存量（测试对账用）
+    ruin: {
+        CFG: { DIGS_DEFAULT: RUIN_DIGS_DEFAULT, DIGS: POI_VARIANTS.ruin.map(v => ({ key: v.key, digs: v.digs })) },
+        stockOf: ruinStockOf,
+        dug: ruinDugCount,
+        isDry: ruinIsDry,
+        title: ruinTitleOf,
+        noteDug: noteRuinDug
     },
     // v52 地图粉笔笔记（测试对账用）
     note: {

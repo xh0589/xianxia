@@ -45,7 +45,7 @@ W.gameLog = { add: function () {} };
 W.showMessage = function () {};
 W.inventory = { currency: { spiritStones: 0, copper: 0 }, slots: [] };
 W.currentCharData = { realm: '金丹', layer: 3 };
-W.addItem = function () { return true; };
+W.addItem = function (id, n) { return n || 1; };   // 桩：回实收件数
 
 vm.createContext(W);
 function load(rel) { vm.runInContext(loadScript(rel), W, { filename: rel }); }

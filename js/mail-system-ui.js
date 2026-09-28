@@ -166,6 +166,8 @@
             t.classList.toggle('active', on);
             t.setAttribute('aria-selected', on ? 'true' : 'false');
         });
+        // 双栏之后，右栏那封信会一直摊着——换页必须顺手合上它，否则点「✍️ 写信」看见的还是上一封旧信
+        closeMail();
         renderInboxList(want);
     }
 
@@ -310,7 +312,7 @@
         arr.slice(_pg * MAIL_PAGE_SIZE, (_pg + 1) * MAIL_PAGE_SIZE).forEach(function(m) {
             // NEW-41：删掉了这里算了个没人用的 new Date() 死变量（时间文案统一走 formatTimeShort）
             var timeStr = m.receivedAt ? formatTimeShort(m.receivedAt) : (m.sentAt ? formatTimeShort(m.sentAt) : '?');
-            html += '<div class="mail-item ' + (m.readAt ? '' : 'mail-unread ') + (importanceClass[m.importance] || '') + '" onclick="window.MailSystemUI.openMail(\'' + m.id + '\')">' +
+            html += '<div class="mail-item ' + (m.readAt ? '' : 'mail-unread ') + (importanceClass[m.importance] || '') + '" data-mail-id="' + m.id + '" onclick="window.MailSystemUI.openMail(\'' + m.id + '\')">' +
                 '<div class="mail-item-icon">' + (carrierIcon[m.carrier] || '🐦') + '</div>' +
                 '<div class="mail-item-body">' +
                     (m.importance === 'urgent' ? '<span class="mail-badge mail-badge-urgent">急</span>' : '') +
@@ -346,13 +348,56 @@
     }
 
     // ============ 打开单封详情 ============
-    function openMail(id) {
-        if (window.MailSystem) window.MailSystem.markRead(id);
+    // 三本账都要查：旧版只查 inbox，于是发件箱条目挂着 onclick＋cursor:pointer，点下去
+    // 什么都不发生也不报错——玩家连「自己寄过什么」都回不去看，更删不掉、收不进收藏。
+    function findMailBook(id) {
         var data = window.MailSystem ? window.MailSystem.getData() : null;
-        if (!data) return;
-        var m = data.inbox.find(function(x) { return x.id === id; });
-        if (!m) return;
-        var detail = document.getElementById('mailDetailPanel');
+        if (!data) return null;
+        var books = ['inbox', 'outbox', 'favorites'];
+        for (var i = 0; i < books.length; i++) {
+            var m = (data[books[i]] || []).find(function(x) { return x.id === id; });
+            if (m) return { mail: m, book: books[i], data: data };
+        }
+        return null;
+    }
+
+    function _mailToName(m) {
+        try {
+            var n = m.toNpcId && window.npcManager ? window.npcManager.getNPC(m.toNpcId) : null;
+            return (n && n.name) || '故人';
+        } catch (e) { return '故人'; }
+    }
+
+    // 双栏右栏的统一开关：摊开一封信与铺开一张信纸共用同一格，左列名录始终不换页
+    function _openPane() {
+        var d = document.getElementById('mailDetailPanel');
+        var p = document.getElementById('mailInboxPanel');
+        if (d) d.classList.add('open');
+        if (p) p.classList.add('is-split');
+        if (d) d.scrollTop = 0;
+        return d;
+    }
+
+    // 左列里给「此刻读的那一封」一道金条——不加这标记，双栏下玩家分不清右面摊的是哪封
+    function _markOpenInList(id) {
+        var p = document.getElementById('mailInboxPanel');
+        var rows = p && p.querySelectorAll ? p.querySelectorAll('.mail-item') : [];
+        [].forEach.call(rows, function (r) {
+            r.classList.toggle('is-open', r.getAttribute('data-mail-id') === id);
+        });
+    }
+
+    var _askDel = null;   // 删信只在窗内二次确认，不再借原生 confirm
+    var _lastMailId = null;   // 「先留着」要把同一封信原样摊回来，得知道刚才读的是哪一封
+
+    function openMail(id) {
+        var hit = findMailBook(id);
+        if (!hit) return;
+        var m = hit.mail, book = hit.book, data = hit.data;
+        if (book === 'inbox') window.MailSystem.markRead(id);
+        _sheet = null;
+        _lastMailId = id;
+        var detail = _openPane();
         if (!detail) return;
 
         var carrierName = '';
@@ -369,25 +414,52 @@
         }
 
         var isFav = data.favorites.find(function(x) { return x.id === id; });
-        var actions = '<button type="button" onclick="window.MailSystemUI.toggleFav(\'' + id + '\')">' + (isFav ? '⭐ 取消收藏' : '⭐ 收藏') + '</button>' +
-                      '<button type="button" class="primary" onclick="window.MailSystemUI.replyMail(\'' + id + '\')">💬 回复</button>' +
-                      '<button type="button" class="mail-act-del" onclick="window.MailSystemUI.deleteMail(\'' + id + '\')">🗑️ 删除</button>';
+        var actions;
+        if (_askDel === id) {
+            // 真破坏动作就地问一句：这一封（连同留底）删了就没了
+            actions = '<span class="mail-del-ask">这一封删了就再也翻不着了，真删？</span>' +
+                '<button type="button" class="mail-act-del" onclick="window.MailSystemUI.deleteMail(\'' + id + '\')">确认删除</button>' +
+                '<button type="button" onclick="window.MailSystemUI.keepMail()">先留着</button>';
+        } else if (book === 'outbox') {
+            // 寄出的信没有「回复」与「收藏」——那是收信方的动作；这一页给的是「再写一封」和「抹掉留底」
+            actions = (m.toNpcId ? '<button type="button" class="primary" onclick="window.MailSystemUI.composeTo(\'' + m.toNpcId + '\')">✍️ 再写一封</button>' : '') +
+                      '<button type="button" class="mail-act-del" onclick="window.MailSystemUI.askDeleteMail(\'' + id + '\')">🗑️ 删除</button>';
+        } else {
+            // 收藏页里的信可能只是原件已删的副本——那种信回不出去，就不摆「回复」这枚假入口
+            var canReply = book === 'inbox' || !!data.inbox.find(function(x) { return x.id === id; });
+            actions = '<button type="button" onclick="window.MailSystemUI.toggleFav(\'' + id + '\')">' + (isFav ? '⭐ 取消收藏' : '⭐ 收藏') + '</button>' +
+                      (canReply ? '<button type="button" class="primary" onclick="window.MailSystemUI.replyMail(\'' + id + '\')">💬 回复</button>' : '') +
+                      '<button type="button" class="mail-act-del" onclick="window.MailSystemUI.askDeleteMail(\'' + id + '\')">🗑️ 删除</button>';
+        }
+
+        // 留底信可以没有地点——空段拿掉，别留下「· ·」这种断句坏了的样子
+        var fromBits = (book === 'outbox'
+            ? ['寄给 <b>' + _esc(_mailToName(m)) + '</b>', _esc(m.location || ''), carrierName,
+               m.sentAt != null ? formatTimeShort(m.sentAt) + '寄出' : '']
+            : ['来自 <b>' + _esc(m.fromNpcName || '系统') + '</b>', _esc(m.location || ''), carrierName,
+               m.receivedAt ? formatTimeShort(m.receivedAt) + '送达' : '']);
+        var fromLine = fromBits.filter(function (x) { return !!x; }).join(' · ');
 
         detail.innerHTML = '<div class="mail-detail-header">' +
-            '<button class="mail-back" onclick="window.MailSystemUI.closeMail()">← 返回列表</button>' +
+            '<button class="mail-back" onclick="window.MailSystemUI.closeMail()">✕ 合上这封</button>' +
             '<div class="mail-detail-title">《' + _esc(m.subject || '') + '》</div>' +
-            '<div class="mail-detail-from">来自 <b>' + _esc(m.fromNpcName || '系统') + '</b> · ' + _esc(m.location || '') + ' · ' + carrierName +
-                (m.receivedAt ? ' · ' + formatTimeShort(m.receivedAt) + '送达' : '') + '</div>' +
+            '<div class="mail-detail-from">' + fromLine + '</div>' +
         '</div>' +
         '<div class="mail-detail-body">' + _esc(m.body || '').replace(/\n/g, '<br>') + attachments + '</div>' +
         '<div class="mail-detail-actions">' + actions + '</div>';
-        detail.classList.add('open');
+        _markOpenInList(id);
         updateUnreadBadge();
     }
 
     function closeMail() {
-        var detail = document.getElementById('mailDetailPanel');
-        if (detail) detail.classList.remove('open');
+        _sheet = null;
+        _askDel = null;
+        var d = document.getElementById('mailDetailPanel');
+        if (d) d.classList.remove('open');
+        var p = document.getElementById('mailInboxPanel');
+        if (p) p.classList.remove('is-split');
+        var rows = p && p.querySelectorAll ? p.querySelectorAll('.mail-item.is-open') : [];
+        [].forEach.call(rows, function (r) { r.classList.remove('is-open'); });
     }
 
     function toggleFav(id) {
@@ -397,14 +469,24 @@
         showToast(isFav ? '⭐ 已收藏' : '已取消收藏', 'success');
     }
 
+    function askDeleteMail(id) {
+        _askDel = id;
+        openMail(id);
+    }
+
+    function keepMail() {
+        _askDel = null;
+        if (_lastMailId) openMail(_lastMailId);
+    }
+
+    // 点「🗑️ 删除」只把这一行换成确认语，点「确认删除」才真动账（原生 confirm 一律不进游戏窗）
     function deleteMail(id) {
-        if (window.confirm('确定删除此邮件？')) {
-            window.MailSystem.deleteMail(id);
-            closeMail();
-            renderInboxList(_activeTab);   // 画当前那一页，不再硬掰成收件箱（高亮与内容会错位）
-            updateUnreadBadge();
-            showToast('已删除', 'info');
-        }
+        _askDel = null;
+        window.MailSystem.deleteMail(id);
+        closeMail();
+        renderInboxList(_activeTab);   // 画当前那一页，不再硬掰成收件箱（高亮与内容会错位）
+        updateUnreadBadge();
+        showToast('已删除', 'info');
     }
 
     // 第一百一十波 · NEW-60：玩家写的信进 DOM 前必须转义——一句「修仙界<1000」的情话
@@ -414,17 +496,187 @@
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
-    var MAIL_BODY_CAP = 500;   // 信纸长度门：纸短情长，存档也短
+    // 一纸能写多少字，认数据层那一个数（mail-system.js 导出）；截断也在数据层做
+    function mailBodyCap() { return (window.MailSystem && window.MailSystem.MAIL_BODY_CAP) || 500; }
+
+    // 超字必须说出口：不能让玩家以为自己寄出去的是整封
+    function _clampWarn(text) {
+        var cap = mailBodyCap();
+        if (text.length > cap) showToast('📜 信纸至此为止，尚余 ' + (text.length - cap) + ' 字未写入', 'warning');
+    }
+
+    // ============ 窗内信纸（UI-01）：写信·回复·再写一封共用这一张纸 ============
+    // 旧做法是三个入口各弹一只系统框：超没超字、走哪只鸽子、这封寄到哪儿去，全在框子合上
+    // 那一瞬蒸发；而且原生框没有本作的皮，看着像网页报错。现在信纸摊在右栏，左列名录不换页。
+    var _sheet = null;
+
+    // 容量认数据层那一个数；这里只管「笔停在哪」和「还差多少没落下」
+    function _paperFit(raw) {
+        var text = String(raw == null ? '' : raw);
+        var cap = mailBodyCap();
+        if (text.length <= cap) return { text: text, over: 0 };
+        return { text: text.slice(0, cap), over: text.length - cap };
+    }
+
+    // 载具那行字由 CARRIERS 现算（资费与路速都是寄信那一头的真账，UI 不另立一份）
+    function _carrierBrief(c) {
+        if (!c) return '';
+        var fee = c.isConsumable ? '耗一件' + (c.name || '信物') : (c.cost > 0 ? c.cost + ' 灵石' : '不要钱');
+        var wait = (!c.baseDelayMin && !c.randomDelayMin) ? '落纸即达'
+            : '最长约 ' + Math.max(1, Math.ceil(((c.baseDelayMin || 0) + (c.randomDelayMin || 0)) / 120)) + ' 时辰';
+        return fee + ' · ' + wait;
+    }
+
+    // 用不得的载具照样亮着、写明差什么（禁止设计 #2：锁就亮锁，不许整栏藏起来）
+    function _carrierRowHtml() {
+        var Ms = window.MailSystem;
+        var Cs = (Ms && Ms.CARRIERS) || {};
+        var out = '';
+        Object.keys(Cs).forEach(function (id) {
+            var c = Cs[id] || {};
+            var av = (Ms.checkCarrierAvailability && Ms.checkCarrierAvailability(id)) || {};
+            var on = av.canUse && id === _sheet.carrier;
+            out += '<button type="button" class="mail-carrier' + (on ? ' mail-carrier-on' : '') + '"' +
+                (av.canUse ? ' onclick="window.MailSystemUI.pickCarrier(\'' + id + '\')">' : ' disabled aria-disabled="true">') +
+                '<span class="mail-carrier-name">' + (c.icon || '🐦') + ' ' + (c.name || '驿路') + '</span>' +
+                '<span class="mail-carrier-brief">' + _esc(av.canUse ? _carrierBrief(c) : (av.reason || '眼下走不了这一路')) + '</span>' +
+                '</button>';
+        });
+        return out;
+    }
+
+    function _carrierNote() {
+        var c = ((window.MailSystem && window.MailSystem.CARRIERS) || {})[_sheet.carrier] || {};
+        return '寄出这一封：' + _carrierBrief(c) + (c.cost > 0 ? '，资费从灵石里扣。' : '。');
+    }
+
+    function _letterSubject() {
+        var city = '';
+        try { city = (window.currentCharData && window.currentCharData.location) || ''; } catch (e) {}
+        return city ? '寄自' + city + '的信' : '寄自远方的信';
+    }
+
+    // 摊纸：写信与回信共用一面，差别只在有没有载具可选（回信走飞鸽是驿路的老账）
+    function openSheet(sheet) {
+        _sheet = sheet;
+        var detail = _openPane();
+        if (!detail) return true;
+        var cap = mailBodyCap();
+        detail.innerHTML = '<div class="mail-detail-header">' +
+            '<button class="mail-back" onclick="window.MailSystemUI.closeMail()">✕ 不写了</button>' +
+            '<div class="mail-detail-title">' + (_sheet.mode === 'reply' ? '💬 回复 ' : '✍️ 写给 ') + _esc(_sheet.npcName) + '</div>' +
+            '<div class="mail-detail-from">信皮《' + _esc(_sheet.subject) + '》 · 落款我</div>' +
+        '</div>' +
+        '<div class="mail-detail-body mail-sheet-body">' +
+            '<textarea class="mail-sheet-paper" id="mail-sheet-paper" rows="8" ' +
+                'placeholder="一纸可容 ' + cap + ' 字，写满即停笔。" ' +
+                'oninput="window.MailSystemUI.onSheetInput(this)">' + _esc(_sheet.body) + '</textarea>' +
+            '<div class="mail-sheet-tally">' +
+                '<span id="mail-sheet-count">已写 0 / ' + cap + ' 字</span>' +
+                '<span class="mail-sheet-over" id="mail-sheet-clamp"></span></div>' +
+            (_sheet.mode === 'reply'
+                ? '<p class="mail-sheet-note">回信走飞鸽：寄出不要钱；回不回、回得多热络，看交情。</p>'
+                : '<div class="mail-sheet-carriers" id="mail-sheet-carriers">' + _carrierRowHtml() + '</div>' +
+                  '<p class="mail-sheet-note" id="mail-sheet-note">' + _esc(_carrierNote()) + '</p>') +
+        '</div>' +
+        '<div class="mail-detail-actions">' +
+            '<button type="button" class="primary" onclick="window.MailSystemUI.sendSheet()">' +
+                (_sheet.mode === 'reply' ? '💬 寄出回信' : '🕊️ 寄出去') + '</button>' +
+            '<button type="button" onclick="window.MailSystemUI.closeMail()">先不寄</button>' +
+        '</div>';
+        onSheetInput(null);
+        var paper = document.getElementById('mail-sheet-paper');
+        if (paper && paper.focus) { try { paper.focus({ preventScroll: true }); } catch (e) { try { paper.focus(); } catch (e2) {} } }
+        return true;
+    }
+
+    // 输入即结算：超出的一刀按回纸上，超出几个字一直摆在计数旁边（不能只闪一句 toast 就完）
+    function onSheetInput(paper) {
+        if (!_sheet) return;
+        if (!paper) paper = document.getElementById('mail-sheet-paper');
+        var raw = (paper && typeof paper.value === 'string') ? paper.value : String(_sheet.body || '');
+        var fit = _paperFit(raw);
+        if (fit.over) {
+            // 敲字与贴字要报同一个数：逐字敲满纸时每次只溢出 1 字，累计才是这封没落下的总数
+            _sheet.dropped = (_sheet.dropped || 0) + fit.over;
+            if (!_sheet.warned) {
+                // 这里不报数：toast 只在头一次溢出时闪一下，那刻确实只挡下 1 字，
+                // 而纸下那行会一路累计——同一屏两个数各说一套比不喊还糟
+                showToast('📜 信纸写满了，多出来的字落不下——差多少看纸下那一行', 'warning');
+                _sheet.warned = true;
+            }
+            if (paper && typeof paper.value === 'string') {
+                paper.value = fit.text;
+                try { paper.selectionStart = paper.selectionEnd = fit.text.length; } catch (e) {}
+            }
+        } else {
+            _sheet.dropped = 0;
+        }
+        _sheet.body = fit.text;
+        var count = document.getElementById('mail-sheet-count');
+        if (count) count.textContent = '已写 ' + fit.text.length + ' / ' + mailBodyCap() + ' 字';
+        var clamp = document.getElementById('mail-sheet-clamp');
+        if (clamp) clamp.textContent = fit.over ? '📜 信纸至此为止，尚余 ' + _sheet.dropped + ' 字未写入' : '';
+    }
+
+    function pickCarrier(id) {
+        if (!_sheet || _sheet.mode === 'reply' || !id) return;
+        var av = window.MailSystem.checkCarrierAvailability(id);
+        if (!av || !av.canUse) return;
+        _sheet.carrier = id;
+        var row = document.getElementById('mail-sheet-carriers');
+        if (row) row.innerHTML = _carrierRowHtml();
+        var note = document.getElementById('mail-sheet-note');
+        if (note) note.textContent = _carrierNote();
+    }
+
+    // 铺纸与寄信分两层：门只管摊纸，账全在驿路老规矩里（资费、境界门槛、回音骰一枚不添）
+    function sendSheet() {
+        if (!_sheet) return false;
+        var mode = _sheet.mode, npcId = _sheet.npcId, mailId = _sheet.mailId, carrier = _sheet.carrier;
+        var paper = document.getElementById('mail-sheet-paper');
+        var raw = (paper && typeof paper.value === 'string') ? paper.value : String(_sheet.body || '');
+        var fit = _paperFit(raw);
+        if (fit.over) _clampWarn(raw);
+        var ok = mode === 'reply' ? sendReply(mailId, fit.text) : sendCompose(npcId, fit.text, carrier);
+        if (ok) {
+            closeMail();
+            renderInboxList(_activeTab);
+            updateUnreadBadge();
+        }
+        return ok;
+    }
+
+    function sendCompose(npcId, body, carrier) {
+        var n = window.npcManager && window.npcManager.getNPC ? window.npcManager.getNPC(npcId) : null;
+        if (!n) { showToast('寻不着这个人——名录怕是旧了', 'warning'); return false; }
+        var text = String(body == null ? '' : body).trim();
+        if (!text) { showToast('白纸一张，寄不出去', 'warning'); return false; }
+        _clampWarn(text);
+        var sent = window.MailSystem.playerSendMail(npcId, n.name || '', _letterSubject(), text.slice(0, mailBodyCap()), carrier || 'pigeon');
+        if (sent) { showToast('✅ 信寄出去了——有没有回音，看驿路，也看交情', 'success'); return true; }
+        return false;
+    }
+
+    function sendReply(mailId, body) {
+        var data = window.MailSystem.getData();
+        var m = data && data.inbox ? data.inbox.find(function (x) { return x.id === mailId; }) : null;
+        if (!m) { showToast('这一封不在收件箱里，没法直接回——再写一封吧', 'warning'); return false; }
+        var text = String(body == null ? '' : body).trim();
+        if (!text) { showToast('白纸一张，回不出去', 'warning'); return false; }
+        _clampWarn(text);
+        var ok = window.MailSystem.playerReply(mailId, text.slice(0, mailBodyCap()));
+        if (ok) showToast('✅ 已回复' + (m.fromNpcName || ''), 'success');
+        else showToast('这封信收不下了——名录怕是旧了', 'warning');
+        return ok;
+    }
 
     function replyMail(id) {
         var data = window.MailSystem.getData();
         var m = data.inbox.find(function(x) { return x.id === id; });
-        if (!m) return;
-        var text = prompt('回复 ' + (m.fromNpcName || '') + '：\n\n你的回信：', '');
-        if (text && text.trim()) {
-            window.MailSystem.playerReply(id, text.trim().slice(0, MAIL_BODY_CAP));
-            showToast('✅ 已回复' + m.fromNpcName, 'success');
-        }
+        if (!m) { showToast('这一封不在收件箱里，没法直接回——再写一封吧', 'warning'); return false; }
+        return openSheet({ mode: 'reply', mailId: id, npcId: m.fromNpcId || '',
+            npcName: m.fromNpcName || '故人', subject: '回复: ' + (m.subject || ''), body: '', carrier: 'pigeon' });
     }
 
     // ============ 第七十六波 · 家书邮路：主动写信的门 ============
@@ -480,26 +732,12 @@
         list.innerHTML = html;
     }
 
+    // 「写信」与发件箱的「再写一封」同一条路：只摊纸，不替玩家决定载具，也不弹系统框
     function composeTo(npcId) {
-        try {
-            var mgr = window.npcManager;
-            var n = mgr && mgr.getNPC ? mgr.getNPC(npcId) : null;
-            if (!n) { showToast('寻不着这个人——名录怕是旧了', 'warning'); return false; }
-            var body = prompt('给「' + (n.name || '故人') + '」写信：\n（信随驿路走——资费与回音，都看载具和交情）\n\n信的内容：', '');
-            if (!body || !body.trim()) return false;
-            body = body.trim().slice(0, MAIL_BODY_CAP);
-            var carrier = 'pigeon';
-            try {
-                var av = window.MailSystem.checkCarrierAvailability('mirror');
-                if (av && av.canUse && window.confirm('改走灵镜传影？（资费五十灵石，落纸即达）\n「取消」＝飞鸽传书（免费，路上慢些）')) carrier = 'mirror';
-            } catch (e2) {}
-            var city = '';
-            try { city = (window.currentCharData && window.currentCharData.location) || ''; } catch (e3) {}
-            var subject = city ? '寄自' + city + '的信' : '寄自远方的信';
-            var sent = window.MailSystem.playerSendMail(npcId, n.name || '', subject, body.trim(), carrier);
-            if (sent) { showToast('✅ 信寄出去了——有没有回音，看驿路，也看交情', 'success'); return true; }
-            return false;
-        } catch (e) { return false; }
+        var n = window.npcManager && window.npcManager.getNPC ? window.npcManager.getNPC(npcId) : null;
+        if (!n) { showToast('寻不着这个人——名录怕是旧了', 'warning'); return false; }
+        return openSheet({ mode: 'send', npcId: npcId, npcName: n.name || '故人',
+            subject: _letterSubject(), body: '', carrier: 'pigeon' });
     }
 
     // ============ 整合到NPCLifeSystem的"主动行为真实化" ============
@@ -528,8 +766,16 @@
             closeMail: closeMail,
             toggleFav: toggleFav,
             deleteMail: deleteMail,
+            askDeleteMail: askDeleteMail,
+            keepMail: keepMail,
             replyMail: replyMail,
             composeTo: composeTo,
+            openSheet: openSheet,
+            onSheetInput: onSheetInput,
+            pickCarrier: pickCarrier,
+            sendSheet: sendSheet,
+            sendCompose: sendCompose,
+            sendReply: sendReply,
             writableRecipients: writableRecipients,
             renderComposeInto: renderComposeInto,
             updateUnreadBadge: updateUnreadBadge,

@@ -173,18 +173,34 @@ function craftPoison(poisonType) {
         }
     }
 
-    // 消耗材料
+    // DES-87：先验成品有没有名分、行囊收不收得下，再动材料——poison_weak/medium/strong 三枚 itemId 全仓无模板
+    // （addItem 遇未知 id 直接返回 false），旧写法材料照扣、熟练度照涨、还念「成功制作」，玩家每配一次毒必净亏那几味料
+    var poisonItemId = poison.itemId || ('poison_' + poisonType);
+    if (!(window.itemById && window.itemById[poisonItemId])) {
+        if (window.showMessage) window.showMessage('这一方的成品还没入册（缺 ' + poisonItemId + ' 的物品档），材料先留在你囊里——这一炉没开。', 'warning');
+        return false;
+    }
+    var _毒入囊;
+    if (typeof window.addItem === 'function') {
+        _毒入囊 = Number(window.addItem(poisonItemId, 1)) || 0;
+    } else if (window.inventory && typeof window.inventory.addItem === 'function') {
+        _毒入囊 = Number(window.inventory.addItem(poisonItemId, 1)) || 0;
+    } else {
+        _毒入囊 = 1; // 没有行囊通道的世界不拦（与各处兜底同口径）
+    }
+    if (!_毒入囊) {
+        // DES-90（第一百三十九批）：这一句后面还接「，配好的…」，是从句位 ⇒ 必须吃**从句支**
+        // （addItemFailPhrase 那一支不带句号）。DES-97：句尾带圆点那两支拼在中段会读成「再来。，」——
+        // 第一百三十八批的 E4 棘轮当场把这一处报红，改的是这里的支，不是那条尺。
+        // 回退文案用④形（毒术炼制拿不准属于哪一类），只说「没落进行囊」，不替行囊断言原因。
+        if (window.showMessage) window.showMessage(((typeof window.addItemFailPhrase === 'function' && window.addItemFailPhrase(poison.name)) || '没能落进你的行囊') + '，配好的' + poison.name + '——这一炉先不开。', 'warning');
+        return false;
+    }
+
+    // 消耗材料（货已落袋才动）
     for (var j = 0; j < materials.length; j++) {
         var sp = _parseMaterialSpec(materials[j]);
         _removeInventoryItem(sp.id, sp.count);
-    }
-
-    // 获得毒药（若无模板则用 addItem 动态 id）
-    var poisonItemId = poison.itemId || ('poison_' + poisonType);
-    if (typeof window.addItem === 'function') {
-        window.addItem(poisonItemId, 1);
-    } else if (window.inventory && typeof window.inventory.addItem === 'function') {
-        window.inventory.addItem(poisonItemId, 1);
     }
 
     if (window.showMessage) window.showMessage('成功制作' + poison.name + '！', 'success');

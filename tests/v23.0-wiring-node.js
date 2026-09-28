@@ -103,8 +103,8 @@ function makeWorld(opts) {
     sb.updateCharacterStatus = () => {};
     sb.__added = [];
     sb.addItemToInventory = (id, n) => { sb.__added.push(id + 'x' + n); return true; };
-    sb.addItem = (id, n) => { sb.__added.push(id + 'x' + (n || 1)); return true; };
-    sb.addResultItem = (id, n) => { sb.__added.push(id + 'x' + (n || 1)); return true; };
+    sb.addItem = (id, n) => { sb.__added.push(id + 'x' + (n || 1)); return n || 1; };
+    sb.addResultItem = (id, n) => { sb.__added.push(id + 'x' + (n || 1)); return n || 1; };
     sb.itemById = {};
     sb.allItems = [];
     sb.materials = [];

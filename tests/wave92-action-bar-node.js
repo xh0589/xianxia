@@ -179,7 +179,16 @@ console.log('\n[B] 全员遵守（敌主/同伴/队员/灵兽各攒各的条，�
 var bF = newBattle(mkPlayer(10), mkEnemy('疾风客', 12, { strength: 30, dexterity: 60, intelligence: 15, willpower: 15, constitution: 30, meridian: 20 }));
 assert(bF.turn >= 1, 'B1 快敌抢了先手——你还没动，它已经出手（先手不是白送的）');
 assert(bF.log.some(function (l) { return l.msg.indexOf('疾风客') >= 0 && l.msg.indexOf('攻击了') >= 0; }), 'B2 抢到的先手是真攻击（战报有账）');
-eq(bF.isPlayerTurn, true, 'B3 抢完先手时间轴停回你手上');
+// B3 原先写的是 `eq(bF.isPlayerTurn, true)`，每 200 跑约红 3 次（第四十一次自修量到 3/200）。
+// 病根不在时间轴：这副夹具把玩家身法压到 10、敌手 60，真伤害下快敌在你首手前要连动 6 次，
+// 约 1.4% 的掷骰会把 100 血的玩家直接打死——那时「没停回你手上」是**这一仗已经打完**，不是引擎坏了。
+// 故拆成两格：契约用真伤害量（要么轮到你、要么仗已了结），时间轴本身另用伤害桩单独量。
+assert(bF.isPlayerTurn === true || bF.isFinished === true, 'B3 抢完先手要么停回你手上、要么这一仗已经打完（不许「仗没打完却停在别人手上」）');
+var spyT = spyAttacks();
+var bT = newBattle(mkPlayer(10), mkEnemy('疾风客', 12, { strength: 30, dexterity: 60, intelligence: 15, willpower: 15, constitution: 30, meridian: 20 }));
+spyT.restore();
+assert(bT.turn >= 1 && bT.isPlayerTurn === true, 'B3a 纯时间轴（伤害桩）：抢完先手必停回你手上');
+eq(spyT.hits.filter(function (n) { return n === '疾风客'; }).length, 6, 'B3b 快敌连动的量级：玩家首手前疾风客动手 6 次（身法 10∶60 ⇒ 行动条速率 7∶42，快者多动没有封顶＝DES-41 立案的现秤）');
 // 敌方同伴各有行动条
 var bP = newBattle(mkPlayer(), mkEnemy('头狼', 10), [mkAllyData('野狼甲'), mkAllyData('野狼乙')]);
 eq(bP._actors.length, 4, 'B4 兽群三个敌人＋你＝四条行动条');

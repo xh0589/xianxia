@@ -350,7 +350,7 @@
         var html = '<h4 class="font-bold text-pink-400 mb-3">当前拍卖品</h4>';
         if (!active.length) html += '<p class="text-gray-400 text-sm mb-4">暂无拍卖品</p>';
         else {
-            html += '<div class="space-y-2 max-h-60 overflow-y-auto mb-4">';
+            html += '<div class="space-y-2 mb-4">';
             active.forEach(function (item) {
                 var left = Math.max(0, item.dueMinute - nowMinute());
                 var leftH = Math.ceil(left / 60);
@@ -373,7 +373,7 @@
         }
         if (!sellable.length) html += '<p class="text-gray-500 text-xs">背包为空</p>';
         else {
-            html += '<div class="space-y-2 max-h-48 overflow-y-auto">';
+            html += '<div class="space-y-2">';
             sellable.forEach(function (entry) {
                 var t = entry.slot.getTemplate ? entry.slot.getTemplate() : templateOf(entry.slot.templateId);
                 html += '<div class="bg-gray-700/30 p-2 rounded flex justify-between items-center"><span class="text-sm">' + ((t && t.name) || entry.slot.templateId) + ' x' + entry.slot.count + '</span>' +

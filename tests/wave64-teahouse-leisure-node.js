@@ -283,9 +283,15 @@ var visLeak = null;
 });
 assert(visLeak === null, 'F5 茶馆消遣话术零拉丁（漏: ' + visLeak + '）');
 var appSrc = fs.readFileSync(path.join(ROOT, 'js/app.js'), 'utf8');
-var teaIdx = appSrc.indexOf('function visitTeaHouse');
-var teaSeg = appSrc.slice(teaIdx, teaIdx + 1800);
-assert(teaSeg.indexOf('renderRumorPanel') >= 0 && teaSeg.indexOf('deductSpiritStones') >= 0, 'F6 老听书函数一字未动（传闻真源与茶资老账都在——city-depth M8 同款哨兵）');
+    var teaIdx = appSrc.indexOf('function visitTeaHouse');
+    // 【第一百四十二批·按「钉法」把取样窗从定长 1800 改成「切到下一个 function 边界」】
+    // 原窗是定长 1800 字，而同一批给本函数补了「扣费后退茶资」的 try/catch 与退款分支（约 1000 字），
+    // 把 `deductSpiritStones` 与 `renderRumorPanel` 两处挤出窗外 ⇒ 假红。
+    // 这道闸的**要求是「传闻真源与茶资老账都还在这个函数里」**，不是「必须落在前 1800 字」。
+    // 改成按函数边界切：要求一字未松，函数再长也不会假红。
+    var teaEnd = appSrc.indexOf('\nfunction ', teaIdx + 10);
+    var teaSeg = appSrc.slice(teaIdx, teaEnd > teaIdx ? teaEnd : teaIdx + 6000);
+    assert(teaSeg.indexOf('renderRumorPanel') >= 0 && teaSeg.indexOf('deductSpiritStones') >= 0, 'F6 老听书函数的传闻真源与茶资老账都还在（同款改钉：取样窗按函数边界切，不按定长 1800）');
 assert(appSrc.indexOf('function openTeaHouseMenu()') >= 0 && appSrc.indexOf('window.openTeaHouseMenu = openTeaHouseMenu;') >= 0, 'F7 菜单入口写好并导出');
 assert(appSrc.indexOf("action: 'openTeaHouseMenu'") >= 0, 'F8 设施卡面改走菜单（老 action 不再直跳听书）');
 var locSrc = fs.readFileSync(path.join(ROOT, 'js/location-system.js'), 'utf8');
@@ -293,7 +299,7 @@ assert(locSrc.indexOf('window.TeaHouseLeisure.open') >= 0 && locSrc.indexOf('els
 var htmlSrc = fs.readFileSync(path.join(ROOT, '仙侠.html'), 'utf8');
 assert(htmlSrc.indexOf('js/city-facilities/teahouse-leisure.js') > htmlSrc.indexOf('js/city-facilities/city-voices.js'), 'F10 页面挂载在口吻包之后（取词不扑空）');
 var rsSrc = fs.readFileSync(path.join(ROOT, 'js/core/reward-service.js'), 'utf8');
-assert(rsSrc.indexOf('mood: signedInt(spec.mood)') >= 0 && rsSrc.indexOf("messages.push('心境'") >= 0, 'F11 统一结算通道收了心境键（死水池打通）');
+assert(rsSrc.indexOf('mood: signedInt(spec.mood)') >= 0 && rsSrc.indexOf("pushGain(messages, '心境'") >= 0, 'F11 统一结算通道收了心境键（死水池打通）');
 
 console.log('\n========== 第六十四波 · 茶馆消遣 ==========');
 console.log('通过：' + passed + '　失败：' + failed);

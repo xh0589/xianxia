@@ -59,7 +59,7 @@ function makeWorld(opts) {
         sectAddContribution: function (n, r) { var d = W.discipleState; d.contribution = (Number(d.contribution) || 0) + n; (W._notes = W._notes || []).push({ n: n, r: r }); return d.contribution; },
         sectSpendContribution: function (n, r) { var d = W.discipleState; if ((Number(d.contribution) || 0) < n) return false; d.contribution -= n; (W._notes = W._notes || []).push({ n: -n, r: r }); return true; },
         applyBuff: function (id, eff, dur) { (W.activeBuffs = W.activeBuffs || {})[id] = { effects: eff, duration: dur }; },
-        addItem: function () { return true; },
+        addItem: function (id, n) { return n || 1; },   // 桩：回实收件数
         consumeItem: function (id, n) {
             var inv = W.inventory; if (!inv || !inv.slots) return false;
             var rem = n;

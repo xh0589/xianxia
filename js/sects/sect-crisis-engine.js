@@ -266,11 +266,24 @@
                 msgs.push('灵石+' + gains.stones);
             }
         }
-        if (gains.cityRep && window.addReputation) {
-            try { window.addReputation(gains.city || (window.getCurrentCityName ? window.getCurrentCityName() : ''), gains.cityRep); msgs.push('声望+' + gains.cityRep); } catch (e) {}
-        }
-        if (gains.karma && window.RewardService) {
-            try { window.RewardService.apply({ karma: gains.karma, msg: '', msgType: 'info' }, { source: 'sect_crisis', city: gains.city }); } catch (e) {}
+        // DES-48：这两本账都归统一通道——直写 addReputation 那一支连「城名取不到就一分不写」都不响，
+        // 屏上却照样报「声望+N」；业障那一支更早连一句回执都没有（账动了、话没说）。
+        // 现一并交给通道，回执用它按差值出的那一串（触顶会喊「实得」，此处不再自拼一支笔）。
+        var deepLedger = {};
+        if (gains.cityRep) deepLedger.rep = gains.cityRep;
+        if (gains.karma) deepLedger.karma = gains.karma;
+        if (deepLedger.rep || deepLedger.karma) {
+            if (window.RewardService && typeof window.RewardService.apply === 'function') {
+                var lr = null;
+                try { lr = window.RewardService.apply(deepLedger, { source: 'sect_crisis', city: gains.city }); } catch (e) {}
+                if (lr && lr.success === true) {
+                    if (lr.messages && lr.messages.length) msgs.push(lr.messages.join('、'));
+                } else {
+                    msgs.push((deepLedger.karma ? '业障' : '') + (deepLedger.karma && deepLedger.rep ? '／' : '') + (deepLedger.rep ? '声望' : '') + '未入账');
+                }
+            } else {
+                msgs.push('业障／声望未入账（结算通道不在位）');
+            }
         }
         if (internal && window.StateRegistry && typeof window.StateRegistry.markDirty === 'function') {
             try { window.StateRegistry.markDirty('sectInternal'); } catch (e) {}

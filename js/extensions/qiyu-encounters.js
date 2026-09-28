@@ -51,8 +51,10 @@
     function realmIdx() {
         var order = ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫', '真仙', '金仙'];
         var r = (global.currentCharData && global.currentCharData.realm) || '';
-        var i = order.indexOf(r);
-        return i < 0 ? 1 : i;
+        // DES-92（第一百三十二批）：这张表里排着游戏从没发到过玩家身上的「真仙」，却没有真出线的「飞升」——
+        //   飞升修士 indexOf 得 -1、被回落到 1（炼气），于是 realmIdx>=5/6/8 那几档高阶奇遇永远刷不出来。尺只此一把。
+        var i = (typeof global.realmIndex === 'function') ? global.realmIndex(r) : order.indexOf(r);
+        return i < 0 ? ((typeof global.realmIndex === 'function') ? global.realmIndex('炼气') : 1) : i;
     }
     function day() {
         try {
@@ -67,6 +69,24 @@
         return false;
     }
     function log(msg, type) { if (global.gameLog && typeof global.gameLog.add === 'function') global.gameLog.add(msg, type || 'info'); }
+    // RewardService.apply 的失败原因翻成人话：账没写成必须说得出为什么，不许静默
+    var REASON_CN = {
+        no_character: '你的账册没翻开',
+        qi: '这一笔要耗的真气你出不起',
+        energy: '这一笔要耗的精力你出不起',
+        health: '这一笔要耗的气血你出不起',
+        transaction_unavailable: '钱货账房没开门',
+        spiritStones: '灵石不够',
+        copper: '铜钱不够',
+        // DES-85 尾（第一百四十二批）：原键 `inventory_full_or_invalid_item` 一名两义，
+    // 这里被译成「到手的东西没能落进你的行囊」——听着像行囊满，其实是它把两种失败糊了。
+    // 按 reward-service 落下来的真因分话：满包让他腾格子；查无此号直说是我们的疏漏。
+    bag_full: '到手的东西没能落进你的行囊——腾出格子再来取',
+    item_no_template: '这一件在百宝册上查无此号（是我们的疏漏，不是你的问题）',
+    inventory_failed: '这一笔没能记上，事由待查',
+        missing_item: '要交出去的东西不在行囊里',
+        economy: '这一笔账没记上'
+    };
 
     // ============ 奇遇名册（十段，各有门槛与两难） ============
     var QIYU = [
@@ -82,14 +102,14 @@
                     text: function () { return hasQin() ? '🪕 循声和一曲（以琴接琴）' : '🎵 循声轻哼，试着接住这段音（音律40+）'; },
                     ok: function () { return hasQin() || skill('音律') >= 40; },
                     effects: { spiritStones: 50, lifeSkill: [{ name: '音律', exp: 6 }], items: [{ itemId: 'qiyu_canpu', count: 1 }] },
-                    msg: '你循着冰壁下的调子接了下去。一曲终了，冰壁里铮然一声，半页霜墨谱文从冰缝里滑出来——是它给你的回礼。音修远在天边，缘在近在耳边。（音律+6，灵石+50，得「遗音谱页」）',
+                    msg: '你循着冰壁下的调子接了下去。一曲终了，冰壁里铮然一声，半页霜墨谱文从冰缝里滑出来——是它给你的回礼。音修远在天边，缘在近在耳边。',
                     failEffects: { lifeSkill: { name: '音律', exp: 2 } },
-                    failMsg: '你接了半句就散了调。冰壁里的琴音顿了顿，像是叹了口气，又沉回冰底。好歹耳朵记住了那半句。（音律+2）'
+                    failMsg: '你接了半句就散了调。冰壁里的琴音顿了顿，像是叹了口气，又沉回冰底。好歹耳朵记住了那半句。'
                 },
                 {
                     text: '🧘 静坐听完（不打扰它）',
                     effects: { lifeSkill: { name: '音律', exp: 3 }, karma: 2 },
-                    msg: '你席地坐下，听完了一整曲。天亮时琴音止了，你起身作了一揖——有些缘分，听过就算数。（音律+3，因果+2）'
+                    msg: '你席地坐下，听完了一整曲。天亮时琴音止了，你起身作了一揖——有些缘分，听过就算数。'
                 }
             ]
         },
@@ -105,14 +125,14 @@
                     text: '🗣️ 叫醒老丈，问个来历（口才40+）',
                     ok: function () { return skill('口才') >= 40; },
                     effects: { items: [{ itemId: 'qiyu_jiuxian_jiu', count: 1 }], lifeSkill: { name: '口才', exp: 3 } },
-                    msg: '你笑着替他把葫芦拾起来。老头眯眼打量你半晌，忽然哈哈大笑：「识货！也识人！」葫芦塞回你手里，人已经醉倒在桌上——再问，只剩呼噜声。（得「仙家残酒」，口才+3）',
+                    msg: '你笑着替他把葫芦拾起来。老头眯眼打量你半晌，忽然哈哈大笑：「识货！也识人！」葫芦塞回你手里，人已经醉倒在桌上——再问，只剩呼噜声。',
                     failEffects: { items: [{ itemId: 'qiyu_jiuxian_jiu', count: 1 }] },
-                    failMsg: '你摇了半天，老头翻了个身，葫芦顺势滚进你怀里，呼噜照旧。这算送的还是算捡的，说不清了。（得「仙家残酒」）'
+                    failMsg: '你摇了半天，老头翻了个身，葫芦顺势滚进你怀里，呼噜照旧。这算送的还是算捡的，说不清了。'
                 },
                 {
                     text: '🤫 悄悄收了葫芦（没人看见）',
                     effects: { items: [{ itemId: 'qiyu_jiuxian_jiu', count: 1 }], karma: -3 },
-                    msg: '葫芦入手温热。你快步出了酒馆，身后呼噜声没停——可这一夜你翻来覆去：酒是好酒，就是喝着有点亏心。（得「仙家残酒」，因果-3）'
+                    msg: '葫芦入手温热。你快步出了酒馆，身后呼噜声没停——可这一夜你翻来覆去：酒是好酒，就是喝着有点亏心。'
                 }
             ]
         },
@@ -128,14 +148,14 @@
                     text: '♟️ 执子续这局棋（学识40+）',
                     ok: function () { return skill('学识') >= 40; },
                     effects: { lifeSkill: { name: '学识', exp: 8 }, items: [{ itemId: 'qiyu_lanke_stone', count: 1 }] },
-                    msg: '你拾起石子里的一颗白子，落在中盘。石壁嗡然——那局棋认了你的落子。回过神来日头已偏西，掌心里多了一块温热的石头，石心里棋局未终。（学识+8，得「烂柯石」）',
+                    msg: '你拾起石子里的一颗白子，落在中盘。石壁嗡然——那局棋认了你的落子。回过神来日头已偏西，掌心里多了一块温热的石头，石心里棋局未终。',
                     failEffects: { lifeSkill: { name: '学识', exp: 4 } },
-                    failMsg: '你落了一子，石壁毫无动静——棋不认你。但你盯着残局看到天黑，看懂了三十年的中盘杀。（学识+4）'
+                    failMsg: '你落了一子，石壁毫无动静——棋不认你。但你盯着残局看到天黑，看懂了三十年的中盘杀。'
                 },
                 {
                     text: '📜 把棋谱抄下来带走',
                     effects: { lifeSkill: { name: '学识', exp: 3 }, copper: 200 },
-                    msg: '你一子一子把残局抄进本子。抄完最后一子，石壁上的刻痕淡了几分——像是交了班。（学识+3，铜钱+200）'
+                    msg: '你一子一子把残局抄进本子。抄完最后一子，石壁上的刻痕淡了几分——像是交了班。'
                 }
             ]
         },
@@ -150,12 +170,12 @@
                 {
                     text: '🗡️ 入冢应名（真元护体，或有灼伤）',
                     effects: { items: [{ itemId: 'qiyu_jianzhong_jing', count: 1 }], exp: 30, health: -40 },
-                    msg: '你以真元护体走进剑林。万剑让开一条缝，冢心的铁英自己跳进你掌心——出来时衣袖焦了三处，掌心滚烫，值。（得「剑冢铁英」，历练+30，气血-40）'
+                    msg: '你以真元护体走进剑林。万剑让开一条缝，冢心的铁英自己跳进你掌心——出来时衣袖焦了三处，掌心滚烫，值。'
                 },
                 {
                     text: '👂 冢外听剑（听一夜剑鸣也是造化）',
                     effects: { lifeSkill: [{ name: '学识', exp: 3 }, { name: '锻造', exp: 2 }], exp: 15 },
-                    msg: '你在冢外坐了一夜，听万剑把三百年的锈一声声抖落。天亮时你懂了半式剑意，也懂了铁是怎么死的。（学识+3，锻造+2，历练+15）'
+                    msg: '你在冢外坐了一夜，听万剑把三百年的锈一声声抖落。天亮时你懂了半式剑意，也懂了铁是怎么死的。'
                 }
             ]
         },
@@ -170,12 +190,12 @@
                 {
                     text: '⛏️ 抢在流沙前挖出来（耗时半日）',
                     effects: { items: [{ itemId: 'qiyu_beile_sutra', count: 1 }], lifeSkill: { name: '学识', exp: 5 }, spiritStones: 100 },
-                    msg: '你和流沙抢了半天，抢回来半卷贝叶残经和一小匣香火钱——塔下埋的，不知是哪朝僧人的私蓄。（得「贝叶残经」，学识+5，灵石+100）'
+                    msg: '你和流沙抢了半天，抢回来半卷贝叶残经和一小匣香火钱——塔下埋的，不知是哪朝僧人的私蓄。'
                 },
                 {
                     text: '🙏 把沙扫回去，替它诵一段经',
                     effects: { karma: 5, lifeSkill: { name: '学识', exp: 2 } },
-                    msg: '你把沙一捧捧扫回去，掩好经角，合十诵了一段不知真假的经。风停的时候，塔影好像直了一瞬。（因果+5，学识+2）'
+                    msg: '你把沙一捧捧扫回去，掩好经角，合十诵了一段不知真假的经。风停的时候，塔影好像直了一瞬。'
                 }
             ]
         },
@@ -191,14 +211,14 @@
                     text: function () { return skill('毒术') >= 40 ? '🧤 以毒引毒，摘珠（毒术40+，稳拿）' : '🧤 硬摘（毒术不到40，恐被毒气反噬）'; },
                     ok: function () { return skill('毒术') >= 40; },
                     effects: { items: [{ itemId: 'qiyu_dumu_zhu', count: 1 }], lifeSkill: { name: '毒术', exp: 5 } },
-                    msg: '你以自身毒息引开母树的护毒，指尖一捻，紫珠入手——百步内的虫豸齐齐伏地。这是它们认下的新毒主。（得「毒母珠」，毒术+5）',
+                    msg: '你以自身毒息引开母树的护毒，指尖一捻，紫珠入手——百步内的虫豸齐齐伏地。这是它们认下的新毒主。',
                     failEffects: { items: [{ itemId: 'qiyu_dumu_zhu', count: 1 }], health: -60, lifeSkill: { name: '毒术', exp: 3 } },
-                    failMsg: '珠子是摘到了，母树的毒气也顺着你的手腕爬了上来——半边胳膊黑了一整天。毒这一行，学费从来是拿肉交的。（得「毒母珠」，气血-60，毒术+3）'
+                    failMsg: '珠子是摘到了，母树的毒气也顺着你的手腕爬了上来——半边胳膊黑了一整天。毒这一行，学费从来是拿肉交的。'
                 },
                 {
                     text: '🚶 退后三步，看它转完这一轮',
                     effects: { lifeSkill: { name: '毒术', exp: 2 }, karma: 1 },
-                    msg: '你没伸手。紫珠转完一轮，缩回枝心——明年再结。有些东西看着它长，比摘了它更像懂毒。（毒术+2，因果+1）'
+                    msg: '你没伸手。紫珠转完一轮，缩回枝心——明年再结。有些东西看着它长，比摘了它更像懂毒。'
                 }
             ]
         },
@@ -213,12 +233,12 @@
                 {
                     text: '🔥 迎风接羽（凤火燎身，灼伤难免）',
                     effects: { items: [{ itemId: 'qiyu_fengxue_stone', count: 1 }], health: -50 },
-                    msg: '你抢在所有人前头跃起，双掌合住那根赤羽——凤火顺着掌纹烧进来，疼得眼前发白。等火熄了，掌心里躺着一块凝成的凤血石，一品奇材。（得「凤血石」，气血-50）'
+                    msg: '你抢在所有人前头跃起，双掌合住那根赤羽——凤火顺着掌纹烧进来，疼得眼前发白。等火熄了，掌心里躺着一块凝成的凤血石，一品奇材。'
                 },
                 {
                     text: '🙇 远远拱手，让羽落地归市',
                     effects: { karma: 3, spiritStones: 30, cityReputation: 2 },
-                    msg: '你拱手退开。赤羽落在赤羽市的老掌柜脚边，他拾起来冲你点头：「懂礼数的客人，巢城记得。」当晚凤裔长老遣人送来一份谢仪。（因果+3，灵石+30，本城声望+2）'
+                    msg: '你拱手退开。赤羽落在赤羽市的老掌柜脚边，他拾起来冲你点头：「懂礼数的客人，巢城记得。」当晚凤裔长老遣人送来一份谢仪。'
                 }
             ]
         },
@@ -234,14 +254,14 @@
                     text: function () { return skill('口才') >= 30 ? '💬 上前宽慰（口才30+，她肯抬头）' : '💬 上前宽慰（口才不到30，只怕词穷）'; },
                     ok: function () { return skill('口才') >= 30; },
                     effects: { items: [{ itemId: 'qiyu_jiaoren_lei', count: 1 }], lifeSkill: { name: '口才', exp: 3 } },
-                    msg: '你没问她的伤心事，只坐在三步外说了半宿人间琐碎——谁家的饭糊了，谁家的猫上房。她听着听着就笑了，走时把最大的一颗泪珠放在你坐过的地方。（得「鲛人之泪」，口才+3）',
+                    msg: '你没问她的伤心事，只坐在三步外说了半宿人间琐碎——谁家的饭糊了，谁家的猫上房。她听着听着就笑了，走时把最大的一颗泪珠放在你坐过的地方。',
                     failEffects: { lifeSkill: { name: '口才', exp: 2 }, spiritStones: 50 },
-                    failMsg: '你张了半天嘴，只憋出一句「都会好的」。她摇摇头潜回海里——礁石上留下两颗小些的珠子，算谢你陪坐。（灵石+50，口才+2）'
+                    failMsg: '你张了半天嘴，只憋出一句「都会好的」。她摇摇头潜回海里——礁石上留下两颗小些的珠子，算谢你陪坐。'
                 },
                 {
                     text: '🌙 远远看着，替她守着这片海滩',
                     effects: { spiritStones: 200, karma: 2 },
-                    msg: '你站在滩头守了一夜，替她挡了三个想捡珠子的醉汉。天亮前她朝你的方向拜了一拜，海里推上来一小匣珍珠。（灵石+200，因果+2）'
+                    msg: '你站在滩头守了一夜，替她挡了三个想捡珠子的醉汉。天亮前她朝你的方向拜了一拜，海里推上来一小匣珍珠。'
                 }
             ]
         },
@@ -257,14 +277,14 @@
                     text: function () { return skill('学识') >= 25 ? '🔍 先辨剑再动手（学识25+）' : '🔍 先辨剑再动手（学识不到25，只怕看走眼）'; },
                     ok: function () { return skill('学识') >= 25; },
                     effects: { items: [{ itemId: 'qiyu_wuming_sword', count: 1 }], lifeSkill: { name: '学识', exp: 4 } },
-                    msg: '你用学识辨出锈下的剑脊纹路——这不是凡铁，是三百年前有人埋剑候人的信物。你按古礼三揖，双手请剑出碑，锈壳片片剥落，剑身如秋水。（得「无名古剑」，学识+4）',
+                    msg: '你用学识辨出锈下的剑脊纹路——这不是凡铁，是三百年前有人埋剑候人的信物。你按古礼三揖，双手请剑出碑，锈壳片片剥落，剑身如秋水。',
                     failEffects: { items: [{ itemId: 'mat_iron_ore', count: 3 }], lifeSkill: { name: '锻造', exp: 2 } },
-                    failMsg: '你看了半天没看出名堂，一咬牙拔了剑——剑身应声断成三截，只有剑柄里掉出几块好铁。碑文那句「候人」，等的不是你这个拔法。（铁矿×3，锻造+2）'
+                    failMsg: '你看了半天没看出名堂，一咬牙拔了剑——剑身应声断成三截，只有剑柄里掉出几块好铁。碑文那句「候人」，等的不是你这个拔法。'
                 },
                 {
                     text: '🪦 不拔剑，替碑培一捧土',
                     effects: { karma: 3, lifeSkill: { name: '学识', exp: 2 } },
-                    msg: '你没碰那把剑。埋剑候人，候的自然是配得上它的人——你自问今天还不是。你替石碑培了土，作了个揖走人。身后剑鸣了一声，很轻，像是记下了你。（因果+3，学识+2）'
+                    msg: '你没碰那把剑。埋剑候人，候的自然是配得上它的人——你自问今天还不是。你替石碑培了土，作了个揖走人。身后剑鸣了一声，很轻，像是记下了你。'
                 }
             ]
         },
@@ -280,14 +300,14 @@
                     text: function () { return skill('医术') >= 40 ? '🔥 续上炉火，把药渣再炼一转（医术40+）' : '🔥 试着续炉火（医术不到40，火候难拿）'; },
                     ok: function () { return skill('医术') >= 40; },
                     effects: { items: [{ itemId: 'qiyu_jiuzhuan_zha', count: 1 }], lifeSkill: { name: '医术', exp: 6 }, energy: -20 },
-                    msg: '你添柴、压火、转炉，把炉渣又炼了一转——开炉时药香冲起三丈。九转炉渣，是渣，也是九转。（得「九转炉渣」，医术+6，精力-20）',
+                    msg: '你添柴、压火、转炉，把炉渣又炼了一转——开炉时药香冲起三丈。九转炉渣，是渣，也是九转。',
                     failEffects: { items: [{ itemId: 'qiyu_jiuzhuan_zha', count: 1 }], lifeSkill: { name: '医术', exp: 3 }, energy: -20 },
-                    failMsg: '火候差着一线，药渣只回了半转——成色打折，但也是别处求不来的东西。你把它小心收好。（得「九转炉渣」，医术+3，精力-20）'
+                    failMsg: '火候差着一线，药渣只回了半转——成色打折，但也是别处求不来的东西。你把它小心收好。'
                 },
                 {
                     text: '🧺 把炉渣收好，把炉膛封上',
                     effects: { lifeSkill: { name: '医术', exp: 3 }, karma: 1 },
-                    msg: '你把炉渣包好收进药囊，又用石片把炉膛封了——留给下一位路过的医者。药王谷的规矩：炉火不熄于人手。（医术+3，因果+1）'
+                    msg: '你把炉渣包好收进药囊，又用石片把炉膛封了——留给下一位路过的医者。药王谷的规矩：炉火不熄于人手。'
                 }
             ]
         },
@@ -304,14 +324,14 @@
                     text: '🛶 纵身登舟，随星图走一程（学识50+）',
                     ok: function () { return skill('学识') >= 50; },
                     effects: { exp: 8000, items: [{ itemId: 'mat_star_sand', count: 2 }], energy: -30 },
-                    msg: '你踏上舟头，星图在你脚下次第亮起——这一程走的是三千年前某位仙人回家的路。舟到星尽处，你被轻轻放下，袖中多了两捧星砂。（经验+8000，得「星辰砂」×2，精力-30）',
+                    msg: '你踏上舟头，星图在你脚下次第亮起——这一程走的是三千年前某位仙人回家的路。舟到星尽处，你被轻轻放下，袖中多了两捧星砂。',
                     failEffects: { exp: 3000, energy: -30 },
-                    failMsg: '你跃上舟舷，星图却一片晦暗——认不得路的人，船不肯载。孤舟把你放回原地，继续慢吞吞地飞。（经验+3000，精力-30）'
+                    failMsg: '你跃上舟舷，星图却一片晦暗——认不得路的人，船不肯载。孤舟把你放回原地，继续慢吞吞地飞。'
                 },
                 {
                     text: '🙏 拱手相送，不搭这趟船',
                     effects: { karma: 3, exp: 1500 },
-                    msg: '你立在原地，朝孤舟长揖到地。舟尾的星辉忽然亮了一瞬，像是回礼——有些路是别人的归途，看过就算送过。（因果+3，经验+1500）'
+                    msg: '你立在原地，朝孤舟长揖到地。舟尾的星辉忽然亮了一瞬，像是回礼——有些路是别人的归途，看过就算送过。'
                 }
             ]
         },
@@ -327,14 +347,14 @@
                     text: '👂 贴耳听它把梦做完（意志过硬才守得住神魂）',
                     ok: function () { var a = (global.currentCharData && global.currentCharData.attrs) || {}; return (Number(a.willpower) || 0) >= 60; },
                     effects: { exp: 15000, items: [{ itemId: 'mat_dragon_crystal', count: 1 }], energy: -40 },
-                    msg: '你听见了开天辟地时的一声叹息——那是它没做完的梦。醒来时天光已换了三回，识海里多了一段不属于人间的道韵，掌心里凝出一枚龙晶。（经验+15000，得「龙晶」，精力-40）',
+                    msg: '你听见了开天辟地时的一声叹息——那是它没做完的梦。醒来时天光已换了三回，识海里多了一段不属于人间的道韵，掌心里凝出一枚龙晶。',
                     failEffects: { exp: 4000, energy: -40 },
-                    failMsg: '梦太大，你的神魂盛不下——被心跳声推着退出来，七窍发麻。但那段梦的边角，够你咀嚼很久。（经验+4000，精力-40）'
+                    failMsg: '梦太大，你的神魂盛不下——被心跳声推着退出来，七窍发麻。但那段梦的边角，够你咀嚼很久。'
                 },
                 {
                     text: '⛰️ 替它把断口埋回土里',
                     effects: { karma: 5, exp: 3000 },
-                    msg: '你搬石填土，把半截神像重新埋好，压上一块青石。心跳声渐渐缓了、沉了——它继续做梦，不再被人打扰。死者为大，神也一样。（因果+5，经验+3000）'
+                    msg: '你搬石填土，把半截神像重新埋好，压上一块青石。心跳声渐渐缓了、沉了——它继续做梦，不再被人打扰。死者为大，神也一样。'
                 }
             ]
         },
@@ -350,14 +370,14 @@
                     text: '👣 踏进那道旧痕，沿前人的脚印走（大乘之姿）',
                     ok: function () { return realmIdx() >= 8; },
                     effects: { exp: 30000, items: [{ itemId: 'mat_space_crystal', count: 1 }], energy: -60 },
-                    msg: '你的道与旧痕合了一瞬——那一瞬你看见了渡河人回头。再睁眼时，识海澄澈如洗，身前浮着一枚空间结晶，是河水的谢礼。（经验+30000，得「空间结晶」，精力-60）',
+                    msg: '你的道与旧痕合了一瞬——那一瞬你看见了渡河人回头。再睁眼时，识海澄澈如洗，身前浮着一枚空间结晶，是河水的谢礼。',
                     failEffects: { exp: 8000, energy: -60 },
-                    failMsg: '脚印太深，你的道太轻——被法则的涟漪轻轻推出识海。它没伤你，这是天河对你的客气。养足精神再来。（经验+8000，精力-60）'
+                    failMsg: '脚印太深，你的道太轻——被法则的涟漪轻轻推出识海。它没伤你，这是天河对你的客气。养足精神再来。'
                 },
                 {
                     text: '🖋️ 不渡河，只在岸边把自己的道刻一笔',
                     effects: { karma: 4, fame: 20, exp: 10000 },
-                    msg: '你在天河岸边刻下自己的道痕，浅，但清楚。千万年后若有后来者渡河，会看见两个脚印——一深一浅，一前一后。（因果+4，名望+20，经验+10000）'
+                    msg: '你在天河岸边刻下自己的道痕，浅，但清楚。千万年后若有后来者渡河，会看见两个脚印——一深一浅，一前一后。'
                 }
             ]
         }
@@ -489,11 +509,22 @@
         var won = (typeof c.ok === 'function') ? !!c.ok() : true;
         var effects = won ? c.effects : (c.failEffects || null);
         var msg = won ? c.msg : (c.failMsg || c.msg);
-        if (effects && global.RewardService && typeof global.RewardService.apply === 'function') {
-            try { global.RewardService.apply(effects, { source: 'qiyu_' + q.id }); } catch (e) {}
+        var res = null;
+        if (effects) {
+            try {
+                res = (global.RewardService && typeof global.RewardService.apply === 'function')
+                    ? global.RewardService.apply(effects, { source: 'qiyu_' + q.id }) : null;
+            } catch (eApply) { res = null; }
+            if (!res || res.success !== true) {
+                // 账上一分未动，就不许演「成了」：旧版丢掉返回值，精力不足以外的话术照印、机缘照发
+                var why = REASON_CN[res && res.reason] || REASON_CN.economy;
+                log('🌫️ 奇遇「' + q.name + '」——' + why + '。这一笔没有落账，赏赐也未发。', 'warning');
+                if (typeof global.showMessage === 'function') global.showMessage('🌫️ 奇遇「' + q.name + '」' + why + '，这一笔没有落账。', 'warning');
+                return true;
+            }
         }
         if (global.timeSystem && typeof global.timeSystem.advanceTime === 'function') {
-            try { global.timeSystem.advanceTime(60, '奇遇·' + q.name); } catch (e) {}
+            try { global.timeSystem.advanceTime(60, '奇遇·' + q.name); } catch (e) { console.warn('[静默失败] js/extensions/qiyu-encounters.js:522 · 奇遇时辰：奇遇得手的时辰本该走掉，这里没接住，玩家会察觉时间没扣', e && e && e.message); }
         }
         // v21.9 机缘值入池：奇遇得手 +10 机缘——攒满 30 可在突破仪式里「燃机缘·破境必成」
         if (won) {
@@ -505,8 +536,10 @@
                 }
             } catch (e) {}
         }
-        log('✨ 奇遇「' + q.name + '」：' + msg, won ? 'success' : 'info');
-        if (typeof global.showMessage === 'function') global.showMessage('✨ ' + q.name + '——' + msg, won ? 'success' : 'info');
+        // 彩头一句由通道的差值拼出（触顶那一格喊「实得」），旧版此处是名册里手写的常量
+        var note = (res.messages && res.messages.length) ? '（' + res.messages.join('、') + '）' : '';
+        log('✨ 奇遇「' + q.name + '」：' + msg + note, won ? 'success' : 'info');
+        if (typeof global.showMessage === 'function') global.showMessage('✨ ' + q.name + '——' + msg + note, won ? 'success' : 'info');
         return true;
     }
 

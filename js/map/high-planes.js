@@ -177,21 +177,36 @@ function _pickWeighted(list) {
     return list[list.length - 1];
 }
 
+// DES-96/97（第一百三十八批）：这一趟几笔发货各抄各的账，拼串时才不拿末件的理由糊整趟；
+// 从句支只出半截话（不带句号），句末这一点由本站自己补
+function 货账话(账集, 名目) {
+    var 话 = (typeof window.addItemFailPhraseFor === 'function') ? (window.addItemFailPhraseFor(账集, 名目) || '') : '';
+    return 话 ? 话 + '。' : '';
+}
+
 function planeGather(plane) {
     var cd = window.currentCharData;
     if (!cd) return false;
     var cfg = PLANE_GATHER[plane || planeOf(cd.location)];
     if (!cfg || planeOf(cd.location) !== (plane || planeOf(cd.location))) { say('此地没有那样的田。', 'warning'); return false; }
     if (!spendQi(cfg.qi)) return false;
-    var drops = [];
+    var drops = 0;
+    var 采账 = [];
     var count = 1 + (Math.random() < 0.4 ? 1 : 0);
     for (var i = 0; i < count; i++) {
         var pick = _pickWeighted(cfg.loot);
-        if (window.addItem) window.addItem(pick.id, pick.n);
-        drops.push(pick.n + ' 份灵材');
+        // DES-86：真气与时辰在头里已经付了，货这一头必须按行囊实收念——旧写法丢返回值、照念开价份数
+        var 有通道 = (typeof window.addItem === 'function');
+        var _采收 = 有通道 ? (Number(window.addItem(pick.id, pick.n)) || 0) : pick.n;
+        if (有通道 && _采收 < pick.n) 采账.push(window.addItemFailReason || null);
+        drops += _采收;
     }
     passTime(cfg.minutes, '位面采撷');
-    say('🌿 ' + cfg.msg + '（得 ' + drops.join('、') + '）', 'success');
+    if (drops) {
+        say('🌿 ' + cfg.msg + '（得 ' + drops + ' 份灵材）', 'success');
+    } else {
+        say('🌿 ' + cfg.msg + '——采下的灵材一份也没带回（真气与时辰已花在这一趟上）。' + (货账话(采账, '这批灵材') || '没能落进你的行囊。'), 'warning');
+    }
     if (window.updateCharacterStatus) window.updateCharacterStatus();
     return true;
 }
@@ -246,14 +261,22 @@ function planeExplore() {
     if (roll < 0.75) {
         var lootPlane = here === '灵界' ? '灵界' : '魔界';
         var gain = [];
+        var 探账 = [];
         var got = 2;
         for (var i = 0; i < got; i++) {
             var pick = _pickWeighted(PLANE_GATHER[lootPlane].loot);
-            if (window.addItem) window.addItem(pick.id, pick.n);
-            gain.push((window.itemById && window.itemById[pick.id] && window.itemById[pick.id].name) || pick.id);
+            // DES-86：报不报这件的名字，以行囊真收下为准——旧写法丢返回值、件件都念进「寻得」那一串
+            var 有通道 = (typeof window.addItem === 'function');
+            var _探收 = 有通道 ? (Number(window.addItem(pick.id, pick.n)) || 0) : pick.n;
+            if (有通道 && _探收 < pick.n) 探账.push(window.addItemFailReason || null);
+            if (_探收 > 0) gain.push(((window.itemById && window.itemById[pick.id] && window.itemById[pick.id].name) || pick.id) + (_探收 > 1 ? '×' + _探收 : ''));
         }
         passTime(60, '位面探幽');
-        say('🏺 你摸进一处无人问津的' + (here === '灵界' ? '仙府残迹' : '塌陷窟室') + '，寻得 ' + gain.join('、') + '。', 'success');
+        if (gain.length) {
+            say('🏺 你摸进一处无人问津的' + (here === '灵界' ? '仙府残迹' : '塌陷窟室') + '，寻得 ' + gain.join('、') + '。', 'success');
+        } else {
+            say('🏺 你摸进一处无人问津的' + (here === '灵界' ? '仙府残迹' : '塌陷窟室') + '——东西到手了却一件也没带走，只好原样留下（这一趟只花了时辰）。' + (货账话(探账, '这趟的东西') || '没能落进你的行囊。'), 'warning');
+        }
         return true;
     }
     if (roll < 0.9) {

@@ -192,21 +192,10 @@ function advanceTime(minutes, actionName) {
     }
     
     // 显示时间推进提示
+    // COPY-01：这一句不再「第1天 黎明」与现代数字钟同排——本作只报白话时段，分钟留在账上不念。
+    // 时长也不再就地口算：DES-22 的禁口算扫描把本文件整支当唯一真源跳过了，本文件里的口算反倒漏网
     if (actionName && minutes > 0) {
-        const hours = Math.floor(minutes / 60);
-        const mins = minutes % 60;
-        let timeStr = '';
-        if (hours > 0 && mins > 0) timeStr = `${hours}小时${mins}分钟`;
-        else if (hours > 0) timeStr = `${hours}小时`;
-        else timeStr = `${mins}分钟`;
-        
-        showMessage(`${actionName}耗时${timeStr}，现在是第${gameTime.currentDay}天 ${getCurrentPeriodName()} ${String(gameTime.currentHour).padStart(2,'0')}:${String(gameTime.currentMinute).padStart(2,'0')}`, 'info');
-    }
-    
-    // v12.4：长行动时长反馈——单次推进≥120分钟时追加「⏰ 时间流逝了X小时」
-    if (!window._suppressTimeFlowMessages && minutes >= 120) {
-        const flowHours = Math.floor(minutes / 60);
-        showMessage(`⏰ 时间流逝了${flowHours}小时`, 'info');
+        showMessage(`${actionName}耗时${formatShichen(minutes)}，现在是第${gameTime.currentDay}天 ${getCurrentPeriodName()}`, 'info');
     }
     
     // ===== v11.8 NPC自主生活：时间推进时更新NPC状态 =====
@@ -239,11 +228,10 @@ function advanceTime(minutes, actionName) {
     }
 
     // v16.5 长行动反馈：≥120分钟的行动给出耗时尾缀——让世界的流逝被看见
-    if (!window._suppressTimeFlowMessages && minutes >= 120 && window.showMessage) {
-        var durHours = Math.floor(minutes / 60);
-        var durMins = minutes % 60;
-        var durTxt = (durHours > 0 ? durHours + '小时' : '') + (durMins > 0 ? durMins + '分' : '');
-        try { window.showMessage('⏰ ' + (actionName || '此番行事') + '耗去' + durTxt + '。', 'info'); } catch (eTimeMsg) {}
+    // COPY-01：这一支只在主提示没开口（调用方没报行动名）时才出声，否则同一笔时长在一屏里念两遍；
+    // 读数同样吃 formatShichen，不再自己拼「X小时Y分」。
+    if (!window._suppressTimeFlowMessages && !actionName && minutes >= 120 && window.showMessage) {
+        try { window.showMessage('⏰ 此番行事耗去' + formatShichen(minutes) + '。', 'info'); } catch (eTimeMsg) {}
     }
 
     // v12.1：所有游戏内期限统一监听这一事件，不再依赖现实 setTimeout/setInterval。
@@ -358,7 +346,7 @@ function onNewDay(oldDay, newDay) {
         try { _newDayListeners[li](oldDay, newDay); } catch (e2) { console.warn('[time] newDay listener failed:', e2); }
     }
     if (window.GameEvents && typeof window.GameEvents.emit === 'function') {
-        try { window.GameEvents.emit('newDay', { oldDay: oldDay, newDay: newDay }); } catch (e3) {}
+        try { window.GameEvents.emit('newDay', { oldDay: oldDay, newDay: newDay }); } catch (e3) { console.warn('[静默失败] js/time-system.js:349 · 新日事件派发：翻日没通知到日结/收租/当铺死当那一整排账，玩家的每日收入悄悄少一天', e3 && e3.message); }
     }
     
     // v20.96：日志挪到 advanceTime 整跳汇总（连过三十天不再刷三十条）
@@ -551,13 +539,11 @@ function updateTimeDisplay() {
     
     if (timeDisplay) {
         const period = getCurrentPeriod();
-        const hour = String(gameTime.currentHour).padStart(2, '0');
-        const minute = String(gameTime.currentMinute).padStart(2, '0');
-        
+        // COPY-01 收口的下半场：HUD 这一格只报「第几天＋哪一段时辰」，不再挂现代数字钟。
+        // 分钟是账（行动扣多少、NPC 几点起居都照它算），不是念给玩家的话——本作没有第二套历法。
         timeDisplay.innerHTML = `
             <span class="text-yellow-400">第${gameTime.currentDay}天</span>
             <span class="${period.color}">${period.name}</span>
-            <span class="text-gray-300">${hour}:${minute}</span>
         `;
     }
     

@@ -332,9 +332,16 @@
             if (window.updateCurrencyUI) window.updateCurrencyUI();
             parts.push('灵石+' + gain.spiritStones);
         }
-        if (gain.item && typeof window.addItem === 'function') {
-            window.addItem(gain.item, 1);
-            parts.push((window.itemById && window.itemById[gain.item] && window.itemById[gain.item].name) || gain.item);
+        if (gain.item && (typeof window.giveWithReceipt === 'function' || typeof window.addItem === 'function')) {
+            // DES-72（第一百三十批）：旧写法丢了返回值——彩头名字照列进回执，囊里进没进不管
+            var 收 = typeof window.giveWithReceipt === 'function'
+                ? window.giveWithReceipt(gain.item, 1, { quiet: true })
+                : { got: Number(window.addItem(gain.item, 1)) || 0, count: 1, name: (window.itemById && window.itemById[gain.item] && window.itemById[gain.item].name) || gain.item, reason: window.addItemFailReason || null };
+            parts.push(收.got > 0
+                ? (收.got > 1 ? 收.name + '×' + 收.got : 收.name)
+                : 收.name + '×' + 收.count + ' 没带走（'
+                  // DES-90（第一百三十九批）：括号内从句支不带句号；秘境彩头是一次性内容，改用②形
+                  + ((typeof window.addItemFailPhraseFor === 'function' && window.addItemFailPhraseFor(收.reason, 收.name)) || '它没有跟你走') + '）');
         }
         if (gain.favor) {
             rel(npc, 'favor', gain.favor);
@@ -375,7 +382,7 @@
             rel(npc, 'respect', TUNE.coerceRespectHit);
             // v20.37 威压账：要挟得手的一刻威压落账——顺从不是信服，是怕
             rel(npc, 'fear', 15, 0, 100);
-            if (npc.state) npc.state.mood = Math.max(5, (npc.state.mood || 50) + TUNE.coerceMoodHit);
+            if (npc.state) npc.state.mood = Math.max(5, (npc.state.mood ?? 50) + TUNE.coerceMoodHit);
             _st.used[key(npc.id, sid)] = 'used_coerce';
             window.showMessage('🃏 ' + d.coerceMsg + '（获得：' + got + '；好感' + TUNE.coerceAffectionHit + '，信任归零，威压+15）', 'success');
             // 隐忍型NPC的记恨提示
@@ -391,7 +398,7 @@
         rel(npc, 'affection', TUNE.tradeAffection, -100, 100);
         rel(npc, 'respect', TUNE.tradeRespect, 0, 100);
         rel(npc, 'trust', TUNE.tradeTrust, 0, 100);
-        if (npc.state) npc.state.mood = Math.min(100, (npc.state.mood || 50) + TUNE.tradeMood);
+        if (npc.state) npc.state.mood = Math.min(100, (npc.state.mood ?? 50) + TUNE.tradeMood);
         _st.used[key(npc.id, sid)] = 'traded';
         window.showMessage('🤝 ' + d.tradeMsg + '（好感+' + TUNE.tradeAffection + '，敬重+' + TUNE.tradeRespect + '，信任+' + TUNE.tradeTrust + '）', 'success');
         if (window.updateCharacterStatus) window.updateCharacterStatus();
@@ -596,7 +603,7 @@
     function doCallName(npc, sid, cn) {
         rel(npc, 'affection', cn.affectionGain, -100, 100);
         rel(npc, 'trust', cn.trustGain, 0, 100);
-        if (npc.state) npc.state.mood = Math.min(100, (npc.state.mood || 50) + (cn.moodGain || 15));
+        if (npc.state) npc.state.mood = Math.min(100, (npc.state.mood ?? 50) + (cn.moodGain || 15));
         _st.used[key(npc.id, sid)] = 'used_call';
         window.showMessage(cn.gainText + ' ' + cn.msg + '（好感+' + cn.affectionGain + '，信任+' + cn.trustGain + '）', 'success');
         if (window.updateCharacterStatus) window.updateCharacterStatus();

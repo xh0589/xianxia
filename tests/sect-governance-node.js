@@ -56,7 +56,7 @@ function makeWorld(opts) {
             'mat_liquorice': { id: 'mat_liquorice', name: '甘草', subtype: 'herb' },
             'iron_ore': { id: 'iron_ore', name: '铁矿', subtype: 'ore' }
         },
-        addItem: function (id, n) { (W._added = W._added || []).push({ id: id, n: n }); return true; },
+        addItem: function (id, n) { (W._added = W._added || []).push({ id: id, n: n }); return n || 1; },   // 桩：回实收件数
         applyBuff: function (id, eff, dur) { buffs.push({ id: id, eff: eff, dur: dur }); },
         getSectNPCs: function (sect) { return [{ id: 'sect_disciple_少林寺_0', name: '沈铁衣', location: sect }]; },
         Tournament: opts.tournament || null,

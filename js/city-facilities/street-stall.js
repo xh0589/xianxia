@@ -39,6 +39,8 @@
         return (cd() && cd().location) ||
             (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || '';
     }
+    // DES-57：城名两串写法（舆图转发的 cityName 带空格「帝都 · 长安」，角色账里是「帝都·长安」）——认账前先取键
+    function pkCity(s) { return String(s == null ? '' : s).replace(/\s+/g, ''); }
     // 商埠城才支得起摊：城里得有铺面或市集（仙山佛窟没有红尘买卖——老规矩）
     function marketCityOk(ct) {
         try {
@@ -221,7 +223,7 @@
         if (!rows.length) {
             html += '<p class="text-xs text-gray-500 mb-3">行囊里能卖的货都卖空了。</p>';
         } else {
-            html += '<div class="space-y-1 mb-3 max-h-64 overflow-y-auto">';
+            html += '<div class="space-y-1 mb-3">';
             for (var i = 0; i < rows.length; i++) {
                 var s = rows[i], t = tplOf(s);
                 var cur = currencyOf(t);
@@ -299,7 +301,7 @@
     function panelHtml(cityName) {
         try {
             if (!marketCityOk(cityName)) return '';
-            if (cityName && city() && cityName !== city()) return '';
+            if (cityName && city() && pkCity(cityName) !== pkCity(city())) return '';
             return '<div class="p-2 bg-amber-900/20 rounded border border-amber-800/50">' +
                 '<button onclick="StreetStall.open()" class="w-full text-left text-sm text-amber-300 hover:text-amber-200">🧺 街边支个摊（把行囊里的货卖给出行的过客——比铺子回购公道，就是耗时辰、看天吃饭）</button>' +
                 '</div>';

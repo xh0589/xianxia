@@ -438,12 +438,28 @@
                     if (npc.inventory && npc.inventory.items && npc.inventory.items.length > 0) {
                         var giveItem = npc.inventory.items[0];
                         if (giveItem.count > 0) {
+                            // DES-72＋DES-86（第一百三十批）：旧写法先扣了人家囊里那一格、再裸发奖丢了返回值——
+                            // 玩家行囊满时那份东西两头都不在，当场蒸发，屏上还念「送给你」。改成先落袋，落得下才从人家手里拿走。
+                            var 礼名 = giveItem.name || giveItem.templateId;
+                            var 收 = typeof window.giveWithReceipt === 'function'
+                                ? window.giveWithReceipt(giveItem.templateId, 1, { quiet: true, label: 礼名 })
+                                : (typeof window.addItem === 'function'
+                                    ? { got: Number(window.addItem(giveItem.templateId, 1)) || 0, count: 1, name: 礼名, reason: window.addItemFailReason || null }
+                                    : null);
+                            if (!收 || 收.got <= 0) {
+                                if (window.showMessage) {
+                                    // DES-96（第一百三十八批）：收 === null 是「这条世界压根没有入库通道」——没问过账就不许替玩家的格子定罪
+                                    var 礼由 = 收
+                                        ? ((typeof window.addItemFailTextFor === 'function' && window.addItemFailTextFor(收.reason, 礼名)) || '没能落进你的行囊。')
+                                        : '这一份先还搁在他那儿。';
+                                    window.showMessage('🎁 ' + npc.name + ' 要送你一份 ' + 礼名 + '，这份只好还搁在他那儿：'
+                                        + 礼由, 'warning');
+                                }
+                                break;   // 人家那一格原样留着，这笔人情也不记
+                            }
                             giveItem.count -= 1;
                             if (giveItem.count <= 0) {
                                 npc.inventory.items = npc.inventory.items.filter(function(i) { return i !== giveItem; });
-                            }
-                            if (typeof window.addItem === 'function') {
-                                window.addItem(giveItem.templateId, 1);
                             }
                             // P2-10：发送礼物邮件
                             if (window.MailSystem && window.MailSystem.send) {

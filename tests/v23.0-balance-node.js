@@ -163,6 +163,13 @@ function read(rel) { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); }
     };
     sb.window = sb; sb.globalThis = sb;
     sb.localStorage = { _s: {}, getItem(k) { return Object.prototype.hasOwnProperty.call(this._s, k) ? this._s[k] : null; }, setItem(k, v) { this._s[k] = String(v); }, removeItem(k) { delete this._s[k]; } };
+    // 【第一百四十四批】本沙箱自建 localStorage、未加载 global-utils.js ⇒ window.saveToStorage 缺席。
+    // 生产码各存档键已统一接到那个 owner，这里补一个同形的桩：**转手调本沙箱自己的 setItem**，
+    // 以免本套里「桩的 setItem 有没有被调到」这类探针失真。
+    sb.saveToStorage = function (k, v) {
+        try { sb.localStorage.setItem(k, v); return true; } catch (e) { return false; }
+    };
+
     sb.__msgs = [];
     sb.showMessage = (t) => sb.__msgs.push(String(t));
     sb.currentCharData = { attrs: { strength: 30 }, health: 100 };

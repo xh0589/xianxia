@@ -73,7 +73,7 @@ W.inventory = { currency: { spiritStones: 500, copper: 500 }, slots: [] };
 W.currentEquipment = {};
 W.itemById = {};
 W.allItems = [];
-W.addItem = function (id, n) { state.added.push(id); W.inventory.slots.push({ templateId: id, count: n || 1 }); return true; };
+W.addItem = function (id, n) { state.added.push(id); W.inventory.slots.push({ templateId: id, count: n || 1 }); return n || 1; };   // 桩：回实收件数
 W.getLifeSkill = function (name) { return (cd.lifeSkills || {})[name] || 0; };
 W.getEquippedItem = function (slot) { return W.currentEquipment[slot] || null; };
 // 城市/区域桩：三座新城 + 北冥
@@ -217,6 +217,30 @@ console.log('\n[Q2] 奇遇：独一份的机缘');
     QE.forceTrigger('qy_lanke_qiju');
     QE.choose(-1);
     ok(!!QE.state().done['qy_lanke_qiju'], 'Q2 转身走开也算见过（一生一次）');
+    // 静默失败（第四十五次自修）：旧版丢掉 apply 的返回值——代价付不起时账上一分未动，话术照印、机缘照发
+    QE.state().done = {}; QE.state().lastDay = -99;
+    cd.energy = 10; cd.tempering = 0; cd.fortune = 0;
+    cd.lifeSkills['学识'] = 60;            // 骰子要赢：这一条测的是结算，不是门槛
+    state.added.length = 0; state.logs.length = 0; state.msgs.length = 0;
+    QE.forceTrigger('qy_xinghai_guzhou');
+    ok(QE.choose(0) === true, 'Q2s 选择照旧收下（这段缘分算见过）');
+    ok(cd.energy === 10 && cd.tempering === 0, 'Q2s2 付不起的船资一分不扣、经验一分不落（通道的预检本就整笔挡下）');
+    ok(state.added.indexOf('mat_star_sand') < 0, 'Q2s3 星辰砂没到手就不许上屏');
+    ok(cd.fortune === 0, 'Q2s4 结算没写成不再白送机缘 +10（旧版照送）');
+    var qyFail = state.logs.join('') + state.msgs.join('');
+    ok(qyFail.indexOf('这一笔要耗的精力你出不起') >= 0 && qyFail.indexOf('没有落账') >= 0, 'Q2s5 失败照实说出原因，不演「成了」');
+    ok(qyFail.indexOf('8000') < 0, 'Q2s6 那一屏再无凭空的彩头（旧版此处印名册手写的常量）');
+    // 成路：彩头由通道的差值拼进同一句（触顶那一格会喊「实得」），名册里不再自带常量
+    QE.state().done = {}; QE.state().lastDay = -99;
+    cd.energy = 100; cd.tempering = 0;
+    state.added.length = 0; state.logs.length = 0; state.msgs.length = 0;
+    QE.forceTrigger('qy_xinghai_guzhou');
+    QE.choose(0);
+    var qyWin = state.logs.join('') + state.msgs.join('');
+    ok(cd.tempering === 8000 && state.added.indexOf('mat_star_sand') >= 0, 'Q2s7 成交那一路账照旧（历练 8000、星辰砂到手）');
+    ok(qyWin.indexOf('历练+8000') >= 0, 'Q2s8 彩头一句写的是真进账（exp 落在 tempering＝历练）');
+    ok(qyWin.indexOf('经验+8000') < 0, 'Q2s9 名册手写的「（经验+8000…）」常量尾巴撤了——同一笔账不再并排两行');
+    cd.lifeSkills['学识'] = 0;
     // 接线：进城事件、采集、打坐
     var appSrc = loadScript('js/app.js');
     ok(/QiyuEncounters\.maybeTrigger\('wild'\)/.test(appSrc) && /maybeTrigger\('cultivate'\)/.test(appSrc), 'Q2 采集与打坐该接奇遇钩子');

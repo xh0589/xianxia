@@ -200,6 +200,13 @@ class Shop {
         };
         const realId = idMap[itemId] || itemId;
 
+        // DES-63：柜上虚标的货（物品表查无此物）不卖。旧版一路放行到下面的兜底分支，
+        // 由它手写一枚「有名字没模板」的死格子——钱收了，货谁也认不出、用不了（坊市「修为丹」那枚）。
+        if (!window.itemById || !window.itemById[realId]) {
+            showMessage('柜上那件「' + (item.name || realId) + '」拿不出真货，掌柜的不肯收钱。', 'warning');
+            return false;
+        }
+
         // 先尝试入包，失败则不扣费
         let added = false;
         if (typeof window.addItem === 'function') {
@@ -309,8 +316,7 @@ class Shop {
             { id: 'iron_ore', name: '精铁', type: 'material', basePrice: 20, description: '限时矿石', icon: '⛏️', limited: true },
             { id: 'spirit_grass', name: '灵草', type: 'material', basePrice: 18, description: '限时灵草', icon: '🌿', limited: true },
             { id: 'vitality_pill', name: '回春丹', type: 'consumable', basePrice: 45, description: '限时丹药', icon: '💊', limited: true },
-            { id: 'iron_sword', name: '玄铁剑', type: 'weapon', basePrice: 220, description: '限时兵器', icon: '⚔️', limited: true },
-            { id: 'exp_potion', name: '修为丹', type: 'consumable', basePrice: 180, description: '限时修为丹', icon: '✨', limited: true }
+            { id: 'iron_sword', name: '玄铁剑', type: 'weapon', basePrice: 220, description: '限时兵器', icon: '⚔️', limited: true }
         ];
         // 清掉旧限时商品
         this.inventory = (this.inventory || []).filter(i => !i.limited);
@@ -675,8 +681,19 @@ const TradeService = {
         return 1.0 + Math.min(0.1, rep / 100 * 0.01);
     },
     
+    // 「柜上收不收这件」的判据：任务信物、钱票、秘籍不上柜台，无价之物不定价。
+    // ⚠️ 街边摆摊 js/city-facilities/street-stall.js 里有一份同款的 `sellable()`——两处迟早漂移。
+    // 本轮没并掉是因为它的单测不加载本文件；收口时把这份挪进真源、让两侧都来读。
+    isSellable: function (slot) {
+        var tpl = _shopSlotTemplate(slot);
+        if (!tpl || !(Number(slot.count) > 0)) return false;
+        if (tpl.category === 'quest' || tpl.category === 'currency' || tpl.subtype === 'manual') return false;
+        return (Number(tpl.price || tpl.basePrice) || 0) > 0;
+    },
+
     // 生成报价
-    quoteSell: function(shopId, itemUid, quantity) {
+    // 第四参 preview=true 只算价、不入报价簿：给货列摆个价不该攒下一堆没人认领的报价单
+    quoteSell: function(shopId, itemUid, quantity, preview) {
         var shop = window.shopManager ? window.shopManager.getShop(shopId) : null;
         if (!shop) {
             if (window.showMessage) window.showMessage('商店不存在', 'error');
@@ -694,8 +711,15 @@ const TradeService = {
             return null;
         }
         
-        var template = slot.getTemplate();
+        var template = (typeof window._slotTemplate === 'function') ? window._slotTemplate(slot)
+            : ((slot && typeof slot.getTemplate === 'function') ? slot.getTemplate() : (window.itemById || {})[slot && slot.templateId] || null);
         if (!template) return null;
+        if (!this.isSellable(slot)) {
+            if (!preview && window.showMessage) {
+                window.showMessage('柜上收不下「' + (template.name || slot.templateId) + '」——这类货不上柜台', 'warning');
+            }
+            return null;
+        }
         
         quantity = quantity || slot.count;
         quantity = Math.min(quantity, slot.count);
@@ -713,6 +737,28 @@ const TradeService = {
         var finalUnitPrice = Math.max(1, Math.floor(
             basePrice * baseBuybackRate * regionMul * demandMul * durabilityMul * speechMul * repMul
         ));
+        // 第六十八批 · DES-11：回购价顶在「本柜今天买这件货要多少」上——站着原地转卖不许生钱。
+        // 病根不在回购率（0.20~0.40 一直折得很低），在两串折扣各切各的：买入吃城市声望（reputation-system
+        // 档位表最高 -25%）与口才（本文件 :138，最高 -20%），卖出又吃声望 +10%（:668）与口才 +20%（:653），
+        // 于是同一件货你付六成、柜上按八成收，药铺「偏好 ×1.5」一乘就翻正。普查读数（现算脚本 .scratch/v24-DE-prefix.cjs：
+        // 满口才＋万人敬仰＋当日最低波动 × 真柜台真货架，货表按真页装齐扩展包（390 余件），改前价＝报价单里未封顶那条链的
+        // 读数，不抄笔记；买价与报价分两趟取，同趟取会被 getItemPrice 的当日缓存烘高买价、条数少算一半）：
+        // 1700 余条「柜台×货架真货」组合里原地印钞口每代约 270 条（六分之一），最高 1.5~1.6×——
+        // 青木城药铺 筑基丹 买 234 → 柜上收 341（1.46×）、大还丹 18 → 27。而第一档声望折扣只要 500 点，新手跑两趟城就够。
+        // 顶的取法：这柜有这件货就取它的当日一口价（与货架上那颗「买入」同读数，不另造公式），
+        // 不卖这件货的柜（缴来的战利品等）按行价封顶——回购是转售，出到行价以上本就无处可赚。
+        // 跨城「脚程换差价」是设计（wave42 C8 钉着），本顶只管同柜原地转卖；卖到别处仍可高于买入价。
+        // 同一脚本两次读数：改前未封顶那条链跨柜为正约 8000 条、最高 1.7~2.1×；封顶后仍留 1300 余条
+        // （如 风灵剑 冰原城黑市买 398 → 金城兵器铺收 709）——本顶削掉的是「到了目的柜还能原地再赚一口」那一层。
+        var shelfEntry = null;
+        var shelfList = shop.inventory || [];
+        for (var se_i = 0; se_i < shelfList.length; se_i++) {
+            var se = shelfList[se_i];
+            if (se && (se.id === template.id || se.id === slot.templateId)) { shelfEntry = se; break; }
+        }
+        var capUnitPrice = shelfEntry ? shop.getItemPrice(shelfEntry) : basePrice;
+        var rawUnitPrice = finalUnitPrice;
+        if (capUnitPrice > 0 && finalUnitPrice > capUnitPrice) finalUnitPrice = Math.max(1, capUnitPrice);
         var totalPrice = finalUnitPrice * quantity;
         var currency = this.getCurrencyType(template);
         
@@ -733,6 +779,8 @@ const TradeService = {
             durabilityMul: durabilityMul,
             speechMul: speechMul,
             repMul: repMul,
+            capUnitPrice: capUnitPrice,     // 第六十八批 · DES-11：本柜今天的售价（无此货则行价）＝回购的顶
+            rawUnitPrice: rawUnitPrice,     // 封顶前算出来的价，被压下去时屏上要念这一笔
             finalUnitPrice: finalUnitPrice,
             totalPrice: totalPrice,
             currency: currency,
@@ -743,6 +791,7 @@ const TradeService = {
             itemIcon: template.icon || '📦'
         };
         
+        if (preview) return quote;   // 只给货列摆个价：不登记、不占号，免得重画一次攒一簿死报价
         this._quotes[quoteId] = quote;
         return quote;
     },
@@ -775,7 +824,8 @@ const TradeService = {
             return false;
         }
         
-        var template = slot.getTemplate();
+        var template = (typeof window._slotTemplate === 'function') ? window._slotTemplate(slot)
+            : ((slot && typeof slot.getTemplate === 'function') ? slot.getTemplate() : (window.itemById || {})[slot && slot.templateId] || null);
         if (!template) return false;
 
         // F-8 修复：之前在扣减后生成快照，归零时 slots[slotIdx]=null，count 变 0 → 回购数量错。
@@ -789,23 +839,47 @@ const TradeService = {
         var buybackCurrency = quote.currency;
 
         // 扣除物品
-        slot.count -= quote.quantity;
-        if (slot.count <= 0) {
-            window.inventory.slots[slotIdx] = null;
-        }
-        
-        // 发放货币
-        var currency = quote.currency;
-        if (currency === 'copper') {
-            window.inventory.currency.copper = (window.inventory.currency.copper || 0) + quote.totalPrice;
-            if (window.currentCharData) window.currentCharData.copper = window.inventory.currency.copper;
-        } else {
-            if (window.XianXia && window.XianXia.DataManager && typeof window.XianXia.DataManager.addSpiritStones === 'function') {
-                window.XianXia.DataManager.addSpiritStones(quote.totalPrice);
-            } else {
-                window.inventory.currency.spiritStones = (window.inventory.currency.spiritStones || 0) + quote.totalPrice;
-                if (window.currentCharData) window.currentCharData.spiritStones = window.inventory.currency.spiritStones;
+        // 第一百四十二批：扣物(842-845) 与「发钱」(848-859) 之间**原来没有 try**。
+        // 发钱那三条分支任一条抛异常 ⇒ **货已扣、钱没到**，玩家白丢一批货。
+        // 已包上：出岔子把货原样放回槽位（整件卖光的，从 itemSnapshot 造回一件）。
+        var _已扣 = quote.quantity;
+        var _回货 = function () {
+            try {
+                var _s = window.inventory.slots[slotIdx];
+                if (_s) _s.count = (_s.count || 0) + _已扣;
+                else window.inventory.slots[slotIdx] = itemSnapshot;
+                if (window.updateInventoryUI) window.updateInventoryUI();
+                if (window.showMessage) window.showMessage('这笔没能成交——货已原样放回行囊。', 'warning');
+            } catch (e) { if (window.console && console.error) console.error('[sell] 退货失败:', e); }
+        };
+        try {
+            slot.count -= quote.quantity;
+            if (slot.count <= 0) {
+                window.inventory.slots[slotIdx] = null;
             }
+        } catch (e1) {
+            if (window.console && console.error) console.error('[sell] 扣货失败:', e1);
+            return;
+        }
+
+        // 发放货币
+        try {
+            var currency = quote.currency;
+            if (currency === 'copper') {
+                window.inventory.currency.copper = (window.inventory.currency.copper || 0) + quote.totalPrice;
+                if (window.currentCharData) window.currentCharData.copper = window.inventory.currency.copper;
+            } else {
+                if (window.XianXia && window.XianXia.DataManager && typeof window.XianXia.DataManager.addSpiritStones === 'function') {
+                    window.XianXia.DataManager.addSpiritStones(quote.totalPrice);
+                } else {
+                    window.inventory.currency.spiritStones = (window.inventory.currency.spiritStones || 0) + quote.totalPrice;
+                    if (window.currentCharData) window.currentCharData.spiritStones = window.inventory.currency.spiritStones;
+                }
+            }
+        } catch (e2) {
+            if (window.console && console.error) console.error('[sell] 发钱失败，归还货物:', e2);
+            _回货();
+            return;
         }
         
         // v23.2 卖出同样动行情：一城抛出一批货，该行当的价格就该松（供需模型接线）
@@ -892,7 +966,8 @@ const TradeService = {
         }
         
         // 扣钱（P1-10: 使用对应货币；第八十二波·ECO-01：扣款同步角色镜像字段，与卖出路径同口径）
-        var currency = item.currencyType || 'spiritStones';
+        // ⚠️ 字段名认 `currency`（_addToBuyback 写的那一本）：曾读 `currencyType`（全仓无写方）→ 铜钱货回购照旧扣灵石
+        var currency = item.currency || 'spiritStones';
         if (currency === 'spiritStones') {
             if (window.inventory.currency.spiritStones < cost) {
                 if (typeof window.removeItem === 'function') window.removeItem(item.templateId, item.quantity);
@@ -959,6 +1034,10 @@ function closeShopModals() {
 function showQuoteDetail(quote) {
     if (!quote) return;
     var currencyName = quote.currency === 'copper' ? '铜钱' : '灵石';
+    // 第六十八批 · DES-11：被封顶时上面那串因子连乘不等于单价——不念出来就是一屏算不通的账
+    var capLine = (quote.capUnitPrice > 0 && quote.finalUnitPrice < quote.rawUnitPrice)
+        ? '<div class="flex justify-between"><span class="text-gray-400">柜上封顶</span><span class="text-orange-300">本柜卖 ' + quote.capUnitPrice + '，回购不出高于售价（原算 ' + quote.rawUnitPrice + '）</span></div>'
+        : '';
     var dlg = document.createElement('div');
     dlg.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-[60]';
     dlg.onclick = function(e) { if (e.target === dlg) dlg.remove(); };
@@ -973,6 +1052,7 @@ function showQuoteDetail(quote) {
                 <div class="flex justify-between"><span class="text-gray-400">物品状态修正</span><span class="text-white">×${quote.durabilityMul.toFixed(2)}</span></div>
                 <div class="flex justify-between"><span class="text-gray-400">口才修正</span><span class="text-white">×${quote.speechMul.toFixed(2)}</span></div>
                 <div class="flex justify-between"><span class="text-gray-400">声望修正</span><span class="text-white">×${quote.repMul.toFixed(2)}</span></div>
+                ${capLine}
                 <div class="border-t border-gray-600 pt-2 mt-2">
                     <div class="flex justify-between"><span class="text-gray-400">单价</span><span class="text-yellow-400 font-bold">${quote.finalUnitPrice} ${currencyName}</span></div>
                     <div class="flex justify-between"><span class="text-gray-400">数量</span><span class="text-white">${quote.quantity}</span></div>
@@ -980,7 +1060,7 @@ function showQuoteDetail(quote) {
                 </div>
             </div>
             <div class="flex gap-2 justify-end mt-4">
-                <button onclick="TradeService.executeSell('${quote.id}'); this.closest('.fixed').remove(); closeShopModals();" class="bg-green-600 hover:bg-green-500 px-4 py-2 rounded text-white font-bold">确认出售</button>
+                <button onclick="shopConfirmQuoteSale('${quote.id}', this)" class="bg-green-600 hover:bg-green-500 px-4 py-2 rounded text-white font-bold">确认出售</button>
                 <button onclick="this.closest('.fixed').remove()" class="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded text-white">取消</button>
             </div>
         </div>
@@ -1006,6 +1086,308 @@ var SHOP_TYPE_LABELS = {
 };
 function shopTypeLabel(type) { return SHOP_TYPE_LABELS[type] || ''; }
 
+// ==================== v24 UI-02 · 货架筛选：读背包那一本账，不再立一套 ====================
+// 筛子（category/search/quality 的比法）与尺子（sortBy 的序）都在 js/inventory.js，
+// 这里只把货架上的 item 认回模板再交给它们——两处若各抄一份，玩家就会在背包筛过的档在店里不认。
+function _shopTemplateOf(item) {
+    if (!item) return null;
+    var byId = window.itemById || {};
+    if (byId[item.id]) return byId[item.id];
+    if (typeof getAllItemTemplates === 'function') {
+        var list = getAllItemTemplates();
+        for (var i = 0; i < list.length; i++) if (list[i] && list[i].id === item.id) return list[i];
+    }
+    return null;   // 认不出模板就交给「全部」那一档：宁可不筛，不许把货藏没
+}
+
+// 行囊格子认回模板：新格子有 getTemplate，旧档采药直写的裸格子只能按 templateId 回查。
+// 背包内部有个同规则的守卫，这里不复用它——本文件要能被单载（几处设施的测试只加载这一个文件）。
+function _shopSlotTemplate(slot) {
+    if (!slot) return null;
+    if (typeof slot.getTemplate === 'function') {
+        try { var t = slot.getTemplate(); if (t) return t; } catch (e) { /* 落到模板库回查 */ }
+    }
+    return _shopTemplateOf({ id: slot.templateId });
+}
+
+function shopFilterActive() {
+    var inv = window.inventory;
+    if (!inv) return false;
+    return (inv.filter && inv.filter !== 'all') || inv.searchQuery ||
+        (inv.qualityFilter && inv.qualityFilter !== 'all');
+}
+
+function shopFilteredGoods(shop) {
+    var all = (shop && shop.inventory) || [];
+    var rows = all.filter(function (item) {
+        var tpl = _shopTemplateOf(item);
+        return !tpl || !window.matchesInventoryFilter || window.matchesInventoryFilter(tpl);
+    });
+    if (window.compareInventoryEntries && rows.length > 1) {
+        var keyed = rows.map(function (item) {
+            return { tpl: _shopTemplateOf(item) || item, count: item.stock == null ? 0 : item.stock, item: item };
+        });
+        keyed.sort(window.compareInventoryEntries);
+        rows = keyed.map(function (e) { return e.item; });
+    }
+    return rows;
+}
+
+// 一张货卡只此一处：首屏与筛选后重画都走它，免得筛完之后卡上少了什么
+function _shopGoodsCardHtml(shop, item) {
+    const price = shop.getItemPrice(item);
+    const soldOut = item.stock != null && item.stock <= 0;
+    const limited = item.limited ? '<span class="text-xs text-red-400">限时</span>' : '';
+    return `
+        <div class="flex items-center justify-between bg-gray-800 p-3 rounded border border-gray-600 ${soldOut ? 'opacity-50' : ''}">
+            <div class="min-w-0 mr-2">
+                <div class="font-bold text-gray-200">${item.icon || ''} ${item.name} ${limited}</div>
+                <div class="text-xs text-gray-400">${item.description || ''}${item.stock != null ? ` · 库存${item.stock}` : ''}</div>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <span class="text-yellow-500 font-bold">${price} 灵石</span>
+                <button onclick="buyFromEnhancedShop('${shop.id}', '${item.id}')"
+                    class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm" ${soldOut ? 'disabled' : ''}>购买</button>
+            </div>
+        </div>`;
+}
+
+function shopFilterBarHtml() {
+    var cfg = window.INVENTORY_CONFIG || {};
+    var base = 'shop-chip bg-gray-600 hover:bg-gray-500 text-white py-1 px-2 rounded text-xs border border-transparent';
+    var chips = (cfg.FILTER_CHIPS || []).map(function (key) {
+        return '<button type="button" data-shop-cat="' + key + '" onclick="shopSetFilterCategory(\'' + key + '\')" ' +
+            'class="' + base + '">' + (cfg.CATEGORY_LABELS || {})[key] + '</button>';
+    }).join('');
+    var clear = '<button type="button" id="shop-filter-clear" onclick="shopClearGoodsFilter()" ' +
+        'class="shop-chip shop-chip--clear bg-gray-700 text-gray-300 py-1 px-2 rounded text-xs border border-dashed border-gray-500">✕ 清除筛选</button>';
+    return '<div class="shop-filter-bar">' +
+        '<input type="text" id="shop-search" placeholder="🔍 搜货名（购买·出售同一筛）…" class="shop-search" ' +
+        'oninput="shopSetGoodsSearch(this.value)" value="' + (((window.inventory || {}).searchQuery || '').replace(/"/g, '&quot;')) + '">' +
+        chips + clear +
+        '</div>';
+}
+
+// 选中态只在本弹窗内动（背包那排 chips 由 _syncInventoryFilterChips 管自己那一栏）
+function _syncShopFilterChips() {
+    var modal = document.querySelector('.shop-modal-overlay');
+    if (!modal) return;
+    var inv = window.inventory || {};
+    modal.classList.toggle('is-filtering', !!shopFilterActive());
+    modal.querySelectorAll('[data-shop-cat]').forEach(function (btn) {
+        btn.classList.toggle('is-active', (inv.filter || 'all') === btn.getAttribute('data-shop-cat'));
+    });
+}
+
+function shopRefreshGoods(shop) {
+    var listEl = document.getElementById('shop-goods-list');
+    var countEl = document.getElementById('shop-goods-count');
+    if (!listEl || !countEl) return;
+    var total = ((shop && shop.inventory) || []).length;
+    var rows = shopFilteredGoods(shop);
+    var who = (window.inventoryFilterLabels ? window.inventoryFilterLabels() : []).join('·');
+    countEl.textContent = who
+        ? '筛出 ' + rows.length + ' / ' + total + ' 件（' + who + '）'
+        : '本店在售 ' + total + ' 件';
+    listEl.innerHTML = rows.length ? rows.map(_shopGoodsCardHtml.bind(null, shop)).join('')
+        // 空态卡包一层自有壳：货架决定它摆在哪（横贯整排），长什么样仍归 ui-craft.css 那一处真相
+        : '<div class="shop-goods__empty">' + window.xEmptyHtml({
+            title: '这一筛把货架筛空了',
+            why: who ? '当前筛选：' + who : '',
+            next: '点上方「✕ 清除筛选」，或换个关键词。'
+        }) + '</div>';
+    _syncShopFilterChips();
+}
+
+// 眼下开着这家店：筛选条重画货单时认店用。只是个指针，货单仍在 shopManager 那一本账上。
+var _shopDialogShop = null;
+
+function shopSetFilterCategory(cat) {
+    window.filterInventory(cat);     // 写账的仍只有背包那一处 setter，货架只是替它按下去
+    shopRefreshGoods(_shopDialogShop);
+    shopRefreshSell(_shopDialogShop);
+}
+
+function shopSetGoodsSearch(q) {
+    window.setSearchQuery(q);
+    shopRefreshGoods(_shopDialogShop);
+    shopRefreshSell(_shopDialogShop);
+}
+
+function shopClearGoodsFilter() {
+    if (typeof window.clearInventoryFilters === 'function') window.clearInventoryFilters();
+    var input = document.getElementById('shop-search');
+    if (input) input.value = '';
+    shopRefreshGoods(_shopDialogShop);
+    shopRefreshSell(_shopDialogShop);
+}
+
+// ==================== v24 UI-02②：出售页直列行囊 ====================
+// 旧链路逼玩家先回背包逐件「标记待售」、再走到柜上才看得见，卖完一件还顺手把商店关掉。
+// 现在柜上直接摆行囊里收得下的货，一钮卖一整堆；标记降为一条可选过滤（它的主业是 NPC 寄售与熟客挂单）。
+// _sellMarkedOnly 只是这扇窗的看货方式，不是第二本账：货有几件、标记没标记，读的全是 inventory 那一本。
+var _sellMarkedOnly = false;
+
+// 行囊里柜上收得下的货，已随页顶那把筛子筛过（判定与排序都走背包导出的那一份）
+function shopSellableSlots() {
+    var slots = typeof window.getFilteredSlots === 'function' ? window.getFilteredSlots() : [];
+    return slots.filter(function (s) { return s && TradeService.isSellable(s); });
+}
+
+function _shopSellRowHtml(shop, slot) {
+    var tpl = _shopSlotTemplate(slot) || {};
+    var q = TradeService.quoteSell(shop.id, slot.uid, slot.count, true);   // 预览：只算价，不进报价簿
+    var cur = (q && q.currency === 'copper') ? '铜钱' : '灵石';
+    var marked = typeof window.isMarkedForSale === 'function' && window.isMarkedForSale(slot.uid);
+    return `
+        <div class="flex items-center justify-between bg-gray-800 p-3 rounded border ${marked ? 'border-yellow-600/70' : 'border-gray-600'}">
+            <div class="min-w-0 mr-2">
+                <div class="font-bold text-gray-200">${marked ? '🏷 ' : ''}${tpl.icon || ''} ${tpl.name || slot.templateId}</div>
+                <div class="text-xs text-gray-400">行囊里有 ×${slot.count}${q ? ` · 单价 ${q.finalUnitPrice} ${cur}` : ''}</div>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <span class="text-yellow-500 font-bold">${q ? q.totalPrice + ' ' + cur : '收不下'}</span>
+                <button type="button" onclick="shopShowSellQuote('${shop.id}', '${slot.uid}')"
+                    class="px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs">报价明细</button>
+                <button type="button" onclick="shopSellStack('${shop.id}', '${slot.uid}')"
+                    class="px-3 py-1 bg-green-600 hover:bg-green-500 rounded text-sm">整堆出售</button>
+            </div>
+        </div>`;
+}
+
+function _shopBuybackRowHtml(shop, item) {
+    return `
+        <div class="flex items-center justify-between bg-gray-800/50 p-2 rounded border border-gray-700">
+            <span class="text-sm text-gray-300">${item.icon || ''} ${item.name} ×${item.quantity}</span>
+            <div class="flex items-center gap-2">
+                <span class="text-yellow-500 text-xs">${item.buybackPrice} ${item.currency === 'copper' ? '铜钱' : '灵石'}</span>
+                <button type="button" onclick="shopBuybackItem('${shop.id}', '${item.uid}')"
+                    class="px-2 py-1 bg-purple-600 hover:bg-purple-500 rounded text-xs">回购</button>
+            </div>
+        </div>`;
+}
+
+function shopRefreshSell(shop) {
+    var listEl = document.getElementById('shop-sell-list');
+    var countEl = document.getElementById('shop-sell-count');
+    if (!listEl || !countEl || !shop) return;
+    var inFilter = shopSellableSlots();
+    var rows = _sellMarkedOnly ? inFilter.filter(function (s) {
+        return typeof window.isMarkedForSale === 'function' && window.isMarkedForSale(s.uid);
+    }) : inFilter;
+    // 页签计数说的是「行囊里总共能卖几件」，不随筛子变——不然页签上的数字会跟着人一起消失
+    var bagTotal = ((window.inventory && window.inventory.slots) || [])
+        .filter(function (s) { return s && TradeService.isSellable(s); }).length;
+    var markedTotal = typeof window.getMarkedForSaleCount === 'function' ? window.getMarkedForSaleCount() : 0;
+    var tabEl = document.getElementById('shop-tab-count-sell');
+    if (tabEl) tabEl.textContent = '(' + bagTotal + ')';
+    var chip = document.getElementById('shop-sell-marked-chip');
+    if (chip) {
+        chip.textContent = '🏷 只看已标记 (' + markedTotal + ')';
+        chip.classList.toggle('is-active', _sellMarkedOnly);
+    }
+    var who = (window.inventoryFilterLabels ? window.inventoryFilterLabels() : []).join('·');
+    var parts = ['行囊可卖 ' + rows.length + ' 件'];
+    if (_sellMarkedOnly) parts.push('只看已标记');
+    if (who) parts.push('筛选：' + who);
+    countEl.textContent = parts.join(' ｜ ');
+    var empty = !rows.length ? window.xEmptyHtml(bagTotal === 0
+        ? { title: '行囊里没有柜上收得下的货',
+            why: '任务信物、钱票与秘籍不上柜台。',
+            next: '去打几只妖兽、或去野外采些药草再来。' }
+        : (_sellMarkedOnly
+            ? { title: '没有已标记的货',
+                why: '标记是给 NPC 寄售与熟客挂单用的线索，不是卖货的前置手续。',
+                next: '再点一次「🏷 只看已标记」看全部，或直接整堆出售。' }
+            : { title: '这一筛把行囊筛空了',
+                why: '当前筛选：' + who,
+                next: '点上方「✕ 清除筛选」，或换个关键词。' })) : '';
+    listEl.innerHTML = rows.length
+        ? rows.map(_shopSellRowHtml.bind(null, shop)).join('')
+        : '<div class="shop-goods__empty">' + empty + '</div>';
+}
+
+function shopRefreshBuyback(shop) {
+    var listEl = document.getElementById('shop-buyback-list');
+    if (!listEl || !shop) return;
+    var items = TradeService.getBuybackItems(shop.id);
+    var tabEl = document.getElementById('shop-tab-count-buyback');
+    if (tabEl) tabEl.textContent = '(' + items.length + ')';
+    listEl.innerHTML = items.length
+        ? items.map(_shopBuybackRowHtml.bind(null, shop)).join('')
+        : window.xEmptyHtml({
+            title: '还没从这家店卖出一件货',
+            why: '',
+            next: '在「出售」页卖出的货，当日可按 120% 价格从这里回购。'
+        });
+}
+
+function shopRefreshCoins() {
+    var c = (window.inventory && window.inventory.currency) || {};
+    var stonesEl = document.getElementById('shop-coin-stones');
+    var copperEl = document.getElementById('shop-coin-copper');
+    var markedEl = document.getElementById('shop-marked-count');
+    if (stonesEl) stonesEl.textContent = '💎 ' + (c.spiritStones || 0);
+    if (copperEl) copperEl.textContent = '💰 ' + (c.copper || 0);
+    if (markedEl && typeof window.getMarkedForSaleCount === 'function') {
+        markedEl.textContent = window.getMarkedForSaleCount() + '件';
+    }
+}
+
+// 成交之后就地重画：柜台上大概率还有下一件，不该为一笔买卖把商店关掉
+function shopRefreshTrade(shop) {
+    if (!shop) return;
+    shopRefreshCoins();
+    shopRefreshSell(shop);
+    shopRefreshBuyback(shop);
+    shopRefreshGoods(shop);
+}
+
+// 不传数量＝行囊里有几件卖几件（整堆）
+function shopSellStack(shopId, uid) {
+    var q = TradeService.quoteSell(shopId, uid);
+    if (!q) return false;
+    var ok = TradeService.executeSell(q.id);
+    if (ok) shopRefreshTrade(_shopDialogShop);
+    return ok;
+}
+
+function shopShowSellQuote(shopId, uid) {
+    var q = TradeService.quoteSell(shopId, uid);
+    if (q) showQuoteDetail(q);
+}
+
+function shopBuybackItem(shopId, uid) {
+    var ok = TradeService.buybackItem(shopId, uid);
+    if (ok) shopRefreshTrade(_shopDialogShop);
+    return ok;
+}
+
+// 明细窗里点「确认出售」只关那张明细：为一笔买卖把整间商店关掉，等于逼玩家重走一遍进门
+function shopConfirmQuoteSale(quoteId, btn) {
+    var ok = TradeService.executeSell(quoteId);
+    var dlg = btn && btn.closest ? btn.closest('.fixed') : null;
+    if (dlg) dlg.remove();
+    if (ok) shopRefreshTrade(_shopDialogShop);
+    return ok;
+}
+
+function shopToggleSellMarked() {
+    _sellMarkedOnly = !_sellMarkedOnly;
+    shopRefreshSell(_shopDialogShop);
+}
+
+window.shopSetFilterCategory = shopSetFilterCategory;
+window.shopSetGoodsSearch = shopSetGoodsSearch;
+window.shopClearGoodsFilter = shopClearGoodsFilter;
+window.shopFilteredGoods = shopFilteredGoods;
+window.shopSellStack = shopSellStack;
+window.shopShowSellQuote = shopShowSellQuote;
+window.shopBuybackItem = shopBuybackItem;
+window.shopConfirmQuoteSale = shopConfirmQuoteSale;
+window.shopToggleSellMarked = shopToggleSellMarked;
+window.shopRefreshSell = shopRefreshSell;
+
 function showShopDialog(shop) {
     if (!shop) return;
     closeShopModals();
@@ -1013,57 +1395,11 @@ function showShopDialog(shop) {
     const stones = window.inventory?.currency?.spiritStones ?? 0;
     const copper = window.inventory?.currency?.copper ?? 0;
     
-    // 获取标记待售物品
-    var markedItems = (typeof window.getMarkedForSaleItems === 'function') ? window.getMarkedForSaleItems() : [];
-    
-    // 获取回购物品
-    var buybackItems = TradeService.getBuybackItems(shop.id);
-    
-    var markedHtml = '';
-    if (markedItems.length === 0) {
-        markedHtml = '<p class="text-gray-500 text-sm">暂无标记待售的物品，请在背包中标记物品后前来出售</p>';
-    } else {
-        markedHtml = markedItems.map(function(slot) {
-            var tpl = slot.getTemplate && slot.getTemplate();
-            if (!tpl) return '';
-            var quote = TradeService.quoteSell(shop.id, slot.uid, slot.count);
-            var priceStr = quote ? (quote.totalPrice + ' ' + (quote.currency === 'copper' ? '铜钱' : '灵石')) : '询价中';
-            return `
-                <div class="flex items-center justify-between bg-gray-800 p-3 rounded border border-yellow-700/50">
-                    <div>
-                        <div class="font-bold text-gray-200">🏷️ ${tpl.icon || ''} ${tpl.name || slot.templateId}</div>
-                        <div class="text-xs text-gray-400">数量: ${slot.count}${quote ? ' | 单价: ' + quote.finalUnitPrice + ' ' + (quote.currency === 'copper' ? '铜钱' : '灵石') : ''}</div>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-yellow-500 font-bold text-sm">${priceStr}</span>
-                        <button onclick="var q = TradeService.quoteSell('${shop.id}', '${slot.uid}', ${slot.count}); if(q) showQuoteDetail(q);"
-                            class="px-2 py-1 bg-blue-600 hover:bg-blue-500 rounded text-xs">报价明细</button>
-                        <button onclick="TradeService.executeSell(TradeService.quoteSell('${shop.id}', '${slot.uid}', ${slot.count}).id); this.closest('.shop-modal-overlay').remove();"
-                            class="px-2 py-1 bg-green-600 hover:bg-green-500 rounded text-xs">出售</button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-    
-    var buybackHtml = '';
-    if (buybackItems.length === 0) {
-        buybackHtml = '<p class="text-gray-500 text-sm">暂无回购物品</p>';
-    } else {
-        buybackHtml = buybackItems.map(function(item) {
-            return `
-                <div class="flex items-center justify-between bg-gray-800/50 p-2 rounded border border-gray-700">
-                    <span class="text-sm text-gray-300">${item.icon || ''} ${item.name} ×${item.quantity}</span>
-                    <div class="flex items-center gap-2">
-                        <span class="text-yellow-500 text-xs">${item.buybackPrice} 灵石</span>
-                        <button onclick="TradeService.buybackItem('${shop.id}', '${item.uid}'); this.closest('.shop-modal-overlay').remove();"
-                            class="px-2 py-1 bg-purple-600 hover:bg-purple-500 rounded text-xs">回购</button>
-                    </div>
-                </div>
-            `;
-        }).join('');
-    }
-
+    // 页签上的计数开窗先给一份，之后每次卖出/回购都由 refresh 现算
+    var markedCount = (typeof window.getMarkedForSaleCount === 'function') ? window.getMarkedForSaleCount() : 0;
+    var sellableCount = ((window.inventory && window.inventory.slots) || [])
+        .filter(function (s) { return s && TradeService.isSellable(s); }).length;
+    var buybackCount = TradeService.getBuybackItems(shop.id).length;
     const content = `
         <div class="space-y-4">
             <div class="bg-gray-700/50 rounded-lg p-4 border border-gray-600">
@@ -1072,60 +1408,48 @@ function showShopDialog(shop) {
                     <span class="text-sm text-gray-400">${shopTypeLabel(shop.type) ? '类型: ' + shopTypeLabel(shop.type) : ''}</span>
                 </div>
                 <div class="grid grid-cols-3 gap-2 text-sm">
-                    <div><span class="text-gray-400">灵石:</span> <span class="text-yellow-300 font-bold">💎 ${stones}</span></div>
-                    <div><span class="text-gray-400">铜钱:</span> <span class="text-yellow-300 font-bold">💰 ${copper}</span></div>
-                    <div><span class="text-gray-400">标记待售:</span> <span class="text-yellow-400 font-bold">${markedItems.length}件</span></div>
+                    <div><span class="text-gray-400">灵石:</span> <span class="text-yellow-300 font-bold" id="shop-coin-stones">💎 ${stones}</span></div>
+                    <div><span class="text-gray-400">铜钱:</span> <span class="text-yellow-300 font-bold" id="shop-coin-copper">💰 ${copper}</span></div>
+                    <div><span class="text-gray-400">标记挂售:</span> <span class="text-yellow-400 font-bold" id="shop-marked-count">${markedCount}件</span></div>
                 </div>
             </div>
 
             <!-- 剩余任务#3：药铺/坊市时价对照出关见闻 -->
             ${window.__buildShopPriceTag && window.__buildShopPriceTag(shop._cityName) || ''}
 
+            <!-- 一把筛子管两页：购买与出售读同一本筛选账，谁筛空了都说得出是谁筛的 -->
+            ${shopFilterBarHtml()}
+
             <!-- Tab 导航 -->
             <div class="flex border-b border-gray-600 mb-2">
                 <button class="tab-btn px-4 py-2 text-sm font-bold text-yellow-400 border-b-2 border-yellow-400" data-tab="buy" onclick="switchShopTab(this, 'buy')">🛒 购买</button>
-                <button class="tab-btn px-4 py-2 text-sm text-gray-400 hover:text-white" data-tab="sell" onclick="switchShopTab(this, 'sell')">🏷️ 出售 (${markedItems.length})</button>
-                <button class="tab-btn px-4 py-2 text-sm text-gray-400 hover:text-white" data-tab="buyback" onclick="switchShopTab(this, 'buyback')">🔄 回购 (${buybackItems.length})</button>
+                <button class="tab-btn px-4 py-2 text-sm text-gray-400 hover:text-white" data-tab="sell" onclick="switchShopTab(this, 'sell')">🏷️ 出售 <span id="shop-tab-count-sell">(${sellableCount})</span></button>
+                <button class="tab-btn px-4 py-2 text-sm text-gray-400 hover:text-white" data-tab="buyback" onclick="switchShopTab(this, 'buyback')">🔄 回购 <span id="shop-tab-count-buyback">(${buybackCount})</span></button>
             </div>
 
             <!-- 购买 Tab -->
             <div id="shop-tab-buy" class="shop-tab">
-                <div class="max-h-64 overflow-y-auto space-y-2">
-                    ${(shop.inventory || []).map(item => {
-                        const price = shop.getItemPrice(item);
-                        const soldOut = item.stock != null && item.stock <= 0;
-                        const limited = item.limited ? '<span class="text-xs text-red-400">限时</span>' : '';
-                        return `
-                        <div class="flex items-center justify-between bg-gray-800 p-3 rounded border border-gray-600 ${soldOut ? 'opacity-50' : ''}">
-                            <div>
-                                <div class="font-bold text-gray-200">${item.icon || ''} ${item.name} ${limited}</div>
-                                <div class="text-xs text-gray-400">${item.description || ''}${item.stock != null ? ` · 库存${item.stock}` : ''}</div>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <span class="text-yellow-500 font-bold">${price} 灵石</span>
-                                <button onclick="buyFromEnhancedShop('${shop.id}', '${item.id}')"
-                                    class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm" ${soldOut ? 'disabled' : ''}>购买</button>
-                            </div>
-                        </div>`;
-                    }).join('') || '<p class="text-gray-500 text-sm">暂无商品</p>'}
-                </div>
+                <div id="shop-goods-count" class="text-xs text-gray-500 mb-2"></div>
+                <div id="shop-goods-list" class="shop-goods-grid"></div>
             </div>
 
-            <!-- 出售 Tab -->
+            <!-- 出售 Tab：柜上直接摆行囊，一钮卖一整堆 -->
             <div id="shop-tab-sell" class="shop-tab" style="display:none">
-                <div class="max-h-64 overflow-y-auto space-y-2">
-                    ${markedHtml}
+                <div class="shop-sell-toolbar">
+                    <button type="button" id="shop-sell-marked-chip" onclick="shopToggleSellMarked()"
+                        class="shop-chip bg-gray-600 hover:bg-gray-500 text-white py-1 px-2 rounded text-xs border border-transparent">🏷 只看已标记 (${markedCount})</button>
+                    <span class="text-xs text-gray-500">标记是给熟客与 NPC 寄售用的线索，不标记也能当场卖。</span>
                 </div>
+                <div id="shop-sell-count" class="text-xs text-gray-500 mb-2"></div>
+                <div id="shop-sell-list" class="shop-goods-grid"></div>
                 <div class="mt-2 text-xs text-gray-500">
-                    💡 在背包中标记物品为"待售"，然后来此出售。价格受地区、商人类型、口才、声望影响。
+                    💡 价按地区、商人类型、口才、声望现算；卖出的货当日可在此回购。
                 </div>
             </div>
 
             <!-- 回购 Tab -->
             <div id="shop-tab-buyback" class="shop-tab" style="display:none">
-                <div class="max-h-48 overflow-y-auto space-y-1">
-                    ${buybackHtml}
-                </div>
+                <div id="shop-buyback-list" class="space-y-1"></div>
                 <div class="mt-2 text-xs text-gray-500">
                     💡 出售给商店的物品可在当日以120%价格回购。商店刷新后清空。
                 </div>
@@ -1146,7 +1470,7 @@ function showShopDialog(shop) {
         if (_greetLine) _titleGreet = '<div class="text-xs text-gray-400 mb-3">' + _greetLine + '</div>';
     } catch (e) {}
     modal.innerHTML = `
-        <div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto">
+        <div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-[1100px] w-full mx-4 max-h-[85vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-bold text-yellow-500">${shop.name}</h3>
                 <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
@@ -1156,6 +1480,11 @@ function showShopDialog(shop) {
         </div>
     `;
     document.body.appendChild(modal);
+    _shopDialogShop = shop;
+    _sellMarkedOnly = false;   // 看货方式跟着这扇窗走：重开一间店就从「看全部」起步
+    shopRefreshGoods(shop);   // 首屏与筛选后走同一条渲染路：两处各拼一份货单就会开始不一致
+    shopRefreshSell(shop);
+    shopRefreshBuyback(shop);
 }
 
 // 剩余任务#3：药铺/坊市时价标签 + 对照出关见闻快照（返回 HTML 或空串）
@@ -1497,6 +1826,11 @@ function playerManualRealmIndex() {
     var realms = window.REALM_CONFIG.realms;
     var i = realms.findIndex(function (x) { return x.name === r; });
     if (i < 0) i = realms.findIndex(function (x) { return String(r).indexOf(x.name) === 0; }); // 容错'筑基期'等带缀写法
+    // DES-92（第一百三十二批）：这张配置表数到渡劫就断了，飞升／金仙查不到 ⇒ 旧写法当 0（炼气），
+    //   三品／二品秘籍（need 2）反倒对最高的两境永不上架。这里只补表尾之上的档，表内序号一档不改。
+    if (i < 0 && typeof window.realmIndex === 'function' && window.realmIndex('渡劫') >= 0) {
+        if (window.realmIndex(r) > window.realmIndex('渡劫')) return realms.length;
+    }
     return i < 0 ? 0 : i;
 }
 

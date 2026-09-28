@@ -135,7 +135,7 @@ function childAction(idx, act) {
         if (window.showMessage) window.showMessage('🎒 孩子出门历练了，三十日后回来。', 'info');
     } else if (act === 'home') {
         c.path = 'home';
-        cd.mood = Math.min(100, (cd.mood || 50) + 10);
+        cd.mood = Math.min(100, (cd.mood ?? 50) + 10);
         if (window.gameLog && window.gameLog.add) window.gameLog.add('🏡 「' + c.name + '」留在你身边。晚课一起上，饭桌多一副碗筷——天伦之乐，心情+10。', 'success');
         if (window.showMessage) window.showMessage('🏡 天伦之乐，心情+10。', 'success');
     } else return false;

@@ -159,14 +159,21 @@
             var caveTick = window.CaveFacilities.tickDay(caveId);
             if (caveTick && caveTick.events && caveTick.events.length) {
                 var ev0 = caveTick.events[0];
-                if (ev0.id === 'empty_wild_herb' && typeof window.addItem === 'function') {
-                    window.addItem('mat_spirit_grass', 1);
-                }
-                if (ev0.id === 'companion_found_herb' && typeof window.addItem === 'function') {
-                    window.addItem('mat_lingzhi', 1);
+                // DES-72（第一百三十批）：这两枚药草旧写法丢了返回值——「长出一株野药」照念，囊里有没有不管
+                var 药草 = ev0.id === 'empty_wild_herb' ? 'mat_spirit_grass'
+                    : (ev0.id === 'companion_found_herb' ? 'mat_lingzhi' : null);
+                var 药 = null;
+                if (药草 && typeof window.giveWithReceipt === 'function') {
+                    药 = window.giveWithReceipt(药草, 1, { quiet: true });   // 合念进下面那一笔，不另弹一条
+                } else if (药草) {
+                    药 = { count: 1, name: (window.itemById && window.itemById[药草] && window.itemById[药草].name) || 药草,
+                        got: typeof window.addItem === 'function' ? (Number(window.addItem(药草, 1)) || 0) : 1 };
                 }
                 if (window.showMessage && !window._isInLongRetreat) {
-                    window.showMessage('🏡 ' + ev0.text, 'info');
+                    window.showMessage('🏡 ' + ev0.text + (药 && 药.got === 0
+                        ? '——可这一株' + 药.name + '没能带走：'
+                          + ((typeof window.addItemFailText === 'function' && window.addItemFailText(药.name)) || '这一件先还留在原处。')
+                        : ''), 'info');
                 }
             }
             return caveTick;
@@ -269,7 +276,7 @@
             trained++;
         }
         if (trained && typeof window.saveBeastData === 'function') {
-            try { window.saveBeastData(); } catch (eSave) {}
+            try { window.saveBeastData(); } catch (eSave) { console.warn('[静默失败] js/core/world-loop.js:279 · 灵兽存盘：驯完当天的灵兽要落盘，这里没接住，玩家会察觉灵兽白养了', eSave && eSave && eSave.message); }
         }
         return { ok: true, trained: trained };
     }

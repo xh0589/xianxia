@@ -267,7 +267,7 @@
         } else {
             addC(100, '盛会夺彩·三战三捷');
         }
-        try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 10); } catch (e) {}
+        try { if (W.currentCharData) W.currentCharData.fame = Math.min(99999, (W.currentCharData.fame || 0) + 10); } catch (e) { console.warn('[静默失败] js/sects/sect-gala.js:270 · 盛会记名气：这一笔fame没接住，玩家会察觉的损失在此', e && e && e.message); }
         var it = sect && internal(sect);
         if (it && !isPSect(sect)) it.influence = (Number(it.influence) || 0) + 5;
         if (sect) chron(sect, '盛会的夺彩台上，' + playerName() + '三战三捷——各家掌门亲自斟酒，这一日满江湖都在说这个名字。（影响力+5）');

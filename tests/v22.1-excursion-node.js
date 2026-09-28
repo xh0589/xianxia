@@ -148,13 +148,17 @@ function loadWorld(opts) {
     ok(Object.keys(d1).length > 0, 'B2 第 1 天就有掌门下山（实得 ' + Object.keys(d1).length + ' 位）');
 
     // 位置合法：去的必是本区域城市
+    // DES-57：落笔口径改成「去空白的表键写法」（mapData 的起始城带空格，与 cityData／homeLocation 长期打架），
+    // 故这里比对也先去空白；另钉一条：写进 NPC 账的那串不许含空白。
     let badCity = 0;
     for (const s in d1) {
         const region = w.sectsData[s].location;
         const cities = (w.mapData[region] || {}).cities || [];
-        if (cities.indexOf(d1[s]) < 0) badCity++;
+        const got = String(d1[s]).replace(/\s+/g, '');
+        if (!got || /\s/.test(d1[s])) badCity++;
+        if (!cities.some(c => String(c).replace(/\s+/g, '') === got)) badCity++;
     }
-    eq(badCity, 0, 'B3 下山去的是本区域城市');
+    eq(badCity, 0, 'B3 下山去的是本区域城市（且落笔是不带空白的表键写法）');
 
     // 同城限流 ≤2
     let capBad = 0;

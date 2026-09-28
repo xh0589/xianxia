@@ -361,7 +361,7 @@
 
         // 宗门史
         var hist = (sect.history || []).slice(-12).reverse();
-        html += '<p class="text-sm text-amber-400 mb-1">宗门史</p><div class="bg-gray-900/50 rounded p-2 mb-3 max-h-40 overflow-y-auto">' +
+        html += '<p class="text-sm text-amber-400 mb-1">宗门史</p><div class="bg-gray-900/50 rounded p-2 mb-3">' +
             (hist.length ? hist.map(function (h) {
                 // 第九波·明面：宗门史跟头部统一口径「立派第 N 天」——不再同屏两套时间
                 var dn = (h.day && sect.createdDay && h.day >= sect.createdDay) ? ('立派第' + (h.day - sect.createdDay + 1) + '天 · ') : '';

@@ -304,7 +304,7 @@
             if (j.ambush) tags.push('可能撞劫道的（真仗）');
             if (j.herbRisk) tags.push('可能认错苗');
             html += '<div class="flex justify-between items-center bg-gray-900/60 rounded p-2 mb-1">'
-                + '<span class="text-xs text-gray-300">' + j.name + ' <span class="text-gray-500">· ' + (j.who || '街坊') + ' · 灵石' + j.pay + ' · 精力' + j.energy + ' · ' + (j.time / 60) + '时辰 · 要' + j.need + '人手' + (tags.length ? ' · ' + tags.join('，') : '') + '</span></span>'
+                + '<span class="text-xs text-gray-300">' + j.name + ' <span class="text-gray-500">· ' + (j.who || '街坊') + ' · 灵石' + j.pay + ' · 精力' + j.energy + ' · ' + (window.formatShichen ? window.formatShichen(j.time) : j.time + '分钟') + ' · 要' + j.need + '人手' + (tags.length ? ' · ' + tags.join('，') : '') + '</span></span>'
                 + (blocked ? '<span class="text-[11px] text-gray-600">风声紧</span>'
                     : btn('接', 'window.PSectVenture.doJob(' + i + ')', (okNeed && okEnergy) ? 'bg-green-700 hover:bg-green-600' : 'bg-gray-700') )
                 + '</div>';

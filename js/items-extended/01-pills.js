@@ -64,14 +64,8 @@ window.extendedSpecialPills = [
     { id: 'pill_hemostatic', name: '止血丹', type: 'consumable', subtype: 'special_pill', category: 'consumable', quality: 'PIN8', level: 3, price: 80, effect: { hemostatic: true }, stackable: true, maxStack: 50, desc: '全身外出血减半，内出血停止累积', icon: '💊' }
 ];
 
-// 医疗物品（绷带类）— 新增 useContext: ['medical']
+// 医疗物品（绷带类）—— items-extended.js 在载入后合并这一张表，下面不许再来一份同名赋值（后写的那份会静默赢）
 window.extendedMedicalItems = [
     { id: 'med_bandage', name: '绷带', type: 'consumable', subtype: 'medical', category: 'consumable', quality: 'PIN9', level: 1, price: 10, effect: { bandage: 40 }, stackable: true, maxStack: 99, desc: '包扎伤口，稳定度+40', icon: '🩹', useContext: ['medical'] },
     { id: 'med_bandage_advanced', name: '灵布绷带', type: 'consumable', subtype: 'medical', category: 'consumable', quality: 'PIN8', level: 3, price: 50, effect: { bandage: 65 }, stackable: true, maxStack: 50, desc: '优质绷带，稳定度+65', icon: '🩹', useContext: ['medical'] }
-];
-
-// 医疗物品（绷带类）
-window.extendedMedicalItems = [
-    { id: 'med_bandage', name: '绷带', type: 'consumable', subtype: 'medical', category: 'consumable', quality: 'PIN9', level: 1, price: 10, effect: { bandage: 40 }, stackable: true, maxStack: 99, desc: '包扎伤口，稳定度+40', icon: '🩹' },
-    { id: 'med_bandage_advanced', name: '灵布绷带', type: 'consumable', subtype: 'medical', category: 'consumable', quality: 'PIN8', level: 3, price: 50, effect: { bandage: 65 }, stackable: true, maxStack: 50, desc: '优质绷带，稳定度+65', icon: '🩹' }
 ];

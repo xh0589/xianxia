@@ -8,7 +8,8 @@
     'use strict';
 
     // ============ 疆界：谁与谁接壤 ============
-    // li：两地关隘之间的里数（进城赶路用的旧里表也以 60 里≈两个时辰折算，这里同一把尺）
+    // li：两地关隘之间的里数。折算只此一处（journeyMinutes＝里×2 分钟；1 时辰＝120 分钟 ⇒ 60 里＝一个时辰）。
+    //   第一百三十一批更正：这一行旧写法写作「60 里≈两个时辰」，比真账大一倍——下面那句出关回执的写死时长就是被它带歪的。
     // kind：这条路是什么走法，决定路上会出什么事
     var WORLD_BORDERS = [
         { a: '中州', b: '东荒', route: '青木官道', li: 240, kind: 'road',   blurb: '官道两边古木成荫，越往东林子越密，兽吼也越近。' },
@@ -32,10 +33,13 @@
     };
 
     // ============ 关隘上的事 ============
-    // time：多花的时辰（负数是省下的）  hp/energy：掉的血与力气  stones：破财  gain：捡着的好物
+    // time：多花（负数是省下）的分钟数，念出来一律走 shichenText 现推
+    //   （第一百三十一批 DES-54：旧写法在三句文案里写死「半个时辰／一个时辰」，与真落笔的 30/30/60 分钟差一倍——
+    //    牌面各算各的正是这一族的病根，时辰数字不许再进文案，只进回执那一句）
+    // hp/energy：掉的血与力气  stones：破财  gain：捡着的好物
     var BORDER_INCIDENTS = {
         pass: [
-            { text: '关卒盘查行囊，磨了半个时辰。', time: 30, energy: 4 },
+            { text: '关卒盘查行囊，一件件抖开看。', time: 30, energy: 4 },
             { text: '关外风雪扑面，眉毛上都结了霜。', energy: 8 },
             { text: '关口外兽啸连声，多绕了半条山路。', energy: 6, hp: 3 }
         ],
@@ -52,12 +56,12 @@
         bridge: [
             { text: '桥头瘴气贴着水漫上来，呛得人头晕。', hp: 3, energy: 5 },
             { text: '廊柱旧符被风掀起，你顺手替它贴了回去。', gain: 'mat_lingzhi' },
-            { text: '桥面湿滑，走得比寻常慢了半个时辰。', time: 30, energy: 3 }
+            { text: '桥面湿滑，一步一步踩得小心。', time: 30, energy: 3 }
         ],
         sea: [
             { text: '半途起了风浪，船身颠得人站不稳。', hp: 4, energy: 6 },
-            { text: '夜里渔火引路，省了大半行程。', time: -40 },
-            { text: '海雾里迷了方向，多漂了一个时辰。', time: 60, energy: 6 }
+            { text: '夜里渔火引路，船走得顺。', time: -40 },   // 第一百三十一批登记：这支的「省」从未进账（passTime 下限 0），要真减时辰属待裁
+            { text: '海雾里迷了方向，兜兜转转才找着水道。', time: 60, energy: 6 }
         ]
     };
 
@@ -128,6 +132,13 @@
     function journeyMinutes(border) { return Math.round((border.li || 60) * 2); }
     function journeyEnergy(border) { return Math.max(2, Math.round((border.li || 60) / 25)); }
 
+    // DES-54（第一百三十一批）：时长话只借 time-system 那一处折（全仓一把尺）；真源没就绪就念分钟，
+    //   绝不在这条支路自己除 120——牌面各算各的正是这一族的病根。
+    function shichenText(minutes) {
+        var m = Math.max(0, Math.round(Number(minutes) || 0));
+        return (typeof global.formatShichen === 'function') ? global.formatShichen(m) : (m + ' 分钟');
+    }
+
     // ============ 人此刻在哪一州 ============
     // 野外图开着，人就站在那片山河里；回城落脚了，就看那座城归哪一州
     function currentRegion() {
@@ -186,6 +197,7 @@
     function incidentText(inc) {
         if (!inc) return '';
         var bits = [];
+        // DES-54（第一百三十一批）：本行只说光景，那笔耽搁由时间通道那句「关隘耽搁耗时X」念——在这儿再念一遍是 DES-42
         if (inc.hp) bits.push('气血 -' + inc.hp);
         if (inc.energy) bits.push('力气 -' + inc.energy);
         if (inc.gain) bits.push('得' + itemName(inc.gain) + '×1');
@@ -248,7 +260,9 @@
         if (cd) cd.energy = Math.max(0, (cd.energy || 0) - cost);   // 脚力按里数结，关口上的事另算
         if (typeof global.updateCharacterStatus === 'function') global.updateCharacterStatus();
 
-        say('🧭 出' + from + '，走' + border.route + '（' + border.li + ' 里 · 约两个时辰十里）……' + border.blurb, 'info');
+        // DES-54（第一百三十一批）：这句旧写法把时长写死成「约两个时辰十里」——真账在 mins 里（60 里＝120 分钟＝一个时辰），
+        //   可 180 里的剑阁栈道要三个时辰、360 里的寒江关要六个，屏上却人人念同一句。改吃 mins，折法只借 time-system 那一处。
+        say('🧭 出' + from + '，走' + border.route + '（' + border.li + ' 里 · 约 ' + shichenText(mins) + '）……' + border.blurb, 'info');
         if (inc) say('⛰️ ' + incidentText(inc), inc.gain ? 'success' : 'warning');
         say('🗺️ 出了' + border.route + '，脚下已是' + target + '地界。', 'success');
 
@@ -477,6 +491,7 @@
         pathBetween: pathBetween,
         journeyMinutes: journeyMinutes,
         journeyEnergy: journeyEnergy,
+        shichenText: shichenText,
         currentRegion: currentRegion,
         setOut: setOut,
         renderRoutes: renderRoutes,

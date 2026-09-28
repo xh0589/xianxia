@@ -30,10 +30,13 @@ function checkMasterRequirement(player, req, contribution) {
     req = req || {};
     var missing = [];
     if (req.realm) {
-        var meetRealm = (typeof window.getRealmTier === 'function')
-            ? window.getRealmTier(player.realm) >= window.getRealmTier(req.realm) && (player.layer || 1) >= (req.layer || 1)
-            : true;
-        if (!meetRealm) missing.push(req.realm + (req.layer || 1) + '层');
+        // DES-92（第一百三十三批）：尺只借这一把（window.realmAtLeast，真源见 js/global-utils.js:734-747）。
+        //   旧写法两处 getRealmTier 相比、尺没就绪那一支回的是 `true`——「测不了」直接换成「开大门」：
+        //   拜师页把谁都标成「可拜」，sectBecomeStudent 的复核走同一支也就真拜成了。
+        //   现判不了即不够格；门槛名本身认不出⇒放行（别拿一张写错的门牌锁人，与 realmAtLeast 同口径）。
+        var 有尺 = typeof window.realmAtLeast === 'function';
+        var meetRealm = 有尺 && window.realmAtLeast(player.realm, req.realm) && (player.layer || 1) >= (req.layer || 1);
+        if (!meetRealm) missing.push(req.realm + (req.layer || 1) + '层' + (有尺 ? '' : '（境界尺未加载，暂按不够格办）'));
     }
     if (req.contribution && !(contribution >= req.contribution)) missing.push('贡献' + req.contribution);
     if (req.medicine && !((player.lifeSkills && player.lifeSkills['医术']) >= req.medicine)) missing.push('医术' + req.medicine);
@@ -119,7 +122,7 @@ function showSectMasters(sectName) {
             html += '<p class="text-sm text-green-400">当前师父：' + master.name + '（' + master.title + '）</p>';
             html += '<p class="text-xs text-gray-400">' + master.desc + '</p>';
             html += '<div class="flex gap-1 mt-2 flex-wrap">';
-            html += '<button onclick="askMasterGuidance(\'' + sectName + '\')" class="bg-cyan-700 hover:bg-cyan-600 text-white px-3 py-1 rounded text-xs" title="耗半个时辰——今日下一次藏经阁参悟感悟翻倍">🧭 请益（半时辰）</button>';
+            html += '<button onclick="askMasterGuidance(\'' + sectName + '\')" class="bg-cyan-700 hover:bg-cyan-600 text-white px-3 py-1 rounded text-xs" title="耗30分钟——今日下一次藏经阁参悟感悟翻倍">🧭 请益（30分钟）</button>';
             html += '<button onclick="chushiFromMaster(\'' + sectName + '\')" class="bg-green-700 hover:bg-green-600 text-white px-3 py-1 rounded text-xs" title="条件：参透本派任意一门功法至大成">🎓 出师</button>';
             html += '<button onclick="sectLeaveMaster(\'' + sectName + '\')" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded text-xs">离开师门</button>';
             html += '</div></div>';
@@ -160,7 +163,7 @@ function sectBecomeStudent(sectName, masterId) {
     
     // v23.2 拜师有礼：敬茶、聆训、录入门墙——旧版点一下「拜师」就算师徒了
     if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
-        try { window.timeSystem.advanceTime(90, '行拜师礼'); } catch (e) {}
+        try { window.timeSystem.advanceTime(90, '行拜师礼'); } catch (e) { console.warn('[静默失败] js/sects/sects-deep-ui.js:166 · 拜师时辰：行拜师礼的时辰本该走掉，这里没接住，玩家会察觉时间没扣', e && e && e.message); }
     }
     if (window.showMessage) window.showMessage('🍵 你奉上拜师茶，' + master.name + ' 受了你三拜，授你门规一册：「入了我门下，勤字当头。」——你正式拜入' + master.name + '门下！', 'success');
     // v15.4 裁决：拜师不送功法——功法须经本派藏经阁参悟获得
@@ -192,7 +195,7 @@ function askMasterGuidance(sectName) {
     var today = (typeof window.getAbsoluteDay === 'function') ? window.getAbsoluteDay()
         : ((window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') ? window.timeSystem.getAbsoluteDay() : 0);
     if (ds._masterBlessDay === today) { if (window.showMessage) window.showMessage('师父今日已指点过你了——贪多嚼不烂。', 'warning'); return; }
-    try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '师父指点'); } catch (e) {}
+    try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '师父指点'); } catch (e) { console.warn('[静默失败] js/sects/sects-deep-ui.js:198 · 请益时辰：师父指点的半个时辰本该走掉，这里没接住，玩家会察觉时间没扣', e && e && e.message); }
     ds._masterBlessDay = today;
     if (window.showMessage) window.showMessage('「' + (ds._masterName || '师父') + '」为你拆解了一路武学的关窍——今日再入藏经阁参悟，必事半功倍。', 'success');
     showSectMasters(sectName);
@@ -234,10 +237,17 @@ function applySectEventEffects(eff, sectName, evtName) {
     if (eff.contribution) { ds.contribution = Math.max(0, (ds.contribution || 0) + eff.contribution); try { window.sectLedgerNote && window.sectLedgerNote(eff.contribution, '门派事件·' + (evtName || '门中一事')); } catch (e) {} msgs.push('贡献' + (eff.contribution > 0 ? '+' : '') + eff.contribution); }
     if (eff.points) { ds.points = Math.max(0, (ds.points || 0) + eff.points); msgs.push('积分' + (eff.points > 0 ? '+' : '') + eff.points); }
     if (eff.fame && typeof window.addFame === 'function') { window.addFame(eff.fame); msgs.push('声望' + (eff.fame > 0 ? '+' : '') + eff.fame); }
-    if (eff.item && eff.item.id && typeof window.addItem === 'function') {
-        if (window.addItem(eff.item.id, eff.item.count || 1)) {
-            var nm = (window.itemById && window.itemById[eff.item.id] && window.itemById[eff.item.id].name) || eff.item.id;
-            msgs.push('获得 ' + nm + 'x' + (eff.item.count || 1));
+    if (eff.item && eff.item.id && (typeof window.giveWithReceipt === 'function' || typeof window.addItem === 'function')) {
+        // DES-72（第一百三十批）：旧写法只判了真值——半收时也照念开价份数
+        var 要 = eff.item.count || 1;
+        var 收 = typeof window.giveWithReceipt === 'function'
+            ? window.giveWithReceipt(eff.item.id, 要, { quiet: true })
+            : { got: Number(window.addItem(eff.item.id, 要)) || 0, count: 要, name: (window.itemById && window.itemById[eff.item.id] && window.itemById[eff.item.id].name) || eff.item.id, reason: window.addItemFailReason || null };
+        if (收.got > 0) {
+            msgs.push('获得 ' + 收.name + 'x' + 收.got + (收.got < 收.count ? '（另 ' + (收.count - 收.got) + ' 件：' + ((typeof window.addItemReasonPhraseFor === 'function' && window.addItemReasonPhraseFor(收.reason, 收.name)) || '没能带走') + '）' : ''));
+        } else {
+            // DES-90（第一百三十九批）：问不到账时不许由站点断言满包
+            msgs.push(收.name + ' 没能落袋（' + ((typeof window.addItemFailPhraseFor === 'function' && window.addItemFailPhraseFor(收.reason, 收.name)) || '这一件先还留在原处') + '）');
         }
     }
     if (eff.buff && typeof window.applyBuff === 'function') {
@@ -245,10 +255,8 @@ function applySectEventEffects(eff, sectName, evtName) {
         var bt = Object.keys(eff.buff.effects || {}).map(function (k) { return k + '+' + eff.buff.effects[k]; }).join(' ');
         msgs.push((eff.buff.name || '气息萦绕') + '（' + bt + '，持续' + (eff.buff.hours || 8) + '小时）');
     }
-    if (eff.repSelf && typeof window.changeFactionReputation === 'function') {
-        window.changeFactionReputation(sectName, eff.repSelf);
-        msgs.push('本派声望' + (eff.repSelf > 0 ? '+' : '') + eff.repSelf);
-    }
+    // 没有 repSelf 这一支：词表里的「本派声望」在全仓没有对应账本（弟子侧只有贡献/积分），
+    // 旧码把门派名喂给按势力 id 索引的 changeFactionReputation——静默 return 0 却照推「本派声望+N」。
     return msgs;
 }
 function renderSectEventCard(sectName, ev) {
@@ -453,14 +461,17 @@ function sectPromote(sectName, targetRank) {
     try { window.sectLedgerNote && window.sectLedgerNote(-reqAmt, '晋升答礼·' + rankDef.name); } catch (e) {}
     // v23.2 晋升有仪程：执事唱名、堂上见礼、同门道贺——旧版点一下数字就变了
     if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
-        try { window.timeSystem.advanceTime(60, '晋升答礼'); } catch (e) {}
+        try { window.timeSystem.advanceTime(60, '晋升答礼'); } catch (e) { console.warn('[静默失败] js/sects/sects-deep-ui.js:464 · 晋升时辰：晋升答礼的仪程时辰本该走掉，这里没接住，玩家会察觉时间没扣', e && e && e.message); }
     }
-    if (window.showMessage) window.showMessage('🎉 堂上执事展开名册唱名，你上前见礼受职——自今日起，你是' + sectName + '的「' + rankDef.name + '」了。同门纷纷道贺。（晋升答礼耗时一个时辰）', 'success');
+    // 回执的时长不写死，吃上面那枚真账同一个数（口径唯一：time-system 的 formatShichen）。
+    // 为什么这里不提成变量：上一行那枚字面量被 tests/v23.2-social-node.js 的 A31 整串钉着（改数就换人钉），
+    // 搬家会把那条断言抽掉——故两处同写一个数，[CS] 段拿它们对质，谁先改口谁报红。
+    if (window.showMessage) window.showMessage('🎉 堂上执事展开名册唱名，你上前见礼受职——自今日起，你是' + sectName + '的「' + rankDef.name + '」了。同门纷纷道贺。（晋升答礼耗时' + (window.formatShichen ? window.formatShichen(60) : '60分钟') + '）', 'success');
     showSectRanks(sectName);
     if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
     // v19.0 批次 B 钩子：玩家职位变化时通知
     if (window.EventBus && typeof window.EventBus.emit === 'function') {
-        try { window.EventBus.emit('sect:role:checked', { rank: rankDef }); } catch (e) {}
+        try { window.EventBus.emit('sect:role:checked', { rank: rankDef }); } catch (e) { console.warn('[静默失败] js/sects/sects-deep-ui.js:474 · 晋升事件：晋升后该 emit 的职位事件没发出去，订阅方收不到，玩家会察觉事件没触发', e && e && e.message); }
     }
 }
 
@@ -811,7 +822,7 @@ function gbVowCheck(today) {
         if (gb.violations === 1) {
             if (window.showMessage) window.showMessage('戒律院长老堵住了你："袖口里的银钱味，隔三条街都闻得到。——初犯，记下了。"', 'warning');
         } else if (gb.violations === 2) {
-            try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(180, '罚乞三日'); } catch (e) {}
+            try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(180, '罚乞三日'); } catch (e) { console.warn('[静默失败] js/sects/sects-deep-ui.js:825 · 罚乞时辰：再犯戒律被罚乞三日的禁足时长本该走掉，这里没接住，玩家会察觉时间没扣', e && e && e.message); }
             var nm = gbDemoteOne();
             if (window.showMessage) window.showMessage('再犯！罚乞三日，降为' + nm + '。', 'error');
         } else {

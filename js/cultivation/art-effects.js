@@ -386,9 +386,19 @@
     if (window.XianXia) window.XianXia.ArtEffects = api;
 
     // 全局便捷：getEffectiveMax('maxQi') / ('maxHealth') —— 各处上限判断统一走这里
-    window.getEffectiveMax = function (kind) {
-        var cd = window.currentCharData || {};
-        var base = kind === 'maxQi' ? (Number(cd.maxQi) || 100) : (Number(cd.maxHealth) || 100);
-        try { return api.effMax(kind, base); } catch (e) { return base; }
-    };
+window.getEffectiveMax = function (kind) {
+  var cd = window.currentCharData || {};
+  // 第一百四十二批（RE-10 定案）：原式只有两支——`maxQi` 走真源，其余**一律回落 maxHealth**。
+  // 于是 `getEffectiveMax('energy')` 读的是**生命值上限**。
+  // 受害点：js/city-facilities/teahouse-leisure.js:46-50 的 `maxEnergy()`，它正是精力上限的读点
+  // （该文件 109-111 行的注释早把这条病写清楚了，只是留着「两把尺择一待裁决」）。
+  // 裁决方向：**精力上限就是 maxEnergy**——通道那侧（app.js:7141 的精力条）读的正是
+  // `cd.maxEnergy`，茶馆这一侧才是异类。补上第三支即可，effMax 对非 maxQi 原样返回（:366），
+  // 所以精力不会凭空多出功法加成——那里本来就没有这个机制。
+  var base;
+  if (kind === 'maxQi') base = Number(cd.maxQi) || 100;
+  else if (kind === 'energy') base = Number(cd.maxEnergy) || 100;
+  else base = Number(cd.maxHealth) || 100;
+  try { return api.effMax(kind, base); } catch (e) { return base; }
+};
 })();

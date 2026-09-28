@@ -172,6 +172,26 @@ eq(cd.mood, 80, 'C20 没看成心境分毫不动');
 eq(W.inventory.currency.copper, 3, 'C21 没看成钱也分毫不动（原子结算）');
 eq(state.minutes, 0, 'C22 没看成时间也不跳');
 
+// 触顶那一屏（DES-42②：账在通道上、话在摊层另说一套 ⇒ 同屏一行真一行谎）
+fresh();
+cd.mood = 100;
+SE.start('goulan_washe', 'stage');
+r = SE.choose(5);
+ok(r && !r.error, 'C23 心境已满也看得成杂耍（不挡门）');
+ok(logsHave('心境已达上限，实得+0'), 'C24 通道那句照实报「实得+0」（改前摊层紧跟一句「（心境+8）」）');
+ok(!logsHave('心境+8'), 'C25 屏上再无手拼的「心境+8」');
+var moodLines = state.logs.filter(function (l) { return l.indexOf('心境') >= 0; });
+eq(moodLines.length, 1, 'C26 一次点击只提心境一次（一本账一副笔；实际=' + JSON.stringify(moodLines) + '）');
+eq(cd.mood, 100, 'C27 账本同读：心境仍在 100');
+fresh();
+cd.lifeSkills['学识'] = 100;
+SE.start('goulan_washe', 'stage');
+r = SE.choose(6);
+ok(r && !r.error, 'C28 学识已满也看得成皮影');
+eq(cd.lifeSkills['学识'], 100, 'C29 账上学识未动');
+ok(!logsHave('学识+1'), 'C30 满级那一格屏上不许多报「学识+1」（改前摊层常量无中生有；通道本就一字不报）');
+ok(logsHave('心境+6'), 'C31 同笔没触顶的心境照旧按差值报 +6');
+
 // ==================== D · 分城 crowd ====================
 console.log('\n[D] 分城 crowd（八座瓦舍城一座不落）');
 var VOICES = W.CITY_VOICES;
@@ -216,7 +236,7 @@ eq(badRoll.length, 0, 'E7 成败签输赢两分支的老纪律不破');
 var leaky = (src.match(/'[^'\n]*'/g) || []).filter(function (s) { return /[一-鿿]/.test(s) && /[A-Za-z]{3}/.test(s); });
 eq(leaky.length, 0, 'E8 瓦舍文案零漏翻' + (leaky.length ? '：' + leaky[0] : ''));
 var rsSrc = loadScript('js/core/reward-service.js');
-ok(rsSrc.indexOf('mood: signedInt(spec.mood)') >= 0 && rsSrc.indexOf("messages.push('心境'") >= 0, 'E9 统一结算通道心境键在册（normalize + apply 两头）');
+ok(rsSrc.indexOf('mood: signedInt(spec.mood)') >= 0 && rsSrc.indexOf("pushGain(messages, '心境'") >= 0, 'E9 统一结算通道心境键在册（normalize + apply 两头）');
 var cvSrc = loadScript('js/city-facilities/city-voices.js');
 eq((cvSrc.match(/crowd: '/g) || []).length, 8, 'E10 口吻包添了八条瓦舍氛围词');
 eq((cvSrc.match(/chess: '/g) || []).length, 5, 'E11 五座茶馆城各备了一位棋客');

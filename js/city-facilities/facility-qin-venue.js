@@ -163,7 +163,7 @@
                             text: '🤸 看一场杂耍（5 文钱，图个热闹）', next: null,
                             effects: {
                                 cost: { copper: 5 }, mood: 8,
-                                msg: function () { return crowdLine() + '吞刀喷火、顶缸走索，一式接一式，喝彩声浪一阵高过一阵。你看得脖子发酸，心里却松快。（心境+8）'; },
+                                msg: function () { return crowdLine() + '吞刀喷火、顶缸走索，一式接一式，喝彩声浪一阵高过一阵。你看得脖子发酸，心里却松快。'; },
                                 time: 45
                             }
                         },
@@ -171,7 +171,7 @@
                             text: '🏮 看一段皮影戏（5 文钱，看个故事）', next: null,
                             effects: {
                                 cost: { copper: 5 }, mood: 6, lifeSkill: { name: '学识', exp: 1 },
-                                msg: function () { return crowdLine() + '白幕之后灯影流转，三根竹棍挑出一段仙门旧事，演得有鼻子有眼。散场时你还能哼出两句主角的出场词——看戏也长见识。（学识+1、心境+6）'; },
+                                msg: function () { return crowdLine() + '白幕之后灯影流转，三根竹棍挑出一段仙门旧事，演得有鼻子有眼。散场时你还能哼出两句主角的出场词——看戏也长见识。'; },
                                 time: 45
                             }
                         },
@@ -179,7 +179,7 @@
                             text: '🐦 听口技「百鸟朝凤」（8 文钱，听个绝活）', next: null,
                             effects: {
                                 cost: { copper: 8 }, mood: 6, lifeSkill: { name: '音律', exp: 1 },
-                                msg: function () { return crowdLine() + '一人一桌一扇一抚尺，百鸟齐鸣绕梁不散——你闭上眼，几乎以为身在春山。换气与转音的门道，也偷师了几分。（音律+1、心境+6）'; },
+                                msg: function () { return crowdLine() + '一人一桌一扇一抚尺，百鸟齐鸣绕梁不散——你闭上眼，几乎以为身在春山。换气与转音的门道，也偷师了几分。'; },
                                 time: 45
                             }
                         },

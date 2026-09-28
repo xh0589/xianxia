@@ -183,7 +183,7 @@ global.inventory.maxSlots = 1;
 global.addItem('mat_lingzhi', 1);   // 把最后一格占掉
 var stonesC = wallet();
 var r3 = PS.redeem();
-assert(r3.error && r3.error.indexOf('背包放不下') >= 0, 'C19 满包赎不走——如实相告');
+assert(r3.error && /货仍在你柜上/.test(r3.error) && !/背包放不下|行囊已满/.test(r3.error), 'C19 赎不回时只说货仍在柜上——通道的 reason 键一名两义（inventory_full_or_invalid_item），源码不许替行囊断因（第一百三十五批尾巴②撤的这句谎，接真账另批）');
 eq(wallet(), stonesC, 'C20 赎不走钱分文不扣');
 assert(global.currentCharData._pawn.item === 'wpn_qingfeng', 'C21 货还在柜上、当票还有效');
 global.inventory.maxSlots = 30;

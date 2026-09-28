@@ -1,0 +1,162 @@
+﻿<svg viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg" id="beast-body-svg" class="body-svg" role="img" aria-label="通用动物躯体图">
+<!--
+  ============================================================================
+  通用动物（妖兽）躯体 SVG —— 四足侧视·狼虎型·低多边形硬边
+  ============================================================================
+  设计口径（与 仙侠.html 内嵌的「通用人类躯体 SVG v15」同族）：
+    · 画法同族：轮廓一律直线段（和 v15 那张「像素边精确描摹」的木人桩一样），
+      不用曲线糊圆角——曲线会把兽形捏成卡通贴纸，硬边才有解剖感
+    · 比例：头长 ≈ 身长 1/2 但压扁成楔形长吻（高仅长的 0.65），颈短厚，
+      躯干纵深 ≈ 立腿长，四肢细于躯干（虎狼体态，不做成犬獒那种柱腿）
+    · 配色：底色 #0f1724 + 柔光 bgGlow，部件本体 #22c55e，描边 #31415a / 外轮廓 #3b4b64
+    · 画布 viewBox 0 0 200 160（四足侧视是横长身，套人形的 200×420 竖版会空掉六成画面；
+      面板按 .body-svg{width:100%;max-width:220px;height:auto} 自适应比例，换盒子不影响嵌入）
+    · 命名规则：L = 近侧（靠观者，画在前），R = 远侧（背观者，画在后）
+    · 侧视只有一只可见眼，眼件用单节点 body-eyes（人形图的 eyes-left/right 为可选附加）
+    · 兽类新增两格：耳（ears）、尾（tail）
+    · 伤害区（脑/胸腔/颈/兽核）沿用人形图做法：整块剪影打底 + 分区件上色
+  ···········································································
+  24 部件清单（id 取「兽类名」，data-part 记「人形别名」）
+    beast id      标签                人形别名      备注
+    brain         脑（要害）          brain         同名
+    eyes          眼                 eyes          同名，侧视单眼
+    jaw           颚（利齿）          jaw           同名
+    head          头                 head          同名
+    ears          耳                 ——            兽类新增
+    neck          颈（要害）          neck          同名
+    chest         胸腔（要害）        chest         同名
+    abdomen       腹                 abdomen       同名
+    waist         腰                 waist         同名
+    pelvis        盆（后胯）          pelvis        同名
+    core          兽核（要害）        dantian       ★双 ID：<g id="body-dantian"> 包 <path id="body-core">
+    tail          尾                 ——            兽类新增
+    shoulderL/R   前肩（左近/右远）  upperArmL/R   ★双 ID
+    forelegL/R    前腿（左近/右远）  forearmL/R    ★双 ID
+    forePawL/R    前爪（左近/右远）  handL/R       ★双 ID
+    thighL/R      后腿·股            thighL/R      同名
+    shinL/R       后腿·胫            calfL/R       ★双 ID
+    hindPawL/R    后爪（左近/右远）  footL/R       ★双 ID
+  ···········································································
+  ★双 ID 怎么做的（纯 SVG，不写 JS）：
+    每个部位外层套 <g id="body-<人形别名>">，内层 <path id="body-<兽类名>" fill="inherit" stroke="inherit">。
+    默认填色/描边给外层 g，内层用 fill="inherit" 继承 →
+    _paintSvgPart() 无论命中兽类 id 还是人形别名 id，涂色都落在同一块图形上，两套接法都能上色。
+  ···········································································
+  接进游戏（两种任选，都不用改 _paintBattleSvgParts）：
+    ① 兽类接法：新增 const BEAST_PARTS，id 用上面「beast id」列（24 格，含耳/尾）。
+    ② 人形接法：直接把本文件当敌人躯体图用，仍按现有人形 22 格查 id，★双 ID 那 11 格由 <g> 兜住。
+    ③ 换槽位改前缀：战斗槽把 id 前缀 body- 批量换成 battle-/enemy-，url(#beast-*) 引用同步替换
+       （现有克隆函数已按 battle 前缀做这件事）。
+-->
+<defs>
+    <radialGradient id="beast-bgGlow" cx="50%" cy="45%" r="55%">
+        <stop offset="0%" stop-color="#2d4a3d" stop-opacity="0.3"></stop>
+        <stop offset="100%" stop-color="transparent"></stop>
+    </radialGradient>
+    <clipPath id="beast-clipHead">
+        <path d="M6,56 L14,49 L24,44 L34,41 L44,40 L52,44 L55,53 L52,62 L44,68 L30,72 L16,71 L8,66 Z"></path>
+    </clipPath>
+    <clipPath id="beast-clipTorso">
+        <path d="M80,48 L112,49 L142,55 L162,62 L172,72 L175,84 L171,93 L160,98 L140,100 L116,100 L97,97 L86,92 L79,80 L78,64 Z"></path>
+    </clipPath>
+</defs>
+
+<!-- 背景 -->
+<rect width="200" height="160" fill="#0f1724" rx="10"></rect>
+<rect width="200" height="160" fill="url(#beast-bgGlow)" rx="10"></rect>
+<ellipse cx="100" cy="152" rx="84" ry="4.5" fill="#0b1220" opacity="0.5"></ellipse>
+
+<!-- ===== 底板剪影（无 id、不描边）：垫在分区件下面，避免接缝露底色 ===== -->
+<path d="M80,48 L112,49 L142,55 L162,62 L172,72 L175,84 L171,93 L160,98 L140,100 L116,100 L97,97 L86,92 L79,80 L78,64 Z" fill="#22c55e" stroke="none"></path>
+<path d="M52,42 L80,48 L88,92 L48,72 Z" fill="#22c55e" stroke="none"></path>
+<path d="M6,56 L14,49 L24,44 L34,41 L44,40 L52,44 L55,53 L52,62 L44,68 L30,72 L16,71 L8,66 Z" fill="#22c55e" stroke="none"></path>
+<path d="M40,41 L56,43 L48,23 Z M18,42 L38,41 L28,22 Z" fill="#22c55e" stroke="none"></path>
+<path d="M146,66 L162,40 L196,20 L198,30 L176,50 L156,76 Z" fill="#22c55e" stroke="none"></path>
+<path d="M92,57 L104,63 L104,89 L96,95 L91,81 L90,63 Z M82,54 L94,60 L94,86 L86,92 L81,78 L80,60 Z" fill="#22c55e" stroke="none"></path>
+<path d="M96,91 L105,93 L107,127 L97,129 L93,111 Z M86,88 L95,90 L97,124 L87,126 L83,108 Z" fill="#22c55e" stroke="none"></path>
+<path d="M96,127 L110,127 L113,139 L108,151 L96,151 L92,139 Z M86,124 L100,124 L103,136 L98,148 L86,148 L82,136 Z" fill="#22c55e" stroke="none"></path>
+<path d="M160,67 L176,75 L178,93 L168,104 L156,106 L150,93 L150,77 Z M150,64 L166,72 L168,90 L158,101 L146,103 L140,90 L140,74 Z" fill="#22c55e" stroke="none"></path>
+<path d="M156,100 L166,108 L178,114 L180,122 L174,141 L163,141 L163,125 L155,111 Z M146,97 L156,105 L168,111 L170,119 L164,138 L153,138 L153,122 L145,108 Z" fill="#22c55e" stroke="none"></path>
+<path d="M162,139 L177,139 L180,148 L175,153 L164,153 L159,147 Z M152,136 L167,136 L170,145 L165,150 L154,150 L149,144 Z" fill="#22c55e" stroke="none"></path>
+
+<!-- ===== 躯干分区（前后竖切线 + 腰腹横切线，与人形图同一套分割法） ===== -->
+<path class="part" id="body-chest" data-part="chest" d="M80,48 L112,49 L116,100 L97,97 L86,92 L79,80 L78,64 Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>胸腔（要害）</title></path>
+<path class="part" id="body-neck" data-part="neck" d="M52,42 L80,48 L88,92 L48,72 Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>颈（要害）</title></path>
+<path class="part" id="body-waist" data-part="waist" d="M112,49 L142,55 L150,58 L149,72 L113,72 Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>腰</title></path>
+<path class="part" id="body-abdomen" data-part="abdomen" d="M113,72 L149,72 L150,97 L140,100 L116,100 Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>腹</title></path>
+<g id="body-dantian" fill="#22c55e" stroke="none">
+    <path class="part" id="body-core" data-part="dantian" d="M114,75 L122,80 L122,89 L114,94 L106,89 L106,80 Z" fill="inherit" stroke="#4a5a75" stroke-width="1.4" clip-path="url(#beast-clipTorso)"><title>兽核（要害）</title></path>
+</g>
+<path class="part" id="body-pelvis" data-part="pelvis" d="M150,58 L162,62 L172,72 L175,84 L171,93 L160,98 L150,97 L149,72 Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>盆（后胯）</title></path>
+
+<!-- ===== 尾 / 耳 ===== -->
+<path class="part" id="body-tail" d="M146,66 L162,40 L196,20 L198,30 L176,50 L156,76 Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>尾</title></path>
+<path class="part" id="body-ears" d="M40,41 L56,43 L48,23 Z M18,42 L38,41 L28,22 Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>耳</title></path>
+
+<!-- ===== 前肢（远侧 R 先画，近侧 L 后画） ===== -->
+<g id="body-upperArmR" fill="#22c55e" stroke="#31415a" stroke-width="1.1">
+    <path class="part" id="body-shoulderR" data-part="upperArmR" d="M92,57 L104,63 L104,89 L96,95 L91,81 L90,63 Z" fill="inherit" stroke="inherit"><title>右前肩（远侧）</title></path>
+</g>
+<g id="body-forearmR" fill="#22c55e" stroke="#31415a" stroke-width="1.1">
+    <path class="part" id="body-forelegR" data-part="forearmR" d="M96,91 L105,93 L107,127 L97,129 L93,111 Z" fill="inherit" stroke="inherit"><title>右前腿（远侧）</title></path>
+</g>
+<g id="body-handR" fill="#22c55e" stroke="#31415a" stroke-width="1.1">
+    <path class="part" id="body-forePawR" data-part="handR" d="M96,127 L110,127 L113,139 L108,151 L96,151 L92,139 Z" fill="inherit" stroke="inherit"><title>右前爪（远侧）</title></path>
+</g>
+<g id="body-upperArmL" fill="#22c55e" stroke="#31415a" stroke-width="1.1">
+    <path class="part" id="body-shoulderL" data-part="upperArmL" d="M82,54 L94,60 L94,86 L86,92 L81,78 L80,60 Z" fill="inherit" stroke="inherit"><title>左前肩（近侧）</title></path>
+</g>
+<g id="body-forearmL" fill="#22c55e" stroke="#31415a" stroke-width="1.1">
+    <path class="part" id="body-forelegL" data-part="forearmL" d="M86,88 L95,90 L97,124 L87,126 L83,108 Z" fill="inherit" stroke="inherit"><title>左前腿（近侧）</title></path>
+</g>
+<g id="body-handL" fill="#22c55e" stroke="#31415a" stroke-width="1.1">
+    <path class="part" id="body-forePawL" data-part="handL" d="M86,124 L100,124 L103,136 L98,148 L86,148 L82,136 Z" fill="inherit" stroke="inherit"><title>左前爪（近侧）</title></path>
+</g>
+
+<!-- ===== 后肢 ===== -->
+<path class="part" id="body-thighR" data-part="thighR" d="M160,67 L176,75 L178,93 L168,104 L156,106 L150,93 L150,77 Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右后腿·股（远侧）</title></path>
+<g id="body-calfR" fill="#22c55e" stroke="#31415a" stroke-width="1.1">
+    <path class="part" id="body-shinR" data-part="calfR" d="M156,100 L166,108 L178,114 L180,122 L174,141 L163,141 L163,125 L155,111 Z" fill="inherit" stroke="inherit"><title>右后腿·胫（远侧）</title></path>
+</g>
+<g id="body-footR" fill="#22c55e" stroke="#31415a" stroke-width="1.1">
+    <path class="part" id="body-hindPawR" data-part="footR" d="M162,139 L177,139 L180,148 L175,153 L164,153 L159,147 Z" fill="inherit" stroke="inherit"><title>右后爪（远侧）</title></path>
+</g>
+<path class="part" id="body-thighL" data-part="thighL" d="M150,64 L166,72 L168,90 L158,101 L146,103 L140,90 L140,74 Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左后腿·股（近侧）</title></path>
+<g id="body-calfL" fill="#22c55e" stroke="#31415a" stroke-width="1.1">
+    <path class="part" id="body-shinL" data-part="calfL" d="M146,97 L156,105 L168,111 L170,119 L164,138 L153,138 L153,122 L145,108 Z" fill="inherit" stroke="inherit"><title>左后腿·胫（近侧）</title></path>
+</g>
+<g id="body-footL" fill="#22c55e" stroke="#31415a" stroke-width="1.1">
+    <path class="part" id="body-hindPawL" data-part="footL" d="M152,136 L167,136 L170,145 L165,150 L154,150 L149,144 Z" fill="inherit" stroke="inherit"><title>左后爪（近侧）</title></path>
+</g>
+
+<!-- ===== 头部分区（整块剪影打底 + 横向切割，同人形图做法） ===== -->
+<path class="part" id="body-head" data-part="head" d="M0,20 L200,20 L200,58 L0,58 Z" fill="#22c55e" clip-path="url(#beast-clipHead)" stroke="none"><title>头</title></path>
+<path class="part" id="body-jaw" data-part="jaw" d="M0,58 L200,58 L200,100 L0,100 Z" fill="#22c55e" clip-path="url(#beast-clipHead)" stroke="none"><title>颚（利齿）</title></path>
+<path class="part" id="body-brain" data-part="brain" d="M42,42 L49,45 L49,52 L42,56 L35,52 L35,45 Z" fill="#22c55e" clip-path="url(#beast-clipHead)" stroke="none"><title>脑（要害）</title></path>
+<path class="part" id="body-eyes" data-part="eyes" d="M19,53 L24,48 L31,50 L26,56 Z" fill="#22c55e" stroke="#353535" stroke-width="0.6" clip-path="url(#beast-clipHead)"><title>眼</title></path>
+
+<!-- ===== 细节线（不参与耐久上色） ===== -->
+<path d="M22,44 L27,39" fill="none" stroke="#3b4b64" stroke-width="0.7"></path>
+<path d="M45,44 L51,42" fill="none" stroke="#3b4b64" stroke-width="0.7"></path>
+<path d="M9,56 L14,57 L9,62 Z" fill="#1f2d1f" opacity="0.7"></path>
+<circle cx="26" cy="51" r="1.6" fill="#1f2d1f" opacity="0.85"></circle>
+<path d="M16,60 L18,68 L22,62 Z" fill="#dcfce7" stroke="#31415a" stroke-width="0.5"></path>
+<path d="M27,62 L29,69 L32,64 Z" fill="#dcfce7" stroke="#31415a" stroke-width="0.5"></path>
+<path d="M156,60 L190,26" fill="none" stroke="#3b4b64" stroke-width="0.7"></path>
+<path d="M150,76 L164,82" fill="none" stroke="#31415a" stroke-width="0.7"></path>
+<path d="M147,88 L162,94" fill="none" stroke="#31415a" stroke-width="0.7"></path>
+<path d="M84,60 L90,78" fill="none" stroke="#31415a" stroke-width="0.7"></path>
+<path d="M89,131 L91,143" fill="none" stroke="#31415a" stroke-width="0.7"></path>
+<path d="M97,131 L99,143" fill="none" stroke="#31415a" stroke-width="0.7"></path>
+<path d="M156,140 L158,147" fill="none" stroke="#31415a" stroke-width="0.7"></path>
+<path d="M163,140 L165,147" fill="none" stroke="#31415a" stroke-width="0.7"></path>
+
+<!-- ===== 头/颈/身/尾/耳 外轮廓压边（描边不参与上色） ===== -->
+<path d="M6,56 L14,49 L24,44 L34,41 L44,40 L52,44 L55,53 L52,62 L44,68 L30,72 L16,71 L8,66 Z" fill="none" stroke="#3b4b64" stroke-width="1.3"></path>
+<path d="M0,58 L200,58" fill="none" stroke="#3b4b64" stroke-width="1.1" clip-path="url(#beast-clipHead)"></path>
+<path d="M52,42 L80,48" fill="none" stroke="#3b4b64" stroke-width="1.3"></path>
+<path d="M80,48 L112,49 L142,55 L162,62 L172,72 L175,84 L171,93 L160,98 L140,100 L116,100 L97,97 L86,92 L79,80 L78,64 Z" fill="none" stroke="#3b4b64" stroke-width="1.3"></path>
+<path d="M146,66 L162,40 L196,20 L198,30 L176,50 L156,76 Z" fill="none" stroke="#3b4b64" stroke-width="1.3"></path>
+<path d="M40,41 L56,43 L48,23 Z M18,42 L38,41 L28,22 Z" fill="none" stroke="#3b4b64" stroke-width="1.3"></path>
+
+</svg>

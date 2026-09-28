@@ -63,7 +63,7 @@ function initHouseSystem() {
 }
 
 function saveHouseData() {
-    try { localStorage.setItem('xianxia_house', JSON.stringify(playerHouse)); } catch (e) {}
+    try { localStorage.setItem('xianxia_house', JSON.stringify(playerHouse)); } catch (e) { console.warn('[静默失败] js/house-system.js:66 · 洞府存档：这一笔存档没接住，玩家会察觉的损失在此', e && e && e.message); }
     window.playerHouse = playerHouse;
 }
 
@@ -328,7 +328,7 @@ function repairHouse(targetType) {
         try { window.timeSystem.advanceTime(recipe.minutes, '修缮洞府'); } catch (eT) {}
     }
     saveHouseData();
-    if (window.showMessage) window.showMessage('🏗️ 动工' + Math.round(recipe.minutes / 60) + '个时辰——「' + t.name + '」落成！' + recipe.label + '。', 'success');
+    if (window.showMessage) window.showMessage('🏗️ 动工' + (window.formatShichen ? window.formatShichen(recipe.minutes) : recipe.minutes + '分钟') + '——「' + t.name + '」落成！' + recipe.label + '。', 'success');
     if (typeof window.renderHouseStatus === 'function') window.renderHouseStatus();
     return true;
 }
@@ -677,12 +677,26 @@ function harvestCrop(index) {
     } else {
         count = Math.max(1, Math.floor(count / 2));
     }
+    // 第一百二十三批·DES-72：addItem 报的是实收件数。旧写法把返回值丢在地上、田照清、
+    // 回执照念开价的 count ⇒ 行囊满时玩家白丢一季，屏上还写着「收获 ×4」。
+    var got = 0;
     if (typeof window.addItem === 'function' && plot.yieldId) {
-        window.addItem(plot.yieldId, count);
+        got = Number(window.addItem(plot.yieldId, count)) || 0;
     }
-    playerHouse.planted.splice(index, 1);
+    if (got <= 0) {
+        // DES-97（第一百四十批）：本处是中段位——前面已有 `这一畦…没收，田还留着。`，后面不再接东西；但回退串挂在中段，句尾支 addItemFailText 带句号会读成「田还留着。这一件先还留在原处。」两个句号叠着。此处回退串本来就是空文案（前后两句已把事说完），故只换支名、不填文案。
+        if (window.showMessage) window.showMessage('这一畦' + (plot.name || '') + '没收，田还留着。' + ((typeof window.addItemFailPhrase === 'function' && window.addItemFailPhrase(plot.name || '这一畦的收成')) || '这一件先还留在原处。'), 'error');
+        if (typeof window.renderHouseStatus === 'function') window.renderHouseStatus();
+        return false;
+    }
+    playerHouse.planted.splice(index, 1);   // 收走一点也算这一季完了：留着反复收同一畦会每回重掷产量，凭空多收
     saveHouseData();
-    if (window.showMessage) window.showMessage('收获 ' + (plot.name || '') + ' x' + count + (withered ? '（蔫后才收，收成减半）' : ''), withered ? 'warning' : 'success');
+    if (window.showMessage) {
+        var _欠 = count - got;
+        window.showMessage('收获 ' + (plot.name || '') + ' ×' + got +
+            (_欠 > 0 ? '（另 ' + _欠 + ' 份：' + ((typeof window.addItemReasonPhrase === 'function' && window.addItemReasonPhrase(plot.name || '这一畦的收成')) || '这一件没能交到你手上') + '，这一畦已清）' : '') + // DES-90（第一百三十九批）：居所产出需付费/消耗，③形·从句支不带句号
+            (withered ? '（蔫后才收，收成减半）' : ''), _欠 > 0 ? 'warning' : (withered ? 'warning' : 'success'));
+    }
     if (typeof window.growLifeSkill === 'function') window.growLifeSkill('种植', withered ? 1 : 2, { reason: withered ? '蔫了才收，长了记性' : '颗粒归仓' }); // v20.94 熟能生巧
     // 第一百一十波 · NEW-103：addProfessionExp 幽灵调用已删（真账是上一行的 growLifeSkill）
     if (typeof window.renderHouseStatus === 'function') window.renderHouseStatus();

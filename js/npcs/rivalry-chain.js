@@ -57,7 +57,7 @@ function settleRivalDuel(won) {
             if (window.showMessage) window.showMessage(b._rivalFinal ? '🎯 死敌伏诛！恩怨了结。' : '你击退了' + npc.name + '的寻仇。', 'success');
         } else {
             var cd = window.currentCharData;
-            if (cd) cd.health = Math.max(1, (cd.health || 100) - 30);
+            if (cd) cd.health = Math.max(1, (cd.health ?? 100) - 30);
             if (window.showMessage) window.showMessage(npc.name + ' 的寻仇让你重伤。', 'warning');
         }
     } catch (e) {}
@@ -76,7 +76,7 @@ function loadRevengeCd() {
     try { return JSON.parse(localStorage.getItem(CD_KEY) || '{}') || {}; } catch (e) { return {}; }
 }
 function saveRevengeCd(cd) {
-    try { localStorage.setItem(CD_KEY, JSON.stringify(cd || {})); } catch (e) {}
+    try { localStorage.setItem(CD_KEY, JSON.stringify(cd || {})); } catch (e) { console.warn('[静默失败] js/npcs/rivalry-chain.js:79 · 宿敌链存档：这一笔存档没接住，玩家会察觉的损失在此', e && e && e.message); }
 }
 function currentDayNum() {
     var t = window.timeSystem;

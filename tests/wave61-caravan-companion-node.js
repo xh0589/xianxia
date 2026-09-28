@@ -79,7 +79,7 @@ global.timeSystem = {
 };
 var battles = [];
 global.openBattleWithEntity = function (foe) { battles.push(foe); };
-global.addItemToInventory = function () { return true; };
+global.addItemToInventory = function (id, n) { return n || 1; };   // 第一百三十批：桩按真源口径回实收件数
 global.itemById = {};
 global.inventory = { currency: { spiritStones: 100 }, slots: [] };
 global.EconomyTransaction = { getBalance: function () { return 100; }, debit: function () { return true; }, credit: function () { return true; } };

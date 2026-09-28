@@ -163,6 +163,36 @@ function initBodyDurability(attrs) {
     return durabilities;
 }
 
+// ---------- 补全一具身子的部位账 ----------
+// 第六十七批：仓里 17 处手搓敌手只写一格（`durabilities: { chest: 130 }`）。缺的那 21 格既不是 0
+// 也不是 100，而是「根本不在册上」，于是三处各按各的读法骗人：takeDamage 对缺格 return 0
+// （屏上念一句「攻击了无效的部位！」——可这具身子分明有头有手）、calculateStatsFromDurability
+// 把缺格当 0 打到属性 0.5× 地板（这批敌手一直比写定的弱一半）、躯体面板与 SVG 把缺格念成「0/100」
+// 并涂成摧毁色。
+// 补账口径：缺格按**这一本册子自己写明的尺**（各格里最大的那个数）补齐，而不是凭空按 100——
+// 按 100 补等于把作者写定的 400 胸甲换成 100 的头，判死门槛被悄悄调低，那是改数值不是补账。
+// 整册一个可用数都没有（传 null／全是非数值）才退回默认满册。
+// ⚠️ 补账后这批敌手两处一起变：属性不再被 0.5× 地板吃掉（变强），非要害格也能挨打了（多出路）。
+//    按「不做数值补偿」的规矩原样上屏。
+function normalizeDurabilityBook(durabilities, attrs) {
+    const given = (durabilities && typeof durabilities === 'object') ? durabilities : null;
+    let 尺 = 0;
+    if (given) {
+        Object.keys(given).forEach(function (id) {
+            const v = Number(given[id]);
+            if (Number.isFinite(v) && v > 尺) 尺 = v;
+        });
+    }
+    const book = initBodyDurability(attrs);
+    if (尺 > 0) BODY_PARTS.forEach(function (part) { book[part.id] = 尺; });
+    if (!given) return book;
+    Object.keys(given).forEach(function (id) {
+        const v = Number(given[id]);
+        if (Number.isFinite(v)) book[id] = Math.max(0, v);
+    });
+    return book;
+}
+
 // ---------- 计算部位对整体属性的影响 ----------
 function calculateStatsFromDurability(durabilities) {
     const multipliers = {
@@ -346,8 +376,14 @@ function initPhysiology(type) {
         // v4.0: health → bloodVolume（语义明确为血量）
         bloodVolume: maxBlood,
         health: maxBlood,           // 兼容旧代码读取 phys.health
+        // DES-32：量程必须有写入者。此前 maxBloodVolume 全库六处读、零处写，
+        // 于是 1.5 倍血肉的妖兽（150）在任何读上限的地方都被当成 100——血条印「150/100」还画满格、
+        // 吃丹回血按 100 封顶。上限与实际同源同处生，读者才有的读。
+        maxBloodVolume: maxBlood,
         circulation: cfg.MAX_CIRCULATION || 100,
+        maxCirculation: cfg.MAX_CIRCULATION || 100,
         consciousness: cfg.MAX_CONSCIOUSNESS || 100,
+        maxConsciousness: cfg.MAX_CONSCIOUSNESS || 100,
         breathing: cfg.MAX_BREATHING || 100,
         painLoad: 0,
         poisonLoad: 0,              // v12.8 毒素负荷0-100（poisoner/尸毒命中累积，回合tick衰减）
@@ -364,7 +400,8 @@ function initPhysiology(type) {
         parts: {},
         state: 'alert',
         isUnconscious: false,
-        integrity: 100,  // 构装体专用
+        integrity: 100,   // 构装体专用
+        maxIntegrity: 100, // UI-16：判据是 integrity<=0，量程也得由账主自己记着
     };
 
     // 根据生理类型调整初始值
@@ -372,12 +409,16 @@ function initPhysiology(type) {
         const mul = cfg.BEAST_HEALTH_MULTIPLIER || 1.5;
         physiology.bloodVolume = maxBlood * mul;
         physiology.health = physiology.bloodVolume;
+        physiology.maxBloodVolume = maxBlood * mul;
         physiology.circulation = (cfg.MAX_CIRCULATION || 100) * mul;
+        physiology.maxCirculation = physiology.circulation;
     } else if (type === 'undead') {
         physiology.bloodVolume = 0;
+        physiology.maxBloodVolume = 0;
         physiology.health = 0; // 亡灵不依赖血量，用结构损伤
     } else if (type === 'construct') {
         physiology.bloodVolume = 0;
+        physiology.maxBloodVolume = 0;
         physiology.health = 0; // 构装体不依赖血量，用integrity
     }
 
@@ -488,12 +529,15 @@ class Entity {
         this.attrs = data.attrs || { strength: 10, dexterity: 10, intelligence: 10, willpower: 10, constitution: 10, meridian: 10 };
         this.skills = data.skills || {};
         // 部位耐久（兼容旧系统）
-        this.durabilities = data.durabilities || initBodyDurability(this.attrs);
+        // 第六十七批：这里过一支补全笔——手搓敌手常只写 `{ chest: N }`，缺格不进册就等于
+        // 「这具身子没有那些格」（详见 normalizeDurabilityBook 上方那段账）。
+        this.durabilities = normalizeDurabilityBook(data.durabilities, this.attrs);
         this.maxDurabilities = { ...this.durabilities };
         // 状态
         this.buffs = [];
         this.debuffs = [];
         this.isAlive = true;
+        this.deathCause = null;   // UI-15：死因与生死同源——哪条判据判的死，判死处写这里
         // 额外数据
         this.loot = data.loot || { exp: 10, copper: 5 };
         this.aiBehavior = data.aiBehavior || 'balanced';
@@ -859,7 +903,13 @@ class Entity {
         if (!damageType) damageType = this.damageType || 'blunt';
         if (damageType === 'sharp') damageType = 'slash';
     
-        if (!this.durabilities.hasOwnProperty(partId)) return 0;
+        if (!this.durabilities.hasOwnProperty(partId)) {
+            // 第六十七批：这条分支过去静默吞伤害（出一分力、账上零进账、屏上无事发生）。
+            // 部位册现已在建账处补全，走到这里说明这一格压根不在这具身子上（旧档／表外格）——
+            // 不许再无声返回，留一行硬账供追查。
+            console.warn('[battle] 部位不在册，伤害未入账：', this.name, partId);
+            return 0;
+        }
         // v12.4 难度条件栏：要害部位（脑/头/胸/颈/丹田）受伤 ×vitalMul
         // 双向生效（玩家打敌人、敌人打玩家）；位于符箓吸收之后——护盾挡下的部分不放大；
         // 护甲减免作用于后续伤口严重度层面，与本倍率互不冲突
@@ -877,13 +927,14 @@ class Entity {
     
         // v4.0 修订：头/颈/胸耐久归零 = 肉体尽毁（全是空气），直接死亡
         // 用户确认：归零语义是部位被彻底摧毁，不是"可救治的危急"
-        if (this.physiology && this.physiology.type !== 'undead' && this.physiology.type !== 'construct' && this.physiology.type !== 'elemental') {
-            if ((partId === 'brain' || partId === 'head' || partId === 'chest' || partId === 'neck') && this.durabilities[partId] <= 0) {
-                this.isAlive = false;
-            }
+        // 2026-09-24 裁决「统一致命判据」：这一条对**所有**生理类型生效，亡灵／构装／元素一律不再豁免。
+        //   改前它整块排除了那三身，而 :887 的 22 格耐久照对它们写、面板照给它们打要害——实机因此出现
+        //   「把火元素『山贼』的脑打到 0，它照打不误」（脑 0 而屏上还挂着 🩸），界面开的是空头票。
+        if ((partId === 'brain' || partId === 'head' || partId === 'chest' || partId === 'neck') && this.durabilities[partId] <= 0) {
+            this._killByVital(partId);
         }
         const total = Object.values(this.durabilities).reduce((a,b) => a + b, 0);
-        if (total <= 0) this.isAlive = false;
+        if (total <= 0) { this.isAlive = false; this.deathCause = 'exhausted'; }
     
         // ===== 生理系统：生成伤口 =====
         if (this.isAlive !== false) {
@@ -891,6 +942,32 @@ class Entity {
         }
     
         return actual;
+    }
+
+    /**
+     * 要害格归零 → 判死（2026-09-24 裁决「统一致命判据」，takeDamage 与 checkDeath 共用这一支笔）。
+     * 死因仍按这一身自己的账记：石魔像不是「脑碎了」，是躯壳撑不住了；火元素是那一身元素之躯溃散。
+     * 同时把那条死线清零——人已经死了，账上不许还留着「躯壳 60/100」这种第二本账。
+     */
+    _killByVital(partId) {
+        const phys = this.physiology;
+        const t = (phys && phys.type) || 'humanoid';
+        if (t === 'construct') {
+            if (phys) phys.integrity = 0;
+            this.isAlive = false;
+            this.deathCause = 'integrity';
+        } else if (t === 'elemental') {
+            if (phys) { phys.bloodVolume = 0; phys.health = 0; }
+            this.isAlive = false;
+            this.deathCause = 'blood';
+        } else if (t === 'undead') {
+            if (phys && phys.parts && phys.parts[partId]) phys.parts[partId].structuralDamage = 100;
+            this.isAlive = false;
+            this.deathCause = 'structure:' + partId;
+        } else {
+            this.isAlive = false;
+            this.deathCause = 'part:' + partId;   // UI-15：当场判死也要当场记名
+        }
     }
 
     // 生理伤害处理（根据physiologyType分支）v4.0：丹田被毁不死亡 + depth≥4 概率关键损伤
@@ -914,6 +991,7 @@ class Entity {
                     // 检查是否死亡
                     if (phys.parts[partId].structuralDamage >= 100) {
                         this.isAlive = false;
+                        this.deathCause = 'structure:' + partId;   // UI-15
                     }
                 }
                 // 火焰/神圣额外伤害
@@ -928,6 +1006,7 @@ class Entity {
                 phys.integrity = Math.max(0, phys.integrity - damage * 0.5);
                 if (phys.integrity <= 0) {
                     this.isAlive = false;
+                    this.deathCause = 'integrity';   // UI-15
                 }
                 // 雷电额外伤害
                 if (damageType === 'thunder') {
@@ -936,10 +1015,17 @@ class Entity {
                 return;
             }
             case 'elemental': {
-                // 元素生物：直接扣health，不产生伤口
-                phys.health = Math.max(0, phys.health - damage * 0.3);
-                if (phys.health <= 0) {
+                // 元素生物：直接扣血肉，不产生伤口
+                // 血量只有一本账：bloodVolume 是权威字段、health 是它的别名（:1197 流血、:1511 自愈、
+                // :4018 吸功、combat-stats.js:433 量程缩放……全仓写者皆成对写）。改前这一支只写 health，
+                // 于是实机一场把火元素 health 打到 39，屏上敌人血条（app.js:3334 读 bloodVolume）纹丝不动，
+                // checkDeath 的复核（:1061）与伤势页「血量」也一律按满格算。
+                const bloodNow = phys.bloodVolume !== undefined ? phys.bloodVolume : phys.health;
+                phys.bloodVolume = Math.max(0, bloodNow - damage * 0.3);
+                phys.health = phys.bloodVolume;
+                if (phys.bloodVolume <= 0) {
                     this.isAlive = false;
+                    this.deathCause = 'blood';   // UI-15
                 }
                 return;
             }
@@ -1018,7 +1104,22 @@ class Entity {
         const phys = this.physiology;
         if (!phys) return;
         const physType = phys.type;
-    
+
+        // 要害归零与全身归零这两条判的是 22 格耐久本身——所有生理都带着这张账，
+        // 所以复核也必须对所有生理跑一遍（2026-09-24 裁决「统一致命判据」）。
+        // 改前它挂在下面人形那一支里、且名单漏了 head：非人形永远走不到，人形也漏判头。
+        if (this.durabilities) {
+            const fatalParts = ['brain', 'head', 'chest', 'neck'];
+            for (const pid of fatalParts) {
+                if (this.durabilities[pid] !== undefined && this.durabilities[pid] <= 0) {
+                    this._killByVital(pid);   // UI-15：哪一格判的死，就地记名
+                    return;
+                }
+            }
+            const allTotal = Object.values(this.durabilities).reduce((a, b) => a + b, 0);
+            if (allTotal <= 0) { this.isAlive = false; this.deathCause = 'exhausted'; }
+        }
+
         switch (physType) {
             case 'undead': {
                 // 亡灵：结构损伤>=100死亡
@@ -1030,18 +1131,21 @@ class Entity {
                 });
                 if (totalStruct >= 100) {
                     this.isAlive = false;
+                    this.deathCause = 'structure';
                 }
                 return;
             }
             case 'construct': {
                 if (phys.integrity <= 0) {
                     this.isAlive = false;
+                    this.deathCause = 'integrity';
                 }
                 return;
             }
             case 'elemental': {
                 if ((phys.bloodVolume !== undefined ? phys.bloodVolume : phys.health) <= 0) {
                     this.isAlive = false;
+                    this.deathCause = 'blood';
                 }
                 return;
             }
@@ -1052,6 +1156,7 @@ class Entity {
                 const blood = phys.bloodVolume !== undefined ? phys.bloodVolume : phys.health;
                 if (blood <= 0) {
                     this.isAlive = false;
+                    this.deathCause = 'blood';
                     return;
                 }
     
@@ -1069,22 +1174,10 @@ class Entity {
                 const totalMinutes = totalRounds * (cfg.CRITICAL_TIMER_PER_TURN || 0.1);
                 if (phys.criticalTimer >= 0 && phys.criticalTimer >= totalMinutes) {
                     this.isAlive = false;
+                    this.deathCause = 'critical';
                     return;
                 }
-
-                // v4.0 修订：头/颈/胸耐久归零 = 肉体尽毁，直接死亡
-                if (this.durabilities) {
-                    const fatalParts = ['brain', 'chest', 'neck'];
-                    for (const pid of fatalParts) {
-                        if (this.durabilities[pid] !== undefined && this.durabilities[pid] <= 0) {
-                            this.isAlive = false;
-                            return;
-                        }
-                    }
-                    // 全部位耐久归零仍死亡
-                    const total = Object.values(this.durabilities).reduce((a, b) => a + b, 0);
-                    if (total <= 0) this.isAlive = false;
-                }
+                // 要害归零／全身归零两条已在 switch 之前统一复核过（所有生理共用），此处不再重列
                 return;
             }
         }
@@ -1105,10 +1198,14 @@ class Entity {
         return {
             health: Math.round(blood),
             bloodVolume: Math.round(blood),
-            maxHealth: cfg.MAX_BLOOD_VOLUME || cfg.MAX_HEALTH || 100,
+            // UI-16：量程取实体自己的账，不取全局配置——妖兽天生 1.5 倍血肉，按配置报就成了「150/100」
+            maxBloodVolume: phys.maxBloodVolume || cfg.MAX_BLOOD_VOLUME || cfg.MAX_HEALTH || 100,
+            maxHealth: phys.maxBloodVolume || cfg.MAX_BLOOD_VOLUME || cfg.MAX_HEALTH || 100,
             circulation: Math.round(phys.circulation),
-            maxCirculation: cfg.MAX_CIRCULATION || 100,
+            maxCirculation: phys.maxCirculation || cfg.MAX_CIRCULATION || 100,
             consciousness: Math.round(phys.consciousness),
+            maxConsciousness: phys.maxConsciousness || cfg.MAX_CONSCIOUSNESS || 100,
+            integrityMax: phys.maxIntegrity || 100,
             painLoad: Math.round(phys.painLoad || 0),
             oxygenDebt: Math.round(phys.oxygenDebt || 0),
             criticalTimer: phys.criticalTimer,
@@ -1236,6 +1333,7 @@ function processPhysiology(entity, roundSeconds) {
         const totalMinutes = totalRounds * (cfg.CRITICAL_TIMER_PER_TURN || 0.1);
         if (phys.criticalTimer >= totalMinutes) {
             entity.isAlive = false;
+            entity.deathCause = 'critical';   // UI-15：这条才是危急致死的主路径（多数战斗在 tick 里判，走不到 checkDeath）
         }
     }
 
@@ -1657,6 +1755,9 @@ const NAMED_NEMESES = [
     { key: 'tianlong', name: '天龙左使·拓跋烬', minLv: 11, sig: 'soundwave',   abilities: ['lifesteal', 'illusion'], attrAllMul: 1.85, fameReward: 22, respawnDays: 10, manualId: 'art_tl_dashouyin' }
 ];
 // 具名强敌组装：boss 底板 + 固定名号/招牌技/全属性倍率 + 击杀奖励标
+// 第一百二十三批 DES-77（幽灵全局，与 NEW-73 同族）：顶层 const 不挂 window，
+// 而 app.js 掷宿敌那一支读的是 window.NAMED_NEMESES ⇒ 恒 undefined，三张脸永远遇不上。
+window.NAMED_NEMESES = NAMED_NEMESES;
 window.buildNemesisEnemy = function (key, playerLevel) {
     const n = NAMED_NEMESES.find(x => x.key === key);
     if (!n) return null;
@@ -1769,7 +1870,12 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
         }
 
         // 根据敌人类型随机分配生理类型
-        const physRoll = Math.random();
+        // 第九十五波 DES-23：调用方点名生理类型（木人桩/试炼傀儡 → construct）时不掷骰。
+        // 定点值落在各档自己的区间里，复用现成的命名/亚型/天生技装配；认不出的值退回掷骰，
+        // 不让一个不认识的强制类型被最后一档兜成元素生物。
+        const PHYS_BAND = { humanoid: 0.1, undead: 0.7, construct: 0.85, elemental: 0.95 };
+        const forcedPhys = (spawnOpts && spawnOpts.physiologyType) || null;
+        const physRoll = (forcedPhys && PHYS_BAND[forcedPhys] != null) ? PHYS_BAND[forcedPhys] : Math.random();
         if (physRoll < 0.6) {
             physiologyType = 'humanoid'; // 60%人类
             // ===== v12.8 人形亚型加权表（权重写死）=====
@@ -2290,26 +2396,30 @@ class Battle {
         try {
             var _e99 = this.enemy;
             var _isBeast99 = _e99 && (_e99.species === 'beast' || _e99.physiologyType === 'beast');
+            // 第九十五波 DES-35 尾巴（实机抓到）：这一整块此前只筛掉妖兽，亡灵／构装体／元素
+            // 一律照人那套开场——木人桩在屏上「略一抱拳，兵刃已出了半鞘」。抱拳、拔刀、舔嘴唇都是人的动作，
+            // 认显式生理标签，不从展示名反推；非人形又不属兽的一律不开口（安静地不出这一句）。
+            var _speaks99 = this._speaksAsHuman(_e99);
             var _st99 = _e99 ? String(_e99.subtype || '') : '';
             var _et99 = _e99 ? String(_e99._enemyType || '') : '';
             var _upright99 = ['monk', 'sword', 'bladesman', 'body'];
             var _open99 = null;
-            if (_e99 && !_isBeast99 && !_e99._evilFaction && _upright99.indexOf(_st99) >= 0 && this._playerDemonicOwner) {
+            if (_e99 && _speaks99 && !_isBeast99 && !_e99._evilFaction && _upright99.indexOf(_st99) >= 0 && this._playerDemonicOwner) {
                 // 正道人一见魔道功法，百口难辨——当场拔刀，这仗没有道理可讲
                 this._foeRighteousWrath = true;
                 _open99 = '⚡ ' + _e99.name + ' 一眼看出你身上缠绕的黑气——「魔头！今日替天行道！」他根本不给你开口的机会！';
                 _e99.aiBehavior = 'aggressive';
             } else if (_isBeast99) {
                 _open99 = '🐾 ' + _e99.name + ' 压低身子，喉咙里滚出闷雷似的吼声，肌肉绷得像拉满的弓——它盯上你了。';
-            } else if (_st99 === 'bandit') {
+            } else if (_speaks99 && _st99 === 'bandit') {
                 _open99 = '🗡️ ' + _e99.name + ' 横刀拦路：「留下东西，饶你不死——这是道上的规矩！」';
-            } else if (_st99 === 'cultist' || _st99 === 'blood' || _st99 === 'essence') {
+            } else if (_speaks99 && (_st99 === 'cultist' || _st99 === 'blood' || _st99 === 'essence')) {
                 _open99 = '🩸 ' + _e99.name + ' 舔了舔嘴唇：「又一个送上门的血食，正好。」';
-            } else if (_st99 === 'monk') {
+            } else if (_speaks99 && _st99 === 'monk') {
                 _open99 = '🙏 ' + _e99.name + ' 单掌当胸：「施主，苦海无边，回头是岸。」';
-            } else if (/boss/.test(_et99) || (_e99 && _e99._affix)) {
+            } else if (_speaks99 && (/boss/.test(_et99) || (_e99 && _e99._affix))) {
                 _open99 = '✨ ' + _e99.name + ' 居高临下地打量你：「无名小辈，也敢拦我？」';
-            } else if (_e99 && !_isBeast99) {
+            } else if (_speaks99 && _e99 && !_isBeast99) {
                 _open99 = '⚔️ ' + _e99.name + ' 略一抱拳，兵刃已出了半鞘：「朋友，亮家伙吧。」';
             }
             if (_open99) this.log.push({ msg: _open99 });
@@ -2326,7 +2436,7 @@ class Battle {
     // 速率：实体速度（身法+轻功那本账，getSpeed 现成）；骑乘机动延伸到行动条（坐骑脚力带着你抢时间）
     _actorRate(e) {
         var sp = 10;
-        try { if (e && typeof e.getSpeed === 'function') sp = e.getSpeed() || 10; } catch (err) {}
+        try { if (e && typeof e.getSpeed === 'function') sp = e.getSpeed() || 10; } catch (err) { console.warn('[静默失败] js/battle.js:2439 · 行动条速率：读取实体速度失败，行动条顺序会乱，玩家会察觉出招顺序不对', err && err && err.message); }
         sp = Math.max(4, Math.round(sp));
         return sp;
     }
@@ -2599,19 +2709,34 @@ class Battle {
         }
         return turns;
     }
+    /** 第九十五波 DES-35：血量账在不在——返回百分比，量程缺失即「不适用」(null)。
+     *  此前两副笔都用 `: 100` 兜底量程，于是血写死为 0/0 的亡灵与构装体被算成「零点血」：
+     *  一具没有血的东西比真流干了血的人更早跪下求饶。判不出就不演这一出（安静收手，不抛错）。 */
+    _bloodLedgerPct(enemy) {
+        var phys = enemy && enemy.physiology;
+        var cap = phys ? Number(phys.maxBloodVolume) : 0;
+        if (!(cap > 0)) return null;
+        var blood = Number(phys.bloodVolume !== undefined ? phys.bloodVolume : phys.health);
+        if (!isFinite(blood)) blood = cap;
+        return Math.max(0, Math.min(100, (blood / cap) * 100));
+    }
+    /** 会开口说人话的，只有人形——骂阵／阵上喊话／临终遗言按显式生理标签筛，不从展示名反推。 */
+    _speaksAsHuman(enemy) {
+        if (!enemy) return false;
+        var t = enemy.physiologyType || (enemy.physiology && enemy.physiology.type) || null;
+        if (t) return t === 'humanoid';
+        return enemy.species === 'human';   // 无标签的老数据（NPC 直传）按人算
+    }
     /** 对面也会使坏（怀里揣着石灰、也会装死）——姿态摆出来，时间轴停住，等你见招拆招 */
     _tryEnemyTrick() {
         var t = this._foeTricks;
         if (!t) return false;
         var enemy = this.enemy;
-        var phys = enemy.physiology;
-        var blood = phys ? (phys.bloodVolume !== undefined ? phys.bloodVolume : phys.health) : 100;
-        var bloodMax = phys && phys.maxBloodVolume ? phys.maxBloodVolume : 100;
-        var bloodPct = bloodMax > 0 ? (blood / bloodMax) * 100 : 100;
+        var bloodPct = this._bloodLedgerPct(enemy);
         // 装死：狗急跳墙的最后一搏（气血不足一半、一场一回、三五成把握使出来）
         // 会遁走的家伙不演这出——人家有更好的逃命路数（不抢遁术的戏）
         var _canEscape = Array.isArray(enemy.combatAbilities) && enemy.combatAbilities.indexOf('escape') >= 0;
-        if (!t.feignUsed && !_canEscape && enemy.isAlive && bloodPct < 50 && Math.random() < 0.35) {
+        if (!t.feignUsed && this._speaksAsHuman(enemy) && !_canEscape && enemy.isAlive && bloodPct !== null && bloodPct < 50 && Math.random() < 0.35) {
             t.feignUsed = true;
             this.log.push({ msg: '💀 ' + enemy.name + ' 兵刃脱手，捂着胸口踉跄两步栽倒在地，一动不动——是真倒了，还是装的？' });
             this._pendingPrompt = {
@@ -2871,7 +2996,7 @@ class Battle {
         if (this.isFinished || !this.isPlayerTurn) return false;
         if (!this.enemy.isAlive) return false;
         var damageType = 'blunt';
-        try { if (typeof window.resolveWeaponDamageType === 'function') damageType = window.resolveWeaponDamageType() || 'blunt'; } catch (e) {}
+        try { if (typeof window.resolveWeaponDamageType === 'function') damageType = window.resolveWeaponDamageType() || 'blunt'; } catch (e) { console.warn('[静默失败] js/battle.js:2999 · 撩拨兵刃类型：读取武器伤害类型失败，撩拨的招式会按默认 blunt 算，玩家会察觉伤害算法不对', e && e && e.message); }
         if (damageType === 'sharp') damageType = 'slash';
         // 第一百波·连环手：踩着蒺藜站都站不稳的人，躲什么轻活儿——必中，耗力翻倍
         var _stum100 = this._foeStumble > 0;
@@ -3009,14 +3134,13 @@ class Battle {
     _tryEnemySurrender() {
         var enemy = this.enemy;
         if (!enemy || !enemy.isAlive || this._surrenderAsked) return false;
-        if (enemy.species === 'beast' || enemy.physiologyType === 'beast') return false;   // 兽不会跪
+        if (!this._speaksAsHuman(enemy)) return false;   // 跪地求饶是人的姿态：兽不会跪，无血之物与元素也不会喊「家里还有老娘」
         if (/boss/.test(String(enemy._enemyType || ''))) return false;                     // 头目宁死不受辱
         // 会遁走的先想着跑，不想着跪（与装死同一口径——不抢遁术的戏）
         if (Array.isArray(enemy.combatAbilities) && enemy.combatAbilities.indexOf('escape') >= 0) return false;
-        var phys = enemy.physiology;
-        var blood = phys ? (phys.bloodVolume !== undefined ? phys.bloodVolume : phys.health) : 100;
-        var bloodMax = (phys && phys.maxBloodVolume) ? phys.maxBloodVolume : 100;
-        var pct = bloodMax > 0 ? (blood / bloodMax) * 100 : 100;
+        // 第一百波改判：跪不跪看的是「血还剩几成」，先得有这笔账——无血之物不适用（DES-35）
+        var pct = this._bloodLedgerPct(enemy);
+        if (pct === null) return false;
         // 第一百波·连环手：心气散了的人更容易跪——触发线抬到两成，肯跪的概率过半
         var _dsh100 = this._foeDisheartened > 0;
         if (pct >= (_dsh100 ? 20 : 12)) return false;
@@ -3139,6 +3263,21 @@ class Battle {
     }
 
     // v10.0：使用招式攻击指定部位
+    // UI-10②：一招此刻打不打得出去，全仓只在这儿判一次——引擎出手与面板「下一击」回显同读这一本账，
+    // 不另立第二处代价比较（代价账在 charData.qi / charData.energy，与此前内联的两段判定同源）。
+    moveBlockReason(move) {
+        if (!move) return '';
+        var cd = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
+        if (!cd) return '';
+        if (move.qiCost > 0 && (cd.qi || 0) < move.qiCost) {
+            return '真气不足——需 ' + move.qiCost + '，你只剩 ' + Math.floor(cd.qi || 0);
+        }
+        if (move.staminaCost > 0 && (cd.energy || 0) < move.staminaCost) {
+            return '精力不足——需 ' + move.staminaCost + '，你只剩 ' + Math.floor(cd.energy || 0);
+        }
+        return '';
+    }
+
     playerAttackWithMove(partId, move) {
         if (this.isFinished || !this.isPlayerTurn) return false;
         if (!this.enemy.isAlive) return false;
@@ -3148,23 +3287,17 @@ class Battle {
             this.log.push({ msg: '⏳ ' + move.name + ' 冷却中（剩 ' + this._moveCD[_cdKey] + ' 回合）' });
             return false;
         }
-        // 检查真气消耗
-        if (move.qiCost > 0) {
-            var charData = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
-            if (charData && (charData.qi || 0) < move.qiCost) {
-                this.log.push({ msg: '⚠️ 真气不足，无法使用 ' + move.name + '（需要 ' + move.qiCost + ' 真气）' });
-                return false;
-            }
-            if (charData) charData.qi = Math.max(0, (charData.qi || 0) - move.qiCost);
+        // 真气／精力两道门槛（判定与面板回显同一处，见 moveBlockReason）
+        var _blocked = this.moveBlockReason(move);
+        if (_blocked) {
+            this.log.push({ msg: '⚠️ ' + move.name + ' 打不出去：' + _blocked });
+            return false;
         }
-        // 检查精力消耗
-        if (move.staminaCost > 0) {
-            var charData2 = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
-            if (charData2 && (charData2.energy || 0) < move.staminaCost) {
-                this.log.push({ msg: '⚠️ 精力不足，无法使用 ' + move.name + '（需要 ' + move.staminaCost + ' 精力）' });
-                return false;
-            }
-            if (charData2) charData2.energy = Math.max(0, (charData2.energy || 0) - move.staminaCost);
+        // 门槛既过，代价在出手这一头当场扣
+        var _costChar = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
+        if (_costChar) {
+            if (move.qiCost > 0) _costChar.qi = Math.max(0, (_costChar.qi || 0) - move.qiCost);
+            if (move.staminaCost > 0) _costChar.energy = Math.max(0, (_costChar.energy || 0) - move.staminaCost);
         }
         // 第九十九波·运功出手，魔气自现：练过魔功的（魔染/魔功名目）一催招式就露相——一场只露一次
         if (this._playerDemonicOwner && !this._demonicShown) {
@@ -3329,7 +3462,8 @@ class Battle {
         // ===== 第九十九波·骂阵：他的嘴比刀还脏——这口气咽不咽，由你定 =====
         // （一场一回；他自己得气血过半才骂得响；把你打到狼狈了才骂得欢——交手一轮之后）
         var _pb99 = this.player.physiology ? (this.player.physiology.bloodVolume !== undefined ? this.player.physiology.bloodVolume : 100) : 100;
-        if (!this._foeTauntPromptDone && !(enemy.species === 'beast' || enemy.physiologyType === 'beast') &&
+        // 第九十五波 DES-35：骂的是人话——准入按生理标签筛，不再只排兽（构装体此前只靠「血量 0 没力气骂」侥幸沉默）
+        if (!this._foeTauntPromptDone && this._speaksAsHuman(enemy) &&
             bloodVol >= 50 && this.turn >= 1 && _pb99 < 60 && Math.random() < 0.12) {
             this._foeTauntPromptDone = true;
             var _tt99 = ['你娘教你的功夫吧？这么软！', '小白脸，吃奶的劲儿使出来没有？', '呸！打死你我都嫌脏了刀！', '爷走南闯北三十年，没见过你这么不中用的！'];
@@ -3348,8 +3482,8 @@ class Battle {
         }
 
         // ===== 第九十九波·阵上不是哑巴场：三成的手数会喊一嗓子（喊招、喊胆、喊狠话）=====
-        // （快倒下的人没力气喊——气血过半才喊得出口）
-        if (!(enemy.species === 'beast' || enemy.physiologyType === 'beast') && bloodVol >= 50 && Math.random() < 0.3) {
+        // （快倒下的人没力气喊——气血过半才喊得出口；喊的也是人话——DES-35 按生理标签筛）
+        if (this._speaksAsHuman(enemy) && bloodVol >= 50 && Math.random() < 0.3) {
             var _stc99 = String(enemy.subtype || '');
             var _cries99 = {
                 bandit: ['「爷爷们在此——识相的留下买路财！」', '「砍了他！货平分！」'],
@@ -3845,7 +3979,10 @@ class Battle {
             } else if (ptype === 'construct') {
                 phys.integrity = Math.max(0, (phys.integrity == null ? 100 : phys.integrity) - drain);
             } else if (ptype === 'elemental') {
-                phys.health = Math.max(0, (phys.health == null ? 100 : phys.health) - drain);
+                // 与下面通用支同一本账：bloodVolume 是权威、health 是别名（改前这里只写 health，
+                // 被毒的元素生物又会分叉成「血条满格而体内掉血」）
+                phys.bloodVolume = Math.max(0, (phys.bloodVolume == null ? phys.health : phys.bloodVolume) - drain);
+                phys.health = phys.bloodVolume;
             } else if (phys.bloodVolume !== undefined) {
                 phys.bloodVolume = Math.max(0, phys.bloodVolume - drain);
                 phys.health = phys.bloodVolume;
@@ -4475,7 +4612,7 @@ class Battle {
             if (this.player && typeof this.player._consumeFormationBuff === 'function') this.player._consumeFormationBuff();
             // ===== 第九十九波·死前之言：武人的最后一口气，不该是一串空账 =====
             try {
-                if (this.enemy.species === 'human' || (!this.enemy.species && this.enemy.physiologyType !== 'beast')) {
+                if (this._speaksAsHuman(this.enemy)) {
                     var _dw99 = {
                         bandit: ['「弟兄们……替我……报仇……」', '「早知道……就不接这票了……」'],
                         cultist: ['「嘿嘿……教主会来……收我的……你不得好死……」', '「我的精气……便宜你了……」'],
@@ -4526,6 +4663,7 @@ class Battle {
                 durabilities: this.player.durabilities,
                 maxDurabilities: this.player.maxDurabilities,
                 isAlive: this.player.isAlive,
+                deathCause: this.player.deathCause || null,
                 physiology: this.player.getPhysiologySummary ? this.player.getPhysiologySummary() : null,
             },
             enemy: {
@@ -4533,6 +4671,7 @@ class Battle {
                 durabilities: this.enemy.durabilities,
                 maxDurabilities: this.enemy.maxDurabilities,
                 isAlive: this.enemy.isAlive,
+                deathCause: this.enemy.deathCause || null,
                 physiology: this.enemy.getPhysiologySummary ? this.enemy.getPhysiologySummary() : null,
             },
             // 修复6：队员状态
@@ -4557,6 +4696,7 @@ window.BODY_PARTS = BODY_PARTS;
 window.PART_IDS = PART_IDS;
 window.Entity = Entity;
 window.initBodyDurability = initBodyDurability;
+window.normalizeDurabilityBook = normalizeDurabilityBook;
 window.generateRandomEnemy = generateRandomEnemy;
 window.Battle = Battle;
 // v13.0 敌人战斗技能注册表（只读引用，机制判定唯一来源）

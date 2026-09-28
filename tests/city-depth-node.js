@@ -62,7 +62,7 @@ mockWindow.timeSystem = {
 mockWindow.showMessage = function (t, k) { state.msgs.push(String(t)); };
 mockWindow.showModal = function (title, html) { state.modals.push({ title: title, html: String(html) }); };
 mockWindow.addFame = function (n) { state.fame += n; };
-mockWindow.addItem = function (id, n) { state.addedItems.push({ id: id, n: n || 1 }); return mockWindow.__bagAccept !== false; };
+mockWindow.addItem = function (id, n) { if (mockWindow.__bagAccept === false) return 0; state.addedItems.push({ id: id, n: n || 1 }); return n || 1; };   // 桩：回实收件数（拒收＝0 件）
 mockWindow.showNPCDialog = function (id) { state.dialogsOpened.push(id); };
 mockWindow.eventSystem = null; // 屏蔽随机事件干扰
 
@@ -496,7 +496,13 @@ function rng(v) { return function () { return v; }; }
     ok((locSrc.match(/window\.CityDepth/g) || []).length >= 6, 'M7 剑冢三按钮全委托');
     var appSrc = fs.readFileSync(path.resolve(__dirname, '..', 'js', 'app.js'), 'utf8');
     var teaIdx = appSrc.indexOf('function visitTeaHouse');
-    var teaSeg = appSrc.slice(teaIdx, teaIdx + 1800);
+    // 【第一百四十二批·按「钉法」把取样窗从定长 1800 改成「切到下一个 function 边界」】
+    // 原窗是定长 1800 字。同一批给 visitTeaHouse 补了「扣费后退茶资」的 try/catch 与退款分支
+    // （约 1000 字），`deductSpiritStones` 与 `renderRumorPanel` 两处**都被挤出 1800 窗** ⇒ 假红。
+    // 这道闸的**要求是「这两个调用还在这个函数里」**，不是「必须落在前 1800 字」。
+    // 定长窗对函数长度敏感，改成按函数边界切：要求一字未松，且函数再长也不会假红。
+    var teaEnd = appSrc.indexOf('\nfunction ', teaIdx + 10);
+    var teaSeg = appSrc.slice(teaIdx, teaEnd > teaIdx ? teaEnd : teaIdx + 6000);
     ok(teaSeg.indexOf('renderRumorPanel') >= 0 && teaSeg.indexOf('deductSpiritStones') >= 0, 'M8 茶馆接传闻真源且收茶资');
     // v20.21 三栋楼各司其职：公会堂做实商会代售台（不再借用悬赏楼门面），悬赏楼接公共悬赏榜真源
     var ghIdx = appSrc.indexOf('function openGuildHall');

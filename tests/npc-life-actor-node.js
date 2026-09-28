@@ -122,15 +122,22 @@ assert(typeCount.social > 0 || typeCount.cultivate > 0, 'social/cultivate 出现
 // 原断言只看 npc_5 自身 → 随机挂。正确断言：social 发生后全场必有好感受影响。
 var affSnap = npcData.map(function (n) { return n.affection; });
 var beforeAff = npcData[5].affection;
-mockWindow.NPCLife._store()['npc_5'] = { lastActionDay: 0, actionHistory: [] };
-mockWindow.NPCLife.tickDay(13);
-// 检查：npc_5 应在 day=13 抽到
-var day13Log = mockWindow.NPCLife.getRumorLog(100).filter(function (r) { return r.day === 13 && r.npcId === 'npc_5'; });
-if (day13Log.length > 0 && day13Log[0].type === 'social') {
-    var afterAff = npcData[5].affection;
-    var anyChanged = npcData.some(function (n, idx) { return n.affection !== affSnap[idx]; });
-    assert(anyChanged, 'social 行动真实改 affection (npc_5 ' + beforeAff + ' → ' + afterAff + '，某方受影响=' + anyChanged + ')');
+// ⚠ 旧写法只在 day 13 恰好抽到 social 时才 assert 一次 ⇒ 本套件通过数在 19/20 之间随机跳，
+//   全量聚合每跑一次就差 1（第一百二十八批复扫时撞上）。现固定只 assert 一次，多天重试提高真被抽到的概率。
+var 抽到 = false, 变了 = false, afterAff = beforeAff;
+for (var sd = 13; sd <= 52 && !抽到; sd++) {
+    affSnap = npcData.map(function (n) { return n.affection; });
+    mockWindow.NPCLife._store()['npc_5'] = { lastActionDay: 0, actionHistory: [] };
+    mockWindow.NPCLife.tickDay(sd);
+    var logS = mockWindow.NPCLife.getRumorLog(100).filter(function (r) { return r.day === sd && r.npcId === 'npc_5'; });
+    if (logS.length > 0 && logS[0].type === 'social') {
+        抽到 = true;
+        afterAff = npcData[5].affection;
+        变了 = npcData.some(function (n, idx) { return n.affection !== affSnap[idx]; });
+    }
 }
+assert(!抽到 || 变了, 'social 行动真实改 affection（本轮' + (抽到 ? '抽到 social，npc_5 ' + beforeAff + '→' + afterAff + '，某方受影响=' + 变了 : 'day13~52 未抽到 social：此断言未真正受力，仍占一枚计数') + '）');
+console.log('[尺口径] 7) 这一轮' + (抽到 ? '真抽到了 social（断言受力）' : '没抽到 social（断言空转，计数仍为 1）'));
 
 // ============ C: 性能 ============
 

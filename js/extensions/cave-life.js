@@ -52,7 +52,7 @@
         if (!Array.isArray(h.diary)) h.diary = [];
         h.diary.push({ day: _today(), kind: kind || 'scene', text: String(text) });
         while (h.diary.length > DIARY_CAP) h.diary.shift();
-        try { if (typeof window.saveHouseData === 'function') window.saveHouseData(); } catch (e) {}
+        try { if (typeof window.saveHouseData === 'function') window.saveHouseData(); } catch (e) { console.warn('[静默失败] js/extensions/cave-life.js:55 · 洞天日记存盘：记完当天见闻要落盘，这里没接住，玩家会察觉日记白记了', e && e && e.message); }
         return true;
     }
 
@@ -142,14 +142,27 @@
                     var line = _pick(hasTea ? VISIT_TEA_LINES : VISIT_LINES).replace('{name}', guest.name);
                     scenes.push({ kind: 'visit', text: line, name: guest.name });
                     // 茶灶待客，知己也不空手——带点山货回礼（真入账，来路是他自己的行囊）
-                    if (hasTea && typeof window.addItem === 'function') {
+                    if (hasTea && (typeof window.giveWithReceipt === 'function' || typeof window.addItem === 'function')) {
                         var gift = _pick(GIFT_POOL);
-                        try { window.addItem(gift, 1); } catch (eG) {}
+                        // DES-72（第一百三十批）：旧写法丢了返回值——「回赠了你一份 X」照念，囊里到底有没有不管
+                        var 赠 = typeof window.giveWithReceipt === 'function'
+                            ? window.giveWithReceipt(gift, 1, { quiet: true }) : null;
                         var giftName = gift;
-                        try {
-                            if (window.itemById && window.itemById[gift] && window.itemById[gift].name) giftName = window.itemById[gift].name;
-                        } catch (eN) {}
-                        scenes[scenes.length - 1].text += '（' + guest.name + ' 回赠了你一份 ' + giftName + '）';
+                        if (赠) giftName = 赠.name;
+                        else {
+                            // DES-72（第一百三十批）：这一支也不许丢返回值——没有公共那只手时自己认实收，
+                            //   拼成同一个 {got,count,name} 形状，下面那句「当场谢辞」分流才在两支都成立。
+                            var 收 = 0;
+                            try { 收 = Number(window.addItem(gift, 1)) || 0; } catch (eG) { console.warn('[静默失败] js/extensions/cave-life.js:156 · 登门回收入囊：来做客的NPC回赠的礼物本该进背包，这里没接住，玩家会察觉礼物没到手', eG && eG && eG.message); }
+                            赠 = { got: 收, count: 1, name: gift, reason: window.addItemFailReason || null };
+                            try {
+                                if (window.itemById && window.itemById[gift] && window.itemById[gift].name) 赠.name = giftName = window.itemById[gift].name;
+                            } catch (eN) {}
+                        }
+                        scenes[scenes.length - 1].text += 赠 && 赠.got === 0
+                            ? '（' + guest.name + ' 回赠了一份 ' + giftName + '，却没落进你的行囊，只好当场谢辞：'
+                              + ((typeof window.addItemFailPhraseFor === 'function' && window.addItemFailPhraseFor(赠.reason, giftName)) || '它没有跟你走') + '）' // DES-90（第一百三十九批）：登门回赠是一次性剧情，②形·括号内不带句号
+                            : '（' + guest.name + ' 回赠了你一份 ' + giftName + '）';
                         scenes[scenes.length - 1].gift = gift;
                     }
                     // 登门是大事，记进天下见闻（与兽潮同款通道）

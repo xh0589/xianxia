@@ -67,9 +67,9 @@ assert(success === true && inventory.currency.spiritStones === 80, 'transaction 
 global.itemById = { reward_item: { id:'reward_item', name:'测试奖励' } };
 global.addItem = function(id,count){
   for (let i=0;i<inventory.slots.length;i++) {
-    if (!inventory.slots[i]) { inventory.slots[i]=new FakeItem(id,count||1); return true; }
+    if (!inventory.slots[i]) { inventory.slots[i]=new FakeItem(id,count||1); return count || 1; }   // 桩：回实收件数
   }
-  return false;
+  return 0;   // 满包＝实收 0 件（false 在真源里专指「查无此号」）
 };
 load('js/core/reward-service.js');
 inventory.maxSlots = 1; inventory.slots = [new FakeItem('occupied',1)]; inventory.currency.spiritStones = 80;
@@ -590,6 +590,13 @@ assert(GameState.applyFullGameState(abSnap) === true, 'applyFullGameState reject
 assert(Array.isArray(global.currentCharData.combatAbilities)
   && global.currentCharData.combatAbilities.length === 1
   && global.currentCharData.combatAbilities[0] === 'venom', 'combatAbilities round-trip mismatch');
+// 载入不许自毁：applyFullGameState 开头的 clearCharacterStorage() 连 xianxia_save 一起删，
+// 而实机量到「点一次继续仙途 → xianxia_save 1,093,586B → 无」——只靠此键存活的自动档一读就没
+localStorage.setItem('xianxia_save', JSON.stringify(abSnap));
+assert(GameState.applyFullGameState(abSnap) === true, 'apply for save-key survival check');
+const stillSaved = localStorage.getItem('xianxia_save');
+assert(stillSaved && JSON.parse(stillSaved).charName === abSnap.charName,
+  'xianxia_save must still hold the snapshot that was just applied (load must not delete what it loads)');
 const legacySnap = GameState.collectFullGameState({ charData: { name: '旧档角色' } });
 assert(Array.isArray(legacySnap.combatAbilities) && legacySnap.combatAbilities.length === 0, 'missing combatAbilities must collect as []');
 assert(GameState.applyFullGameState({ charName: '旧档角色' }) === true, 'legacy save without combatAbilities must still apply');

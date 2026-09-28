@@ -294,7 +294,7 @@ function cultivateQi() {
     }
 
     const charData = window.currentCharData;
-    const energy = charData.energy || 100;
+    const energy = charData.energy ?? 100;
     if (energy < 10) {
         if (window.showMessage) window.showMessage('精力不足！', 'error');
         return false;

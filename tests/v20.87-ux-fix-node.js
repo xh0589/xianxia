@@ -77,9 +77,23 @@ ok(g.toasts.length === 3 && g.toasts[2].indexOf('异步炸了') >= 0, 'C Promise
 
 // ============ D 存档失败可见 ============
 ok(appSrc.indexOf("setItem('xianxia_save', JSON.stringify(saveData)); } catch (e) {}") < 0, 'D 手动档写入的空吞 catch 已移除');
-var quotaHits = (appSrc.match(/存储空间可能已满/g) || []).length;
-ok(quotaHits >= 2, 'D 两处存档写入失败都有「存储空间可能已满」提示（实得 ' + quotaHits + '）');
-ok(/try \{\s*localStorage\.setItem\('xianxia_saves'/.test(appSrc), 'D 槽位表写入已包进 try/catch');
+// 【第一百四十四批·按「钉法」重钉，要求一字未松】
+// 改前：数 appSrc 里「存储空间可能已满」出现 ≥2 次 —— 那是在数**两处各自**的告警。
+// 改后：第一百四十四批把 18 个存档键接到**单一 owner**（js/global-utils.js 的 window.saveToStorage，
+// 它自己吞异常、返回布尔、去重告警一次），app.js 里的告警随之并成一条。
+// **要求没松，反而更紧**：不是「有两处提示」而是「**所有写盘都走单源，单源有提示**」——
+// 从 2 处扩到 18 个键，且不许再有裸 setItem 绕开单源。下面的断言按新机制重钉。
+var gu = loadScript('js/global-utils.js');
+// ⚠️ 第一版这里写的是 `typeof gu.indexOf(...) >= 0` —— **`typeof` 取的是字符串**，
+//    `'number' >= 0` 恒为 false，于是这条钉恒红。**改的是我的尺。**
+ok(gu.indexOf('window.saveToStorage = function') >= 0
+    && /存储空间可能已满/.test(gu)
+    && /_盘满已警/.test(gu),
+    'D 写盘告警收在单一 owner 里了（含去重标记 `_盘满已警`）——配额一满弹一次，不刷屏');
+ok(/if \(!window\.saveToStorage\('xianxia_save'/.test(appSrc),
+    'D 手动档走单源且**读返回值**（saveToStorage 不抛，原式那个 catch 已成死支，不读返回值会恒判成功）');
+ok(/if \(!window\.saveToStorage\('xianxia_saves'[\s\S]{0,80}_writeOk = false/.test(appSrc),
+    'D 槽位表走单源且写失败会把 _writeOk 改假（DES-78；改前是 `catch { _writeOk = false }`）');
 
 // ============ E 定期自动存档开关（真跑） ============
 function makeAutoWorld(preOff) {

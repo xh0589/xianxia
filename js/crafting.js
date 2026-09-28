@@ -711,17 +711,22 @@ function consumeMaterials(recipe) {
 }
 
 // ============ 添加结果物品 ============
+// 第一百二十三批·DES-72：这里**返回实收件数**（0=一件没进）。第八十二波起 window.addItem 报的就是实收数，
+// 旧代码把它压成 !! ⇒ 行囊只装得下 1 件也算「全数成功」，回执照样念开价的 resultCount——屏上说假话。
+// 0 与非 0 的真值关系不变，各调用点 `if (!addOk) 回滚` 那道闸照旧成立。
 function addResultItem(itemId, count) {
-    // B2：统一走 window.addItem（ItemInstance），返回是否成功
-    count = count || 1;
+    // B2：统一走 window.addItem（ItemInstance）
+    count = Math.max(1, count || 1);
+    var r;
     if (typeof window.addItem === 'function') {
-        return !!window.addItem(itemId, count);
+        r = window.addItem(itemId, count);
+    } else if (window.inventory && typeof window.inventory.addItem === 'function') {
+        r = window.inventory.addItem(itemId, count);
+    } else {
+        console.warn('[crafting] addItem 不可用，成品未发放: ' + itemId);
+        return 0;
     }
-    if (window.inventory && typeof window.inventory.addItem === 'function') {
-        return !!window.inventory.addItem(itemId, count);
-    }
-    console.warn('[crafting] addItem 不可用，成品未发放: ' + itemId);
-    return false;
+    return typeof r === 'number' ? Math.max(0, r) : (r ? count : 0);
 }
 
 // v18.6 门派工坊折扣读取器（模块级：供合成/强化两处消费）
@@ -946,8 +951,8 @@ function executeCrafting(recipeId) {
     }
     // 添加结果。若背包空间/实例创建等原因导致发放失败，完整恢复本次材料、货币和真气。
     const resultCount = Math.max(1, Math.floor(recipe.result.count * qualityMultiplier * (profQuality > 1.15 ? 1.2 : 1)));
-    var addedOk = addResultItem(recipe.result.itemId, resultCount);
-    if (!addedOk) {
+    var gotCount = addResultItem(recipe.result.itemId, resultCount);
+    if (!gotCount) {
         if (economySnapshot && window.EconomyTransaction) window.EconomyTransaction.restore(economySnapshot);
         if (charData) charData.qi = qiBeforeCraft;
         if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e) {} }
@@ -962,19 +967,25 @@ function executeCrafting(recipeId) {
         }
     } catch (eCodexR) {}
     // P1：如果合成成功且物品已加入背包，发射 item:crafted 事件
-    if (addedOk && typeof window.EventBus !== 'undefined') {
+    if (typeof window.EventBus !== 'undefined') {
         window.EventBus.emit('item:crafted', {
             recipeId: recipeId,
             itemId: recipe.result.itemId,
             itemName: recipe.result.name || recipe.name,
-            count: resultCount,
+            count: gotCount, // 第一百二十三批·DES-72：念实收，不念开价
             quality: qualityName,
             profession: (typeof qSkill === 'string' && qSkill) ? qSkill : null
         });
     }
     
     if (typeof window.showMessage === 'function') {
-        window.showMessage('合成成功！获得 ' + recipe.name + ' x' + resultCount + ' (' + qualityName + ')', 'success');
+        if (gotCount < resultCount) {
+            // DES-72：以前这一句念的是开价的 resultCount——行囊只吞得下 1 件也说「获得 ×3」
+            window.showMessage('合成成功！行囊只收下 ' + recipe.name + ' ×' + gotCount +
+                '（另 ' + (resultCount - gotCount) + ' 件：' + ((typeof window.addItemReasonPhrase === 'function' && window.addItemReasonPhrase(recipe.name)) || '没能带走') + '）(' + qualityName + ')', 'warning');
+        } else {
+            window.showMessage('合成成功！获得 ' + recipe.name + ' ×' + gotCount + ' (' + qualityName + ')', 'success');
+        }
     }
     growRecipeSkills(recipe, 2); // v20.94 熟能生巧：炉子越热手越熟
     
@@ -989,7 +1000,19 @@ function executeCrafting(recipeId) {
 // ============ 合成完成回调 ============
 function finishCrafting(result) {
     if (result) {
-        addResultItem(result.itemId, result.count || 1);
+        // DES-72（第一百三十批）：旧写法把实收数丢在地上——炉子成了东西，囊里进没进屏上从不报
+        var 要数 = Math.max(1, result.count || 1);
+        var 得数 = addResultItem(result.itemId, 要数);
+        var 成品名 = (window.itemById && window.itemById[result.itemId] && window.itemById[result.itemId].name) || result.itemId;
+        if (typeof window.showMessage === 'function') {
+            window.showMessage(得数 > 0
+                ? '🔥 炉火收势：' + 成品名 + '×' + 得数 + ' 出炉入囊'
+                  + (得数 < 要数 ? '（另 ' + (要数 - 得数) + ' 件：' + ((typeof window.addItemReasonPhrase === 'function' && window.addItemReasonPhrase(成品名)) || '没能带走') + '）' : '')
+                : '🔥 炉子成了 ' + 成品名 + '，这一件却没能进你的囊：'
+                  // DES-90（第一百三十九批）：问不到账时不许由站点断言满包；炉子这一炉的成品下次重炼还能再得，选①
+                  + ((typeof window.addItemFailText === 'function' && window.addItemFailText(成品名)) || '这一件先还留在原处。'),
+                得数 > 0 ? 'success' : 'warning');
+        }
     }
     craftingState.isCrafting = false;
     craftingState.currentRecipe = null;

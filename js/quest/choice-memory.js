@@ -131,9 +131,13 @@ function loadChoiceMemory() {
 }
 
 function saveChoiceMemory() {
-    try {
-        localStorage.setItem('xianxia_choices', JSON.stringify(playerChoices));
-    } catch (e) {}
+    // 第一百二十三批 DES-80：此前 catch(e){} 把写盘失败吞干净，而 recordChoice 照样念
+    // 「📜 选择已记录」——配额满时那一句话是假的，重开档抉择史一片空白。
+    //
+    // 第一百四十四批：接入单一 owner（window.saveToStorage）后**本函数自己吞异常、返回布尔、从不抛**，
+    // 那个 catch 成了**永远不触发的死支** ⇒ 这里**恒返回 true** ⇒ DES-80 被我弄坏了：
+    // 写盘失败时 recordChoice 照样念「选择已记录」。改成**读返回值**。
+    return !!window.saveToStorage('xianxia_choices', JSON.stringify(playerChoices));
 }
 
 // ============ 记录选择 ============
@@ -156,7 +160,7 @@ function recordChoice(choiceId, questTitle) {
     }
 
     // 保存
-    saveChoiceMemory();
+    var stored = saveChoiceMemory();
 
     // 显示记录提示
     var tagNames = {
@@ -169,7 +173,12 @@ function recordChoice(choiceId, questTitle) {
     var tagText = tags.map(function(t) { return '#' + (tagNames[t] || '抉择'); }).join(' ');
 
     if (window.showMessage) {
-        window.showMessage('📜 选择已记录：' + choiceDef.description + ' ' + tagText, 'info');
+        if (stored) {
+            window.showMessage('📜 选择已记录：' + choiceDef.description + ' ' + tagText, 'info');
+        } else {
+            window.showMessage('📜 这一条抉择没能留住（浏览器存储空间已满）：' + choiceDef.description
+                + ' —— 这一世仍然认它，但重开存档就没了；腾出空间前别指望抉择史', 'warning');
+        }
     }
 
     // 检查是否触发结局变化
