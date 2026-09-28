@@ -116,7 +116,8 @@
 
     // ============ 三 · 插旗草创（开局就能立派） ============
     function foundCheap(name, alignment) {
-        name = String(name || '').trim();
+        // 重构第1步：宗名入口白名单清洗（口径同 _psDoFound / renameArt）——两个立宗入口同规则
+        name = String(name || '').replace(/[<>"'&\\]/g, '').trim();
         if (name.length < 2) return { ok: false, reason: 'no-name' };
         if (mine()) return { ok: false, reason: 'has-sect' };
         try {

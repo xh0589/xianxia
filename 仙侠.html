@@ -1931,6 +1931,7 @@
         </div>
     </div>
 
+    <!-- SCRIPTS:BEGIN 加载序列唯一真源 scripts.manifest.json · 改清单后跑 tools/manifest-scripts.py gen -->
     <!-- ================================ -->
     <!-- 加载顺序：按依赖关系分层排列     -->
     <!-- ================================ -->
@@ -1938,6 +1939,8 @@
     <!-- 第0层：全局工具函数（必须先于所有其他文件加载，解决跨文件依赖） -->
     <script defer src="js/core/error-guard.js"></script><!-- v20.87 全局异常兜底：最先加载，任何脚本报错都有提示不再静默 -->
     <script defer src="js/global-utils.js"></script>
+    <!-- 重构第4步：事件委托注册表（data-act），须在所有注册者之前——运行时查表故晚注册也安全 -->
+    <script defer src="js/core/delegate.js"></script>
     <!-- UI-12：公共空态件（各面板的「为什么空＋下一步」引导卡），须在任何渲染面板的脚本之前 -->
     <script defer src="js/core/empty-state.js"></script>
     <script defer src="js/core/balance-config.js"></script>
@@ -2215,8 +2218,6 @@
     <script defer src="js/ui-immersive.js"></script>
 
     <!-- 第12层：扩展物品补丁（依赖各自的系统，使用setTimeout延迟合并） -->
-    <!-- 09-loot-sources.js 已废弃：战利品系统移至 js/loot-system.js -->
-    <!-- <script defer src="js/items-extended/09-loot-sources.js"></script> -->
     <script defer src="js/items-extended/10-crafting-extensions.js"></script>
     <script defer src="js/items-extended/11-event-extensions.js"></script>
     <script defer src="js/items-extended/12-quest-extensions.js"></script>
@@ -2342,5 +2343,6 @@
 
     <!-- 第16层：调试面板（Admin 专属，依赖 app.js 中的 currentCharData） -->
     <script defer src="js/debug-panel.js"></script>
+    <!-- SCRIPTS:END -->
 </body>
 </html>

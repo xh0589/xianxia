@@ -60,6 +60,12 @@ function syncShortcutsCheckbox() {
 // 第九十五波·NEW-47：hidden 的面板不是「开着的窗」；战斗/转世/实体交互三块静态面板只能藏不能删——
 // 此前空屏上按 Esc 会把藏着的 #battle-modal 当最上层弹窗删掉，本局从此再也打不了仗
 function _closeTopModal() {
+    // 重构第3步·栈轨优先：Modal 注册栈的顶层走句柄 close()（onClose 回调有通知），
+    // 栈空时回落 DOM 通配（存量 97 处自建弹层，逐个迁移后此轨退役）
+    try {
+        var topH = window.XianXia && window.XianXia.Modal && window.XianXia.Modal.top();
+        if (topH) { topH.close(); return true; }
+    } catch (eM) {}
     var modals = [].filter.call(document.querySelectorAll('.fixed.inset-0'), function (el) {
         if (!el || !el.remove) return false;
         if (el.classList && el.classList.contains('hidden')) return false;
@@ -74,6 +80,10 @@ function _closeTopModal() {
         if (top.classList && top.classList.contains('mail-modal-scrim')
             && window.MailSystemUI && typeof window.MailSystemUI.closeInbox === 'function') {
             try { window.MailSystemUI.closeInbox(); return true; } catch (eMail) {}
+        }
+        // 有句柄锚点的走句柄（不丢 onClose 回调）
+        if (top.xModalHandle && typeof top.xModalHandle.close === 'function') {
+            try { top.xModalHandle.close(); return true; } catch (eH) {}
         }
         top.remove();
         return true;

@@ -18,9 +18,9 @@
 
     function num(v) { return typeof v === 'number' && isFinite(v) ? v : 0; }
     function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+    // 重构第1步：局部 escapeHtml 收编为全局 esc 的薄别名（原局部版不转义单引号 ' ——全局版补齐）
     function escapeHtml(s) {
-        if (s == null) return '';
-        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        return (global.esc || function (x) { return String(x == null ? '' : x); })(s);
     }
     function charData() { return global.currentCharData || {}; }
     function playerRef() {

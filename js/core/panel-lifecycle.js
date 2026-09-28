@@ -9,6 +9,32 @@
 
     var transients = new Map();
 
+    // ===== 重构第5步 · 主面板刷新注册表 =====
+    // 动机：switchPanel 是巨型 if-else 硬编码分发（13 个面板分支），新面板要改 3 处
+    // （HTML nav + panel div + switchPanel 分支）。改法：面板自己注册 onShow，
+    // switchPanel 先查注册表，未注册的走旧路径（双轨共存，迁移完一个删一个 if 分支）。
+    // 与上面 transients 同住本文件：都是「主面板切换生命周期」的职责，语义同宗。
+    var showHooks = new Map();
+
+    function registerShow(id, options) {
+        if (!id) return false;
+        options = options || {};
+        if (typeof options.onShow !== 'function') return false;
+        showHooks.set(id, { onShow: options.onShow });
+        return true;
+    }
+
+    function runShowHooks(panelId) {
+        var meta = showHooks.get(panelId);
+        if (!meta) return false;          // 未注册：调用方回落旧路径
+        try { meta.onShow(panelId); } catch (e) {
+            if (global.console && global.console.error) global.console.error('[panel-lifecycle] onShow("' + panelId + '") 失败:', e);
+        }
+        return true;                      // 已接手：调用方不必再走旧分支
+    }
+
+    function registeredPanels() { return Array.from(showHooks.keys()); }
+
     function register(id, options) {
         if (!id) return;
         options = options || {};
@@ -55,6 +81,10 @@
         register: register,
         beforeMainSwitch: beforeMainSwitch,
         hide: hide,
-        remove: remove
+        remove: remove,
+        // 重构第5步：主面板刷新注册（面板文件自注册 onShow；switchPanel 查表优先）
+        registerShow: registerShow,
+        runShowHooks: runShowHooks,
+        registeredPanels: registeredPanels
     };
 })(typeof window !== 'undefined' ? window : this);

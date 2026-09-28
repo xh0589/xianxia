@@ -27,9 +27,10 @@
         }
         return (ts && ts.gameTime && ts.gameTime.currentDay) || 1;
     }
+    // 重构第1步：局部 escapeHtml 收编为全局 esc 的薄别名（实现收口到 global-utils.js 一处，
+    // 此处保留函数名是为了不动本文件内的既有调用点）
     function escapeHtml(s) {
-        if (s == null) return '';
-        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        return (global.esc || function (x) { return String(x == null ? '' : x); })(s);
     }
     function drift(npc, dim, delta, reason) {
         if (typeof global.driftPersonality === 'function') {

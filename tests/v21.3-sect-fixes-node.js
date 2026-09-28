@@ -68,6 +68,12 @@ El.prototype.querySelector = function () { return null; };
 El.prototype.querySelectorAll = function () { return []; };
 El.prototype.closest = function () { return this.parentNode; };
 El.prototype.insertAdjacentHTML = function (pos, html) { this._html += html; };
+// v24.1：重构第3步的 Modal 栈在 open() 里给 overlay 挂 addEventListener（点×关闭、点遮罩关闭）。
+// 真实 createElement 必有这两个方法，桩缺了是桩不完整，不是代码错——不补桩而改生产代码
+// 等于让真实行为迁就残缺假环境。此处只登记监听，不模拟冒泡（v21.3 的断言不依赖派发）。
+El.prototype.addEventListener = function (type, fn) { (this._on || (this._on = []))[type] = fn; };
+El.prototype.removeEventListener = function (type) { if (this._on) delete this._on[type]; };
+El.prototype.dispatchEvent = function () { return true; };
 
 var DOC = { byId: {} };
 DOC.createElement = function (tag) { return new El('', tag); };

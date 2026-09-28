@@ -900,6 +900,12 @@ function switchPanel(panelId) {
         panel.classList.add('fade-in');
     }
 
+    // 重构第5步：面板刷新先查注册表（面板文件自注册 onShow），已接手则跳过下面的旧 if-else 链。
+    // 未注册面板（存量）走原路径——双轨共存，迁移一个删一个分支。
+    var _handled = window.PanelLifecycle && typeof window.PanelLifecycle.runShowHooks === 'function'
+        && window.PanelLifecycle.runShowHooks(panelId);
+
+    if (!_handled) {
     if (panelId === 'character') {
         switchSubTab('status');
         if (typeof renderBodyDurability === 'function') renderBodyDurability();
@@ -956,15 +962,8 @@ function switchPanel(panelId) {
             try { window.WorldMap.refresh('world-map'); } catch (eWorld) {}
         }
     }
-    // v18.9 世界日程面板
-    if (panelId === 'calendar') {
-        if (window.WorldCalendarUI && typeof window.WorldCalendarUI.renderCalendarPanel === 'function') {
-            window.WorldCalendarUI.renderCalendarPanel();
-        }
-        if (window.WorldCalendarUI && typeof window.WorldCalendarUI.updateNextAuctionBadge === 'function') {
-            window.WorldCalendarUI.updateNextAuctionBadge();
-        }
-    }
+    // v18.9 世界日程面板 → 重构第5步·示范迁移：分支挪去 world-calendar-ui.js 自注册（registerShow），
+    // 面板刷新逻辑从此住在面板自己的文件里——新面板从改 3 处变 1 处。
     // v11.0：Admin调试面板检测
     if (panelId === 'settings') {
         if (window.DebugPanel && typeof window.DebugPanel.renderDebugPanel === 'function') {
@@ -976,6 +975,7 @@ function switchPanel(panelId) {
             debugPanel.style.display = isAdmin ? 'block' : 'none';
         }
     }
+    } // if (!_handled) 闭合——重构第5步双轨：注册表未接手的面板走完上面旧链
 }
 
 function switchSubTab(subId) {

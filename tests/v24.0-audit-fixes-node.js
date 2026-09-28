@@ -5205,20 +5205,32 @@ console.log('\n[CG] 第六十批 UI-25 地标三扇模态不再顶穿视口');
     // 家族账（读码层棘轮）：全仓手搓「居中卡片式」遮罩里卡片不带任何高度帽的处数，只许降不许升。
     // 这把是**粗尺**——只在遮罩声明起 14 行内找 max-h-[，卡片行更靠后的窗会被漏报成「已带帽」，故 46 是下界不是全貌；
     // 精量要一扇一扇开屏量（UI-25 家族账仍挂在改良说明.md §一）。
+    // v24.1·重构第3步后，这把粗尺第一次撞上**自己的盲区**并误报了一次，说明白再判：
+    // Modal 栈在 global-utils.js 新写的第 167 行那扇遮罩，帽（max-h-[85vh] overflow-y-auto）
+    // 落在第 182 行——正好在 14 行窗**外第 15 行**，于是被记成「无帽」，总数 46→47 判红。
+    // 处置**不是把基线抬到 47**（那等于给尺的漏洞开门，此后真出现无帽新窗也不红了），
+    // 而是让扇 167 跳出粗尺的统计口径：它是重构自己写的、按体例自带 max-h- 的公共模态，
+    // 归 CM⑤ 那把尺管（那条已随转发链走 XianXia.Modal.open 并做过摘帽反证，仍会咬）。
+    var 弹层白名单 = { 'js/global-utils.js': [167] };   // 自带 max-h- 帽、超出粗尺 14 行窗的公共模态
     function 扫(表) {
-        var n = 0, 例 = [];
+        var n = 0, 例 = [], 跳过 = 0;
         表.forEach(function (x) {
+            var 名 = String(x.名).replace(/\\/g, '/');
+            var 白 = 弹层白名单[名] || [];
             var 行 = codeOnly(x.文).replace(/\r\n/g, '\n').split('\n');
             for (var i = 0; i < 行.length; i++) {
+                if (白.indexOf(i + 1) >= 0) { 跳过++; continue; }   // 帽子在窗外，属 CM⑤ 的账
                 if (!/className\s*=\s*'fixed inset-0[^']*items-center[^']*justify-center/.test(行[i])) continue;
-                if (!/max-h-\[/.test(行.slice(i, i + 14).join('\n'))) { n++; if (例.length < 5) 例.push(x.名 + ':' + (i + 1)); }
+                if (!/max-h-\[/.test(行.slice(i, i + 14).join('\n'))) { n++; if (例.length < 5) 例.push(名 + ':' + (i + 1)); }
             }
         });
-        return { 数: n, 例: 例 };
+        return { 数: n, 例: 例, 跳过: 跳过 };
     }
     var 全 = 扫(jsFiles('js').map(function (f) { return { 名: f, 文: src(f) }; }));
-    console.log('  · 家族账（读码层，不判红）：全仓居中手搓遮罩里卡片无高度帽 ' + 全.数 + ' 枚，例：' + 全.例.join(' / ') + '…');
-    assert(全.数 <= 46, 'CG⑬ 棘轮：无帽的手搓居中模态处数不许再涨（本批基线 46；量法＝遮罩声明起 14 行内找 max-h-[；其余各扇未查屏，UI-25 家族账仍挂在改良说明.md §一）');
+    console.log('  · 家族账（读码层，不判红）：全仓居中手搓遮罩里卡片无高度帽 ' + 全.数 + ' 枚，例：' + 全.例.join(' / ') + '…'
+        + (全.跳过 ? '（另有 ' + 全.跳过 + ' 枚自带帽但帽子落在粗尺 14 行窗外，归 CM⑤ 管，不计入本账）' : ''));
+    assert(全.数 <= 46, 'CG⑬ 棘轮：无帽的手搓居中模态处数不许再涨（本批基线 46；量法＝遮罩声明起 14 行内找 max-h-[；'
+        + '※v24.1 Modal 那扇自带帽但帽在窗外，改由 CM⑤ 逐字盯，不抬基线；其余各扇未查屏，UI-25 家族账仍挂在改良说明.md §一）');
 })();
 
 // 野外那张图的语境工厂（[CH]／[CI] 共用一份桩，别复制两遍）：
@@ -5635,7 +5647,7 @@ console.log('\n[CM] 家族账：无帽 38 扇、其中 13 扇内容由循环长�
     // 「内容会长」＝遮罩行前后各 40 行内有**真在拼 HTML**的循环，向回看还须与遮罩同在一个函数体内。
     //   三条限制各挡一类实测到的错：只向前看漏掉「先拼 html 再 createElement」（竞技场榜 :149→:156）；
     //   `.join(` 当循环把公共 showConfirm 的字面量拼接报成长；不清函数界就让上一扇窗的循环渗到下一扇头上
-    //   （global-utils.js:177 属 showChoiceDialog，与同文件的 showConfirm :215 无关）。
+    //   （global-utils.js:177 属 showChoiceDialog，与同文件的 showConfirm :326 无关；※v24.1 215→326）。
     var 是循环 = function (s) { return /forEach\s*\(|\.map\s*\(|\bfor\s*\(|\bwhile\s*\(/.test(s); };
     var 是清理 = function (s) { return /querySelectorAll\s*\([^)]*\)\s*\.\s*(forEach|map)\(/.test(s) || /\.remove\(\)/.test(s); };
     var 在拼串 = function (s) { return /\w\s*\+=\s*['"`<]|\w*Html\s*\+=|\.join\s*\(|return\s*['"`<]|<div\b|<tr\b|<li\b/.test(s); };
@@ -5764,7 +5776,10 @@ console.log('\n[CM] 家族账：无帽 38 扇、其中 13 扇内容由循环长�
     assert(数('A').length >= 45, 'CM②b 戴帽且会滚的窗 ' + 数('A').length + ' 扇，地板 45——谁把帽摘了这支就红');
 
     // ---- ③ 「卡层没定位到」那一档逐处点名：按「文件＋几处」记账，行号只当 ±30 容差中心 ----
-    var 未定位记 = { 'js/global-utils.js': [241], 'js/mail-system-ui.js': [142], 'js/ui-immersive.js': [22, 87, 131] };
+    // v24.1：重构第3步在 showModal 之后插入 Modal 栈 111 行，其后的遮罩整体下移。
+    // 241→352（showLoading 转圈）、215→326（XianXia.showConfirm 遮罩）都是同一次位移，
+    // 两处漂移量一致已互相印证：不是新窗冒出来，是旧窗换了行号。判据一个字没动。
+    var 未定位记 = { 'js/global-utils.js': [352], 'js/mail-system-ui.js': [142], 'js/ui-immersive.js': [22, 87, 131] };
     var 未定位 = 数('?');
     var 漂3 = [];
     Object.keys(未定位记).forEach(function (f) {
@@ -5800,7 +5815,7 @@ console.log('\n[CM] 家族账：无帽 38 扇、其中 13 扇内容由循环长�
         'CM④a 名单里确有玩家常规流程点得到的两扇（城市特殊设施「皇家拍卖行」那格走 openRoyalAuction、宗门页两枚「查看公告」钮）——这族不是死代码堆里的数字');
     // 「判它不会长」也要能被回读：这四扇是收紧「会长」判后被移出名单的，逐条回读过源码，判据一旦改松这里就该红
     var 不会长 = [
-        ['js/global-utils.js', 'XianXia.showConfirm', 215],   // 卡体是 [字面量].join('')
+        ['js/global-utils.js', 'XianXia.showConfirm', 326],   // 卡体是 [字面量].join('')  ※v24.1 215→326（Modal 栈插入所致，与 CM③ 同一次位移）
         ['js/lifespan-system.js', 'triggerLifespanEnd', 126], // 寿元已尽：固定三行
         ['js/quest/main-storyline-arc.js', 'openMainStoryPanel', 223],  // 主线：一段定死段落
         ['js/quest/quest-system.js', 'showEndingScreen', 825]           // 任务结算：至多 5 颗星
@@ -5824,9 +5839,24 @@ console.log('\n[CM] 家族账：无帽 38 扇、其中 13 扇内容由循环长�
         'CM④b 顺手钉一条定性：app.js 那扇 showProficiencyPanel 全仓零调用点（只有定义行自己），账上属「死窗」不属「玩家会撞到的窗」');
 
     // ---- ⑤ 公共笔与第六十批那三扇：接上的帽不许退 ----
+    // v24.1·重构第3步后尺要跟着走新路：showModal 变成一行转发壳（XianXia.Modal.open），
+    // 卡片帽随之搬到 Modal.open 体内。原尺是「showModal= 之后 1200 字符内」——死窗宽，
+    // 重构后帽在窗外 1200 之外，就报了个「帽没了」的假红。代码有帽，是尺的取样窗过时了。
+    // 改法不是把窗放宽到「整个文件里有就算」（那会让尺失去约束力，变成永远绿），
+    // 而是顺着 showModal 真正转发到的那扇窗去量：取转发目标的函数体。
     var 笔 = src('js/global-utils.js');
-    assert(/showModal\s*=/.test(笔) && /max-h-\[[^\]]*\][^"']*overflow-y-auto|overflow-y-auto[^"']*max-h-\[/.test(笔.split(/showModal\s*=/)[1].slice(0, 1200)),
-        'CM⑤ 公共 showModal 那张卡自己戴着帽（max-h-[…vh] ＋ overflow-y-auto）——它是全仓收口时的那支笔，它漏了就没人对');
+    var 笔帽 = function (s) { return /max-h-\[[^\]]*\][^"']*overflow-y-auto|overflow-y-auto[^"']*max-h-\[/.test(s); };
+    var 壳 = 笔.split(/showModal\s*=/)[1] || '';
+    var 转发到 = (壳.match(/XianXia\.Modal\.\w+/) || [])[0] || '';   // showModal 现在转发给谁
+    var 窗外 = '';
+    if (转发到) {
+        var 目标 = new RegExp('function\\s+' + 转发到.replace(/\./g, '\\.') + '\\s*\\(');
+        var 起 = 笔.search(目标);
+        if (起 >= 0) 窗外 = 笔.slice(起, 笔.indexOf('\n    }', 起) >= 0 ? 笔.indexOf('\n    }', 起) + 6 : 起 + 4000);
+    }
+    assert(/showModal\s*=/.test(笔) && (笔帽(壳) || 笔帽(窗外)),
+        'CM⑤ 公共 showModal 那张卡自己戴着帽（max-h-[…vh] ＋ overflow-y-auto）——它是全仓收口时的那支笔，它漏了就没人对'
+        + (转发到 ? '（尺已跟随转发链：showModal → ' + 转发到 + '）' : '（未识别转发目标，只按壳内量）'));
     var 图 = 表.filter(function (e) { return e.文件 === 'js/map/landmark-explore.js'; });
     eq(图.length, 3, 'CM⑤a 地标那三扇手搓窗仍在册（' + 图.length + ' 扇，第六十批接笔的三处）');
     assert(图.every(function (e) { return e.档 === 'A'; }), 'CM⑤b 三扇全是 A（读到 ' + 图.map(function (e) { return e.遮罩行 + ':' + e.档; }).join(' ') + '）——帽与滚都在，UI-25 不收口就复发');

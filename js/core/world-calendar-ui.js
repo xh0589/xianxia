@@ -259,4 +259,18 @@
     global.WorldCalendarUI = api;
     global.XianXia = global.XianXia || {};
     global.XianXia.WorldCalendarUI = api;
+
+    // ===== 重构第5步·示范迁移：主面板刷新自注册 =====
+    // 原 switchPanel 里的 calendar 分支搬到此处——面板刷新逻辑住进面板自己的文件。
+    // switchPanel 查到注册即接管（typeof 防御随迁，语义不变）。
+    try {
+        if (global.PanelLifecycle && typeof global.PanelLifecycle.registerShow === 'function') {
+            global.PanelLifecycle.registerShow('calendar', {
+                onShow: function () {
+                    if (api && typeof api.renderCalendarPanel === 'function') api.renderCalendarPanel();
+                    if (api && typeof api.updateNextAuctionBadge === 'function') api.updateNextAuctionBadge();
+                }
+            });
+        }
+    } catch (eReg) { /* 静默：注册失败时 switchPanel 回落旧路径……但旧分支已删——此 catch 只防 API 形态突变 */ }
 })(typeof window !== 'undefined' ? window : this);

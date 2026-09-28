@@ -89,8 +89,10 @@
             '<button onclick="window._psDoFoundCheap()" class="w-full bg-yellow-700 hover:bg-yellow-600 text-white text-sm font-bold py-2 rounded">白手起家，插旗立宗</button></div>';
 
         // 一、宗名
+        // 重构第1步：value 属性回填转义——草稿里的宗名曾被直接拼进 value="..."，
+        // 名字含 " 就能闭合属性改写标签结构。此处 esc() 与下方入口白名单双保险。
         html += '<div class="mb-3"><p class="text-sm text-amber-400 mb-1">宗名（自拟，或挑一个）</p>' +
-            '<input id="ps-found-name" value="' + (_draft.name || '') + '" maxlength="10" placeholder="起个响亮的名号" ' +
+            '<input id="ps-found-name" value="' + (window.esc ? window.esc(_draft.name || '') : (_draft.name || '')) + '" maxlength="10" placeholder="起个响亮的名号" ' +
             'class="bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-gray-100 w-full">' +
             '<div class="flex gap-2 mt-2">' + names.map(function (n) {
                 return '<button onclick="document.getElementById(\'ps-found-name\').value=\'' + n + '\'" ' +
@@ -98,11 +100,13 @@
             }).join('') + '</div></div>';
 
         // 二、出身
+        // 重构第4步·示范迁移：onclick="window._psDraftAlign('正道')" → data-act + data-arg。
+        // 参数走属性通道（esc 转义），注册见文件尾 actions.register；文本含引号不再断。
         html += '<div class="mb-3"><p class="text-sm text-amber-400 mb-1">出身（往后谁对你先行礼，谁先拔剑）</p><div class="grid grid-cols-3 gap-2">' +
             ['正道', '中立', '邪派'].map(function (a) {
                 var sel = _draft.alignment === a;
                 var note = a === '正道' ? '名门正派与你论资排辈' : (a === '邪派' ? '黑道奉你为座上宾' : '两边都跟你做买卖');
-                return '<button onclick="window._psDraftAlign(\'' + a + '\')" class="' +
+                return '<button data-act="ps-draft-align" data-arg="' + (window.esc ? window.esc(a) : a) + '" class="' +
                     (sel ? 'bg-amber-700 text-white' : 'bg-gray-700 hover:bg-gray-600 text-gray-200') +
                     ' text-xs px-2 py-2 rounded text-left"><b>' + a + '</b><br><span class="text-gray-400">' + note + '</span></button>';
             }).join('') + '</div></div>';
@@ -141,7 +145,10 @@
     window._psDoFound = function () {
         _keepName();
         var cd = window.currentCharData;
-        var name = (_draft.name || '').trim();
+        // 重构第1步：宗名入口白名单清洗（口径同 player-sect-life.js renameArt 的碑名清洗）。
+        // 宗名会流入：宗门总册标题/宗门史/编年史/江湖日志——都是 innerHTML 拼接通道，
+        // 在入口一处清洗，比在每个上屏点各自转义更稳（漏一处就是活的注入点）。
+        var name = String(_draft.name || '').replace(/[<>"'&\\]/g, '').trim();
         if (!name || name.length < 2) { _msg('宗名总得有两三个字。', 'warning'); return; }
         var site = null;
         ((window.PlayerSect && window.PlayerSect.FOUND_SITES) || []).forEach(function (s) { if (s.id === _draft.siteId) site = s; });
@@ -365,7 +372,7 @@
             (hist.length ? hist.map(function (h) {
                 // 第九波·明面：宗门史跟头部统一口径「立派第 N 天」——不再同屏两套时间
                 var dn = (h.day && sect.createdDay && h.day >= sect.createdDay) ? ('立派第' + (h.day - sect.createdDay + 1) + '天 · ') : '';
-                return '<p class="text-xs text-gray-400">' + dn + h.text + '</p>';
+                return '<p class="text-xs text-gray-400">' + dn + (window.esc ? window.esc(h.text) : h.text) + '</p>';
             }).join('') : '<p class="text-xs text-gray-500">尚无记录。</p>') + '</div>';
 
         html += '<button onclick="window._psDissolveAsk()" class="w-full bg-gray-700 hover:bg-red-900 text-gray-300 text-xs py-1 rounded">解散宗门（弟子散尽，库房清空）</button>';
@@ -576,6 +583,13 @@
         }
         if (typeof window.startBattle === 'function') window.startBattle(enemyData);
     };
+
+    // ===== 重构第4步：data-act 注册（立派面板「出身三选一」，替代原内联 onclick） =====
+    if (window.XianXia && window.XianXia.actions) {
+        window.XianXia.actions.register('ps-draft-align', function (arg) {
+            if (typeof window._psDraftAlign === 'function') window._psDraftAlign(arg);
+        });
+    }
 
     try { console.log('[PlayerSectUI] initialized (立派流程 + 宗门总册 + 招收弟子 + 第二十一波镇山秘艺/派遣下山入口)'); } catch (e) {}
 })();

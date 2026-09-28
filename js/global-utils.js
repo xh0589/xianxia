@@ -132,25 +132,105 @@ window.XianXia = window.XianXia || {};
         window.XianXia.showMessage(message, type);
     };
 
-    // ===== v10.0 通用模态框 =====
-    window.showModal = function(title, contentHtml) {
-        var overlay = document.getElementById('xianxia-modal-overlay');
-        if (overlay) overlay.remove();
-        overlay = document.createElement('div');
-        overlay.id = 'xianxia-modal-overlay';
-        overlay.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50';
-        overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
-        overlay.innerHTML = [
-            '<div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-2xl w-full mx-4 max-h-[85vh] overflow-y-auto">',
-            '<div class="flex justify-between items-center mb-4">',
-            '<h3 class="text-xl font-bold text-yellow-500">' + (title || '') + '</h3>',
-            '<button onclick="this.closest(\'#xianxia-modal-overlay\').remove()" class="text-gray-400 hover:text-white text-2xl">&times;</button>',
-            '</div>',
-            contentHtml || '',
-            '</div>'
-        ].join('');
-        document.body.appendChild(overlay);
+    // ===== 转义层收口（重构第1步）：全库唯一 escapeHtml =====
+    // 现状盘点：335 处 innerHTML 拼接，escapeHtml 只有 2 个文件各自局部定义（npc-rel-events.js
+    // / player-rumor.js），其余插值点裸奔。本函数是唯一实现，各处一律 esc(x) 调用，不再各自抄。
+    window.esc = window.XianXia.esc = function (s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
     };
+
+    // ===== v10.0 通用模态框 =====
+    // 重构第3步：本体改走 XianXia.Modal.open 的兼容壳（固定 id，单实例语义与旧版逐字兼容：
+    // 存量代码 getElementById('xianxia-modal-overlay').remove() 依旧有效；句柄 isAlive 过滤死引用）。
+    window.showModal = function(title, contentHtml) {
+        return window.XianXia.Modal.open({ id: 'xianxia-modal-overlay', title: title, html: contentHtml });
+    };
+
+    // ===== 重构第3步 · Modal 栈式注册制 =====
+    // 动机：97 处自建 fixed.inset-0 弹层 + closeRuntimeModals 用 querySelectorAll 通配删除，
+    // 已踩过「误删战斗/转世/实体交互静态面板」的坑（STATIC_PANEL_IDS 白名单是补丁不是根治）。
+    // 根治 = 弹层自己注册自己（栈），关闭遍历栈而不是猜 DOM。
+    // 语义约定：title 永远纯文本（esc）；text 纯文本（esc）；html 直传（HTML 语义，调用方自负责）。
+    // z-index 从 ui-tokens 的 --x-z-modal 读基值，栈内第 N 层 +5，天然低于 toast(90)。
+    (function () {
+        var _stack = [];
+        function alive(h) { return h && h.el && h.el.isConnected; }
+        function liveStack() { return _stack.filter(alive); }
+
+        function open(cfg) {
+            cfg = cfg || {};
+            // 同 id 单实例语义（showModal 兼容路径靠它维持旧行为）
+            if (cfg.id) closeById(cfg.id);
+            var overlay = document.createElement('div');
+            overlay.className = 'fixed inset-0 bg-black/70 flex items-center justify-center x-modal-layer';
+            if (cfg.id) overlay.id = cfg.id;
+            if (cfg.className) overlay.classList.add(cfg.className);
+            // z-index 基值从 ui-tokens 的 --x-z-modal 读。getComputedStyle/documentElement 是浏览器全局，
+            // Node 与 SSR 环境下不存在 → 裸调会 ReferenceError 打穿所有调用方（v21.3 / wave133 两套崩在这）。
+            // 兜底顺序：CSS 变量 → 50（与 ||50 原默认值一致，不改浏览器内行为）。
+            var zBase = 50;
+            if (typeof getComputedStyle === 'function' && document.documentElement) {
+                var zRaw = getComputedStyle(document.documentElement).getPropertyValue('--x-z-modal');
+                zBase = parseInt(zRaw, 10) || 50;
+            }
+            overlay.style.zIndex = String(zBase + liveStack().length * 5);
+            var body = (cfg.html != null) ? String(cfg.html) : window.esc(cfg.text || '');
+            var widthCls = cfg.width || 'max-w-2xl';
+            overlay.innerHTML =
+                '<div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 ' + widthCls + ' w-full mx-4 max-h-[85vh] overflow-y-auto">' +
+                '<div class="flex justify-between items-center mb-4">' +
+                '<h3 class="text-xl font-bold text-yellow-500">' + window.esc(cfg.title || '') + '</h3>' +
+                '<button data-x-modal-close class="text-gray-400 hover:text-white text-2xl">&times;</button>' +
+                '</div>' + body + '</div>';
+            var handle = {
+                el: overlay, id: cfg.id || null,
+                close: function () {
+                    if (!overlay.isConnected) return; // 幂等：被外部直接 remove 过（旧代码风格）也不报错
+                    overlay.remove();
+                    var i = _stack.indexOf(handle); if (i >= 0) _stack.splice(i, 1);
+                    if (typeof cfg.onClose === 'function') { try { cfg.onClose(handle); } catch (e) {} }
+                }
+            };
+            // 双轨兼容锚点：DOM 式旧逻辑（_closeTopModal / closeRuntimeModals 二轨）能通过它找回句柄，
+            // 走 close() 而不是裸 remove()——onClose 回调不再丢失
+            overlay.xModalHandle = handle;
+            overlay.addEventListener('click', function (e) {
+                if (e.target === overlay && cfg.dismissable !== false) handle.close();
+            });
+            var btn = overlay.querySelector('[data-x-modal-close]');
+            if (btn) btn.addEventListener('click', function () { handle.close(); });
+            document.body.appendChild(overlay);
+            _stack.push(handle);
+            return handle;
+        }
+        function closeById(id) {
+            liveStack().forEach(function (h) { if (h.id === id) h.close(); });
+        }
+        // keepId 与静态面板白名单在栈轨同样生效——与 closeRuntimeModals 的二轨同口径
+        function closeAll(opts) {
+            opts = opts || {};
+            var targets = liveStack().slice().reverse();
+            for (var i = 0; i < targets.length; i++) {
+                var h = targets[i];
+                if (opts.keepId && h.id === opts.keepId) continue;
+                if (h.id && window.STATIC_PANEL_IDS && window.STATIC_PANEL_IDS.indexOf(h.id) >= 0) continue;
+                h.close();
+            }
+        }
+        function top() { return liveStack().slice(-1)[0] || null; }
+
+        window.XianXia.Modal = {
+            open: open,
+            close: function (h) { if (h && typeof h.close === 'function') h.close(); },
+            closeById: closeById,
+            closeAll: closeAll,
+            top: top,
+            depth: function () { return liveStack().length; },
+            _stack: _stack // 只读调试用；别直接改
+        };
+    })();
 
     // ===== 第九十五波·外包修复批：弹窗收口两件套 =====
     // NEW-35：收摊/上工/打盹这类「流程终点」要能软收 showModal 开的遮罩——
@@ -164,13 +244,23 @@ window.XianXia = window.XianXia || {};
     // NEW-47：战斗/转世/地图实体交互三块是静态面板——全游戏唯一的画面，只能藏不能删。
     // 此前八处「打扫屏幕」用 .fixed.inset-0 通配把它们当弹窗删了，删掉后本局再也打不了仗。
     window.STATIC_PANEL_IDS = ['battle-modal', 'reincarnation-modal', 'entity-interaction'];
+    // 重构第3步·双轨：一轨走 Modal 注册栈（可靠关闭，onClose 回调有通知，keepId/静态白名单同口径），
+    // 二轨保留原 querySelectorAll 通配（97 处自建弹层迁移完之前不撤——迁移清单见 REFACTOR-NOTES.md）。
+    // 存量自建弹层将来逐个改走 XianXia.Modal.open 后，二轨整体退役、此函数缩为一行 closeAll。
     window.closeRuntimeModals = function (keepId) {
         try {
+            // 一轨：注册栈（后进先出）
+            if (window.XianXia && window.XianXia.Modal) {
+                try { window.XianXia.Modal.closeAll({ keepId: keepId }); } catch (eM) {}
+            }
+            // 二轨：DOM 通配兜底（未注册的存量弹层）
             var nodes = document.querySelectorAll('.fixed.inset-0');
             for (var i = nodes.length - 1; i >= 0; i--) {
                 var el = nodes[i];
                 if (!el || !el.remove) continue;
                 if (el.id && window.STATIC_PANEL_IDS.indexOf(el.id) >= 0) continue;   // 静态面板永不删
+                // 一轨已用句柄关过的不重复处理（isConnected 会是 false，这里自然跳过）
+                if (!el.isConnected) continue;
                 // 飞鸽的遮罩与窗体是两个节点：单独摘它会留半死窗——交给它自己的关窗口一起收
                 if (el.classList && el.classList.contains('mail-modal-scrim')
                     && window.MailSystemUI && typeof window.MailSystemUI.closeInbox === 'function') {
@@ -178,6 +268,11 @@ window.XianXia = window.XianXia || {};
                     continue;
                 }
                 if (keepId && el.id === keepId) continue;
+                // 有句柄锚点的走句柄（不丢 onClose）；没有的按原样裸 remove
+                if (el.xModalHandle && typeof el.xModalHandle.close === 'function') {
+                    try { el.xModalHandle.close(); } catch (eH) {}
+                    continue;
+                }
                 el.remove();
             }
         } catch (e) {}
