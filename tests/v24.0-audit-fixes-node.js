@@ -5818,7 +5818,9 @@ console.log('\n[CM] 家族账：无帽 38 扇、其中 13 扇内容由循环长�
         ['js/global-utils.js', 'XianXia.showConfirm', 326],   // 卡体是 [字面量].join('')  ※v24.1 215→326（Modal 栈插入所致，与 CM③ 同一次位移）
         ['js/lifespan-system.js', 'triggerLifespanEnd', 126], // 寿元已尽：固定三行
         ['js/quest/main-storyline-arc.js', 'openMainStoryPanel', 223],  // 主线：一段定死段落
-        ['js/quest/quest-system.js', 'showEndingScreen', 825]           // 任务结算：至多 5 颗星
+        ['js/quest/quest-system.js', 'showEndingScreen', 869]           // 任务结算：至多 5 颗星
+        //  ※试玩批次·PLAY-1c/1d 825→869：acceptQuest 加 realm 类目标回溯（+23 行）、
+        //    _syncTemplatesFromLedger 加账本外复位（+21 行）。两处都在本文件之前，位移下移。
     ];
     var 误长 = [];
     不会长.forEach(function (x) {

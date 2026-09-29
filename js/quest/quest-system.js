@@ -436,9 +436,35 @@ function _syncTemplatesFromLedger() {
                     }
                     q.completed = q.objectives.length > 0 && q.objectives.every(function (o) { return o && o.completed; });
                 }
+                return;
+            }
+            // 第二批·PLAY-1d：账本两条都没命中 ⇒ 这条任务**不在进度里**，模板必须清干净。
+            // 此前此处直接落空（既不置位也不复位），而 allQuests 挂的是**同一批对象引用**——
+            // 谁先把它置成 accepted（loadSaveData 回灌、旧档残留），这里就原样留着脏值。
+            // 实测病态（2026-09-29）：账本 activeQuests=["main_001"]，
+            // 模板 main_002 却 accepted=true、目标 0/1 ⇒ 面板显示「进行中 0/1」，
+            // 而 acceptQuest(:515) 又因 quest.accepted 为真把"已接取"顶回来——
+            // **任务卡上永远出不了交付按钮，也没有任何办法重接**。
+            q.accepted = false;
+            q.completed = false;
+            q.turnedIn = false;
+            if (Array.isArray(q.objectives)) {
+                q.objectives.forEach(function (o) {
+                    if (!o) return;
+                    o.currentCount = 0;
+                    o.completed = false;
+                });
             }
         });
-    } catch (e) {}
+    } catch (e) {
+        // 此前是 `catch (e) {}` 纯吞：整段 forEach 一抛就全废，且无处可查——
+        // 实测排查 PLAY-1d 时正是它把「模板没被复位」藏了起来。
+        // 不往上抛（读档路径经 importQuestProgress 调用，抛出去会连带整次读档失败），
+        // 但留一条警告，让同类问题下次能一眼看见。
+        if (window.console && console.warn) {
+            console.warn('[quest] _syncTemplatesFromLedger 中断，部分任务模板未与账本对齐：', e);
+        }
+    }
 }
 
 /** 读档真接口：就地灌账本 + 回灌模板 + 落盘（game-state 的 importQuestState 守卫指到这里，不再写 window 幻影） */
@@ -540,6 +566,29 @@ function acceptQuest(questId) {
             advanceQuestObjectivesFromEvent('sect:joined', { sectId: _ds21.sectId, rank: _ds21.rank });
         }
     } catch (eRetro) {}
+
+    // 第二批·PLAY-1c：先突破到目标境界、再接那章任务 = 永久卡 0/1。
+    // cultivation_realm / breakthrough_realm 靠 cultivation:breakthrough 事件推进，
+    // 而 questObjectiveMatches 要求事件的 toLayer 精确等于目标 layer——人已经在目标境界时
+    // 那个事件永远不来（升到下一层反而不匹配），此章就此死锁。
+    // 而「先肝到 3 层，再去接那个让你升到 3 层的任务」是最自然的玩法顺序。
+    // 故在接取当场按现状对账这两类目标，不另立规则。
+    try {
+        var _cd = window.currentCharData;
+        if (_cd && Array.isArray(quest.objectives) &&
+            quest.objectives.some(function (o) {
+                if (!o || o.completed) return false;
+                if (o.type !== 'cultivation_realm' && o.type !== 'breakthrough_realm') return false;
+                var want = o.realm || o.toRealm;
+                if (want && want !== _cd.realm) return false;
+                // layer 为空＝只要求到这个境界；否则现状层数 ≥ 目标即算达成
+                return o.layer == null || Number(_cd.layer || 1) >= Number(o.layer);
+            })) {
+            advanceQuestObjectivesFromEvent('cultivation:breakthrough', {
+                toRealm: _cd.realm, toLayer: _cd.layer, fromRealm: _cd.realm, fromLayer: _cd.layer,
+            });
+        }
+    } catch (eRealm) {}
 
     // v21.9：宗门守卫战接取时当面问一句——誓死守护还是暂避锋芒。
     // 此前 main_025_protect/main_025_flee 两笔选择记录无来源（demon_heart_count 永远为 0）。
