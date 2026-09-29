@@ -432,8 +432,15 @@
                         <!-- 右侧：部位耐久列表 -->
                         <div class="flex-1">
                             <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600">
-                                <h3 class="text-yellow-500 font-bold mb-1 border-b border-gray-600 pb-2">🩻 躯体耐久</h3>
-                                <p class="text-xs text-gray-500 mb-3">部位 · 职司 → 受损影响</p>
+                                <!-- 表头：标题在左，「详细描述」开关靠右贴近框边 -->
+                                <div class="flex items-center justify-between gap-2 mb-1 border-b border-gray-600 pb-2">
+                                    <h3 class="text-yellow-500 font-bold">🩻 躯体耐久</h3>
+                                    <button id="btn-body-desc"
+                                            onclick="window.toggleBodyPartDesc()"
+                                            class="text-xs text-gray-400 hover:text-yellow-400 px-2 py-0.5 rounded border border-gray-600 hover:border-yellow-600 transition flex-shrink-0"
+                                            title="显示/隐藏每个部位的职司与受损影响">详细描述</button>
+                                </div>
+                                <p id="body-durability-hint" class="text-xs text-gray-500 mb-3">部位 · 耐久</p>
                                 <div id="body-durability-list">
                                     <!-- 动态生成 -->
                                 </div>

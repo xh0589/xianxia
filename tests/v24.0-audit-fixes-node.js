@@ -2085,8 +2085,15 @@ console.log('\n[Z] UI-04 躯体耐久表：列数跟容器走，说明文字宁�
     assert(tag.indexOf('grid') < 0 && !/\b(md|lg|sm):/.test(tag),
         '宿主 div 上不再有 grid-cols-1 md:grid-cols-2（视口断点量不到这块还剩多宽：1366 档名册 802px、1024 档只剩 459px，两者都在 md 之上）');
     var head = html.slice(html.indexOf('🩻 躯体耐久'), hostAt);
-    eq((head.match(/受损影响/g) || []).length, 1, '「受损影响」在列头说一次（此前 22 行各抄一遍，窄屏先被挤掉的正是这 5 个字）');
-    assert(/部位 · 职司/.test(head), '列头写明这一行的读法（部位 · 职司 → 受损影响），箭头不是让玩家猜的');
+      // ※试玩批次：提示语改为**随「详细描述」开关切换**（app.js 动态写 #body-durability-hint）——
+      //   关时「部位 · 耐久（点右上「详细描述」看职司与受损影响）」，开时「部位 · 职司 → 受损影响」。
+      //   故静态 HTML 里不再有固定的「部位 · 职司」串，判据改为：
+      //   列头必须把这一行的读法讲清（两种措辞任一），且「受损影响」全页只说一次。
+      var headStatic = html.slice(html.indexOf('🩻 躯体耐久'), hostAt);
+      eq((headStatic.match(/受损影响/g) || []).length, 1, '「受损影响」在列头说一次（此前 22 行各抄一遍，窄屏先被挤掉的正是这 5 个字）');
+      assert(/部位 · (职司|耐久)/.test(headStatic) || /详细描述/.test(headStatic),
+          '列头写明这一行的读法（部位 · 职司 → 受损影响），箭头不是让玩家猜的；'
+          + '或列出「详细描述」开关并说明它管什么——两种表达都算把读法讲清了');
 
     var sec2 = craft.slice(craft.indexOf('---------- 2.'), craft.indexOf('---------- 3.'));
     assert(sec2.length > 40, 'ui-craft.css 里第 2 节还在（这块表只有它一个样式宿主）');
@@ -2156,7 +2163,12 @@ console.log('\n[Z] UI-04 躯体耐久表：列数跟容器走，说明文字宁�
     eq(Math.max.apply(null, words.map(function (w) { return w.length; })), 4,
         '状态词最长 4 字（轻微损伤／中度损伤／重度损伤／濒临毁坏）——标签格从 w-16 收到 w-14 就是按这个数定的');
     assert(/body-part-label text-xs w-14/.test(rb), '状态词格确实改成了 w-14');
-    assert(/body-part-bar w-20/.test(rb), '进度条确实改成了 w-20（原 w-24）');
+    // ※试玩批次 w-20 → w-16 sm:w-20：进度条改为窄屏收窄（w-16）、
+    //   sm 断点以上仍是 w-20。原 w-24 的意图（收窄、别抢描述的横向空间）不变，
+    //   只是把"多窄"交给断点决定——窄屏本就没空间，w-20 挤掉描述。
+    //   判据放宽到"存在 w-16 且 sm 以上回 w-20"，仍钉住收窄这件事。
+    assert(/body-part-bar w-16 sm:w-20/.test(rb) || /body-part-bar w-20/.test(rb),
+        '进度条收窄（w-20；窄屏档 w-16 sm:w-20）');
 })();
 
 console.log('\n[AA] UI-20 战斗卡三段：会滚的是读数，钉住的是要按的');

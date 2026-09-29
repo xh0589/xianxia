@@ -759,19 +759,26 @@ function renderBodyDurability() {
     const listContainer = document.getElementById('body-durability-list');
     if (listContainer) {
         listContainer.innerHTML = '';
-        // v25.1·P23：空态折叠——开局全身完好时 20 条一模一样的绿条占据首屏相当篇幅，
-        // 折成一行摘要，点开看明细；任何部位受损就照旧全量展开（受伤信息不该藏着）。
-        var _allWhole = bodyParts.every(function (part) {
-            var _v = bodyDurability[part.id] != null ? bodyDurability[part.id] : 100;
-            return _v >= 100;
-        });
-        if (_allWhole && !window._bodyListExpanded) {
-            listContainer.innerHTML = `
-            <div class="body-part-row flex items-center justify-between bg-gray-800 p-2 rounded cursor-pointer hover:bg-gray-700" onclick="window._bodyListExpanded = true; if (typeof renderBodyDurability === 'function') renderBodyDurability();">
-                <span class="body-part-name text-gray-300 text-sm font-bold">🧍 ${bodyParts.length} 个身体部位</span>
-                <span class="body-part-label text-xs" style="color:#22c55e">✅ 全部完好 · 点击展开明细</span>
-            </div>`;
-        } else {
+        // 试玩批次：部位**恒常全量展开**——旧设计在「全完好时折成一行」与「掉 1 点就炸成
+        // 22 行」之间二选一（app.js:764 的 every(v>=100) 二值判定），
+        // 既让玩家在完好时看到一片空洞，又让 1 点的变化换来整屏跳动。
+        // 改为：耐久行永远全显，把「职司 → 受损影响」这层说明抽成独立开关，
+        // 由表头右侧的「详细描述」按钮控制（默认关＝紧凑且始终可读）。
+        const _showDesc = !!window._bodyDescOn;
+        const btn = document.getElementById('btn-body-desc');
+        if (btn) {
+            btn.className = (_showDesc
+                ? 'text-xs text-yellow-400 px-2 py-0.5 rounded border flex-shrink-0 transition '
+                : 'text-xs text-gray-400 hover:text-yellow-400 px-2 py-0.5 rounded border border-gray-600 hover:border-yellow-600 transition flex-shrink-0 ')
+                + (_showDesc ? 'border-yellow-600 bg-yellow-600/20' : '');
+            btn.textContent = _showDesc ? '隐藏描述' : '详细描述';
+        }
+        const hint = document.getElementById('body-durability-hint');
+        if (hint) {
+            hint.textContent = _showDesc
+                ? '部位 · 职司 → 受损影响'
+                : '部位 · 耐久（点右上「详细描述」看职司与受损影响）';
+        }
         bodyParts.forEach(part => {
             // 「没有这一格」才兜 100；0 是打烂了的真值（同页 SVG 那支用的就是 != null）
             const value = bodyDurability[part.id] != null ? bodyDurability[part.id] : 100;
@@ -783,33 +790,50 @@ function renderBodyDurability() {
             const descShown = cut >= 0
                 ? desc.slice(0, cut) + ' → ' + desc.slice(cut + '，受损影响'.length)
                 : desc;
+            // 描述常驻 DOM，只用 hidden 切显隐——切开关不必重建节点，
+            // 且 title 悬停提示在两种状态下都留着。
+            // ⚠️ 不用 truncate：三列网格里格子宽约 200px，长描述（如「丹田」的
+            //   「修仙根本 → 所有内功相关能力」）一截断就只剩省略号，
+            //   而这个开关的用途正是让玩家**读到**职司与受损影响；窄屏无悬停更读不到。
+            //   代价是长描述会让该行变两行、网格略参差——这个代价可以接受。
+            const descCls = _showDesc ? 'text-gray-500' : 'text-gray-600 hidden';
             listContainer.innerHTML += `
-            <div class="body-part-row flex items-center justify-between bg-gray-800 p-2 rounded">
-                <div class="body-part-text flex items-center gap-2">
-                    <span class="body-part-name text-gray-300 text-sm font-bold">${part.name}</span>
-                    <span class="body-part-desc text-xs text-gray-500" title="${desc}">${descShown}</span>
+            <div class="body-part-row flex items-center justify-between gap-2 bg-gray-800 p-2 rounded">
+                <div class="body-part-text flex items-center gap-2 min-w-0 flex-1">
+                    <span class="body-part-name text-gray-300 text-sm font-bold flex-shrink-0">${part.name}</span>
+                    <span class="body-part-desc text-xs leading-tight ${descCls}" title="${desc}">${descShown}</span>
                 </div>
-                <div class="body-part-gauge flex items-center gap-2">
-                    <div class="body-part-bar w-20 h-2 bg-gray-600 rounded overflow-hidden">
+                <div class="body-part-gauge flex items-center gap-2 flex-shrink-0">
+                    <div class="body-part-bar w-16 sm:w-20 h-2 bg-gray-600 rounded overflow-hidden">
                         <div class="body-part-bar-fill h-full rounded" style="width:${value}%; background:${color};"></div>
                     </div>
-                    <span class="body-part-value font-bold w-8 text-right text-xs" style="color:${color}">${Math.round(value)}</span>
-                    <span class="body-part-label text-xs w-14 text-right" style="color:${color}">${label}</span>
+                    <span class="body-part-value font-bold w-8 text-right text-xs flex-shrink-0" style="color:${color}">${Math.round(value)}</span>
+                    <span class="body-part-label text-xs w-14 text-right flex-shrink-0" style="color:${color}">${label}</span>
                 </div>
             </div>`;
         });
-        if (_allWhole) {
-            listContainer.innerHTML += `
-            <div class="body-part-row flex items-center justify-center bg-gray-800/60 p-1.5 rounded cursor-pointer hover:bg-gray-700" onclick="window._bodyListExpanded = false; if (typeof renderBodyDurability === 'function') renderBodyDurability();">
-                <span class="body-part-label text-xs text-gray-500">▲ 全部完好 · 点击收起明细</span>
-            </div>`;
-        }
-        }
     }
 
     // 更新状态面板 SVG 人体图颜色（必须执行）
     updateBodySVG();
 }
+
+/**
+ * 「详细描述」开关：显示/隐藏每个部位的「职司 → 受损影响」。
+ * 试玩批次（替 v25.1·P23 的空态折叠）：
+ *   旧设计二值化——全完好时把 22 行折成 1 行（首屏一片空洞），
+ *   掉 1 点耐久又整屏炸开（app.js 旧 :764 的 every(v>=100)）；
+ *   且那 1 行除"全部完好"四字外无任何信息量，与上方 SVG 人体图重复而更少。
+ *   现改为：耐久行恒常全显，描述这层说明独立开关。
+ */
+window.toggleBodyPartDesc = function toggleBodyPartDesc() {
+    window._bodyDescOn = !window._bodyDescOn;
+    if (typeof renderBodyDurability === 'function') {
+        try { renderBodyDurability(); } catch (e) {
+            console.warn('[静默失败] js/app.js · toggleBodyPartDesc：描述开关没能重绘列表', e && e.message);
+        }
+    }
+};
 
 function _setSvgPartFill(el, color, extraStroke) {
     if (!el) return;

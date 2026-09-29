@@ -25,7 +25,11 @@
 
 import { spawn } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// 本文件是 ESM（.mjs），没有 __dirname
+const __dirname = dirname(fileURLToPath(import.meta.url));
 import { setTimeout as sleep } from 'node:timers/promises';
 
 // ---------- 参数 ----------
@@ -43,7 +47,44 @@ const CHROME = flag(
     : process.env['PROGRAMFILES(X86)'] + '\\Google\\Chrome\\Application\\chrome.exe'
 );
 
-// ---------- CDP 连接 ----------
+// ---------- 粘性视口 ----------
+// Emulation.setDeviceMetricsOverride 是**会话级**的：设置它的 CDP 连接一关就失效。
+// 所以把期望视口记在状态文件里，让每条命令在动手前自己重放一遍。
+const VP_STATE = join(__dirname, '..', '..', '.scratch', 'cdp-viewport.json');
+function readViewport() {
+  try { return JSON.parse(readFileSync(VP_STATE, 'utf8')); } catch (e) { return null; }
+}
+function writeViewport(v) {
+  try {
+    if (!existsSync(path.dirname(VP_STATE))) mkdirSync(path.dirname(VP_STATE), { recursive: true });
+    writeFileSync(VP_STATE, JSON.stringify(v), 'utf8');
+  } catch (e) { /* 存不上就退化成非粘性，不影响正确性 */ }
+}
+const viewportSteps = () => {
+  const v = readViewport();
+  if (!v) return [];
+  return [v.reset
+    ? { method: 'Emulation.clearDeviceMetricsOverride' }
+    : { method: 'Emulation.setDeviceMetricsOverride', params: { width: v.width, height: v.height, deviceScaleFactor: 1, mobile: false } }];
+};
+
+/**
+ * 在一条连接内「重放粘性视口 + 读回实际尺寸」。
+ * ⚠️ Emulation.setDeviceMetricsOverride 绑在**连接**上：另开连接去读，
+ *    innerWidth 会弹回窗口实际宽度（我为此白查一轮，误以为覆盖失效）。
+ *    所以设置与读取必须同一 session。
+ */
+async function applyViewportAndRead(t) {
+  const v = readViewport();
+  if (!v) return null;
+  const steps = [v.reset
+    ? { method: 'Emulation.clearDeviceMetricsOverride' }
+    : { method: 'Emulation.setDeviceMetricsOverride', params: { width: v.width, height: v.height, deviceScaleFactor: 1, mobile: false } },
+    { method: 'Runtime.evaluate', params: { expression: 'window.innerWidth + "x" + window.innerHeight' } }];
+  const out = await session(t.webSocketDebuggerUrl, steps, 15000);
+  const last = out[out.length - 1];
+  return (last && last.result && last.result.value) || null;
+}
 async function httpJson(path) {
   const r = await fetch(`http://127.0.0.1:${PORT}${path}`);
   if (!r.ok) throw new Error(`HTTP ${r.status} ${path}`);
@@ -279,12 +320,21 @@ const commands = {
         catch (e) { return JSON.stringify({ok:false, err: (e && e.message) || String(e),
           stack: (e && e.stack || '').split('\\n').slice(0,4).join(' | ')}); }
       })()`;
-    // Page.enable 与 evaluate 必须同连接，否则 confirm() 的事件收不到
-    const steps = await session(t.webSocketDebuggerUrl, [
+    // Page.enable 与 evaluate 必须同连接，否则 confirm() 的事件收不到；
+    // 粘性视口的重放也必须在这同一条连接里（Emulation 覆盖绑连接，另开连接无效）
+    const v = readViewport();
+    const vpStep = !v ? null : (v.reset
+      ? { method: 'Emulation.clearDeviceMetricsOverride' }
+      : { method: 'Emulation.setDeviceMetricsOverride', params: { width: v.width, height: v.height, deviceScaleFactor: 1, mobile: false } });
+    const probe = 'window.innerWidth + "x" + window.innerHeight';
+    const base = [
       { method: 'Page.enable' },
+      ...(vpStep ? [vpStep] : []),
       { method: 'Runtime.evaluate', params: { expression: wrapped, returnByValue: true, awaitPromise: true } },
-    ]);
-    const res = steps[1]; // 第 2 步才是 evaluate 的结果
+      { method: 'Runtime.evaluate', params: { expression: probe } },
+    ];
+    const steps = await session(t.webSocketDebuggerUrl, base);
+    const res = steps[steps.length - 2]; // 倒数第 2 步才是 evaluate 的结果
     const txt = res && res.result && res.result.value;
     if (txt === undefined) {
       console.log(JSON.stringify({ ok: false, err: 'Runtime.evaluate 无返回值', raw: res }, null, 2));
@@ -293,6 +343,11 @@ const commands = {
     let out;
     try { out = JSON.parse(txt); } catch { out = { ok: false, err: '返回非 JSON', raw: txt }; }
     console.log(JSON.stringify(out, null, 2));
+    // 把实际视口一并打出来：粘性视口是「同连接内」才生效的，
+    // 少了这行，跨命令的视口失效会被误读成"mobile 没起作用"。
+    const lastStep = steps[steps.length - 1];
+    const vp = lastStep && lastStep.result && lastStep.result.value;
+    if (v) console.log('（视口 ' + vp + (v.reset ? '，已重置' : '，粘性 ' + v.width + '×' + v.height) + '）');
   },
 
   async text() {
@@ -308,21 +363,41 @@ const commands = {
     const out = resolve(String(flag('out', argv[1] || '.scratch/shot.png')));
     if (!existsSync(dirname(out))) mkdirSync(dirname(out), { recursive: true });
     const t = await requireLivePage();
-    const metrics = await send(t.webSocketDebuggerUrl, 'Page.getLayoutMetrics');
     const full = !!flag('full', false);
-    if (full) {
-      const h = Math.min(20000, Math.ceil(metrics.cssContentSize.height));
-      await send(t.webSocketDebuggerUrl, 'Emulation.setDeviceMetricsOverride', {
-        width: Math.ceil(metrics.cssContentSize.width), height: h, deviceScaleFactor: 1, mobile: false,
-      });
-      await sleep(400);
+    const v = readViewport();
+
+    // ⚠️ 两处必须同连接，否则窄屏截图全白做：
+    //   ① 粘性视口（mobile 记下的）绑在连接上，getLayoutMetrics 另开连接读不到；
+    //   ② captureScreenshot 不带 clip 时按**窗口实际像素**出图，
+    //      于是「已切到 390×844」却截出 2048 宽的图。
+    //   所以：设视口 → 量尺寸 → 截图，全在一条 session 里顺序发。
+    const vpStep = !v ? null : (v.reset
+      ? { method: 'Emulation.clearDeviceMetricsOverride' }
+      : { method: 'Emulation.setDeviceMetricsOverride', params: { width: v.width, height: v.height, deviceScaleFactor: 1, mobile: false } });
+
+    const steps = [
+      ...(vpStep ? [vpStep] : []),
+      { method: 'Page.getLayoutMetrics' },
+    ];
+    const first = await session(t.webSocketDebuggerUrl, steps, 20000);
+    const metrics = first[first.length - 1];
+    const mvs = metrics.cssVisualViewport || {};
+    const vw = Math.ceil(mvs.clientWidth || (metrics.cssLayoutViewport && metrics.cssLayoutViewport.clientWidth) || 1280);
+    const vh = Math.ceil(mvs.clientHeight || (metrics.cssLayoutViewport && metrics.cssLayoutViewport.clientHeight) || 800);
+
+    const clipH = full ? Math.min(20000, Math.ceil(metrics.cssContentSize.height)) : vh;
+    const shotSteps = [
+      ...(vpStep ? [vpStep] : []),
+      { method: 'Page.captureScreenshot', params: { format: 'png', clip: { x: 0, y: 0, width: vw, height: clipH, scale: 1 } } },
+    ];
+    const out2 = await session(t.webSocketDebuggerUrl, shotSteps, 60000);
+    const r = out2[out2.length - 1];
+    if (!r || !r.data) {
+      console.error('【失败】截图没拿到数据（视口 ' + vw + '×' + clipH + '）');
+      return;
     }
-    const r = await send(t.webSocketDebuggerUrl, 'Page.captureScreenshot', { format: 'png' });
     writeFileSync(out, Buffer.from(r.data, 'base64'));
-    if (full) {
-      await send(t.webSocketDebuggerUrl, 'Emulation.clearDeviceMetricsOverride');
-    }
-    console.log('已保存 ' + out);
+    console.log('已保存 ' + out + '（视口 ' + vw + '×' + clipH + (full ? '，整页' : '') + '）');
   },
 
   /** click：不用 Playwright 的可见性/拦截判定，直接派发真实鼠标事件 */
@@ -379,6 +454,28 @@ const commands = {
     let arr;
     try { arr = typeof v === 'string' ? JSON.parse(v) : v; } catch { arr = { 解析失败: v }; }
     console.log(JSON.stringify(arr, null, 2));
+  },
+
+  /**
+   * mobile：切到手机视口（默认 390×844，iPhone 14 尺寸）。
+   * 不加 --reset 就一直是窄屏，后续 shot/front 都在手机尺寸下跑。
+   * 用途：这个游戏此前**没有任何窄屏验证手段**——布局里全是 flex + 固定宽度
+   * （w-20 进度条、w-8 数值、w-14 标签、长中文描述），窄屏必然挤。
+   */
+  async mobile() {
+    const reset = !!flag('reset', false);
+    const w = Number(flag('width', 390));
+    const h = Number(flag('height', 844));
+    // 粘性：记到状态文件，后续每条命令自己重放（Emulation 覆盖是会话级的）
+    writeViewport({ width: w, height: h, reset });
+    const t = await getTarget();
+    await sleep(700);
+    const [r] = await session(t.webSocketDebuggerUrl, [
+      { method: 'Runtime.evaluate', params: { expression: 'window.innerWidth + "x" + window.innerHeight' } },
+    ], 10000);
+    console.log(reset
+      ? '已恢复默认视口：' + (r && r.result && r.result.value) + '（已记录，后续命令同样生效）'
+      : '已切到手机视口 ' + w + '×' + h + ' → 实际 ' + (r && r.result && r.result.value) + '（已记录为粘性，后续命令自动沿用）');
   },
 
   /**
