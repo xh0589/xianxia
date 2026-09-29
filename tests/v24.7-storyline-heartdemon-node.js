@@ -251,8 +251,16 @@ console.log('--- [F] showStorylineDialogue 真身 ---');
     var body = sliceFn(NS, 'function showStorylineDialogue');
     assert(!!body, 'F3 切片成功');
     var appended = [];
+    // v25.2·收编批：showStorylineDialogue 末尾多了一句
+    //   `if (window.XianXia && window.XianXia.Modal && modal.isConnected) …`
+    // 生产代码是三重守卫，浏览器里无碍；但本夹具用 new Function('document', …) 只注入
+    // document，函数体里的 `window` 标识符本身就会抛 ReferenceError——
+    // 那是**夹具太窄**，不是产品代码坏了。给宿主补一个最小 window 桩即可，
+    // 桩里不提供 XianXia，adopt 分支自然跳过，真身逻辑照旧被验。
+    // ⚠ 别在这里把 window 指向真 global：那会与「不注桩遮蔽真身」的初衷相反。
+    var fakeWin = { XianXia: undefined, undefined: undefined };
     var fakeDoc = {
-        createElement: function () { return { className: '', onclick: null, innerHTML: '', remove: function () {} }; },
+        createElement: function () { return { className: '', onclick: null, innerHTML: '', remove: function () {}, isConnected: true }; },
         body: { appendChild: function (el) { appended.push(el); } }
     };
     var stage = {
@@ -262,8 +270,8 @@ console.log('--- [F] showStorylineDialogue 真身 ---');
     };
     var threw = null;
     try {
-        var fn = new Function('document',
-            'return function showStorylineDialogue(npc, stage, stageIndex, npcId) {' + body + '};')(fakeDoc);
+        var fn = new Function('document', 'window',
+            'return function showStorylineDialogue(npc, stage, stageIndex, npcId) {' + body + '};')(fakeDoc, fakeWin);
         fn({ id: 'healer_01', name: '灵素' }, stage, 1, 'healer_01');
     } catch (e) { threw = e; }
     assert(threw === null, 'F4 真身构建弹窗不再抛 ReferenceError（旧版九条故事线全体哑火的根因）');
@@ -273,10 +281,10 @@ console.log('--- [F] showStorylineDialogue 真身 ---');
     // 改前对照：形参没有 npcId 的旧签名跑同一段模板必炸（病是真的）
     var threwOld = null;
     try {
-        var fnOld = new Function('document',
+        var fnOld = new Function('document', 'window',
             'return function showStorylineDialogue(npc, stage, stageIndex) {' +
             body.replace("const _sid = npcId || (npc && npc.id) || '';", '')
-                .replace(/\$\{_sid\}/g, '${npcId}') + '};')(fakeDoc);
+                .replace(/\$\{_sid\}/g, '${npcId}') + '};')(fakeDoc, fakeWin);
         fnOld({ id: 'healer_01', name: '灵素' }, stage, 1, 'healer_01');
     } catch (e) { threwOld = e; }
     assert(threwOld && threwOld instanceof ReferenceError,

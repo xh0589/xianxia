@@ -1497,6 +1497,10 @@ function showItemMenu(uid) {
     `;
     
     document.body.appendChild(menu);
+    // v25.2·收编进 Modal 栈（Esc 可关/closeRuntimeModals 走句柄；既有裸删路径 isAlive 自愈）
+    if (window.XianXia && window.XianXia.Modal && menu.isConnected) {
+        window.XianXia.Modal.adopt(menu);
+    }
 }
 
 // ============ 装备对比弹窗（v12.4：背包物品 vs 当前同槽位装备，逐属性绿(+)/红(−)差值） ============
@@ -1595,6 +1599,10 @@ function showEquipmentCompareDialog(uid) {
         + '<div class="flex justify-end"><button onclick="this.closest(\'.fixed\').remove();" class="bg-gray-600 hover:bg-gray-500 px-4 py-2 rounded text-white">关闭</button></div>'
         + '</div>';
     document.body.appendChild(dialog);
+    // v25.2·收编进 Modal 栈（Esc 可关/closeRuntimeModals 走句柄；既有裸删路径 isAlive 自愈）
+    if (window.XianXia && window.XianXia.Modal && dialog.isConnected) {
+        window.XianXia.Modal.adopt(dialog);
+    }
 }
 
 // ============ 标记出售数量选择对话框（v10.5 替代原出售对话框） ============
@@ -1628,6 +1636,10 @@ function showMarkForSaleQuantityDialog(uid) {
         </div>
     `;
     document.body.appendChild(dlg);
+    // v25.2·收编进 Modal 栈（Esc 可关/closeRuntimeModals 走句柄；既有裸删路径 isAlive 自愈）
+    if (window.XianXia && window.XianXia.Modal && dlg.isConnected) {
+        window.XianXia.Modal.adopt(dlg);
+    }
     
     var input = document.getElementById('mark-qty-' + uid);
     if (input) {
@@ -2265,6 +2277,10 @@ function openShop(shopType = 'general') {
     `;
     
     document.body.appendChild(modal);
+    // v25.2·收编进 Modal 栈（Esc 可关/closeRuntimeModals 走句柄；既有裸删路径 isAlive 自愈）
+    if (window.XianXia && window.XianXia.Modal && modal.isConnected) {
+        window.XianXia.Modal.adopt(modal);
+    }
 }
 
 function buyFromInventoryShop(itemId, price) {
@@ -2475,6 +2491,10 @@ function showBuyQuantityDialog(itemId, itemName, unitPrice, maxAfford) {
         </div>
     `;
     document.body.appendChild(dlg);
+    // v25.2·收编进 Modal 栈（Esc 可关/closeRuntimeModals 走句柄；既有裸删路径 isAlive 自愈）
+    if (window.XianXia && window.XianXia.Modal && dlg.isConnected) {
+        window.XianXia.Modal.adopt(dlg);
+    }
     
     var input = document.getElementById('buy-qty-' + itemId);
     if (input) {

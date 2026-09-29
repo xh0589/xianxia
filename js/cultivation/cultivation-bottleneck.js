@@ -187,10 +187,16 @@ function attemptBreakBottleneck() {
     if (!config) return;
 
     // 构建瓶颈突破UI
+    // v25.2·收编（Modal.adopt 首例）：本弹窗保持自建皮肤不变，收编进 Modal 栈获得句柄。
+    // 三条关闭路径（成功分支/遮罩点击/暂时不管）全部改走句柄 close()——
+    // 根治旧病：突破成功用 querySelector('.fixed.z-50') 直删，会误删 DOM 序最前的
+    // #reincarnation-modal（它带 hidden 也会被 querySelector 命中）→ 本会话转世死面板。
+    // （案底：FIX_NOTES 第十三轮核对 2026-09-20 记录在案，当日未修。）
     var modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black/80 flex items-center justify-center z-50';
     modal.style.backdropFilter = 'blur(4px)';
-    modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+
+    var _handle = null; // 收编后句柄（attach 前先声明，onclick 里引用闭包变量）
 
     var solutionsHtml = '';
     for (var i = 0; i < BOTTLENECK_SOLUTIONS.length; i++) {
@@ -204,10 +210,14 @@ function attemptBreakBottleneck() {
         '<div class="text-center mb-4"><div class="text-5xl mb-2">🔒</div><h3 class="text-xl font-bold text-purple-500">' + config.name + '</h3><p class="text-sm text-gray-400 mt-1">' + config.desc + '</p></div>' +
         '<div class="bg-purple-900/30 rounded-lg p-3 mb-4 border border-purple-600/30"><p class="text-sm text-purple-300">当前境界：' + playerBottleneck.bottleneckRealm + ' ' + playerBottleneck.bottleneckLayer + '层<br>心魔滋生概率：' + Math.round(playerBottleneck.heartDemonChance * 100) + '%<br>尝试次数：' + playerBottleneck.attempts + '次</p></div>' +
         '<div class="space-y-2 mb-4">' + solutionsHtml + '</div>' +
-        '<div class="flex justify-center"><button onclick="this.closest(\'.fixed\').remove()" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded-lg transition">暂时不管</button></div>' +
+        '<div class="flex justify-center"><button onclick="window.XianXia.Modal.close(window.__bottleneckHandle)" class="px-4 py-2 bg-gray-600 hover:bg-gray-500 text-white text-sm rounded-lg transition">暂时不管</button></div>' +
     '</div>';
 
     document.body.appendChild(modal);
+    // v25.2：append 之后收编（adopt 要求 el 已在 DOM），句柄存全局口供「暂时不管」按钮用
+    _handle = window.XianXia && window.XianXia.Modal ? window.XianXia.Modal.adopt(modal) : null;
+    window.__bottleneckHandle = _handle;
+    modal.onclick = function (e) { if (e.target === modal && _handle) _handle.close(); };
 }
 
 // ============ 执行瓶颈突破方式 ============
@@ -257,9 +267,10 @@ function executeBottleneckSolution(solutionIndex) {
 
         if (window.showMessage) window.showMessage('🎉 瓶颈突破！修为继续提升！', 'success');
 
-        // 关闭UI
-        var modal = document.querySelector('.fixed.z-50');
-        if (modal) modal.remove();
+        // 关闭UI —— v25.2：改走收编句柄（旧的 querySelector('.fixed.z-50') 直删已废弃，
+        // 它会命中 DOM 序最前的 #reincarnation-modal 把转世面板删掉）
+        if (window.__bottleneckHandle) window.XianXia.Modal.close(window.__bottleneckHandle);
+        else { var _fallback = document.querySelector('#xianxia-modal-overlay'); if (_fallback) _fallback.remove(); }
     } else {
         playerBottleneck.attempts++;
 

@@ -3019,10 +3019,19 @@ const DEEP_TALK_REAL_HANDLERS = {
 };
 
 // 辅助：关闭NPC对话框
+// v25.2·收编（Modal.adopt 第2例）：句柄优先走栈轨 close（出栈、Esc/打扫口径统一），
+// 句柄失联时兜底 querySelector 裸删（老行为）。同时挂 window——下方「←」返回按钮的
+// onclick 字符串需要全局名。
 function closeNpcModal() {
+    var h = window.__npcDialogHandle;
+    if (h && h.el && h.el.isConnected && window.XianXia && window.XianXia.Modal) {
+        window.XianXia.Modal.close(h);
+        return;
+    }
     var m = document.querySelector('.npc-dialog-modal');
     if (m) m.remove();
 }
+window.closeNpcModal = closeNpcModal;
 
 // 辅助：调用高级请求
 function callAdvancedRequest(npcId, requestId) {
@@ -3653,13 +3662,17 @@ function executeDeepTalkSubOption(npcId, categoryId, subOptionId) {
         modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50 npc-dialog-modal';
         document.body.appendChild(modal);
     }
+    // v25.2·收编进 Modal 栈（Esc 可关/打扫走句柄；幂等——复用容器时返回原句柄）
+    if (window.XianXia && window.XianXia.Modal && modal.isConnected) {
+        window.__npcDialogHandle = window.XianXia.Modal.adopt(modal);
+    }
 
     let extraHtml = '';
     if (categoryId === 'farewell') {
         extraHtml = '<div class="text-xs text-gray-500 text-center mt-3">对话结束，面板将自动关闭...</div>';
-        setTimeout(function() { var m = document.querySelector('.npc-dialog-modal'); if (m) m.remove(); }, 3000);
+        setTimeout(function() { closeNpcModal(); }, 3000); // v25.2·走句柄出栈
     } else {
-        extraHtml = '<button onclick="this.closest(\'.fixed\').remove(); showSubCategoryDialog(\'' + npcId + '\', \'' + categoryId + '\')" class="w-full bg-blue-700 hover:bg-blue-600 px-3 py-2 rounded text-sm text-white mt-3">继续交谈</button>';
+        extraHtml = '<button onclick="closeNpcModal(); showSubCategoryDialog(\'' + npcId + '\', \'' + categoryId + '\')" class="w-full bg-blue-700 hover:bg-blue-600 px-3 py-2 rounded text-sm text-white mt-3">继续交谈</button>';
     }
 
     modal.innerHTML = '<div class="bg-gray-800 border-2 border-blue-500 rounded-xl p-6 max-w-xl w-full mx-4">' +
@@ -3697,11 +3710,11 @@ function showNPCDialog(npcId, screen = 'main') {
         }
     }
     // 先移除旧NPC对话框（避免与entity-interaction面板的z-50冲突）
-    const oldNpcModal = document.querySelector('.npc-dialog-modal');
-    if (oldNpcModal) oldNpcModal.remove();
+    // v25.2·收编：旧的走 closeNpcModal（句柄出栈），新的 append 后 adopt 进栈
+    closeNpcModal();
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50 npc-dialog-modal';
-    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    modal.onclick = (e) => { if (e.target === modal) closeNpcModal(); };
     const affection = npc.relationship?.affection || 0;
     const hatred = npc.relationship?.hatred || 0;
     const favor = npc.relationship?.favor || 0;
@@ -3941,6 +3954,10 @@ function showNPCDialog(npcId, screen = 'main') {
     </div>`;
     modal.innerHTML = html;
     document.body.appendChild(modal);
+    // v25.2·收编进 Modal 栈（Esc 可关/打扫走句柄）
+    if (window.XianXia && window.XianXia.Modal && modal.isConnected) {
+        window.__npcDialogHandle = window.XianXia.Modal.adopt(modal);
+    }
 }
 
 // 从面板招募NPC入队
@@ -3968,11 +3985,11 @@ function showGiftUI(npcId) {
 function showSubCategoryDialog(npcId, categoryId) {
     const npc = window.npcManager?.getNPC(npcId);
     if (!npc) { showMessage('NPC不存在', 'error'); return; }
-    const oldModal = document.querySelector('.npc-dialog-modal');
-    if (oldModal) oldModal.remove();
+    // v25.2·收编：旧的走 closeNpcModal（句柄出栈），新的 append 后 adopt 进栈
+    closeNpcModal();
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50 npc-dialog-modal';
-    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    modal.onclick = (e) => { if (e.target === modal) closeNpcModal(); };
     const affection = npc.relationship?.affection || 0;
     let cat = null;
     for (const key in DEEP_TALK_CATEGORIES) { if (DEEP_TALK_CATEGORIES[key].id === categoryId) { cat = DEEP_TALK_CATEGORIES[key]; break; } }
@@ -4028,6 +4045,10 @@ function showSubCategoryDialog(npcId, categoryId) {
     '</div>';
     modal.innerHTML = html;
     document.body.appendChild(modal);
+    // v25.2·收编进 Modal 栈（Esc 可关/打扫走句柄）
+    if (window.XianXia && window.XianXia.Modal && modal.isConnected) {
+        window.__npcDialogHandle = window.XianXia.Modal.adopt(modal);
+    }
 }
 
 // ==================== 深谈2.0：分支选择对话 ====================
@@ -4096,10 +4117,14 @@ function showBranchDialog(npcId, categoryId, subOptionId, branchKey) {
         modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50 npc-dialog-modal';
         document.body.appendChild(modal);
     }
+    // v25.2·收编进 Modal 栈（Esc 可关/打扫走句柄；幂等——复用容器时返回原句柄）
+    if (window.XianXia && window.XianXia.Modal && modal.isConnected) {
+        window.__npcDialogHandle = window.XianXia.Modal.adopt(modal);
+    }
 
     modal.innerHTML = '<div class="bg-gray-800 border-2 border-purple-500 rounded-xl p-6 max-w-xl w-full mx-4 max-h-[90vh] overflow-y-auto">' +
         '<div class="flex items-center gap-3 mb-4">' +
-            '<button onclick="this.closest(\'.fixed\').remove(); showSubCategoryDialog(\'' + npcId + '\', \'' + categoryId + '\')" class="text-gray-400 hover:text-white text-lg">&larr;</button>' +
+            '<button onclick="closeNpcModal(); showSubCategoryDialog(\'' + npcId + '\', \'' + categoryId + '\')" class="text-gray-400 hover:text-white text-lg">&larr;</button>' +
             '<h3 class="text-lg font-bold text-purple-300">💬 深谈</h3>' +
             '<button onclick="this.closest(\'.fixed\').remove()" class="text-gray-400 hover:text-white text-2xl ml-auto">&times;</button>' +
         '</div>' +
@@ -4234,10 +4259,14 @@ function executeSecretDialogueOption(npcId, categoryId, subOptionId) {
         modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50 npc-dialog-modal';
         document.body.appendChild(modal);
     }
+    // v25.2·收编进 Modal 栈（Esc 可关/打扫走句柄；幂等——复用容器时返回原句柄）
+    if (window.XianXia && window.XianXia.Modal && modal.isConnected) {
+        window.__npcDialogHandle = window.XianXia.Modal.adopt(modal);
+    }
 
     modal.innerHTML = '<div class="bg-gray-800 border-2 border-purple-500 rounded-xl p-6 max-w-xl w-full mx-4">' +
         '<div class="flex items-center gap-3 mb-4">' +
-            '<button onclick="this.closest(\'.fixed\').remove(); showSubCategoryDialog(\'' + npcId + '\', \'' + categoryId + '\')" class="text-gray-400 hover:text-white text-lg">&larr;</button>' +
+            '<button onclick="closeNpcModal(); showSubCategoryDialog(\'' + npcId + '\', \'' + categoryId + '\')" class="text-gray-400 hover:text-white text-lg">&larr;</button>' +
             '<h3 class="text-lg font-bold text-purple-300">🔐 秘密对话</h3>' +
             '<button onclick="this.closest(\'.fixed\').remove()" class="text-gray-400 hover:text-white text-2xl ml-auto">&times;</button>' +
         '</div>' +
@@ -4254,7 +4283,7 @@ function executeSecretDialogueOption(npcId, categoryId, subOptionId) {
         '<div class="text-xs text-gray-500 text-center">' +
             (affChange > 0 ? '好感度+' + affChange + ' 信任+' + trustChange : '好感度' + affChange + ' 信任' + trustChange) +
         '</div>' +
-        '<button onclick="this.closest(\'.fixed\').remove(); showSubCategoryDialog(\'' + npcId + '\', \'' + categoryId + '\')" class="w-full bg-purple-700 hover:bg-purple-600 px-3 py-2 rounded text-sm text-white mt-3">继续交谈</button>' +
+        '<button onclick="closeNpcModal(); showSubCategoryDialog(\'' + npcId + '\', \'' + categoryId + '\')" class="w-full bg-purple-700 hover:bg-purple-600 px-3 py-2 rounded text-sm text-white mt-3">继续交谈</button>' +
     '</div>';
 }
 
@@ -4899,6 +4928,10 @@ if (typeof window !== 'undefined') {
         
         modal.innerHTML = storyContent;
         document.body.appendChild(modal);
+    // v25.2·收编进 Modal 栈（Esc 可关；故事线与对话族独立，不共用句柄口）
+    if (window.XianXia && window.XianXia.Modal && modal.isConnected) {
+        window.XianXia.Modal.adopt(modal);
+    }
     }
     
     function handleStorylineChoice(npcId, choiceIndex, buttonElement) {

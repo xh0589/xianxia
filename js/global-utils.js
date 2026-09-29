@@ -221,8 +221,33 @@ window.XianXia = window.XianXia || {};
         }
         function top() { return liveStack().slice(-1)[0] || null; }
 
+        // ===== v25.2 · Modal.adopt：存量自建弹层零视觉改动收编进栈 =====
+        // 动机：全库 98 处自建 fixed.inset-0 弹层不可能一夜重写成 Modal.open 皮肤；
+        // adopt 让它们**保持原样**就能进栈获得句柄（closeRuntimeModals 栈轨可靠关闭、
+        // Esc 关栈顶、isAlive 过滤外部裸 remove）。根治「query 单选器直删误杀静态面板」族
+        // （首例：cultivation-bottleneck.js 突破成功删 #reincarnation-modal——FIX_NOTES 第十三轮记录在案）。
+        // 语义：只挂锚点+入栈，不改 z-index/不改 DOM 结构/不动既有 onclick（要不要换关闭路径由调用方决定）。
+        function adopt(el, cfg) {
+            cfg = cfg || {};
+            if (!el || !el.isConnected) return null;
+            if (el.xModalHandle) return el.xModalHandle; // 幂等：重复收编返回原句柄
+            var handle = {
+                el: el, id: el.id || cfg.id || null, adopted: true,
+                close: function () {
+                    if (!el.isConnected) return;
+                    el.remove();
+                    var i = _stack.indexOf(handle); if (i >= 0) _stack.splice(i, 1);
+                    if (typeof cfg.onClose === 'function') { try { cfg.onClose(handle); } catch (e) {} }
+                }
+            };
+            el.xModalHandle = handle;
+            _stack.push(handle);
+            return handle;
+        }
+
         window.XianXia.Modal = {
             open: open,
+            adopt: adopt,
             close: function (h) { if (h && typeof h.close === 'function') h.close(); },
             closeById: closeById,
             closeAll: closeAll,
