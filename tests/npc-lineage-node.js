@@ -36,6 +36,17 @@ mockWindow.getAbsoluteDay = function () { return mockWindow._absDay; };
 mockWindow.window = mockWindow;
 mockWindow.global = mockWindow;
 mockWindow.XianXia = mockWindow.XianXia || {};
+// v25.1·试-04：给沙箱一个 NPC 类真身——npc-lineage 有构造器时必须 new NPC 入册，
+// 配合下面带 instanceof 闸的 mock addNPC，测试才拦得住「纯对象字面量幽灵子嗣」回归
+// （真身 addNPC 在 npc-system.js NPCManager：`if (npc instanceof NPC) {...return true;} return false;`）。
+mockWindow.NPC = function NPC(id, name, options) {
+    options = options || {};
+    this.id = id; this.name = name;
+    this.gender = options.gender; this.age = options.age;
+    this.location = options.location; this.occupation = options.occupation || '';
+    this.combat = options.combat;
+    this.relationship = { affection: 0 };
+};
 
 var eventBusSrc = fs.readFileSync(path.resolve(__dirname, '..', 'js', 'core', 'event-bus.js'), 'utf8');
 var stateRegSrc = fs.readFileSync(path.resolve(__dirname, '..', 'js', 'core', 'state-registry.js'), 'utf8');
@@ -74,7 +85,11 @@ function makeNpc(opts) {
 mockWindow.npcManager = {
     getNPC: function (id) { return npcList.find(function (n) { return n.id === id; }) || null; },
     getAllNPCs: function () { return npcList.slice(); },
-    addNPC: function (n) { npcList.push(n); }
+    // v25.1·试-04：与真函数同款的 instanceof 闸——旧 mock 来者不拒，把真闸遮住了（当年漏检的原因）
+    addNPC: function (n) {
+        if (n instanceof mockWindow.NPC) { npcList.push(n); return true; }
+        return false;
+    }
 };
 
 function resetNpcs(arr) {

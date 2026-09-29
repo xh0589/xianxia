@@ -177,11 +177,16 @@
             : Number(window.currentCharData && window.currentCharData.spiritStones) || 0;
         var cost = Math.floor(Math.max(0, balance) * 0.5);
         if (window.EconomyTransaction && window.EconomyTransaction.run) {
-            var paid = window.EconomyTransaction.run('npc-critical-heal', function(tx) {
-                if (cost > 0 && !tx.debit('spiritStones', cost)) throw new Error('灵石不足');
+            // v24.2 修真接口：旧写法 run('npc-critical-heal', function(tx){tx.debit…}) 是想象出来的 API——
+            // run 的真实签名是 run(work)，work 收到的是快照不是 tx；字符串被当函数调用必抛，
+            // 返回 {success:false}，而判据读的 paid.ok 永远 undefined ⇒ 急救永远「救治失败」。
+            // 现按真 API 走（与 breakthrough-ritual.js 同款）：work 里用模块级 debit，成功返回 true。
+            var paid = window.EconomyTransaction.run(function () {
+                if (cost > 0 && !window.EconomyTransaction.debit('spiritStones', cost)) return false;
+                return true;
             });
-            if (!paid.ok) {
-                if (window.showMessage) window.showMessage('救治失败：' + (paid.error && paid.error.message || '灵石不足'), 'error');
+            if (paid !== true) {
+                if (window.showMessage) window.showMessage('救治失败：' + ((paid && paid.error && paid.error.message) || '灵石不足'), 'error');
                 return false;
             }
         } else if (window.currentCharData) {

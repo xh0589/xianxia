@@ -75,7 +75,7 @@ function _deAddContribution(n, reason) {
     var ds = window.discipleState;
     if (!ds || !ds.isInSect) return false;
     ds.contribution = (ds.contribution || 0) + n;
-    try { window.sectLedgerNote && window.sectLedgerNote(n, reason || '门中日常'); } catch (e) {}
+    try { window.sectLedgerNote && window.sectLedgerNote(n, reason || '门中日常'); } catch (e) { console.warn('[静默失败] js/core/daily-events.js:78 · _deAddContribution：贡献加了、门派账本没落笔——账房少一行，记功无对证', e && e && e.message); }
     return true;
 }
 
@@ -94,17 +94,25 @@ function _deSetFlag(name) {
 
 function _deAdvance(min, name) {
     if (min > 0 && window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
-        try { window.timeSystem.advanceTime(min, name || '日常'); } catch (e) {}
+        try { window.timeSystem.advanceTime(min, name || '日常'); } catch (e) { console.warn('[静默失败] js/core/daily-events.js:97 · _deAdvance：日常事件的时辰没扣（timeSystem 路）——事白办、天白过', e && e && e.message); }
     } else if (min > 0 && typeof window.advanceTime === 'function') {
-        try { window.advanceTime(min, name || '日常'); } catch (e) {}
+        try { window.advanceTime(min, name || '日常'); } catch (e) { console.warn('[静默失败] js/core/daily-events.js:99 · _deAdvance：日常事件的时辰没扣（window.advanceTime 兜底路）——事白办、天白过', e && e && e.message); }
     }
 }
 
 function _deInBattle() {
     try {
-        if (window.battle && window.battle.active) return true;
-        if (window.Battle && window.Battle.instance && window.Battle.instance.running) return true;
-        if (document.getElementById('battle-panel') && !document.getElementById('battle-panel').classList.contains('hidden')) return true;
+        // v24.3 修复（NEW-76/v24 审计点名，三条旧检查全死）：
+        //   window.battle —— 全仓零写方；Battle.instance —— Battle 是类、无单例；
+        //   #battle-panel —— 从未被任何代码创建（真身是 仙侠.html 的 #battle-modal）。
+        // 三条恒假 ⇒ 战斗中日常事件照弹不误，盖住出手时机。
+        // 现改认全仓权威信号：window.currentBattle（showBattleUI 写、closeBattle 清），
+        // 判活口径与 talisman-system.inBattle 同款；另拿真弹窗 #battle-modal 做 DOM 兜底
+        // （胜利结算屏 isFinished=true 但弹窗还开着的那段，也照样抑制）。
+        var b = window.currentBattle;
+        if (b && !b.isFinished && b.enemy && b.enemy.isAlive) return true;
+        var bm = document.getElementById('battle-modal');
+        if (bm && !bm.classList.contains('hidden')) return true;
     } catch (e) {}
     return false;
 }
@@ -599,8 +607,10 @@ var DAILY_EVENT_LIST = [
                     _deAdvance(20, '参悟石碑');
                     var p = window.currentCharData;
                     if (p) p.essence = (p.essence || 0) + 5;
-                    if (typeof window.unlock === 'function') {
-                        try { window.unlock('skill_01', 'heard', { source: 'stele', completeness: 0.1 }); } catch (e) {}
+                    // v24.5 死读修复：unlock 真身在 window.KnowledgeSystem.unlock（knowledge-system.js:398/411），
+                    // 裸 window.unlock 零挂载——旧版「驻足参悟碑文」的悟 fragment 静默丢失（catch 包着，无痕）。
+                    if (window.KnowledgeSystem && typeof window.KnowledgeSystem.unlock === 'function') {
+                        try { window.KnowledgeSystem.unlock('skill_01', 'heard', { source: 'stele', completeness: 0.1 }); } catch (e) {}
                     }
                     _deMsg('你若有所悟，修为略有精进。', 'success');
                 }
@@ -866,7 +876,7 @@ function saveDailyEventState() {
             lastById: dailyEventState.lastById,
             history: (dailyEventState.history || []).slice(-30)
         }));
-    } catch (e) {}
+    } catch (e) { console.warn('[静默失败] js/core/daily-events.js:869 · saveDailyEventState：日常事件状态没落盘——冷却账与历史刷新即丢，同一出戏可能反复弹', e && e && e.message); }
 }
 
 // ============ 解析地点 ============

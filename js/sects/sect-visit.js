@@ -59,7 +59,16 @@ function getGateGuardDialogue(sectName, sect) {
     };
     
     var lines = dialogues[type] || dialogues['中立'];
-    return lines[Math.floor(Math.random() * lines.length)];
+    var line = lines[Math.floor(Math.random() * lines.length)];
+    // v25.1·P9 P7：山门口「通报入内」与「申请入门」并排，旧台词只说「请勿擅入」，玩家找不到拜入入口——
+    // 未入门的游客，守卫点破入口；已入门的本门弟子，换成同门口吻（旧台词对身份零分支）。纯文案，不动按钮行为。
+    try {
+        var _ds = (typeof window.discipleState === 'object' && window.discipleState) ? window.discipleState : {};
+        if (_ds.isInSect && _ds.sectId === sectName) {
+            return '"哦，是本门的' + (_ds.rankName || '同门') + '回来了。内院照常开着——进去吧。"';
+        }
+    } catch (eDs) {}
+    return line + '<br>「若要拜入本门，点下方『申请入门』——过了考核，便是自己人。『通报入内』只是进外院看看。」';
 }
 
 // ============ 渲染公告栏 ============
@@ -139,11 +148,18 @@ function showSectBulletinDialog(sectName) {
         if (_dsB.isInSect && _dsB.sectId === sectName) {
             liveLines.push('📌 你的职分：' + (_dsB.rankName || '外门弟子') + ' · 在册贡献 ' + (_dsB.contribution || 0) + ' 点。');
         }
-        if (window.SectCrisisEngine && typeof window.SectCrisisEngine.listForSect === 'function') {
-            var _crises = window.SectCrisisEngine.listForSect(sectName) || [];
-            for (var _ci = 0; _ci < _crises.length && _ci < 2; _ci++) {
-                if (_crises[_ci] && _crises[_ci].title) liveLines.push('⚠️ 门中近日有异：「' + _crises[_ci].title + '」——内院有详请。');
-            }
+        // v24.5 死读修复：引擎真身叫 window.SectCrisis（sect-crisis-engine.js:350），listForSect 从未存在过——
+        // 名字对不上号，门中真出了危机，山门页也一个字不提。改按真 API 取活账（mem().active + 事件池报名字）。
+        if (window.SectCrisis && typeof window.SectCrisis.mem === 'function') {
+            try {
+                var _cm = window.SectCrisis.mem(sectName);
+                var _cPool = window.SECT_CRISIS_EVENTS || {};
+                if (_cm && _cm.active) {
+                    var _cev = _cPool[_cm.active.eventId] || {};
+                    var _cstage = _cev[_cm.active.stage] || _cev.omen || {};
+                    liveLines.push('⚠️ 门中近日有异：「' + (_cstage.name || '说不上名目的异动') + '」——内院有详请。');
+                }
+            } catch (eCrisis) {}
         }
         // 改造批 · 公告栏一板看全：编年近事 / 外务榜 / 节令
         try {

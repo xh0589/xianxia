@@ -38,7 +38,7 @@
     function cd() { return global.currentCharData || {}; }
     function msg(t, kind) { if (global.showMessage) global.showMessage(t, kind || 'info'); }
     function dm() { return (global.XianXia && global.XianXia.DataManager) || null; }
-    function addTime(min, why) { if (global.timeSystem && global.timeSystem.advanceTime) { try { global.timeSystem.advanceTime(min, why); } catch (e) {} } }
+    function addTime(min, why) { if (global.timeSystem && global.timeSystem.advanceTime) { try { global.timeSystem.advanceTime(min, why); } catch (e) { console.warn('[静默失败] js/city-depth.js:41 · addTime：城中事务的时辰没走成——事白办了，一天白过', e && e && e.message); } } }
     function grantItem(itemId, n) {
         n = Math.max(1, Math.floor(Number(n) || 1));
         var 名 = (global.itemById && global.itemById[itemId] && global.itemById[itemId].name) || itemId;

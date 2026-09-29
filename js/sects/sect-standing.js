@@ -58,7 +58,8 @@
     var WAR_MUL = { '巨擘': 1.4, '大派': 1.2, '中等偏上': 1.05, '中等': 1.0, '小派': 0.85, '式微': 0.7, '残破': 0.55, '名存实亡': 0.4, '已灭': 0.3, '未知': 1.0 };
     // 枯萎八城与门派所在地区的对应（灵脉一枯，本地门派首当其冲）
     var CITY_REGION = { '大漠孤城': '西漠', '冰原城': '北冥', '万毒谷': '南疆', '青木城': '东荒', '剑阁': '蜀地', '炎城': '东南海域', '洛水城': '中州', '帝都·长安': '中州' };
-    var TREND_WORD = { rising: '↗ 上升', steady: '→ 平稳', falling: '↘ 下滑' };
+    // v25.1·P22：趋势词去掉裸箭头——旧「巨擘 → 平稳」被读成两档势力并排
+    var TREND_WORD = { rising: '上升', steady: '平稳', falling: '下滑' };
 
     function homeWithered(sect) {
         var sd = (W.sectsData || {})[sect];
@@ -118,7 +119,8 @@
     W.sectPowerLabel = function (sect) {
         var p = W.sectPowerNow(sect);
         if (!p) return (W.sectsData && W.sectsData[sect] && W.sectsData[sect].power) || '未知';
-        return p.tier + ' ' + (TREND_WORD[p.trend] || '');
+        // v25.1·P22：旧写法「巨擘 → 平稳」把档位与趋势并排成两个裸词，玩家读成两档势力——改成明示口径
+        return p.tier + '（江湖座次 · 趋势' + (TREND_WORD[p.trend] || '平稳') + '）';
     };
     W.sectPowerWarMul = function (sect) {
         var p = W.sectPowerNow(sect);

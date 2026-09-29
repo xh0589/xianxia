@@ -140,10 +140,10 @@
     }
 
     function spendTime(min, why) {
-        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(min, why); } catch (e) {}
+        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(min, why); } catch (e) { console.warn('[静默失败] js/city-facilities/teahouse-leisure.js:143 · spendTime：茶馆的时辰没扣——茶白喝、天白过', e && e && e.message); }
     }
-    function say(m, t) { try { if (window.showMessage) window.showMessage(m, t || 'info'); } catch (e) {} }
-    function refresh() { try { if (window.updateCharacterStatus) window.updateCharacterStatus(); } catch (e) {} }
+    function say(m, t) { try { if (window.showMessage) window.showMessage(m, t || 'info'); } catch (e) { console.warn('[静默失败] js/city-facilities/teahouse-leisure.js:145 · say：茶馆的话没说出来——屏幕闷着，玩家不知道发生了什么', e && e && e.message); } }
+    function refresh() { try { if (window.updateCharacterStatus) window.updateCharacterStatus(); } catch (e) { console.warn('[静默失败] js/city-facilities/teahouse-leisure.js:146 · refresh：茶馆后面板没刷新——HUD 数字还是旧的', e && e && e.message); } }
 
     // ============ 菜单 ============
     function openMenu() {

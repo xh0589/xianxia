@@ -198,6 +198,59 @@ const DEEP_TALK_CATEGORIES = {
     }
 };
 
+// ==================== v24.2 topics 接线：数据话题上桌 ====================
+// v24.0 审计点名的断链：数据文件把 457 句专属台词写在 dialogueTree.topics.<key> 下
+// （键名 gossip/personal/cultivation/sect/market/dungeon/quest），而唯一的消费点拿
+// UI 分类名（topics/intel/love/…）去查——两套命名永远对不上，永远 miss 永远走通用兜底池；
+// topicRequirements 的 59 道门槛也无人问过。本段把数据键钉上 UI：
+// ① 「📖 话题」子分类下按 NPC 动态列「TA尤其想与你聊的」（dt_* 选项，门槛当场判）；
+// ② 固定子选项按语义映射借数据池（FIXED_SUBOPTION_TOPIC）；
+// ③ 消费点改按数据键取句，借池须过 topicRequirements 门槛。
+const DATA_TOPIC_UI = {
+    gossip:      { icon: '🗞️', name: '街谈巷议', desc: '街坊间的人和事' },
+    personal:    { icon: '💭', name: '心事倾谈', desc: 'TA的过往与心事' },
+    cultivation: { icon: '🧘', name: '修行心得', desc: 'TA在修行上的体会' },
+    sect:        { icon: '🏯', name: '门派见闻', desc: '门派里的事TA知道些' },
+    market:      { icon: '⚖️', name: '坊市行情', desc: '物价的涨跌冷暖' },
+    dungeon:     { icon: '🗺️', name: '秘境传闻', desc: '秘境里的宝物与凶险' },
+    quest:       { icon: '📜', name: '托付之言', desc: 'TA有事想拜托你' }
+};
+// 固定子选项 → 数据话题键（语义对得上的才映射；对不上的照旧走通用池，不硬凑）
+const FIXED_SUBOPTION_TOPIC = {
+    'topics:recent': 'greeting',
+    'topics:history': 'personal',
+    'topics:worries': 'personal',
+    'intel:gossip': 'gossip',
+    'intel:market_prices': 'market',
+    'intel:secret_realms': 'dungeon',
+    'intel:sect_movements': 'sect',
+    'cultivation_guidance:insight_share': 'cultivation'
+};
+// greeting 不进 dt_ 列表：那是问候路径（getGreeting 各钩子）的地盘，深谈不掺和；
+// 但 FIXED_SUBOPTION_TOPIC 里「近况如何」仍可借它的句子。
+function getNpcDataTopics(npc) {
+    const tree = npc && npc.dialogueTree;
+    const topics = tree && tree.topics;
+    if (!topics || typeof topics !== 'object') return [];
+    const reqs = tree.topicRequirements || {};
+    const out = [];
+    for (const key in topics) {
+        if (key === 'greeting') continue;
+        const entry = topics[key];
+        const lines = entry && entry.all;
+        if (!Array.isArray(lines) || !lines.length) continue;
+        const req = reqs[key] || {};
+        out.push({
+            key: key,
+            lines: lines,
+            warm: Array.isArray(entry.warm) && entry.warm.length ? entry.warm : null,
+            minAffection: typeof req.minAffection === 'number' ? req.minAffection : 0,
+            ui: DATA_TOPIC_UI[key] || { icon: '💬', name: key, desc: 'TA想聊的话题' }
+        });
+    }
+    return out;
+}
+
 // ==================== 深谈分支对话树定义 ====================
 // 每个分支树按 (npcId, categoryId, subOptionId) 索引
 // 当玩家选择有分支树的子选项时，进入分支选择模式
@@ -881,6 +934,18 @@ class NPC {
     getDialogue(category = 'greeting') {
         const tree = this.dialogueTree;
         const aff = this.relationship.affection;
+        // v25.2·P28 分档死代码根治：旧版 if (tree[category]) 先行短路，默认 category='greeting'
+        // 永远命中 tree.greeting——好感从陌生涨到挚爱，寒暄永远只有开场那几句，
+        // affectionLow/Mid/High 三档池子写了等于没写。现 greeting 按好感选档；
+        // 数据 NPC 的定制树若没备某档池子，逐级退回 greeting，原样不劣化。
+        if (category === 'greeting') {
+            const _has = k => Array.isArray(tree[k]) && tree[k].length > 0;
+            let pool = null;
+            if (aff < -50 && _has('affectionLow')) pool = tree.affectionLow;
+            else if (aff >= 50 && _has('affectionHigh')) pool = tree.affectionHigh;
+            else if (aff >= 0 && _has('affectionMid')) pool = tree.affectionMid;
+            if (pool) return randomChoice(pool).replace('{playerName}', playerName || '朋友');
+        }
         if (tree[category]) return tree[category][Math.floor(Math.random() * tree[category].length)].replace('{playerName}', playerName || '朋友');
         if (aff < -50) return randomChoice(tree.affectionLow || ['走开']);
         if (aff < 0) return randomChoice(tree.greeting);
@@ -899,7 +964,9 @@ class NPC {
     }
 
     // === 记忆系统 ===
-    recordPlayerAction(action, result = 'neutral') {
+    // v25.2·P27 opts.noAffection：好感已由调用方直接结算时置真，跳过 updateRelationshipFromAction
+    // ——照 F-18 gift 同一判例（送礼好感由 confirmGiftToNPC 直发，账房不再重复记一笔）。
+    recordPlayerAction(action, result = 'neutral', opts) {
         this.memory.playerActions.push({ action, result, gameMinute: npcNowGameMinute(), timestamp: Date.now() });
         if (this.memory.playerActions.length > 50) this.memory.playerActions = this.memory.playerActions.slice(-50);
         this.memory.lastAction = action;
@@ -909,7 +976,13 @@ class NPC {
         else if (action === 'help') this.memory.totalHelps++;
         else if (action === 'attack') { this.memory.totalAttacks++; this.addStress(20); this.changeFear(10); } // v20.37 威压账：挨过打的人怕你
         else if (action === 'refuse_quest') this.memory.totalRefusals++;
-        else if (action === 'talk' || action === 'greet') {
+        // v25.2·P27 键名失配根治：旧版只认 talk/greet 两键才置「认识」，而深谈记的是
+        // deep_talk_*、好感不足硬聊记 forced_talk、初见记 first_meet——面对面聊了一路，
+        // meetCount/firstMet 仍是零，全仓 7 处读 firstMet/meetCount 的门禁（吃醋对峙/吃醋合集/
+        // 无咎吃醋/个人事件/旧事重提/掌门出游/社交流量）对「只深谈过」的人全部卡死。
+        // 深谈与情感线入口都有同地守卫（npcNotCoLocated），记到任何一条都算真见过面。
+        else if (action === 'talk' || action === 'greet' || action === 'first_meet'
+            || action === 'forced_talk' || String(action).indexOf('deep_talk') === 0) {
             this.memory.meetCount++;
             if (!this.memory.firstMet) {
                 this.memory.firstMet = true;
@@ -917,7 +990,7 @@ class NPC {
             }
         }
         this.memory.impressions[action] = (this.memory.impressions[action] || 0) + 1;
-        this.updateRelationshipFromAction(action, result);
+        if (!(opts && opts.noAffection)) this.updateRelationshipFromAction(action, result);
     }
 
     updateRelationshipFromAction(action, result) {
@@ -1376,6 +1449,8 @@ class NPC {
                 // F-5 修复：爱情线冷却与告白承诺标志之前未序列化，读档冷却清零 + 前置承诺丢失，可绕过冷却直接 bond_dao
                 _loveCd: this.memory._loveCd ? {...this.memory._loveCd} : {},
                 _loveAccepted_confess: this.memory._loveAccepted_confess || false,
+                // v25.2·P29：「道侣婉拒只演一次」的记账，不随档走则读档后同一句角色台词重演
+                _bondDaoAsked: this.memory._bondDaoAsked || false,
                 // F-18：送礼疲倦持久化
                 giftFatigue: this.memory.giftFatigue || 0,
                 lastGiftDay: this.memory.lastGiftDay || 0,
@@ -1440,6 +1515,11 @@ class NPC {
             // F-19 修：v20.0 master-teach.js 字段显式持久化（旧版 serialize 逐字段列出漏了，读档后弟子培养进度全丢）
             _cultivationProgress: Number(this._cultivationProgress) || 0,
             _graduated: !!this._graduated,
+            // v25.1·试-05：第二十一波的真账随档——培养进度(_teachProgress)与弟子荷包(_purse)此前漏出白名单，
+            // 真账写点在 js/sects/master-teach.js:58-65/119（传功只写 _teachProgress，读档一次进度/荷包全蒸发）。
+            // 从未写过账的存 null（不是 0）——保住「_teachProgress==null 时从 _cultivationProgress 迁移」的旧档活路。
+            _teachProgress: this._teachProgress != null ? (Number(this._teachProgress) || 0) : null,
+            _purse: this._purse != null ? (Number(this._purse) || 0) : null,
             // 批四：道侣心情/需求随档（此前 _companionData 从不序列化，读档即失忆——需求做实的前提是它记得住）
             _companionData: this._companionData ? JSON.parse(JSON.stringify(this._companionData)) : null,
             _retired: !!this._retired,   // 方案五·执事养老：挂了牌的同门随档记住
@@ -1511,6 +1591,10 @@ class NPC {
         // F-19 修：v20.0 master-teach.js 字段还原（旧档→默认 0/false）
         npc._cultivationProgress = Number(data._cultivationProgress) || 0;
         npc._graduated = !!data._graduated;
+        // v25.1·试-05：培养进度与荷包还原——旧档没这两键时保持 null，
+        // 让 master-teach.js teachProg() 的「null 则从 _cultivationProgress 迁移」老路照旧走得通。
+        if (data._teachProgress != null) npc._teachProgress = Number(data._teachProgress) || 0;
+        if (data._purse != null) npc._purse = Number(data._purse) || 0;
         // 批四：道侣心情/需求还原（旧档没有则为 null，首次互动时重建）
         if (data._companionData) npc._companionData = JSON.parse(JSON.stringify(data._companionData));
         if (data._retired) { npc._retired = true; try { npc.occupation = '养老'; } catch (eR) {} }
@@ -1549,6 +1633,7 @@ class NPC {
                 // F-5 修复：恢复爱情线冷却与告白承诺标志，否则读档后可绕过冷却直接 bond_dao
                 _loveCd: data.memory._loveCd || {},
                 _loveAccepted_confess: data.memory._loveAccepted_confess || false,
+                _bondDaoAsked: data.memory._bondDaoAsked || false,   // v25.2·P29 同白名单
                 // F-18：送礼疲倦恢复
                 giftFatigue: data.memory.giftFatigue || 0,
                 lastGiftDay: data.memory.lastGiftDay || 0,
@@ -2322,8 +2407,11 @@ class NPCQuestSystem {
     }
     acceptQuest(questId) {
         const q = this.quests.get(questId); if (!q) return false;
-        if (!window.playerQuestProgress) window.playerQuestProgress = { activeQuests: [], completedQuests: [], totalCompleted: 0 };
-        if (!window.playerQuestProgress.activeQuests.find(x => x.id === questId)) { window.playerQuestProgress.activeQuests.push({ ...q, status: 'active', acceptedAt: Date.now() }); }
+        // v24.6：改前往 window.playerQuestProgress 塞对象条目——那是真任务账本
+        // （quest-system.js 顶层 let，completedQuests 存字符串 id）的同名幽灵，
+        // 形状还不兼容（对象 vs 字符串 id）。NPC 委托是独立子系统，改记实例态。
+        if (!this.acceptedQuests) this.acceptedQuests = [];
+        if (!this.acceptedQuests.find(x => x.id === questId)) { this.acceptedQuests.push({ ...q, status: 'active', acceptedAt: Date.now() }); }
         return true;
     }
     completeQuest(questId) {
@@ -2338,7 +2426,16 @@ class NPCQuestSystem {
             { id: 'quest_defeat_bandits', title: '击败山贼', type: 'combat', npcId: 'warrior_01', minAffection: 40, rewards: { spiritStones: 100 } },
             { id: 'quest_deliver_message', title: '传递消息', type: 'delivery', npcId: 'mentor_01', minAffection: 20, rewards: { respect: 10 } },
             { id: 'quest_mine_ore', title: '采集矿石', type: 'collection', npcId: 'craftsman_01', minAffection: 30, rewards: { spiritStones: 80 } },
-            { id: 'quest_explore_dungeon', title: '探索秘境', type: 'exploration', npcId: 'mysterious_01', minAffection: 50, rewards: { spiritStones: 200 } }
+            { id: 'quest_explore_dungeon', title: '探索秘境', type: 'exploration', npcId: 'mysterious_01', minAffection: 50, rewards: { spiritStones: 200 } },
+            // v25.1·试-10：补注册故事线数据（npc-storylines.js）引用而注册表没有的 5 张委托——
+            // 旧版 handleStorylineChoice 接下 quest_gather/quest_investigate/quest_talk/quest_dungeon/quest_combat
+            // 时 acceptQuest 查无此单恒弹「接取失败」，stage2Completed 闸门永关，7/9 故事线死锁在第三幕前。
+            // 字段格式照抄上面既有 5 张。
+            { id: 'quest_gather', title: '采集火属灵药', type: 'collection', npcId: 'elder_01', minAffection: 20, rewards: { spiritStones: 60 } },
+            { id: 'quest_investigate', title: '调查神秘人', type: 'exploration', npcId: 'warrior_01', minAffection: 20, rewards: { spiritStones: 60 } },
+            { id: 'quest_talk', title: '传讯求援', type: 'delivery', npcId: 'mentor_01', minAffection: 20, rewards: { spiritStones: 40, affection: 5 } },
+            { id: 'quest_dungeon', title: '探索魔教地宫', type: 'exploration', npcId: 'mentor_01', minAffection: 50, rewards: { spiritStones: 200 } },
+            { id: 'quest_combat', title: '决战魔教护法', type: 'combat', npcId: 'warrior_01', minAffection: 60, rewards: { spiritStones: 150, affection: 10 } }
         ];
         defaults.forEach(q => this.registerQuestTemplate(q)); this.availableQuests = defaults;
     }
@@ -2482,7 +2579,21 @@ function getGreeting(npc, player) {
         ]
     };
 
-    if (affection >= 80) baseGreeting = randomChoice(greetingPool.high);
+    // v24.3 topics.greeting 接通：数据文件里写好的 21 句人物专属问候（topics.greeting.all／warm）
+    // 此前零消费方——本函数只认通用池，清虚道人的「阿弥陀佛，施主来了」永远开不了口。
+    // 现：再见面（首面仍走上面的名气自我介绍）、好感不为负时，一半机会用人物自己的话；
+    // 交情到知己（60）且备了 warm 体己池，再一半机会说体己话。命中专属句时通用池让路，
+    // 名气词缀／时间后缀照旧叠加——人物的话也要接得上「几天不见」的世情。
+    var _npcGreet = npc.dialogueTree && npc.dialogueTree.topics && npc.dialogueTree.topics.greeting;
+    var _npcGreetAll = (_npcGreet && Array.isArray(_npcGreet.all) && _npcGreet.all.length) ? _npcGreet.all : null;
+    var _npcGreetWarm = (_npcGreet && Array.isArray(_npcGreet.warm) && _npcGreet.warm.length) ? _npcGreet.warm : null;
+    if (_npcGreetAll && affection >= 0 && Math.random() < 0.5) {
+        var _npcLine = (_npcGreetWarm && affection >= 60 && Math.random() < 0.5)
+            ? randomChoice(_npcGreetWarm)
+            : randomChoice(_npcGreetAll);
+        baseGreeting = _npcLine.replace(/{playerName}/g, player.name || '朋友');
+    }
+    else if (affection >= 80) baseGreeting = randomChoice(greetingPool.high);
     else if (affection >= 60) baseGreeting = randomChoice(greetingPool.midHigh);
     else if (affection >= 40) baseGreeting = randomChoice(greetingPool.mid);
     else if (affection >= 20) baseGreeting = randomChoice(greetingPool.low);
@@ -2996,6 +3107,51 @@ function showCultivationGuide(npcId, guideType) {
     return true;
 }
 
+// v25.2·P29 终章定局名册：下面 bond_dao 拦截链里的每一位，道侣之盟都由各自的终章/个人线剧情落定。
+// 旧版病症（试玩清单·二 P29）：26+ 条分支一人一句婉拒然后 break，UI 上「确定关系」可点、不灰、
+// 不标注，婉拒台词不点破出路，玩家可以无限次点下去每次重演同一句——白忙一场还不知为何。
+// 现三管齐下：① showSubCategoryDialog 在爱情分类里亮明「此盟由XX定局」；② 首次婉拒照旧演角色台词，
+// 此后不再重演，直说答案没变、点破终章名；③ 名册与拦截链同文件维护，新增终章女主两处一起加。
+var BOND_DAO_FINAL_CHAPTER = {
+    'sect_leader_修罗宫': '她的个人事件线',
+    'sect_leader_百花谷': '终章「花开」',
+    'sect_leader_天山派': '终章「霜鸣」',
+    'sect_leader_五仙教': '终章「蝶变」',
+    'sect_leader_铸剑山庄': '终章「一柄为你铸的剑」',
+    'sect_leader_药王谷': '终章「一张为你开的方」',
+    'sect_leader_茅山派': '终章「一道为你画的符」',
+    'sect_leader_金刚宗': '终章「为你破最后一戒」',
+    'sect_leader_峨眉派': '终章「第七条戒」',
+    'sect_leader_华山派': '终章「石壁最后一笔」',
+    'sect_leader_唐门': '终章「解字」',
+    'sect_leader_武当派': '终章「一争」',
+    'sect_leader_蓬莱派': '终章「海市」',
+    'sect_leader_逍遥派': '终章「一执」',
+    'sect_leader_恒山派': '终章「经圆」',
+    'sect_leader_嵩山派': '终章「第一百零八条」',
+    'sect_leader_泰山派': '终章「第一缕」',
+    'sect_leader_青城派': '终章「初雪」',
+    'sect_leader_衡山派': '终章「夜雨阑」',
+    'sect_leader_丐帮': '终章「拾玖」',
+    'sect_leader_阎罗殿': '终章「命格未定」',
+    'sect_leader_血手门': '终章「普通日子」',
+    'sect_leader_飞蝎坞': '终章「不蛰」',
+    'sect_leader_烈日教': '终章「真日出」',
+    'sect_leader_天龙教': '终章「名字」',
+    'sect_leader_神机门': '终章「不算」',
+    'sect_leader_霹雳堂': '终章「静夜」',
+    'sect_leader_天书阁': '终章「无从校起」',
+    'sect_leader_大隐阁': '终章「卦破」',
+    'sect_leader_侠隐阁': '终章「这一栏你填」',
+    'sect_leader_天涯海阁': '终章「站站有灯」',
+    'sect_leader_大旗门': '终章「三十七针」',
+    'sect_leader_铁掌帮': '终章「那句话」',
+    'sect_leader_昆仑派': '终章「无名之舞」',
+    'sect_leader_全真教': '终章「全押」',
+    'sect_leader_少林寺': '终章「骂不出」',
+    'shaolin_wujiu': '终章「第五百零一条」'
+};
+
 // 辅助：情感互动（爱情类）
 function executeEmotionInteraction(npcId, interactionType) {
 var npc = window.npcManager?.getNPC(npcId);
@@ -3051,6 +3207,16 @@ switch (interactionType) {
             else { showMessage(name + ' 后退一步：「请自重。」', 'warning'); }
             break;
         case 'bond_dao':
+            // v25.2·P29 婉拒只演一次：名册内的终章女主，首次问询照旧演各自的角色台词（下方拦截链），
+            // 此后再点不重演——直接说破「答案没变、此盟由XX定局」，玩家不必反复撞同一句婉拒。
+            if (BOND_DAO_FINAL_CHAPTER[npcId]) {
+                npc.memory = npc.memory || {};
+                if (npc.memory._bondDaoAsked) {
+                    showMessage('你又提起道侣之盟。' + name + '的答案没有变——这段姻缘由' + BOND_DAO_FINAL_CHAPTER[npcId] + '定局。时机到了，自会有分晓。', 'info');
+                    break;
+                }
+                npc.memory._bondDaoAsked = true;
+            }
             // 绯泪（修罗宫主）/温蘅（百花谷主）的道侣路线由个人事件系统控制，不在深谈中触发
             if (npcId === 'sect_leader_修罗宫') {
                 showMessage('绯泪看了你一眼：「……这件事，等你准备好了再说。」', 'info');
@@ -3369,6 +3535,15 @@ function executeDeepTalkSubOption(npcId, categoryId, subOptionId) {
         const c = DEEP_TALK_CATEGORIES[key];
         if (c.id === categoryId) { cat = c; subOption = c.subOptions.find(s => s.id === subOptionId); break; }
     }
+    // v24.2 topics 接线：dt_* 是数据里的话题，不在固定选项表——就地造一枚等价选项，
+    // minAffection 直接取 topicRequirements，「关系不足可点但有代价」的规矩（v14.6）同样适用
+    var dataTopic = null;
+    if (!subOption && categoryId === 'topics' && String(subOptionId).indexOf('dt_') === 0) {
+        dataTopic = getNpcDataTopics(npc).find(t => 'dt_' + t.key === subOptionId) || null;
+        if (dataTopic) {
+            subOption = { id: subOptionId, name: dataTopic.ui.name, desc: dataTopic.ui.desc, minAffection: dataTopic.minAffection, affectionCost: 0 };
+        }
+    }
     if (!subOption) { showMessage('选项不存在', 'error'); return; }
 
     // ====== 深谈2.0：检查是否有分支对话树 ======
@@ -3411,9 +3586,20 @@ function executeDeepTalkSubOption(npcId, categoryId, subOptionId) {
         const negativeResponses = getDeepTalkResponse(npc, categoryId, subOptionId, true);
         npcResponse = randomChoice(negativeResponses);
     } else {
-        const customDialogue = npc.dialogueTree?.topics?.[categoryId]?.all;
+        // v24.2 topics 接线：dt_* 直取数据话题的句子；固定子选项按语义映射借池。
+        // 旧写法 topics?.[categoryId] 拿 UI 分类名查数据键，永远 miss（审计「未接通」即此）。
+        var topicKey = dataTopic ? dataTopic.key : FIXED_SUBOPTION_TOPIC[categoryId + ':' + subOptionId];
+        var customDialogue = dataTopic ? dataTopic.lines : (topicKey ? npc.dialogueTree?.topics?.[topicKey]?.all : null);
+        // 固定子选项借池要过数据门槛：好感不够退回通用池（dt_* 的门槛已在入口按 minAffection 判过，不二次拦）
+        if (!dataTopic && customDialogue) {
+            var topicGate = npc.dialogueTree?.topicRequirements?.[topicKey];
+            if (topicGate && typeof topicGate.minAffection === 'number' && aff < topicGate.minAffection) customDialogue = null;
+        }
         if (customDialogue && customDialogue.length > 0) {
-            const chosen = randomChoice(customDialogue);
+            // 交情到知己（60）且数据里备了 warm 专属句时，一半机会说体己话（warm 池首次投入使用）
+            const chosen = (dataTopic && dataTopic.warm && aff >= 60 && Math.random() < 0.5)
+                ? randomChoice(dataTopic.warm)
+                : randomChoice(customDialogue);
             npcResponse = chosen.replace(/{playerName}/g, playerName);
         } else {
             const genericResponses = getDeepTalkResponse(npc, categoryId, subOptionId, false);
@@ -3573,7 +3759,9 @@ function showNPCDialog(npcId, screen = 'main') {
     let categoriesHtml = '';
     for (const key in DEEP_TALK_CATEGORIES) {
         const cat = DEEP_TALK_CATEGORIES[key];
-        categoriesHtml += `<button onclick="showSubCategoryDialog('${npcId}', '${cat.id}')" class="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded text-sm text-white w-full transition-colors"><span>${cat.icon}</span><span>${cat.name}</span><span class="text-xs text-gray-400 ml-auto">${cat.subOptions.length}项</span></button>`;
+        // v24.2 topics 接线：「话题」一项的计数把数据话题也算上，别让玩家看着 7 项点进去一堆
+        const nSub = cat.id === 'topics' ? cat.subOptions.length + getNpcDataTopics(npc).length : cat.subOptions.length;
+        categoriesHtml += `<button onclick="showSubCategoryDialog('${npcId}', '${cat.id}')" class="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded text-sm text-white w-full transition-colors"><span>${cat.icon}</span><span>${cat.name}</span><span class="text-xs text-gray-400 ml-auto">${nSub}项</span></button>`;
     }
 
     // === 新增：P0/P1 功能 ===
@@ -3801,6 +3989,32 @@ function showSubCategoryDialog(npcId, categoryId) {
             '<span class="text-gray-300">' + s.name + '</span>' +
             '<span class="text-xs ml-auto ' + (insufficient ? 'text-amber-300/80' : 'text-gray-400') + '">' + s.desc + (s.affectionCost > 0 ? ' (情分-' + s.affectionCost + ')' : '') + warnHtml + '</span>' +
         '</button>';
+    }
+
+    // v25.2·P29：终章女主的「确定关系」在 UI 上点破出路——旧版可点、不灰、不标注，
+    // 玩家攒满好感+表白+牵身后只换来一句不指路的婉拒。名册内的人在按钮下方直说由何定局。
+    if (categoryId === 'love' && BOND_DAO_FINAL_CHAPTER[npcId]) {
+        subsHtml += '<p class="text-[11px] text-gray-500 pt-2 px-1">「确定关系」这一盟，由' + BOND_DAO_FINAL_CHAPTER[npcId] + '定局——在此强求，只会换来一句婉拒。</p>';
+    }
+
+    // v24.2 topics 接线：NPC 数据里写好的话题上桌——「TA尤其想与你聊的」。
+    // 门槛按 topicRequirements 当场判：好感不足照 v14.6 同一套琥珀角标，可点但有代价。
+    if (categoryId === 'topics') {
+        var dataTopics = getNpcDataTopics(npc);
+        if (dataTopics.length) {
+            subsHtml += '<p class="text-[11px] text-gray-500 pt-2.5 pb-0.5 px-1">—— TA尤其想与你聊的 ——</p>';
+            for (var di = 0; di < dataTopics.length; di++) {
+                var dtp = dataTopics[di];
+                var dtLack = affection < dtp.minAffection;
+                var dtWarn = dtLack
+                    ? ' <span class="text-[10px] text-amber-400" title="好感不足，强行交谈将损失好感">⚠' + (dtp.minAffection ? -Math.floor(dtp.minAffection / 10) : -2) + '</span>'
+                    : (dtp.minAffection > 0 ? ' <span class="text-[10px] text-gray-500">好感' + dtp.minAffection + '可深聊</span>' : '');
+                subsHtml += '<button onclick="executeDeepTalkSubOption(\'' + npcId + '\', \'topics\', \'dt_' + dtp.key + '\')" class="flex items-center gap-2 ' + (dtLack ? 'bg-gray-700 hover:bg-gray-600 border-l-2 border-amber-500/70' : 'bg-gray-700 hover:bg-gray-600') + ' px-3 py-2 rounded text-sm text-white w-full transition-colors">' +
+                    '<span class="text-gray-300">' + dtp.ui.icon + ' ' + dtp.ui.name + '</span>' +
+                    '<span class="text-xs ml-auto text-gray-400">' + dtp.ui.desc + dtWarn + '</span>' +
+                '</button>';
+            }
+        }
     }
 
     var html = '<div class="bg-gray-800 border-2 border-blue-500 rounded-xl p-6 max-w-xl w-full mx-4 max-h-[90vh] overflow-y-auto">' +
@@ -4302,27 +4516,56 @@ function executeAdvancedRequest(npc, requestId) {
             return window.NPCBorrowService.borrowFromNPC(npc);
         case 'request_heal':
             // P2-2: 同时处理22部位伤口/流血/疼痛
+            // v25.1·试-09b：伤口/部位的真账在 window._playerPhysiology.physiology——charData 从无
+            // parts/wounds 字段，旧代码读 cd.parts/cd.wounds 全打在幽灵账上：结构损伤全仓零清零出口，
+            // 回执恒报「愈合了0处伤口」。改指真账；深伤语义与医馆/医师同一口径：可治、逐次递减、不奇迹。
             var healedWounds = 0;
             if (cd) {
                 cd.health = cd.maxHealth || 100;
                 cd.qi = cd.maxQi || 100;
+            }
+            var _healEnt = window._playerPhysiology || null;
+            var _healPhys = (_healEnt && _healEnt.physiology) || null;
+            if (_healPhys) {
                 if (typeof window.hemostaticTreatment === 'function') {
-                    try { window.hemostaticTreatment({ physiology: cd.physiology || cd }); healedWounds++; } catch(e) {}
+                    try { window.hemostaticTreatment(_healEnt); } catch(e) {}
                 }
-                if (cd.wounds && Array.isArray(cd.wounds)) {
-                    cd.wounds.forEach(function(w) { if (w) { w.bleeding = false; w.externalBleedRate = 0; w.internalBleedRate = 0; w.stabilization = 100; w.stabilized = true; } });
-                    healedWounds += cd.wounds.length;
-                    cd.wounds = [];
-                }
-                if (cd.parts && typeof cd.parts === 'object') {
-                    Object.keys(cd.parts).forEach(function(pid) {
-                        var p = cd.parts[pid];
-                        if (p) { p.structuralDamage = 0; p.nerveDamage = 0; p.fracture = false; p.woundIds = []; }
+                // 流血伤口：止血稳定，逐处入账（severity 递减/深伤缓治由医师后续处置
+                // treatWoundsByHealer 接手——social-content.js 在 request_heal 成功后包一层，不重复扣账）
+                if (Array.isArray(_healPhys.wounds)) {
+                    _healPhys.wounds.forEach(function(w) {
+                        if (w && w.bleeding && !w.stabilized) {
+                            w.bleeding = false; w.stabilized = true;
+                            w.externalBleedRate = 0; w.internalBleedRate = 0;
+                            healedWounds++;
+                        }
                     });
                 }
-                if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+                // 部位结构/神经损伤：正骨续脉逐次递减（每次结构-25/神经-20/肿胀-30，
+                // 骨折待结构损伤清零后复位）——与医馆「正骨续脉」深伤分支保持同一递减口径
+                if (_healPhys.parts && typeof _healPhys.parts === 'object') {
+                    Object.keys(_healPhys.parts).forEach(function(pid) {
+                        var p = _healPhys.parts[pid];
+                        if (!p) return;
+                        var touched = false;
+                        if ((p.structuralDamage || 0) > 0) { p.structuralDamage = Math.max(0, (p.structuralDamage || 0) - 25); touched = true; }
+                        if ((p.nerveDamage || 0) > 0) { p.nerveDamage = Math.max(0, (p.nerveDamage || 0) - 20); touched = true; }
+                        if ((p.swelling || 0) > 0) { p.swelling = Math.max(0, (p.swelling || 0) - 30); touched = true; }
+                        if (p.fracture && (p.structuralDamage || 0) === 0) { p.fracture = false; touched = true; }
+                        // 部位挂的伤口索引同步清理已愈合的
+                        if (Array.isArray(p.woundIds) && p.woundIds.length && Array.isArray(_healPhys.wounds)) {
+                            var _aliveW = {};
+                            _healPhys.wounds.forEach(function(w) { if (w && w.id && !w.healed) _aliveW[w.id] = true; });
+                            p.woundIds = p.woundIds.filter(function(wid) { return _aliveW[wid]; });
+                        }
+                        if (touched) healedWounds++;
+                    });
+                    try { if (typeof window.renderBodyDurability === 'function') window.renderBodyDurability(); } catch (e) {}
+                    try { if (typeof window.updateBodySVG === 'function') window.updateBodySVG(); } catch (e) {}
+                }
             }
-            return { success: true, msg: npc.name + ' 为你疗伤，恢复了生命/真气并愈合了' + healedWounds + '处伤口！' };
+            if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+            return { success: true, msg: npc.name + ' 为你疗伤，恢复了生命/真气' + (healedWounds > 0 ? ('并愈合了' + healedWounds + '处伤口！') : '（身上暂无需处置的外伤）。') };
         case 'breakthrough_help':
             if (cd) {
                 cd.tempering = (cd.tempering || 0) + 50;
@@ -4534,11 +4777,14 @@ if (typeof window !== 'undefined') {
     window.NPCEventSystem = NPCEventSystem;
     window.NPCRequestSystem = NPCRequestSystem;
     window.executeNPCRequest = function(npcId, requestType) {
-        if (window.requestSystem && typeof window.requestSystem.executeRequest === 'function') {
-            const result = window.requestSystem.executeRequest(npcId, requestType);
-            if (result.success) { showMessage(result.msg, 'success'); if (typeof window.closeRuntimeModals === 'function') window.closeRuntimeModals(); showNPCDialog(npcId); }   // 第一百一十波 · NEW-49：通配删除改保护版
-            else showMessage(result.msg, 'error');
-        }
+        // v24.5 死读修复：window.requestSystem 全仓零挂载——真身是 :2879/:4614 实例化的 window.npcRequestSystem。
+        // 旧守卫恒假、无 else，这个导出函数整体静默空转（全仓现无调用方，修好备将来 UI 接用）。
+        var _reqSys = window.npcRequestSystem;
+        if (!_reqSys || typeof _reqSys.executeRequest !== 'function') return;
+        const result = _reqSys.executeRequest(npcId, requestType);
+        if (!result) return;
+        if (result.success) { showMessage(result.msg, 'success'); if (typeof window.closeRuntimeModals === 'function') window.closeRuntimeModals(); showNPCDialog(npcId); }   // 第一百一十波 · NEW-49：通配删除改保护版
+        else showMessage(result.msg, 'error');
     };
     window.acceptNPCQuest = function(questId, npcId) {
         if (window.npcQuestSystem && typeof window.npcQuestSystem.acceptQuest === 'function') {
@@ -4597,12 +4843,16 @@ if (typeof window !== 'undefined') {
                     continue;
                 }
             }
-            if (stage.trigger.stage2Complete && !charData.quest_gather_herbs_completed) {
+            // v24.7：闸改读故事线进度上的真字段 stage2Completed（与 :1329 那套实现同口径）。
+            // 改前读 charData.quest_gather_herbs_completed——全仓零写方的幽灵字段，
+            // 带 stage2Complete 触发的剧情阶段（多条 NPC 故事线的后半段）永远被 continue 挡死。
+            if (stage.trigger.stage2Complete && !progress.stage2Completed) {
                 continue;
             }
             
             // 故事线触发 - 显示对话
-            showStorylineDialogue(npc, stage, i);
+            // v25.1·试-03：调用点同步传 npcId——真身形参此前没有它，模板串裸读 ${npcId} 即 ReferenceError
+            showStorylineDialogue(npc, stage, i, npcId);
             
             // 标记该阶段为已解锁（但不完成，需要玩家选择）
             if (!npc.storylineProgress[npcId]) {
@@ -4616,8 +4866,12 @@ if (typeof window !== 'undefined') {
         return false;
     }
     
-    function showStorylineDialogue(npc, stage, stageIndex) {
+    // v25.1·试-03：形参补 npcId（缺省回退 npc.id）。旧版形参没有 npcId，:4751 模板串裸读
+    // `${npcId}` 构建弹窗即抛 ReferenceError——九条故事线全体哑火，且上游 checkNPCStorylines
+    // 的进度写入（storylineProgress.stage）随异常一并被吞。
+    function showStorylineDialogue(npc, stage, stageIndex, npcId) {
         // 创建故事线弹窗
+        const _sid = npcId || (npc && npc.id) || '';
         const modal = document.createElement('div');
         modal.className = 'fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4';
         modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
@@ -4630,7 +4884,7 @@ if (typeof window !== 'undefined') {
                 </div>
                 <div class="space-y-3">
                     ${stage.choices.map((choice, idx) => `
-                        <button onclick="handleStorylineChoice('${npcId}', ${idx}, this)"
+                        <button onclick="handleStorylineChoice('${_sid}', ${idx}, this)"
                                 class="w-full bg-gray-700 hover:bg-gray-600 text-left px-4 py-3 rounded transition">
                             ${choice.text}
                         </button>
@@ -4664,18 +4918,101 @@ if (typeof window !== 'undefined') {
         if (currentStageIndex >= 0) {
             const choice = storyline.story[currentStageIndex].choices[choiceIndex];
             // 应用选择效果
-            if (choice.effect.includes('affection+')) {
-                const affGain = parseInt(choice.effect.match(/affection\+(\d+)/)[1]);
-                npc.changeAffection(affGain);
-            } else if (choice.effect.includes('affection-')) {
-                const affLoss = parseInt(choice.effect.match(/affection-(\d+)/)[1]);
-                npc.changeAffection(-affLoss);
-            }
+            // v25.1·试-11：令牌→动作映射补全——旧版只解析 affection±N 和 quest_ 两类令牌，
+            // spiritStones/exp/health/qi/karma/item_*/secret_unlocked/story_end_bad/story_complete
+            // 全被静默丢弃（借的灵石不扣、许的神剑不发、好坏结局无旗）。数据侧令牌全貌已对照
+            // npc-storylines.js 全量 grep 收齐；各账走各自正规入口，守卫式取用（桩环境不炸）。
+            const _fxCd = window.currentCharData || null;
+            const _fxNotes = [];
+            String(choice.effect || '').split(',').forEach(function (tok) {
+                tok = tok.trim();
+                if (!tok) return;
+                var m, n;
+                if ((m = tok.match(/^affection([+-])(\d+)$/))) {
+                    n = parseInt(m[2], 10) * (m[1] === '-' ? -1 : 1);
+                    if (npc && typeof npc.changeAffection === 'function') npc.changeAffection(n);
+                } else if ((m = tok.match(/^spiritStones([+-])(\d+)$/))) {
+                    // 灵石走 DataManager 正规账（同 marriage-offspring.js _addStones 口径），缺管理器回退角色账
+                    n = parseInt(m[2], 10);
+                    var _dm = window.DataManager;
+                    if (m[1] === '+') {
+                        if (_dm && typeof _dm.addSpiritStones === 'function') _dm.addSpiritStones(n);
+                        else if (_fxCd) _fxCd.spiritStones = (_fxCd.spiritStones || 0) + n;
+                        _fxNotes.push('灵石+' + n);
+                    } else {
+                        var _paid = true;
+                        if (_dm && typeof _dm.deductSpiritStones === 'function') _paid = !!_dm.deductSpiritStones(n);
+                        else if (_fxCd) { _paid = (_fxCd.spiritStones || 0) >= n; if (_paid) _fxCd.spiritStones -= n; }
+                        else _paid = false;
+                        if (_paid) _fxNotes.push('灵石-' + n);
+                        else if (typeof showMessage === 'function') showMessage('你囊中羞涩，没能兑出这笔灵石。', 'warning');
+                    }
+                } else if ((m = tok.match(/^exp([+-])(\d+)$/))) {
+                    // 经验账即 tempering（app.js 存档口径 exp↔tempering），优先走既有 gainExp 入口
+                    n = parseInt(m[2], 10) * (m[1] === '-' ? -1 : 1);
+                    if (typeof window.gainExp === 'function') window.gainExp(n);
+                    else if (_fxCd) _fxCd.tempering = Math.max(0, (_fxCd.tempering || 0) + n);
+                } else if ((m = tok.match(/^health([+-])(\d+)$/))) {
+                    if (_fxCd) {
+                        n = parseInt(m[2], 10) * (m[1] === '-' ? -1 : 1);
+                        _fxCd.health = Math.max(0, Math.min(_fxCd.maxHealth || 100, (_fxCd.health == null ? (_fxCd.maxHealth || 100) : _fxCd.health) + n));
+                        if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+                    }
+                } else if ((m = tok.match(/^qi([+-])(\d+)$/))) {
+                    if (_fxCd) {
+                        n = parseInt(m[2], 10) * (m[1] === '-' ? -1 : 1);
+                        _fxCd.qi = Math.max(0, Math.min(_fxCd.maxQi || 100, (_fxCd.qi == null ? (_fxCd.maxQi || 100) : _fxCd.qi) + n));
+                        if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+                    }
+                } else if ((m = tok.match(/^karma([+-])(\d+)$/))) {
+                    // 因果账：charData.karma，刻度 -100..100（app.js 业力指示条同口径），加减后 clamp
+                    if (_fxCd) {
+                        n = parseInt(m[2], 10) * (m[1] === '-' ? -1 : 1);
+                        _fxCd.karma = Math.max(-100, Math.min(100, (_fxCd.karma || 0) + n));
+                    }
+                } else if (tok === 'item_secret_art' || tok === 'item_legendary') {
+                    // v25.1·试-11：令牌是占位 id，物品库查无此物（全仓 grep 仅存在于故事线数据侧）。
+                    // 换成库里真实存在的等价物：秘籍→「太极剑法」(taiji_sword，七品秘籍)；
+                    // 传说→「仙人斩」(immortal_sword，三品传说神兵)。发物走既有 addItem 管线。
+                    var _realId = (tok === 'item_legendary') ? 'immortal_sword' : 'taiji_sword';
+                    var _got = (typeof window.addItem === 'function') ? (Number(window.addItem(_realId, 1)) || 0) : 0;
+                    if (_got > 0) _fxNotes.push(tok === 'item_legendary' ? '得传说神兵「仙人斩」' : '得秘籍「太极剑法」');
+                    // v25.1·wave135-C5 口径：没落进行囊的缘由问 addItemFailReason 那本账，不许界面替行囊自断
+                    else if (typeof showMessage === 'function') {
+                        var _宝名 = (tok === 'item_legendary') ? '仙人斩' : '太极剑法';
+                        var _缘由 = (typeof window.addItemReasonText === 'function') ? window.addItemReasonText(_宝名) : '';
+                        showMessage('这份宝物「' + _宝名 + '」没能落进你的行囊。' + (_缘由 || ''), 'warning');
+                    }
+                } else if (tok === 'secret_unlocked' || tok === 'story_end_bad' || tok === 'story_complete') {
+                    // 秘密/结局旗：落进 storylineProgress 的标记账（随 serialize 持久化），供第五幕结局分支读取
+                    if (npc) {
+                        if (!npc.storylineProgress) npc.storylineProgress = {};
+                        if (!npc.storylineProgress[npcId]) npc.storylineProgress[npcId] = { stage: currentStageIndex, completedStages: [] };
+                        npc.storylineProgress[npcId][tok] = true;
+                        if (typeof npc.saveStorylineProgress === 'function') npc.saveStorylineProgress();
+                        if (tok === 'story_complete') _fxNotes.push('这段因果功德圆满');
+                        else if (tok === 'story_end_bad') _fxNotes.push('这段因果憾然收场');
+                    }
+                }
+            });
             
             // 处理任务相关效果
             if (choice.effect.includes('quest_')) {
-                const questId = choice.effect.match(/quest_(\w+)/)[1];
-                window.acceptNPCQuest(questId);
+                // v24.7：旧解析 match(/quest_(\w+)/)[1] 把前缀剥掉——传给 acceptNPCQuest 的
+                // 是 'gather_herbs'，模板 id 是 'quest_gather_herbs'，查无此单恒弹「接取失败」：
+                // 玩家选了「我这就去寻药」，寻药委托其实从来没接上。改取带前缀整词。
+                const questId = (choice.effect.match(/quest_\w+/) || [])[0];
+                if (questId) {
+                    window.acceptNPCQuest(questId);
+                    // 承诺立住即记 stage2Completed（随故事线进度持久化）——
+                    // stage 3 的 stage2Complete 闸从此读的是有写方的真账。
+                    if (npc && window.npcQuestSystem && window.npcQuestSystem.quests.has(questId)) {
+                        if (!npc.storylineProgress) npc.storylineProgress = {};
+                        if (!npc.storylineProgress[npcId]) npc.storylineProgress[npcId] = { stage: currentStageIndex, completedStages: [] };
+                        npc.storylineProgress[npcId].stage2Completed = true;
+                        if (typeof npc.saveStorylineProgress === 'function') npc.saveStorylineProgress();
+                    }
+                }
             }
             
             // 标记阶段完成
@@ -4688,10 +5025,14 @@ if (typeof window !== 'undefined') {
                     progress.completedStages.push(currentStageIndex);
                 }
                 progress.stage = currentStageIndex + 1;
+                // v25.1·试-10：第二幕闸放宽为「完成本幕任一 nextStage:true 选择即记账」——
+                // 9 条故事线里 5 条（贾有道/柳随风/张大爷/丹大师/铁匠老王）第二幕选项根本没有 quest_ 令牌，
+                // 只认委托账则永死锁在第三幕前；有委托的线上面 acceptNPCQuest 写点照旧记，两路同归。
+                if (currentStageIndex === 1) progress.stage2Completed = true;
                 npc.saveStorylineProgress();
             }
-            
-            showMessage(`你选择了：${choice.text}`, 'info');
+
+            showMessage(`你选择了：${choice.text}` + (_fxNotes.length ? `（${_fxNotes.join('、')}）` : ''), 'info');
         }
         
         // 关闭弹窗

@@ -29,7 +29,8 @@ function load(rel) { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); }
 // ============ ① 主线第一任务 ============
 const questSrc = load('js/quest/quest-system.js');
 ok(/locationId:\s*'sect_list'[\s\S]{0,120}location:\s*'门派列表'/.test(questSrc), '① main_001 首目标带 locationId=sect_list');
-ok(/description:\s*'浏览门派列表'/.test(questSrc), '① main_001 首目标带人话 description');
+// v25.1·P2：文案扩写成「浏览门派列表（「地图」面板 →…页签）」带路指引——哨兵改为前缀匹配，仍钉住人话标签在
+ok(/description:\s*'浏览门派列表/.test(questSrc), '① main_001 首目标带人话 description');
 ok(/description:\s*'拜入任意门派'/.test(questSrc), '① join_sect 目标带人话 description');
 const appSrc = load('js/app.js');
 ok(/switchListMode[\s\S]{0,900}EventBus\.emit\('location:visited',\s*\{\s*locationId:\s*'sect_list',\s*locationName:\s*'门派列表'/.test(appSrc), '② 门派页签打开发射 location:visited');

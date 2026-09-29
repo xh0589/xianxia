@@ -171,6 +171,19 @@ function performBreakthrough() {
     const tempering = charData.tempering || 0;
     const qi = charData.qi || 0;
 
+    // v25.1·试-02：九境表之外的境界（凡人/飞升/金仙，getRealmIndex=-1）一律拦截——
+    // 旧路径 realms[realmIndex+1] 会取到 realms[0]（飞升九层"晋升"回炼气一层），
+    // 升层走 getQiMax(-1) 兜底把 maxQi 塌回 50。飞升/金仙的进阶走飞升链（二段飞升），不走此门。
+    // 返回值契约：被拦截 → false（真正进入结算才返回 true）。
+    if (realmIndex < 0) {
+        if (window.showMessage) {
+            window.showMessage((charData.realm === '飞升' || charData.realm === '金仙')
+                ? '🌅 你已超脱凡尘、不入九境——这道突破门里没有你的路。修为精进请走「二段飞升」，愿回人间则「回入尘世」。'
+                : '👤 凡人之躯尚难凝真元——先踏入修行之路（炼气），再谈突破。', 'warning');
+        }
+        return false;
+    }
+
     // 检查是否已达最高境界
     if (realmIndex >= window.REALM_CONFIG.realms.length - 1 && layer >= 9) {
         if (window.showMessage) window.showMessage('已达最高境界，无法继续突破', 'warning');
@@ -280,7 +293,8 @@ function performBreakthrough() {
         }
 
         if (window.updateCharacterStatus) window.updateCharacterStatus();
-        return false;
+        // v25.1·试-02：返回值契约——已进入结算（无论成败）返回 true；调用方据此决定是否关弹窗
+        return true;
     }
 }
 
@@ -309,7 +323,9 @@ function cultivateQi() {
     var _roots = charData.spiritualRoots;
     var _mainEl = (typeof window._getMainTechniqueElement === 'function') ? window._getMainTechniqueElement() : 'neutral';
     var _rootMul = (typeof window.getRootSpeedMultiplier === 'function') ? window.getRootSpeedMultiplier(_roots, _mainEl) : 1.0;
-    const essenceGain = Math.floor(baseGain * _rootMul);
+    // v25.1·试-14：「接受结局」后的一缕道息撑着残躯——修炼真元产出减半（寿元账的真实后果，不再是死旗）
+    var _lsEndPen = (typeof window.getLifespanEndedPenalty === 'function') ? window.getLifespanEndedPenalty() : 1;
+    const essenceGain = Math.floor(baseGain * _rootMul * _lsEndPen);
     charData.essence = (charData.essence || 0) + essenceGain;
 
     // 真气恢复（内功决定）

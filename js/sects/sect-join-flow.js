@@ -1481,17 +1481,24 @@ function shaoLinFight() {
     var dex = (player.attrs && player.attrs.dexterity) || (player.mainAttributes && player.mainAttributes['灵巧']) || 0;
     document.querySelectorAll('#xianxia-modal-overlay').forEach(function(el) { el.remove(); });
     var isStrong = (con + dex) >= 30;
+    // v25.1·P9 P4：这一关不是掷骰也不是纯剧情——真判属性（体质+灵巧 合计 ≥30 根基过关）。
+    // 此前判定全程暗箱、旁白写得像挨打，玩家分不清过关靠什么；现把判定依据与结果如实亮出。
+    var basisLine = '<p class="text-xs text-gray-400 mt-2">（判定依据：体质 ' + con + ' + 灵巧 ' + dex + ' = ' + (con + dex) + '，'
+        + (isStrong ? '已达 30，根基扎实——武僧收掌，这关你过了' : '未达 30，根基尚浅——这一关只考根基站桩，并非要你打赢武僧') + '）</p>';
     var html = '<div class="space-y-4"><div class="bg-gray-800/60 p-3 rounded border-l-4 border-yellow-500"><p class="text-xs text-gray-400 mb-1">🚶 山门守卫：</p>';
     if (isStrong) {
         html += '<p class="text-sm text-gray-200 italic">你扎稳马步，硬接了武僧三掌，纹丝不动。</p><p class="text-sm text-yellow-300 mt-2 italic">武僧点头：「根基扎实，可入内门。」</p>';
+        html += basisLine;
         html += '<p class="text-sm text-yellow-300 mt-2 italic">他正色道：「少林戒律森严，可能持戒？」</p></div>';
-        html += '<div class="mt-3 space-y-2"><button onclick="shaoLinResolve(true)" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded text-sm">「弟子愿持戒」</button>';
-        html += '<button onclick="shaoLinResolve(false)" class="w-full bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">「我尽量」</button></div></div>';
+        // v25.1·P9 P4：戒律二选后果此前全凭猜——「愿持戒」即入门、「尽量」会被送客，现写明在按钮上
+        html += '<div class="mt-3 space-y-2"><button onclick="shaoLinResolve(true)" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded text-sm">「弟子愿持戒」<span class="block text-xs opacity-75">——立誓持戒，即刻正式入门（内门弟子）</span></button>';
+        html += '<button onclick="shaoLinResolve(false)" class="w-full bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">「我尽量」<span class="block text-xs opacity-75">——答得含糊，武僧会把你请出山门（无法入门）</span></button></div></div>';
     } else {
-        html += '<p class="text-sm text-gray-200 italic">你咬牙硬接了三掌，后退了好几步。</p><p class="text-sm text-yellow-300 mt-2 italic">武僧：「底子尚浅，先做杂役磨砺。」</p>';
+        html += '<p class="text-sm text-gray-200 italic">你咬牙硬接了三掌，后退了好几步——好在武僧只是试你根基，并非真打。</p><p class="text-sm text-yellow-300 mt-2 italic">武僧：「底子尚浅，先做杂役磨砺。」</p>';
+        html += basisLine;
         html += '<p class="text-sm text-yellow-300 mt-2 italic">他正色道：「少林戒律森严，可能持戒？」</p></div>';
-        html += '<div class="mt-3 space-y-2"><button onclick="shaoLinResolveMisc()" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded text-sm">「弟子愿持戒」</button>';
-        html += '<button onclick="shaoLinResolve(false)" class="w-full bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">「我尽量」</button></div></div>';
+        html += '<div class="mt-3 space-y-2"><button onclick="shaoLinResolveMisc()" class="w-full bg-yellow-600 hover:bg-yellow-500 text-white px-4 py-2 rounded text-sm">「弟子愿持戒」<span class="block text-xs opacity-75">——立誓持戒，即刻正式入门（从杂役弟子做起）</span></button>';
+        html += '<button onclick="shaoLinResolve(false)" class="w-full bg-gray-600 hover:bg-gray-500 text-white px-4 py-2 rounded text-sm">「我尽量」<span class="block text-xs opacity-75">——答得含糊，武僧会把你请出山门（无法入门）</span></button></div></div>';
     }
     if (typeof window.showModal === 'function') window.showModal('📝 少林寺 · 考核', html);
 }

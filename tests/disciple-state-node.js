@@ -254,6 +254,90 @@ mockWindow.discipleState.contribution = 5000;
 mockWindow.sectPromote('少林寺', 3); // 亲传
 assert(roleChecked && roleChecked.rank && roleChecked.rank.name === '亲传弟子', '晋升应发 sect:role:checked');
 
+// ============ v25.1·P9 P24：joinSect/leaveSect 与 game-state 重置路径结构对齐 ============
+// 单独起一个干净上下文——joinSect/leaveSect 改的是模块内闭包 discipleState（仅在加载那一刻
+// 与 window.discipleState 同引用），主测试上面反复 reassign 过 mockWindow.discipleState 会让两者分叉，
+// 无法忠实验证闭包侧的 delete position / rank 复位。这里镜像加载顺序、全程只 mutate 不 reassign。
+(function p24() {
+    var W2 = {
+        EventBus: null, showMessage: function () {}, alert: function () {}, console: console,
+        Math: Math, JSON: JSON, Object: Object, Array: Array, Number: Number, String: String, Date: Date,
+        document: { querySelector: function () { return null; }, querySelectorAll: function () { return []; }, getElementById: function () { return null; }, createElement: function () { return { style: {}, classList: { add: function () {}, remove: function () {} }, appendChild: function () {}, remove: function () {} }; }, body: { appendChild: function () {} } },
+        timeSystem: { gameTime: { currentDay: 1, totalMinutes: 0 }, advanceTime: function () {} },
+        inventory: { currency: { spiritStones: 0, copper: 0 } },
+        activeTasks: [], COMMON_RANKS: null, BALANCE_CONFIG: { sectTasks: { maxConcurrent: 5 } },
+        currentCharData: { name: 'test', energy: 100, maxEnergy: 100, realm: '炼气' },
+        updateCurrencyUI: function () {}, updateSectUI: function () {}, updateCharacterStatus: function () {},
+        updateTaskUI: function () {}, getCurrentLocation: function () { return '帝都'; }, getRealmIndex: function () { return 0; }
+    };
+    W2.window = W2; W2.global = W2;
+    var _absDay = 1;
+    W2.getAbsoluteDay = function () { return _absDay; };
+    W2.confirm = function () { return true; };
+    var ctx2 = vm.createContext(W2);
+    vm.runInContext(eventBusSrc, ctx2);
+    vm.runInContext(stateRegSrc, ctx2);
+    W2.EventBus = ctx2.EventBus; W2.StateRegistry = ctx2.StateRegistry;
+    vm.runInContext(commonRanksSrc, ctx2);
+    vm.runInContext(sectsSysSrc, ctx2);
+    // joinSect 读裸标识 sectsData（sects.js 未在最小上下文加载）——就地声明一份最小表
+    vm.runInContext('var sectsData = { "少林寺": { name:"少林寺", type:"正道", power:"大派" }, "逍遥派": { name:"逍遥派", type:"中立" } };', ctx2);
+
+    // 加载后 window.discipleState 即闭包对象；模拟 game-state 重置路径写入的旧结构（含死字段 position）
+    Object.assign(W2.discipleState, { sectName: null, position: '散修', contribution: 0, rank: null });
+    assert('position' in W2.discipleState, 'P24 前置：重置路径确实留下了 position 死字段');
+    assert(W2.discipleState.isInSect !== true, 'P24 前置：重置后 isInSect 非 true');
+
+    // joinSect → isInSect true 且 position 被删（不再残留自相矛盾的散修死键）
+    _absDay = 1;
+    W2.joinSect('少林寺', null);
+    assert(W2.discipleState.isInSect === true, 'P24 joinSect 后 isInSect===true');
+    assert(!('position' in W2.discipleState), 'P24 joinSect 后无 position 死字段');
+    assert(W2.discipleState.joinDay === 1, 'P24 joinSect 记下入门游戏日 joinDay');
+
+    // 入门当日不可退（温和粘性）
+    var leftSameDay = W2.leaveSect();
+    assert(leftSameDay === false && W2.discipleState.isInSect === true, 'P24 入门当日 leaveSect 被拦下');
+
+    // 次日退门成功，键位与重置路径对齐、且无 position
+    _absDay = 2;
+    var left = W2.leaveSect();
+    assert(left === true && W2.discipleState.isInSect === false, 'P24 次日 leaveSect 成功');
+    assert(W2.discipleState.sectId === null && W2.discipleState.sectName === null, 'P24 退门 sectId/sectName 复位 null');
+    assert(W2.discipleState.rank === null, 'P24 退门 rank 复位 null（不再是掌门 0）');
+    assert(W2.discipleState.contribution === 0, 'P24 退门 contribution 清零');
+    assert(!('position' in W2.discipleState), 'P24 退门后同样无 position 死字段');
+})();
+
+// ============ v25.1·P9 试-16：日常差事「看到的 = 做得了的」（展示过滤与结算闸同向） ============
+(function shiSixteen() {
+    // 三档身份：掌门(0) / 内门(4) / 同参(-2)。minRank 越大职位越低（7=杂役门槛最低，2=长老级差事）。
+    var ranksToCheck = [
+        { name: '掌门', rank: 0 },
+        { name: '内门', rank: 4 },
+        { name: '同参', rank: -2 }
+    ];
+    var tasks = mockWindow.COMMON_TASKS;
+    assert(tasks && tasks.length > 0, '试-16 前置：COMMON_TASKS 已加载');
+    // 展示过滤（sects-deep-ui.js:504 修后）：minRank!=null && rank>minRank → 隐藏；否则显示
+    // 结算闸（sects-deep-ui.js:548）：minRank && curRank>minRank → 拒绝；否则放行
+    // 二者对同一 (task, rank) 必须同向——凡显示者必可结算，凡被闸拒者必不显示
+    ranksToCheck.forEach(function (rc) {
+        tasks.forEach(function (t) {
+            var shown = !(t.minRank != null && rc.rank > t.minRank);
+            var settleAllowed = !(t.minRank && rc.rank > t.minRank);
+            assert(shown === settleAllowed,
+                '试-16 ' + rc.name + '(rank=' + rc.rank + ') 差事「' + t.name + '」(minRank=' + t.minRank + ') 展示与结算方向不一致');
+        });
+    });
+    // 回归点：同参(-2) 旧码被 minRank>-2 恒真过滤光，现应至少看得到门槛最低的杂役差事
+    var tongcan = tasks.filter(function (t) { return !(t.minRank != null && (-2) > t.minRank); });
+    assert(tongcan.length === tasks.length, '试-16 同参弟子(rank=-2) 不再被过滤光，看得到全部差事');
+    // 掌门(0) 不再被 `||7` 折成杂役：0 满足所有 minRank（均 ≥2），显示集合 = 全部
+    var zhangmen = tasks.filter(function (t) { return !(t.minRank != null && 0 > t.minRank); });
+    assert(zhangmen.length === tasks.length, '试-16 掌门(rank=0) 不被折成 7，显示全部差事');
+})();
+
 // ============ 收尾 ============
 console.log('=========================================');
 console.log('discipleState v19.0 batch-A: ' + passed + ' passed, ' + failed + ' failed');

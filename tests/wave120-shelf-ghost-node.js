@@ -91,7 +91,17 @@ function 买一次(货, 有模板) {
     const win = {
         inventory: { currency: { spiritStones: 1000 }, slots: slots },
         itemById: 有模板 ? { real_mat: { id: 'real_mat', name: '真料', stackable: true, maxStack: 99 } } : {},
-        currentCharData: { spiritStones: 1000 }
+        currentCharData: { spiritStones: 1000 },
+        // v24.2 补桩：真实环境 window.addItem 恒在（inventory.js:2520 无条件导出），
+        // 旧沙箱漏了它、真货全靠在兜底里手写裸格子买成——那正是 FIX-01 的病根本体。
+        // 兜底已铲（v24.2-bare-write-root 棘轮钉死），这里照 regression-node 同款补真桩：
+        // 有空格就落一格、回实收件数；满包回 0。为迁就残缺 mock 保留病写法是本末倒置。
+        addItem(id, n) {
+            for (let i = 0; i < slots.length; i++) {
+                if (!slots[i]) { slots[i] = { templateId: id, count: n || 1, uid: 'stub_' + id, getTemplate() { return this; } }; return n || 1; }
+            }
+            return 0;
+        }
     };
     const r = run((m) => msgs.push(m), win, { add() { } }).call(ctx, 货.id, 1);
     return { r, msgs, 付了: 1000 - win.inventory.currency.spiritStones, 格子: slots.filter(Boolean).length };

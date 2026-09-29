@@ -143,6 +143,8 @@ function tribulationSuccess() {
         cd.realm = '飞升';
         cd.layer = 1;
     }
+    // v25.1·试-27：不论 onAscension 是否在场/是否抛错，渡劫成功即飞升——寿元账落永生（幂等，已永生则静默）
+    if (typeof window.grantImmortality === 'function') { try { window.grantImmortality('渡劫飞升'); } catch (eImm) {} }
     // 雷劫产物（用既有雷系材料代指；雷劫液正式物品待后续物品扩展）
     // DES-72（第一百三十批）：旧写法丢了返回值——飞升喜话念完，这两枚到底进没进囊，屏上从不提
     function 雷收入(id, n) {

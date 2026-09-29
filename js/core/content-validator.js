@@ -55,11 +55,21 @@
     }
 
     function validateQuestRefs(out) {
-        var q = global.playerQuestProgress;
+        // v24.6：改前读 global.playerQuestProgress——真账本是 quest-system.js 的顶层 let，
+        // window 名从未挂过，这池校验恒空。改走官方快照口 exportQuestState()；
+        // 账本 activeQuests 存字符串 id，用 window.allQuests 注册表还原成模板再验。
+        var q = null;
+        if (typeof global.exportQuestState === 'function') {
+            try { q = global.exportQuestState(); } catch (e) { q = null; }
+        }
         // 运行时任务进度只校验明确写成 itemId 的目标；名称型/泛型目标不误报。
         var pools = [];
         if (Array.isArray(global.questsData)) pools.push(global.questsData);
-        if (q && Array.isArray(q.activeQuests)) pools.push(q.activeQuests);
+        if (q && Array.isArray(q.activeQuests)) {
+            var byId = {};
+            (Array.isArray(global.allQuests) ? global.allQuests : []).forEach(function(t) { if (t && t.id) byId[t.id] = t; });
+            pools.push(q.activeQuests.map(function(id) { return byId[id]; }).filter(Boolean));
+        }
         pools.forEach(function(list) {
             list.forEach(function(quest) {
                 (quest.objectives || []).forEach(function(obj) {

@@ -131,11 +131,11 @@ assert(typeof Q2.getQiDeviationBlocked() === 'string' && Q2.getQiDeviationBlocke
 var Q3 = makeWorld({});
 Q3.addQiDeviation(50);
 Q3._calmByMeditation();
-assert(Q3.getQiDeviation() === 30 && Q3.__advanced.length === 1 && Q3.__advanced[0].m === 30,
-    'Q6 静坐压制：-20，半日——化解不白走');
+assert(Q3.getQiDeviation() === 30 && Q3.__advanced.length === 1 && Q3.__advanced[0].m === 720,
+    'Q6 静坐压制：-20，半日=720 分钟（v25.1·试-29：文案立价=实收账，不再只收 30 分钟）');
 Q3._calmByYield();
-assert(Q3.getQiDeviation() === 0 && Q3.__advanced[1].m === 60,
-    'Q7 顺势化解：-40，一整日——化得深，日子也花得多');
+assert(Q3.getQiDeviation() === 0 && Q3.__advanced[1].m === 1440,
+    'Q7 顺势化解：-40，一整日=1440 分钟（v25.1·试-29：不再只收 60 分钟）');
 var Q4 = makeWorld({});
 Q4.addQiDeviation(40);
 assert(Q4._calmByGuard() === false && Q4.__msgs.join('').indexOf('尚无道侣') >= 0,
@@ -147,6 +147,8 @@ Q5.addQiDeviation(40);
 Q5._calmByGuard();
 assert(Q5.getQiDeviation() === 10 && npcsQ['sect_leader_百花谷'].relationship.affection === 72,
     'Q9 道侣护法：紊乱-30、护你之人情分+2——陪你渡劫的人，账上记得');
+assert(Q5.__advanced.length === 1 && Q5.__advanced[0].m === 720,
+    'Q9b 道侣护法耗时半日=720 分钟（v25.1·试-29：与文案对齐，不再只收 30 分钟）');
 var Q6 = makeWorld({});
 Q6.addQiDeviation(30);
 assert(Q6.calmQiChoice() === true && Q6.__modals.length === 1

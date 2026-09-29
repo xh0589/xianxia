@@ -684,7 +684,7 @@ console.log('\n[O] 血脉归山门（长成的孩子真入门·吃门里的饭�
 {
     const env = makeSandbox({});
     const ps = env.found();
-    env.W.npcManager.addNPC = function (n) { env.npcs[n.id] = n; };
+    env.W.npcManager.addNPC = function (n) { env.npcs[n.id] = n; return true; }; // v25.1·试-04：与真 addNPC 同款返回契约（收下即 true）——调用侧现在如实收返回值
     env.W.currentCharData._children = [{ name: '李慕风', grown: true, level: 3, bornDay: 90, path: 'home' }];
     ok(env.W.sendChildToSect(0), 'O1 孩子上山叩门——嫡系二代入门');
     const c = env.W.currentCharData._children[0];
@@ -703,16 +703,16 @@ console.log('\n[O] 血脉归山门（长成的孩子真入门·吃门里的饭�
     eq(env.stt.wallet, w0, 'O10 入门之后孝敬停发（钱不两头拿）');
     // 没长成 / 在外历练的送不去
     const env2 = makeSandbox({});
-    env2.W.npcManager.addNPC = function (n) { env2.npcs[n.id] = n; };
+    env2.W.npcManager.addNPC = function (n) { env2.npcs[n.id] = n; return true; };
     env2.W.currentCharData._children = [{ name: '李小满', grown: false, bornDay: 140 }];
     ok(!env2.W.sendChildToSect(0), 'O11 山门不收稚子');
     const env3 = makeSandbox({});
     env3.found();
-    env3.W.npcManager.addNPC = function (n) { env3.npcs[n.id] = n; };
+    env3.W.npcManager.addNPC = function (n) { env3.npcs[n.id] = n; return true; };
     env3.W.currentCharData._children = [{ name: '李远行', grown: true, level: 1, bornDay: 50, path: 'ventured', awayUntilDay: 999 }];
     ok(!env3.W.sendChildToSect(0), 'O12 在外历练的——回了山再谈入门');
     const env4 = makeSandbox({});
-    env4.W.npcManager.addNPC = function (n) { env4.npcs[n.id] = n; };
+    env4.W.npcManager.addNPC = function (n) { env4.npcs[n.id] = n; return true; };
     env4.W.currentCharData._children = [{ name: '李无门', grown: true, level: 2, bornDay: 40 }];
     ok(!env4.W.sendChildToSect(0), 'O13 还没立宗——送孩子去哪里求学');
 }

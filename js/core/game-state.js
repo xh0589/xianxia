@@ -98,6 +98,13 @@
                 templateId: s.templateId || s.id,
                 count: s.count != null ? s.count : 1,
                 durability: s.durability,
+                // v25.1·试-07：装在背包里的强化/精炼/附魔/护甲耐久随主存档走——
+                // 白名单原先只收 6 个字段，「+5 强化剑」完整存档往返一圈强化就被剃光
+                // （与 js/inventory.js saveInventory 小档侧的对称改动同款）
+                enhancementLevel: s.enhancementLevel,
+                refineLevel: s.refineLevel,
+                enchantType: s.enchantType,
+                armorDurability: s.armorDurability,
                 customProps: s.customProps || null,
                 markedForSale: s.markedForSale || false
             };
@@ -255,6 +262,40 @@
             _failedBreakthroughs: charData._failedBreakthroughs != null ? charData._failedBreakthroughs : 0,
             dungeonClearedAt: charData.dungeonClearedAt && typeof charData.dungeonClearedAt === 'object'
                 ? JSON.parse(JSON.stringify(charData.dungeonClearedAt)) : {},
+            // ===== v24.4 账本续查（DES-75 同病，全仓字段扫描抓出：写方活、读方活、两头都没点名） =====
+            // 丹毒：服丹累积、丹毒闸与警告都读它——蒸发＝读档免费清毒
+            pillPoison: charData.pillPoison != null ? charData.pillPoison : 0,
+            // 心魔账：心魔进度与未消费的突破加成（breakthrough-system:128 真读）——蒸发＝战胜过的心魔复活、加成白攒
+            _heartDemon: charData._heartDemon && typeof charData._heartDemon === 'object'
+                ? JSON.parse(JSON.stringify(charData._heartDemon)) : null,
+            _heartDemonBonus: charData._heartDemonBonus != null ? charData._heartDemonBonus : 0,
+            // 行脚三本一次性账：travel-journal.js 自家头注承诺「随存档走」——此前两头零命中，承诺落空，
+            // 一次性事件的「办过」标记丢失可读档重刷
+            _travel: charData._travel && typeof charData._travel === 'object'
+                ? JSON.parse(JSON.stringify(charData._travel)) : null,
+            // 冰塔寒毒淬体层数：层越深蚀体越重（location-system:1482 现读）——蒸发＝寒毒白淬
+            _iceTowerPerm: charData._iceTowerPerm != null ? charData._iceTowerPerm : 0,
+            // 本命法宝「性命相连不可易主」——蒸发＝法宝丢、还能再契一件（不可易主形同虚设）
+            _bondedArtifact: charData._bondedArtifact && typeof charData._bondedArtifact === 'object'
+                ? JSON.parse(JSON.stringify(charData._bondedArtifact)) : null,
+            // 占据的灵脉（日产进账）——蒸发＝灵脉丢、可再占一处
+            _spiritVein: charData._spiritVein && typeof charData._spiritVein === 'object'
+                ? JSON.parse(JSON.stringify(charData._spiritVein)) : null,
+            // 飞升终局三件套：天界解锁旗／证道日记／渡界前来处（_mortalOrigin 早在 v20.53 入档，这三兄弟一直漏着）
+            _unlockedTianjie: !!charData._unlockedTianjie,
+            _ascensionDay: charData._ascensionDay != null ? charData._ascensionDay : null,
+            _tianjieFrom: charData._tianjieFrom != null ? charData._tianjieFrom : '',
+            // 死因记名：转世积分表按死因计分（ascend +50）——蒸发＝证道而死被读档洗成自然死
+            lastDeathReason: charData.lastDeathReason != null ? charData.lastDeathReason : null,
+            // 主线 025 两枚一次性剧情闸（:1030 真读 _main025_stood）——蒸发＝戏重演、闸失忆
+            _main025_asked: !!charData._main025_asked,
+            _main025_stood: !!charData._main025_stood,
+            // 至交书信每日计数（day 键控，「来得太勤回信转短」的账）——蒸发＝读档绕过冷却
+            _mailAffDay: charData._mailAffDay && typeof charData._mailAffDay === 'object'
+                ? JSON.parse(JSON.stringify(charData._mailAffDay)) : null,
+            // 自创丹短效增益（days 键控、到期按天判）——蒸发＝buff 凭空消失
+            _customPillBuff: charData._customPillBuff && typeof charData._customPillBuff === 'object'
+                ? JSON.parse(JSON.stringify(charData._customPillBuff)) : null,
             maxHealth: charData.maxHealth != null ? charData.maxHealth : 100,
             maxQi: charData.maxQi != null ? charData.maxQi : 100,
             maxEnergy: charData.maxEnergy != null ? charData.maxEnergy : 100,
@@ -335,7 +376,8 @@
         if (global.discipleState) {
             saveData.discipleState = JSON.parse(JSON.stringify(global.discipleState));
         } else {
-            saveData.discipleState = { sectName: null, position: '散修', contribution: 0 };
+            // v25.1·P24：与 sects-system.js:13 的真身结构对齐——补 isInSect/sectId/rank，去掉全仓零读者的 position
+            saveData.discipleState = { isInSect: false, sectId: null, sectName: null, contribution: 0, rank: null };
         }
 
         // 门派设施状态（B3：设施冷却/使用次数进入统一存档）
@@ -633,14 +675,17 @@
                 Object.keys(global.discipleState).forEach(function (k) {
                     delete global.discipleState[k];
                 });
+                // v25.1·P24：重置结构补齐 isInSect/sectId——旧结构缺键，转世/重开后
+                // 读 isInSect 的二十来处全在 undefined 上走假分支；position 是零读者死字段，删
                 Object.assign(global.discipleState, {
+                    isInSect: false,
+                    sectId: null,
                     sectName: null,
-                    position: '散修',
                     contribution: 0,
                     rank: null
                 });
             } catch (e) {
-                global.discipleState = { sectName: null, position: '散修', contribution: 0 };
+                global.discipleState = { isInSect: false, sectId: null, sectName: null, contribution: 0, rank: null };   // v25.1·P24
             }
         }
 
@@ -808,6 +853,23 @@
             _failedBreakthroughs: n(saveData._failedBreakthroughs, 0),
             dungeonClearedAt: (saveData.dungeonClearedAt && typeof saveData.dungeonClearedAt === 'object')
                 ? saveData.dungeonClearedAt : {},
+            // ===== v24.4 账本续查：与上方 collect 一一对应的回灌 =====
+            // 旧档没这些字段时按底色处理（与 DES-75 同口径）：不凭空发毒、发法宝、发灵脉、开天门。
+            pillPoison: n(saveData.pillPoison, 0),
+            _heartDemon: (saveData._heartDemon && typeof saveData._heartDemon === 'object') ? saveData._heartDemon : null,
+            _heartDemonBonus: n(saveData._heartDemonBonus, 0),
+            _travel: (saveData._travel && typeof saveData._travel === 'object') ? saveData._travel : null,
+            _iceTowerPerm: n(saveData._iceTowerPerm, 0),
+            _bondedArtifact: (saveData._bondedArtifact && typeof saveData._bondedArtifact === 'object') ? saveData._bondedArtifact : null,
+            _spiritVein: (saveData._spiritVein && typeof saveData._spiritVein === 'object') ? saveData._spiritVein : null,
+            _unlockedTianjie: !!saveData._unlockedTianjie,
+            _ascensionDay: n(saveData._ascensionDay, null),
+            _tianjieFrom: saveData._tianjieFrom || '',
+            lastDeathReason: saveData.lastDeathReason || null,
+            _main025_asked: !!saveData._main025_asked,
+            _main025_stood: !!saveData._main025_stood,
+            _mailAffDay: (saveData._mailAffDay && typeof saveData._mailAffDay === 'object') ? saveData._mailAffDay : null,
+            _customPillBuff: (saveData._customPillBuff && typeof saveData._customPillBuff === 'object') ? saveData._customPillBuff : null,
             maxHealth: n(saveData.maxHealth, 100),
             maxQi: n(saveData.maxQi, 100),
             maxEnergy: n(saveData.maxEnergy, 100),
@@ -851,6 +913,10 @@
                     var instance = new global.ItemInstance(slotData.templateId, slotData.count);
                     if (slotData.uid) instance.uid = slotData.uid;
                     if (slotData.durability != null) instance.durability = slotData.durability;
+                    // v25.1·试-07：强化字段随主存档还原（与 serializeInventorySlots 对称，写法同 inventory.js loadInventory）
+                    ['enhancementLevel', 'refineLevel', 'enchantType', 'armorDurability'].forEach(function (f) {
+                        if (slotData[f] !== undefined && slotData[f] !== null) instance[f] = slotData[f];
+                    });
                     instance.customProps = slotData.customProps || {};
                     instance.markedForSale = slotData.markedForSale || false;
                     return instance;

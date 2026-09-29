@@ -82,7 +82,8 @@
         var now = safeNow();
         var next = global.WorldCalendar.getNextByCategory('auction', now);
         if (!next) {
-            el.innerHTML = '<span class="text-xs text-gray-500">无拍卖</span>';
+            // v25.1·P23：裸「无拍卖」三字被玩家当成错字（试玩记录写成「无挂买」）——补全语境
+            el.innerHTML = '<span class="text-xs text-gray-500">近期无拍卖</span>';
             return;
         }
         var days = Math.max(0, next.dueAbsoluteDay - now);

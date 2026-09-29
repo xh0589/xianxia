@@ -264,7 +264,8 @@
         cooldown: 24,
         rankReq: 5,
         costText: '香火钱10灵石；戒疤七日不面壁淡一层',
-        stateText: function () { return '戒疤：' + JIEBA_WORD[jieba()] + '层'; },
+        // v25.1·P8：零层时旧文案拼出「戒疤：无层」，语义不明像漏了变量——如实说「尚未落疤」
+        stateText: function () { return jieba() <= 0 ? '戒疤：尚未落疤（面壁一回落一枚）' : '戒疤：' + JIEBA_WORD[jieba()] + '层'; },
         precheck: function () {
             if (stones() < 10) return '香火钱不够十灵石。佛前不点空灯——洞口的知客僧合十不语，意思你懂。';
             return null;

@@ -122,6 +122,19 @@ assert(B.getActiveBeastBuff('coldHerb') === 0.3, '冰蛇字符串 coldHerb 0.3')
 mockWindow.currentCharData = { pets: [{ id: 'beast_lingfox' }] };
 assert(B.getActiveBeastBuff('treasure') === 0.05, 'pets 别名 OK');
 
+// v25.1·试-22：进化形映射——风狼王/炎虎王/成年火凤（beast-taming 进化表全量目标）要认回本系生态 id
+// 旧账 TEMPLATE_TO_ECO/BEAST_NAME_TO_ID 查无进化形 → normalizeBeastId 原样吐回 → BEAST_BUFFS 查空，增益随进化蒸发
+mockWindow.currentCharData = { spiritBeasts: [{ templateId: 'wind_wolf_king', name: '风狼王' }] };
+assert(B.normalizeBeastId('wind_wolf_king') === 'beast_windwolf', 'normalize wind_wolf_king → beast_windwolf');
+assert(B.normalizeBeastId('flame_tiger_king') === 'beast_flametiger', 'normalize flame_tiger_king → beast_flametiger');
+assert(B.normalizeBeastId('fire_phoenix_adult') === 'beast_firephoenix', 'normalize fire_phoenix_adult → beast_firephoenix');
+assert(B.normalizeBeastId('风狼王') === 'beast_windwolf', 'normalize 中文名「风狼王」');
+assert(B.normalizeBeastId('炎虎王') === 'beast_flametiger', 'normalize 中文名「炎虎王」');
+assert(B.normalizeBeastId('成年火凤') === 'beast_firephoenix', 'normalize 中文名「成年火凤」');
+assert(B.getActiveBeastBuff('travel') === 0.8, '风狼王 travel 0.8（进化后引路不蒸发）');
+mockWindow.currentCharData = { spiritBeasts: [{ templateId: 'fire_phoenix_adult', name: '成年火凤' }] };
+assert(B.getActiveBeastBuff('craftFire') === 0.1, '成年火凤 craftFire 0.1（进化后火候不蒸发）');
+
 // ---- 7. 事件总线 ----
 section('7) 事件总线');
 assert((listeners['beast:ecosystem:placed'] || []).length >= 1, 'placed ≥ 1 (got ' + (listeners['beast:ecosystem:placed'] || []).length + ')');

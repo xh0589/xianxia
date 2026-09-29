@@ -73,10 +73,11 @@ const mainQuestChain = [
         title: '仙路初启',
         type: QUEST_TYPES.MAIN,
         priority: QUEST_PRIORITIES.CRITICAL,
-        description: '你踏上了修仙之路，首先需要前往一个门派拜师学艺。',
+        description: '你踏上了修仙之路，首先需要前往一个门派拜师学艺。门派列表在「地图」面板左下「地区列表」卡片的「门派」页签里。',
         objectives: [
             // v20.81：description 给追踪栏一个人话标签；locationId 由"门派列表"页签打开时发射（见 app.js switchListMode）。
-            { type: 'visit', locationId: 'sect_list', location: '门派列表', description: '浏览门派列表', count: 1, completed: false },
+            // v25.1·P2：目标藏在地图面板页签里无人指路——描述里直说位置（判定逻辑不动，仍认 locationId）
+            { type: 'visit', locationId: 'sect_list', location: '门派列表', description: '浏览门派列表（「地图」面板 →「地区列表」卡片 →「门派」页签）', count: 1, completed: false },
             { type: 'join_sect', sectId: null, description: '拜入任意门派', count: 1, completed: false }
         ],
         rewards: {
@@ -111,7 +112,7 @@ const mainQuestChain = [
         title: '首次猎妖',
         type: QUEST_TYPES.MAIN,
         priority: QUEST_PRIORITIES.HIGH,
-        description: '外出猎杀妖兽，获取妖兽内丹，证明自己的实力。',
+        description: '外出猎杀妖兽，获取妖兽内丹，证明自己的实力。（猎妖入口：「活动」面板 →「⚔️ 出城猎妖」；赶路途中也可能遭遇妖兽）',
         objectives: [
             { type: 'kill', target: '妖兽', count: 5, completed: false }
         ],
@@ -436,34 +437,20 @@ function _syncTemplatesFromLedger() {
                     }
                     q.completed = q.objectives.length > 0 && q.objectives.every(function (o) { return o && o.completed; });
                 }
-                return;
-            }
-            // 第二批·PLAY-1d：账本两条都没命中 ⇒ 这条任务**不在进度里**，模板必须清干净。
-            // 此前此处直接落空（既不置位也不复位），而 allQuests 挂的是**同一批对象引用**——
-            // 谁先把它置成 accepted（loadSaveData 回灌、旧档残留），这里就原样留着脏值。
-            // 实测病态（2026-09-29）：账本 activeQuests=["main_001"]，
-            // 模板 main_002 却 accepted=true、目标 0/1 ⇒ 面板显示「进行中 0/1」，
-            // 而 acceptQuest(:515) 又因 quest.accepted 为真把"已接取"顶回来——
-            // **任务卡上永远出不了交付按钮，也没有任何办法重接**。
-            q.accepted = false;
-            q.completed = false;
-            q.turnedIn = false;
-            if (Array.isArray(q.objectives)) {
-                q.objectives.forEach(function (o) {
-                    if (!o) return;
-                    o.currentCount = 0;
-                    o.completed = false;
-                });
+            } else {
+                // v25.1·P1d：账本两条都没命中 → 模板一律复位。allQuests 挂的是同一批对象引用，
+                // 旧档残留/读档回灌谁先把 accepted 置真就原样留着脏值：面板显示「进行中 0/1」
+                // 却永远出不了交付按钮，acceptQuest 的重复门又把重接顶回来——玩家无任何出路。
+                q.accepted = false; q.completed = false; q.turnedIn = false;
+                if (Array.isArray(q.objectives)) {
+                    q.objectives.forEach(function (o) { if (o) { o.currentCount = 0; o.completed = false; } });
+                }
             }
         });
     } catch (e) {
-        // 此前是 `catch (e) {}` 纯吞：整段 forEach 一抛就全废，且无处可查——
-        // 实测排查 PLAY-1d 时正是它把「模板没被复位」藏了起来。
-        // 不往上抛（读档路径经 importQuestProgress 调用，抛出去会连带整次读档失败），
-        // 但留一条警告，让同类问题下次能一眼看见。
-        if (window.console && console.warn) {
-            console.warn('[quest] _syncTemplatesFromLedger 中断，部分任务模板未与账本对齐：', e);
-        }
+        // v25.1·P1d：纯吞会让整段 forEach 一抛就全废且无处可查——吞但留痕。
+        // 不往上抛是因为读档路径经 importQuestProgress 调用，抛出去会连带整次读档失败。
+        console.warn('[吞但留痕] quest-system._syncTemplatesFromLedger：任务模板对账中断，部分任务状态可能不对', e && e.message);
     }
 }
 
@@ -567,28 +554,33 @@ function acceptQuest(questId) {
         }
     } catch (eRetro) {}
 
-    // 第二批·PLAY-1c：先突破到目标境界、再接那章任务 = 永久卡 0/1。
-    // cultivation_realm / breakthrough_realm 靠 cultivation:breakthrough 事件推进，
-    // 而 questObjectiveMatches 要求事件的 toLayer 精确等于目标 layer——人已经在目标境界时
-    // 那个事件永远不来（升到下一层反而不匹配），此章就此死锁。
-    // 而「先肝到 3 层，再去接那个让你升到 3 层的任务」是最自然的玩法顺序。
-    // 故在接取当场按现状对账这两类目标，不另立规则。
+    // v25.1·P1c：NEW-21 的同族死账——「先升到目标境界、再接那章任务」= 永久卡 0/1：
+    // cultivation_realm 匹配要求事件 toLayer 精确等于目标层（questObjectiveMatches），
+    // 人已在炼气3层则「升到3层」的事件永不再来，升到4层又因 !==3 失配，交付按钮永远出不来。
+    // 接取当场按当前 realm/layer 对账这两类目标，仍走同一条事件桥（合成与目标精确匹配的负载），不另立规则。
     try {
-        var _cd = window.currentCharData;
-        if (_cd && Array.isArray(quest.objectives) &&
-            quest.objectives.some(function (o) {
-                if (!o || o.completed) return false;
-                if (o.type !== 'cultivation_realm' && o.type !== 'breakthrough_realm') return false;
-                var want = o.realm || o.toRealm;
-                if (want && want !== _cd.realm) return false;
-                // layer 为空＝只要求到这个境界；否则现状层数 ≥ 目标即算达成
-                return o.layer == null || Number(_cd.layer || 1) >= Number(o.layer);
-            })) {
-            advanceQuestObjectivesFromEvent('cultivation:breakthrough', {
-                toRealm: _cd.realm, toLayer: _cd.layer, fromRealm: _cd.realm, fromLayer: _cd.layer,
-            });
+        var _cdRetro = window.currentCharData;
+        if (_cdRetro && _cdRetro.realm && typeof getRealmIndex === 'function' && Array.isArray(quest.objectives)) {
+            var _riNow = getRealmIndex(_cdRetro.realm), _lyNow = Number(_cdRetro.layer) || 1;
+            if (_riNow >= 0) {
+                quest.objectives.forEach(function (o) {
+                    if (!o || o.completed) return;
+                    if (o.type === 'cultivation_realm' && o.realm) {
+                        var _riT = getRealmIndex(o.realm);
+                        if (_riT < 0) return;
+                        if (_riNow > _riT || (_riNow === _riT && _lyNow >= Number(o.layer || 1))) {
+                            advanceQuestObjectivesFromEvent('cultivation:breakthrough', { fromRealm: o.realm, toRealm: o.realm, toLayer: Number(o.layer || 1) });
+                        }
+                    } else if (o.type === 'breakthrough_realm' && o.toRealm) {
+                        var _riB = getRealmIndex(o.toRealm);
+                        if (_riB >= 0 && _riNow >= _riB) {
+                            advanceQuestObjectivesFromEvent('cultivation:breakthrough', { fromRealm: o.fromRealm || null, toRealm: o.toRealm });
+                        }
+                    }
+                });
+            }
         }
-    } catch (eRealm) {}
+    } catch (eRetroRealm) {}
 
     // v21.9：宗门守卫战接取时当面问一句——誓死守护还是暂避锋芒。
     // 此前 main_025_protect/main_025_flee 两笔选择记录无来源（demon_heart_count 永远为 0）。
@@ -612,6 +604,10 @@ function acceptQuest(questId) {
     }
     
     showMessage(`接取任务：${quest.title}`, 'success');
+    // v25.1·P1：接任务是零时辰变更——旧订阅表听不见，建号即接主线的玩家刷新就丢角色。
+    // 一补事件（continue-save.js 订阅 quest:accepted），二直接标脏（防御式，模块缺席也不炸）。
+    try { if (window.EventBus && window.EventBus.emit) window.EventBus.emit('quest:accepted', { questId: questId, questType: quest.type }); } catch (eDirty) {}
+    if (window.ContinueSave && ContinueSave.markDirty) ContinueSave.markDirty();
     updateQuestUI();
     // BUG-12 修复：主线/日常列表由独立渲染函数负责，接取后必须一并刷新，
     // 否则已接取状态要等切面板（showQuestPanel → updateMainQuestUI）才显示。
@@ -805,7 +801,11 @@ function checkEndingCondition() {
     var killCount = charData._killCount || 0;
     var bonds = charData.bonds || {};
     var hasDaoCompanion = Object.values(bonds).some(function(b) { return b.type === 'dao_companion'; });
-    var questProgress = window.playerQuestProgress;
+    // v24.6：真账本是本文件顶层 let playerQuestProgress（经典脚本的词法全局），
+    // window.playerQuestProgress 这个名字从未被挂过——改前读 window 恒 undefined，
+    // completedMainQuests 恒 0 → allCompleted 恒 false，飞升/隐退/混沌之主三结局永不可达
+    // （F-1 把门槛 35→20 修活了，却栽在这行幽灵读上）。与 v24.5 八处 window 幽灵同病。
+    var questProgress = (typeof playerQuestProgress !== 'undefined') ? playerQuestProgress : null;
     var completedMainQuests = (questProgress && questProgress.completedQuests) ?
         questProgress.completedQuests.filter(function(qid) { return qid.indexOf('main_') === 0; }).length : 0;
     // F-1 修复：原条件 completedMainQuests >= 35，但实际主线只有 5(quest-system.js) + 15(12-quest-extensions.js) = 20 个
@@ -1513,7 +1513,7 @@ function _qgActiveEmptyHtml() {
         if (q && q.type === 'random' && !q.accepted && !q.completed) boardable++;
     });
     const hints = [];
-    if (boardable > 0) hints.push('布告栏上还贴着 ' + boardable + ' 单现结的活计，不要前置，赏钱当场给。');
+    if (boardable > 0) hints.push('布告栏上还贴着 ' + boardable + ' 单现结的活计，不要前置，酬劳当场给。');   // v25.1·P18：口径统一「酬劳」
     hints.push('接了之后就会出现在这一栏，并自动挂上右上角的追踪条。');
     return xEmptyHtml({
         // fill：这一格与左栏主线同排，行高由主线定（实机 ~700px），空卡不填就在地面上留 ~460px 死背景
@@ -1917,7 +1917,7 @@ function updateRandomQuestUI() {
                 status: status,
                 progress: (status === 'doing' || status === 'ready') ? _qgProgressOf(quest) : null,
                 reward: _qgRewardText(quest),
-                rewardLabel: '赏格',
+                rewardLabel: '酬劳',   // v25.1·P18：主线叫「酬劳」布告叫「赏格」——同一概念两种叫法，统一为「酬劳」
                 objectives: _qgObjectiveHtml(quest, 2),
                 actions: actions
             })
@@ -1926,7 +1926,7 @@ function updateRandomQuestUI() {
     list.innerHTML = _qgFoldTail(cards, QG_LIST_CAP, '单');
     _qgMountBar(list, '<span class="qg-bar__title">共 ' + randoms.length + ' 单</span>'
         + '<span class="qg-bar__stat">未接 ' + openCnt + ' 单</span>'
-        + '<span class="qg-bar__hint">赏钱现结，不要前置</span><span class="qg-bar__rest"></span>');
+        + '<span class="qg-bar__hint">酬劳现结，不要前置</span><span class="qg-bar__rest"></span>');
 }
 
 // 故人心事：交情没到的不显示（人物心里没把你当自己人，自然不会托付）
@@ -1942,12 +1942,13 @@ function updateNpcQuestUI() {
         });
         return;
     }
-    const rel = (window.npcSystem && typeof window.npcSystem.getNPCRelationship === 'function')
-        ? window.npcSystem.getNPCRelationship : null;
+    // v24.5 死读修复：window.npcSystem 全仓零挂载（早期想象名），旧 getAff 两条腿全踩空恒 0——
+    // 带好感门槛的故人托付永远筛不进门，玩家看不到。改问全仓唯一的 NPC 账本 npcManager。
     const getAff = function (npcId) {
-        if (rel) { try { const r = rel(npcId); if (r && r.affection != null) return Number(r.affection) || 0; } catch (e) {} }
-        const nps = window.npcSystem && window.npcSystem.npcs;
-        if (nps && nps[npcId]) return Number(nps[npcId].affection) || 0;
+        try {
+            const n = (window.npcManager && typeof window.npcManager.getNPC === 'function') ? window.npcManager.getNPC(npcId) : null;
+            if (n && n.relationship && n.relationship.affection != null) return Number(n.relationship.affection) || 0;
+        } catch (e) {}
         return 0;
     };
     const cards = [];
@@ -2077,6 +2078,9 @@ function questObjectiveMatches(obj, eventType, data) {
         var target = questEventText(obj.target || obj.enemyId || obj.enemyType).toLowerCase();
         if (!target) return true;
         var actual = [data.enemyId, data.enemyType, data.species, data.name].concat(data.tags || []).filter(Boolean).join(' ').toLowerCase();
+        // v25.1·P25：「猎杀妖兽」类目标认兽种——野生妖兽的名字（赤炎狼/幽冥虎…）不含「妖兽」二字，
+        // 旧字符串互contain永远失配：猎妖入口修好后杀再多也不计数。种系账（species/enemyType='beast'）才是正主。
+        if ((target === '妖兽' || target === '野兽') && (data.enemyType === 'beast' || data.species === 'beast')) return true;
         return actual.indexOf(target) >= 0 || target.indexOf(actual) >= 0;
     }
     // v20.81：collect/craft 匹配加固。

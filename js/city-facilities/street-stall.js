@@ -205,8 +205,8 @@
         var fee = settle({ copper: -CFG.STALL_FEE });
         if (!fee.ok) { say('🧺 占地钱 ' + CFG.STALL_FEE + ' 铜钱都凑不出——市司的差役把你请走了。', 'warning'); return false; }
         c.energy = Math.max(0, Number(c.energy) - CFG.STALL_EN);
-        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(CFG.STALL_MIN, '街边摆摊'); else if (window.advanceTime) window.advanceTime(CFG.STALL_MIN, '街边摆摊'); } catch (e) {}
-        try { if (window.updateCharacterStatus) window.updateCharacterStatus(); } catch (e2) {}
+        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(CFG.STALL_MIN, '街边摆摊'); else if (window.advanceTime) window.advanceTime(CFG.STALL_MIN, '街边摆摊'); } catch (e) { console.warn('[静默失败] js/city-facilities/street-stall.js:208 · openStall：摆摊的时辰没扣——占地钱和精力都付了，时辰纹丝不动', e && e && e.message); }
+        try { if (window.updateCharacterStatus) window.updateCharacterStatus(); } catch (e2) { console.warn('[静默失败] js/city-facilities/street-stall.js:209 · openStall：摆摊后面板没刷新——HUD 上的精力还是旧数', e2 && e2 && e2.message); }
         session = { city: city(), foot: footfall(), sold: 0, event: '', priceMul: 1 };
         var ev = rollEvent();
         log('🧺 你在' + session.city + '街边支起了摊（占地钱 ' + CFG.STALL_FEE + ' 铜、一个时辰）。' + ev, 'info');

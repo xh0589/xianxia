@@ -2429,7 +2429,7 @@ class Battle {
         try {
             this._initTimeline();
             this._advanceTimeline();
-        } catch (eTL) {}
+        } catch (eTL) { console.warn('[静默失败] js/battle.js:2432 · Battle.constructor：战斗行动序时间线没建起来——出手次序排不出，战斗界面可能卡住不动', eTL && eTL && eTL.message); }
     }
 
     // ---------- 第九十二波 · 行动条引擎 ----------

@@ -16,6 +16,8 @@ function onAscension() {
     cd._ascensionDay = (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function')
         ? window.timeSystem.getAbsoluteDay() : 0;
     cd._unlockedTianjie = true;
+    // v25.1·试-27：飞升即寿与天齐——置永生，寿命钟停走（此前飞升不入寿元账，成仙后仍会收到大限弹窗）
+    if (typeof window.grantImmortality === 'function') { try { window.grantImmortality('白日飞升'); } catch (eImm) {} }
     if (window.showMessage) {
         window.showMessage('🌤️ 你白日飞升，凡间信徒 ' + cd.incense + ' 人为你立祠供奉。每日香火回馈真元。天界之路已开——修行面板里「登上天界」，去走走九重之上的地界。'
             + ((window.eventFlags && window.eventFlags['qi_fin_fought']) ? '（香火是供奉管道——如今镰刀碎了，这条管道改姓你。）' : ''), 'success');
@@ -61,6 +63,8 @@ function trySecondAscension() {
     cd.realm = '金仙';
     cd.layer = 1;
     cd._foundationBonus = (cd._foundationBonus || 0) + 50;
+    // v25.1·试-27：证道金仙，寿与天齐——飞升时已置永生则幂等跳过
+    if (typeof window.grantImmortality === 'function') { try { window.grantImmortality('证道金仙'); } catch (eImm2) {} }
     if (window.showMessage) window.showMessage('🌟🌟 二段飞升！你证道金仙，寿与天齐，超脱轮回！', 'success');
     if (window.updateCharacterStatus) window.updateCharacterStatus();
     // v21.9 世界大事记留痕

@@ -383,8 +383,20 @@
     W.doBranchRest = function (city) {
         _close();
         try { if (typeof W.advanceTime === 'function') W.advanceTime(120); } catch (e) {}
-        try { if (typeof W.restoreQi === 'function') W.restoreQi(30); else if (W.currentCharData) W.currentCharData.qi = Math.min(100, (W.currentCharData.qi ?? 50) + 30); } catch (e2) { console.warn('[静默失败] js/sects/sect-cities.js:386 · 歇息回气：在分舵厢房歇半日的真气回复本该生效，这里没接住，玩家会察觉气血没回', e2 && e2 && e2.message); }
-        log('🛏️ 你在分舵的厢房歇了半日——被褥是晒过的，比客栈干净，也不花钱。（时辰过去半日，真气回了三十）', 'success');
+        // v25.1·P9 P9：旧码先试 W.restoreQi——全库根本没有这个函数（sect-facilities 里那只是设施效果 case 名），
+        // 恒走 else 分支且把常量 100 当真气上限：筑基/金丹 maxQi 数百上千时被硬卡回 100，日志还谎报「回了三十」。
+        // 现直接读真实上限（优先 getEffectiveMax('maxQi')，对照 app.js:7178/inventory.js 既有姿势），回执如实报数。
+        var gained = 0;
+        try {
+            var cd = W.currentCharData;
+            if (cd) {
+                var maxQi = (typeof W.getEffectiveMax === 'function') ? W.getEffectiveMax('maxQi') : (cd.maxQi || 100);
+                var before = Number(cd.qi) || 0;
+                cd.qi = Math.min(maxQi, before + 30);
+                gained = (Number(cd.qi) || 0) - before;
+            }
+        } catch (e2) { console.warn('[静默失败] js/sects/sect-cities.js:386 · 歇息回气：在分舵厢房歇半日的真气回复本该生效，这里没接住，玩家会察觉气血没回', e2 && e2 && e2.message); }
+        log('🛏️ 你在分舵的厢房歇了半日——被褥是晒过的，比客栈干净，也不花钱。（时辰过去半日，' + (gained > 0 ? '真气+' + gained + '）' : '真气已满，没能再进）'), 'success');
     };
 
     // ============ 六 · 分舵麻烦（不是摇钱树） ============

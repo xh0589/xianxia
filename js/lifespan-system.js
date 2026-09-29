@@ -14,7 +14,10 @@ var LIFESPAN_CONFIG = {
     '炼虚': { years: 5000, desc: '炼虚期寿元' },
     '合体': { years: 8000, desc: '合体期寿元' },
     '大乘': { years: 12000, desc: '大乘期寿元' },
-    '渡劫': { years: 15000, desc: '渡劫期寿元' }
+    '渡劫': { years: 15000, desc: '渡劫期寿元' },
+    // v25.1·试-27：飞升/金仙寿与天齐——years:null 走 increaseLifespanOnBreakthrough 的永生支
+    '飞升': { years: null, desc: '飞升仙寿（寿与天齐）' },
+    '金仙': { years: null, desc: '金仙仙寿（寿与天齐）' }
 };
 
 // v20.81：初值补齐——旧代码 remainingDays:0，新开一局寿元面板直接显示"余0天"并弹凶兆
@@ -58,6 +61,18 @@ function updatePlayerLifespan(daysPassed) {
         if (!playerLifespan._endingShown) {
             playerLifespan._endingShown = true;
             triggerLifespanEnd();
+        } else if (playerLifespan._deathAccepted) {
+            // v25.1·试-14：「接受结局」之后不再每日弹红条——大限面板已给过三途抉择，
+            // 死旗改成一缕道息撑着残躯的活账：每日心情轻压、修炼减半（getLifespanEndedPenalty），
+            // 每 30 日一条低频提示，指路延寿丹/转世/二周目（还能翻盘）。
+            playerLifespan._acceptedDays = (playerLifespan._acceptedDays || 0) + 1;
+            try {
+                var _cdA = window.currentCharData;
+                if (_cdA && typeof _cdA.mood === 'number') _cdA.mood = Math.max(0, _cdA.mood - 1);
+            } catch (eAcc) {}
+            if (playerLifespan._acceptedDays % 30 === 1 && window.showMessage) {
+                window.showMessage('🕯️ 道消身死——一缕道息撑着残躯游历人间。若想再活一世：延寿丹、转世重修，或二周目续缘。', 'info');
+            }
         } else if (window.showMessage) {
             window.showMessage('⚠️ 寿元已尽……', 'error');
         }
@@ -133,6 +148,34 @@ function triggerLifespanEnd() {
     document.body.appendChild(modal);
 }
 
+// v25.1·试-14：「接受结局」的死旗给出真实消费——道消身死，残躯游历，修炼效率减半。
+// breakthrough-system.js 的打坐真元产出（cultivateQi）读这一枚惩罚系数；未接受结局时回 1（不罚）。
+function getLifespanEndedPenalty() {
+    try {
+        var cd = window.currentCharData;
+        if (playerLifespan._deathAccepted || (cd && cd.flags && cd.flags.lifespanEnded)) return 0.5;
+    } catch (e) {}
+    return 1;
+}
+
+// v25.1·试-27：飞升/金仙证道——寿与天齐，置永生。此前 LIFESPAN_CONFIG 只到渡劫，
+// increaseLifespanOnBreakthrough('飞升') 查无配置直接 return，isImmortal 全仓无置真处，成仙后寿命钟照走。
+// 飞升成功链（ascension-epilogue 的 onAscension/trySecondAscension、heavenly-tribulation 的渡劫成功）调本函数落账。
+function grantImmortality(reason) {
+    if (playerLifespan.isImmortal) return false;
+    playerLifespan.isImmortal = true;
+    playerLifespan.remainingDays = -1;
+    // 飞升超脱寿元轮回——旧的「大限/接受结局」账一并作废
+    playerLifespan._endingShown = false;
+    playerLifespan._deathAccepted = false;
+    playerLifespan._acceptedDays = 0;
+    if (window.currentCharData && window.currentCharData.flags) window.currentCharData.flags.lifespanEnded = false;
+    updateLifespanDisplay();
+    saveLifespan();
+    if (window.showMessage) window.showMessage('♾️ ' + (reason || '证道') + '——寿与天齐，不再受岁月催逼！', 'success');
+    return true;
+}
+
 function _tryUseLongevityFromEnd() {
     var used = false;
     if (window.inventory && window.inventory.slots) {
@@ -157,14 +200,24 @@ function _tryUseLongevityFromEnd() {
 function _lifespanNewGamePlus() {
     var m = document.getElementById('lifespan-end-modal');
     if (m) m.remove();
-    if (typeof window.startNewGamePlus === 'function') window.startNewGamePlus();
-    else {
+    // v25.1·试-14：无论继承走哪条路，先把当前局的寿元账处理干净——清掉死旗、补回一段余日，
+    // 免得顶着"已死"状态在新生开局前还被每日 newDay 弹「寿元已尽」红条（继承消费在 app.js，主控并行接）。
+    playerLifespan._endingShown = false;
+    playerLifespan._deathAccepted = false;
+    playerLifespan._acceptedDays = 0;
+    if (window.currentCharData && window.currentCharData.flags) {
+        window.currentCharData.flags.lifespanEnded = false;
+    }
+    if (!(playerLifespan.remainingDays > 0)) {
         playerLifespan.currentAge = 18;
         playerLifespan.remainingDays = (playerLifespan.maxAge - 18) * 360;
-        playerLifespan._endingShown = false;
-        saveLifespan();
-        updateLifespanDisplay();
-        if (window.showMessage) window.showMessage('轮回再起，年龄重置', 'success');
+    }
+    saveLifespan();
+    updateLifespanDisplay();
+    if (typeof window.startNewGamePlus === 'function') {
+        window.startNewGamePlus();
+    } else if (window.showMessage) {
+        window.showMessage('轮回再起，年龄重置', 'success');
     }
 }
 
@@ -175,15 +228,29 @@ function _lifespanAcceptDeath() {
         window.currentCharData.flags = window.currentCharData.flags || {};
         window.currentCharData.flags.lifespanEnded = true;
     }
-    if (window.showMessage) window.showMessage('道消身死……可继续浏览或读档', 'info');
+    // v25.1·试-14：持久「已接受结局」旗——从此每日 newDay 不再刷「寿元已尽」红条，
+    // 改走一缕道息撑着的状态（心情轻压 + 修炼减半 + 低频指路）。随 saveLifespan 序列化进档。
+    playerLifespan._deathAccepted = true;
+    playerLifespan._acceptedDays = 0;
+    saveLifespan();
+    if (window.showMessage) window.showMessage('道消身死……一缕道息尚存，可继续浏览人间，或寻转世/延寿丹翻盘', 'info');
 }
 
 
 function increaseLifespanOnBreakthrough(realm) {
     var config = LIFESPAN_CONFIG[realm];
     if (!config) return;
-    if (config.years === null) { playerLifespan.isImmortal = true; playerLifespan.remainingDays = -1; }
-    else { playerLifespan.maxAge = Math.max(playerLifespan.maxAge, config.years); }
+    // v25.1·试-27：years:null 为飞升/金仙——寿与天齐，置永生，不再按历法回算余日
+    //（旧写法无条件重算 remainingDays，会把刚置的 -1 覆盖成正数，账不干净）
+    if (config.years === null) {
+        playerLifespan.isImmortal = true;
+        playerLifespan.remainingDays = -1;
+        if (window.showMessage) window.showMessage('🎉 突破至' + realm + '——寿与天齐，得永生！', 'success');
+        updateLifespanDisplay();
+        saveLifespan();
+        return;
+    }
+    playerLifespan.maxAge = Math.max(playerLifespan.maxAge, config.years);
     playerLifespan.remainingDays = Math.max(0, (playerLifespan.maxAge - playerLifespan.currentAge) * 360);
     if (window.showMessage) window.showMessage('🎉 突破至' + realm + '期，寿元增加至' + playerLifespan.maxAge + '年！', 'success');
     updateLifespanDisplay();
@@ -237,6 +304,8 @@ if (typeof window !== 'undefined') {
     window.extendLifespan = extendLifespan;
     window.spendLifespan = spendLifespan;
     window.getAgePenaltyMultiplier = getAgePenaltyMultiplier;
+    window.getLifespanEndedPenalty = getLifespanEndedPenalty;
+    window.grantImmortality = grantImmortality;
     window.triggerLifespanEnd = triggerLifespanEnd;
     window._tryUseLongevityFromEnd = _tryUseLongevityFromEnd;
     window._lifespanNewGamePlus = _lifespanNewGamePlus;

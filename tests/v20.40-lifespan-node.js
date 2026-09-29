@@ -123,6 +123,57 @@ p7.currentAge = 99.5; // 余 180 日，一年档内
 W7.updatePlayerLifespan(0);
 assert(W7.__displayEl.style.color === '#fbbf24', 'L6b 一年内寿元——面板先黄再红');
 
+// ============ L7 v25.1·试-27：飞升/金仙寿与天齐——置永生、寿命钟停走 ============
+var W8 = makeWorld();
+var p8 = W8.playerLifespan;
+assert(W8.LIFESPAN_CONFIG['飞升'] && W8.LIFESPAN_CONFIG['飞升'].years === null
+    && W8.LIFESPAN_CONFIG['金仙'] && W8.LIFESPAN_CONFIG['金仙'].years === null,
+    'L7a 飞升/金仙入寿元表且 years:null（走永生支）');
+assert(typeof W8.grantImmortality === 'function' && W8.grantImmortality('白日飞升') === true
+    && p8.isImmortal === true && p8.remainingDays === -1,
+    'L7b grantImmortality 置永生——飞升不再受岁月催逼');
+assert(W8.__displayEl.innerHTML.indexOf('永生') >= 0, 'L7c 面板渲染 ♾️ 永生');
+var age8 = p8.currentAge;
+W8.updatePlayerLifespan(360);
+assert(p8.currentAge === age8, 'L7d 永生后每日寿元递减跳过——年龄不增');
+assert(W8.grantImmortality(' 又飞一次') === false, 'L7e grantImmortality 幂等——已永生不重复落账');
+var W8b = makeWorld();
+W8b.increaseLifespanOnBreakthrough('飞升');
+assert(W8b.playerLifespan.isImmortal === true && W8b.playerLifespan.remainingDays === -1,
+    'L7f increaseLifespanOnBreakthrough("飞升") 走 null 支置永生、余日不被重算覆盖');
+
+// ============ L8 v25.1·试-14：「接受结局」后停每日弹条 + 死旗给出真实消费 ============
+var W9 = makeWorld();
+W9.currentCharData = { mood: 50, flags: {} };
+var p9 = W9.playerLifespan;
+p9.maxAge = 100; p9.currentAge = 100; p9.remainingDays = 0;
+W9.updatePlayerLifespan(0);   // 触发大限落幕弹窗
+assert(W9.__appended.length === 1, 'L8a 寿元尽触发大限落幕弹窗');
+W9._lifespanAcceptDeath();
+assert(p9._deathAccepted === true && W9.currentCharData.flags.lifespanEnded === true,
+    'L8b 接受结局落持久死旗（_deathAccepted + flags.lifespanEnded）');
+assert(W9.getLifespanEndedPenalty() === 0.5, 'L8c 接受结局后修炼效率减半（getLifespanEndedPenalty=0.5）');
+W9.__msgs.length = 0;
+var mood9 = W9.currentCharData.mood;
+W9.updatePlayerLifespan(1);
+assert(!W9.__msgs.some(function (m) { return m.indexOf('寿元已尽') >= 0; }),
+    'L8d 接受结局后每日不再刷「寿元已尽」红条');
+assert(W9.currentCharData.mood === Math.max(0, mood9 - 1), 'L8e 每日心情轻压（死旗的真实后果，非纯死旗）');
+assert(W9.__msgs.some(function (m) { return m.indexOf('一缕道息') >= 0; }),
+    'L8f 低频指路（首日报一次）——延寿丹/转世/二周目还能翻盘');
+
+// ============ L9 v25.1·试-14：选「二周目」先把当前局寿元账处理干净 ============
+var W10 = makeWorld();
+W10.currentCharData = { mood: 10, flags: { lifespanEnded: true } };
+var p10 = W10.playerLifespan;
+p10.maxAge = 100; p10.currentAge = 100; p10.remainingDays = 0; p10._endingShown = true; p10._deathAccepted = true;
+W10._lifespanNewGamePlus();
+assert(p10._endingShown === false && p10._deathAccepted === false
+    && W10.currentCharData.flags.lifespanEnded === false,
+    'L9a 选二周目先清死旗——不再顶着已死状态每日弹条');
+assert(p10.remainingDays > 0 && p10.currentAge === 18, 'L9b 补回余日、年龄重置（新生开局前账干净）');
+assert(W10.getLifespanEndedPenalty() === 1, 'L9c 死旗清掉后修炼不再减半');
+
 console.log('---');
 console.log('v20.40 lifespan: ' + passed + ' 通过, ' + failed + ' 失败');
 process.exit(failed ? 1 : 0);

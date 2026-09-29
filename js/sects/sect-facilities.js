@@ -832,7 +832,9 @@ function executeAction(action, resultMsgs, facilityId) {
         case 'addSkillExp': {
             // F-33：此前只 push 文案不写数据（"技能经验+5"是空操作）。
             // 接 addProficiencyExp 到玩家主修功法（currentSkills.skill_main），无主修则提示
-            var _mainSkill = window.currentSkills && window.currentSkills.skill_main;
+            // v25.1·试-06：槽里是功法对象（NEW-22 口径）——对象/字符串双兼容取 .id，不再写 '[object Object]' 垃圾键
+            var _mainSlot = window.currentSkills && window.currentSkills.skill_main;
+            var _mainSkill = _mainSlot ? (typeof _mainSlot === 'object' ? (_mainSlot.id || null) : _mainSlot) : null;
             if (_mainSkill && typeof window.addProficiencyExp === 'function') {
                 window.addProficiencyExp(_mainSkill, action.value);
                 resultMsgs.push(`・主修功法熟练度 +${action.value}`);

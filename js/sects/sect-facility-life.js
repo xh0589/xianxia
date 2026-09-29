@@ -141,7 +141,9 @@
             L.sparMomentum = (L.sparMomentum || 0) + 1;   // 势头：大比预热
             // 真同门：切磋赢一场，功法熟练度长一点（打出来的长进）
             try {
-                var main = W.currentSkills && W.currentSkills.skill_main;
+                // v25.1·试-06：槽里是功法对象（NEW-22 口径）——对象/字符串双兼容取 .id，不再写 '[object Object]' 垃圾键
+                var _msSlot = W.currentSkills && W.currentSkills.skill_main;
+                var main = _msSlot ? (typeof _msSlot === 'object' ? (_msSlot.id || null) : _msSlot) : null;
                 if (main && typeof W.addProficiencyExp === 'function') W.addProficiencyExp(main, 3);
             } catch (e) {}
             // 改造批：切磋也是练——门中底子长功底

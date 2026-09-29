@@ -275,8 +275,10 @@
         // 副作用：扣真气
         if (cd && recipe.qiCost) cd.qi = (cd.qi || 0) - recipe.qiCost;
         // 毒扣血（仅 flaw）
+        // v24.4 死字段修复：旧版写 cd.hp/cd.maxHp——全仓无人读这两个顶层字段（真身是 health/maxHealth，
+        // 战斗实体、面板、存档白名单认的都是它），炸炉扣血记在幽灵账上实际纹丝不动。
         if (isFlaw && cd) {
-            cd.hp = Math.max(1, (cd.hp || 100) - Math.floor((cd.maxHp || 100) * 0.3));
+            cd.health = Math.max(1, (cd.health != null ? cd.health : 100) - Math.floor((cd.maxHealth != null ? cd.maxHealth : 100) * 0.3));
         }
         // 落物品到背包
         // DES-72 同族：addResultItem 报的是行囊**实收件数**，旧写法只判真假 ⇒ 回执照念开价的粒数

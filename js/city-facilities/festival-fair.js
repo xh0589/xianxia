@@ -168,7 +168,7 @@
         return { ok: true, note: '' };
     }
     function spendTime(min, why) {
-        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(min, why); } catch (e) {}
+        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(min, why); } catch (e) { console.warn('[静默失败] js/city-facilities/festival-fair.js:171 · spendTime：节市游玩的时辰没扣——白玩一场、天白过', e && e && e.message); }
     }
     // ============ 回执要说实话（DES-27） ============
     // 统一通道自 DES-38 起已按差值报数，但 `settle` 在缺通道时还有一条直写兜底（下面那几行 `Math.min`），

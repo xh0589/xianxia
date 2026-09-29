@@ -257,6 +257,48 @@ var leak = null;
 });
 eq(leak, null, 'E8 新账话术零中英混排（漏: ' + leak + '）');
 
+// ==================== F · v25.1·试-07 卸下→再装上，强化不清零 ====================
+console.log('\n[F] v25.1·试-07 穿脱往返强化账（+5 脱下再穿上还是 +5）');
+global.alert = function (m) { msgs.push(String(m)); };
+global.confirm = function () { return true; };
+load('js/equipment.js');   // 真 equipItem/unequipItem（equipment.js 顶层纯数据，测试沙箱可直接装）
+regTpl('wpn_shi07', { name: '试07·宝剑', type: 'equipment', category: 'equipment', stackable: false, maxStack: 1, price: 500, slot: 'mainHand' });
+resetWorld();
+global.currentEquipment.mainHand = null;
+global.addItem('wpn_shi07', 1);
+var eqInst = global.inventory.slots.filter(function (s) { return s && s.templateId === 'wpn_shi07'; })[0];
+assert(!!eqInst, 'F0 宝剑入囊');
+eqInst.uid = 'sword_shi07';
+eqInst.enhancementLevel = 5;
+eqInst.refineLevel = 2;
+eqInst.enchantType = 'fire';
+eqInst.armorDurability = 66;
+eqInst.durability = 88;
+eq(global.equipItemFromInventory('sword_shi07'), true, 'F1 头一回穿上成功');
+var worn1 = global.currentEquipment.mainHand;
+assert(!!worn1, 'F2 剑在身上');
+eq(worn1.enhancementLevel, 5, 'F3 穿上即带 +5（实例账真递进了 equipItem）');
+eq(worn1.refineLevel, 2, 'F4 精炼账随穿');
+eq(worn1.enchantType, 'fire', 'F5 附魔账随穿');
+eq(worn1.durability, 88, 'F6 耐久随穿');
+eq(worn1.armorDurability, 66, 'F7 甲耐久随穿');
+eq(global.itemById['wpn_shi07'].enhancementLevel, undefined, 'F8 全局模板分文未动（F-29 克隆语义仍在，同款第二把不沾光）');
+eq(global.unequipItemToInventory('mainHand'), true, 'F9 卸下成功');
+eq(global.currentEquipment.mainHand, null, 'F10 身上已空');
+var bagBack = global.inventory.slots.filter(function (s) { return s && s.templateId === 'wpn_shi07'; })[0];
+assert(!!bagBack, 'F11 剑回行囊');
+eq(bagBack.enhancementLevel, 5, 'F12 卸下保住 +5（F-29 老账原样）');
+eq(bagBack.durability, 88, 'F13 卸下保住耐久');
+eq(global.equipItemFromInventory(bagBack.uid), true, 'F14 再穿上成功');
+var worn2 = global.currentEquipment.mainHand;
+eq(worn2.enhancementLevel, 5, 'F15 再穿上还是 +5（试-07 主诉：此前归 0）');
+eq(worn2.refineLevel, 2, 'F16 精炼原样');
+eq(worn2.enchantType, 'fire', 'F17 附魔原样');
+eq(worn2.durability, 88, 'F18 耐久原样');
+eq(worn2.armorDurability, 66, 'F19 甲耐久原样');
+eq(worn2.name, '试07·宝剑', 'F20 名字走模板（合并的是强化账不是身份账）');
+global.currentEquipment.mainHand = null;
+
 console.log('\n========== 第八十三波 · 装备典当实例账 ==========');
 console.log('通过：' + passed + '　失败：' + failed);
 process.exit(failed ? 1 : 0);

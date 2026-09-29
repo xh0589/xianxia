@@ -234,14 +234,41 @@
             }
         };
         // 6) 入 npcManager
+        // v25.1·试-04：addNPC 真身带 `instanceof NPC` 闸（npc-system.js NPCManager.addNPC）——
+        // 旧版拿纯对象字面量入册被无声拒收，「喜得贵子」公告后那孩子世界上根本不存在（幽灵子嗣）。
+        // 有真身构造器时按正确姿势 new global.NPC(...)（参照 js/sects/sect-internal.js registerSectNPCs），
+        // 灵根/变异灵根/性格/血脉等扩展字段挂到实例上；无 NPC 构造器的无头桩环境仍走纯对象。
+        var regNpc = newNpc;
+        try {
+            if (typeof global.NPC === 'function') {
+                regNpc = new global.NPC(newNpc.id, newNpc.name, {
+                    gender: newNpc.gender, age: newNpc.age, location: newNpc.location,
+                    occupation: newNpc.occupation, combat: newNpc.combat
+                });
+                regNpc.spiritualRoots = childRoots;
+                regNpc.mutatedRoots = childMut;
+                regNpc.personality16 = childP16;
+                regNpc.appearance = newNpc.appearance;
+                regNpc.personality = newNpc.personality;
+                regNpc.isPlayer = false;
+                regNpc.lineage = newNpc.lineage;
+                if (regNpc.relationship) regNpc.relationship.affection = 0;
+            }
+        } catch (eNpc) { regNpc = newNpc; }
+        var added = false;
         if (global.npcManager && typeof global.npcManager.addNPC === 'function') {
-            global.npcManager.addNPC(newNpc);
+            added = !!global.npcManager.addNPC(regNpc);   // v25.1·试-04：收返回值——拒收不再当入账
         } else if (global.npcManager && Array.isArray(global.npcManager.npcs)) {
-            global.npcManager.npcs.push(newNpc);
+            global.npcManager.npcs.push(regNpc); added = true;
         } else if (global.npcManager && typeof global.npcManager.getAllNPCs === 'function') {
             // 兜底：mock 环境，注入到 getAllNPCs 返回数组
             if (!global.npcManager._injectList) global.npcManager._injectList = [];
-            global.npcManager._injectList.push(newNpc);
+            global.npcManager._injectList.push(regNpc); added = true;
+        }
+        if (!added) {
+            // 入册失败即中止——不再往下写族谱/索引造出一个世界上不存在的幽灵
+            if (global.showMessage) global.showMessage('人物名册未就绪，这孩子没能入册——改日再试。', 'warning');
+            return null;
         }
 
         // 7) 双方 lineage.children
@@ -258,7 +285,7 @@
             try { global.EventBus.emit('npc:lineage:childBorn', { fatherId: fatherId, motherId: motherId, childId: newNpc.id, childName: name, day: getCurrentDay() }); } catch (e) {}
         }
         if (global.showMessage) global.showMessage('🎉 ' + (father.name || fatherId) + ' 与 ' + (mother.name || motherId) + ' 喜得 ' + name, 'success');
-        return newNpc;
+        return regNpc;   // v25.1·试-04：返回真正入了名册的那个对象（真身 NPC 实例或桩环境纯对象）
     }
 
     /**

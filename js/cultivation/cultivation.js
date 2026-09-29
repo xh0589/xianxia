@@ -139,42 +139,46 @@ function addProficiencyExp(skillId, expAmount) {
     } catch (e) {}
     const info = getProficiencyInfo(skillId);
     info.exp += expAmount;
-    
+
     // 检查是否可以升级
-    checkProficiencyUpgrade(skillId);
-    
+    // v25.1·试-13：把升级结果真正返回出去——旧版返回 info，cultivateSkill 读 result.upgraded
+    // 恒 undefined，「功法升级」提示是死枝。全仓只有 cultivateSkill 消费返回值，改型安全。
+    const upResult = checkProficiencyUpgrade(skillId);
+
     saveProficiencyData();
-    return info;
+    return upResult;
 }
 
 // ============ 检查功法升级 ============
 function checkProficiencyUpgrade(skillId) {
     const info = proficiencyData[skillId];
-    if (!info) return false;
-    
+    if (!info) return { upgraded: false };
+
     const currentLevel = PROFICIENCY_LEVELS[info.level];
     const nextLevel = PROFICIENCY_LEVELS[info.level + 1];
-    
+
     if (!nextLevel) {
-        return false; // 已达最高等级
+        // v25.1·试-13：满级也回对象不回裸 false——调用方统一读 .upgraded 不炸
+        return { upgraded: false, maxLevel: true }; // 已达最高等级
     }
-    
+
     // 计算升级所需经验
     const requiredExp = getNextLevelRequiredExp(info.level);
-    
+
     if (info.exp >= requiredExp) {
         // 自动升级
         info.exp -= requiredExp;
         info.level++;
-        
+
         return {
             upgraded: true,
             newLevel: info.level,
+            level: info.level,
             levelName: PROFICIENCY_LEVELS[info.level].name,
             multiplier: PROFICIENCY_LEVELS[info.level].multiplier
         };
     }
-    
+
     return { upgraded: false };
 }
 
@@ -183,7 +187,24 @@ function getNextLevelRequiredExp(currentLevel) {
     return Math.floor(100 * Math.pow(1.5, currentLevel));
 }
 
+// ============ v25.1·试-13：熟练度乘数消费口 ============
+// PROFICIENCY_LEVELS 的 multiplier 此前全仓只有修炼面板展示（×N）在读，没有任何数值管线消费——
+// 「练到返璞归真 ×5.0」是空头条。这里提供只读 helper，按当前熟练度等级返回乘数，供打坐真元产出接入。
+// 无功法 / 查不到 / 数据异常一律返回 1（不改变既有产出，只做加法接口，主控按需接线）。
+function getProficiencyEffectMultiplier(skillId) {
+    // 槽里可能是对象也可能是字符串 id（NEW-22 口径），双兼容取 id
+    var id = skillId ? (typeof skillId === 'object' ? (skillId.id || null) : skillId) : null;
+    if (!id) return 1;
+    var info = proficiencyData[id];
+    if (!info) return 1;
+    var lv = PROFICIENCY_LEVELS[info.level] || PROFICIENCY_LEVELS[0];
+    var m = lv && Number(lv.multiplier);
+    return (m && m > 0) ? m : 1;
+}
+
 // ============ 突破功法 ============
+// v25.1·试-13：手动突破路径已停用——熟练度改由 addProficiencyExp 内的 checkProficiencyUpgrade 攒满即自动升级，
+// info.exp 永达不到本级门槛，此函数的「经验不足」闸恒真、按钮已从面板撤下。保留函数体仅作向后兼容（不再挂 UI）。
 function breakthroughProficiency(skillId) {
     const info = getProficiencyInfo(skillId);
     const currentLevel = PROFICIENCY_LEVELS[info.level];
@@ -358,13 +379,21 @@ function cultivateSkill(skillId, amount = 10) {
         else if (_rk === 1 || _rk === 0) efficiency += 0.5; // 副掌门/掌门：宗门气运加身
         else if (_rk === 5) efficiency += 0.1;              // 外门
     }
+    // v25.1·试-13：「悟道：修炼速度+20%」接通真实消费——此前 insightEffects.SPECIAL.悟道 唯一读者是
+    // 永死的手动突破成功率加成，玩家抽到它从不生效。现按 effect.cultivation_speed 百分比加进修炼效率。
+    try {
+        var _wd = insights.find(function (i) { return i && i.type === 'SPECIAL' && i.name === '悟道' && i.effect && i.effect.cultivation_speed; });
+        if (_wd) efficiency += (Number(_wd.effect.cultivation_speed) || 0) / 100;
+    } catch (eWd) {}
     const exp = Math.floor(amount * efficiency);
     const result = addProficiencyExp(skillId, exp);
     if (Math.random() < 0.05) {
         window.insightPoints = (window.insightPoints || 0) + 1;
         alert('修炼有所感悟，获得1点领悟点数！');
     }
-    if (result.upgraded) alert(`功法升级！\n当前等级：${PROFICIENCY_LEVELS[result.level].name}\n效果加成：×${result.multiplier}`);
+    // v25.1·试-13：result 现为 checkProficiencyUpgrade 的真实返回（{upgraded,newLevel,levelName,multiplier}），
+    // 自动升级时这条提示不再是死枝。
+    if (result && result.upgraded) alert(`功法升级！\n当前等级：${result.levelName}\n效果加成：×${result.multiplier}`);
 
     if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') window.timeSystem.advanceTime(timeCost, '修炼功法');
     else if (typeof window.advanceTime === 'function') window.advanceTime(timeCost, '修炼功法');
@@ -414,13 +443,15 @@ function updateCultivationUI() {
                     </div>
                 </div>
                 
-                <div class="flex gap-2">
+                <div class="flex gap-2 items-center">
                     <button onclick="cultivateSkill('${skill.id}')" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded text-xs">修炼</button>
-                    ${nextLevel ? `<button onclick="breakthroughProficiency('${skill.id}')" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-3 py-1 rounded text-xs">突破</button>` : '<span class="text-xs text-yellow-400">已达最高等级</span>'}
+                    ${nextLevel ? '<span class="text-xs text-gray-400">熟练度随修炼自动精进</span>' : '<span class="text-xs text-yellow-400">已达最高等级</span>'}
                 </div>
             </div>
         `;
     });
+    // v25.1·试-13：手动「突破」按钮撤下——熟练度攒满即自动升级（checkProficiencyUpgrade），
+    // 旧按钮门槛 exp>=下级所需 在自动升级下永不满足，点了必弹「经验不足」，是个恒死的假承诺。
     
     if (html === '<div class="space-y-3">') {
         html += '<p class="text-gray-500 text-sm text-center">没有装备功法</p>';
@@ -1158,7 +1189,11 @@ function checkHeartDemonTrigger() {
     var killCount = charData._killCount || 0;
     var spiritStones = window.inventory ? window.inventory.currency.spiritStones : 0;
     var bonds = Object.keys(charData.bonds || {}).length;
-    var realmLevel = charData.realmLevel || 0;
+    // v24.7：charData.realmLevel 全仓零写方（角色账上只有 realm 字符串 + layer）——
+    // 「傲慢心魔」的触发条 realmLevel>=5 恒假，五种心魔里这一只从上线起没现身过。
+    // 改用全仓统一的境界刻度 window.realmIndex（global-utils.js:870，凡人0…化神5…渡劫9）。
+    var realmLevel = (typeof window.realmIndex === 'function' && charData.realm)
+        ? window.realmIndex(charData.realm) : (charData.realmLevel || 0);
     var failedBreakthroughs = charData._failedBreakthroughs || 0;
     
     // 按优先级检查
@@ -1585,6 +1620,7 @@ window.getProficiencyInfo = getProficiencyInfo;
 window.addProficiencyExp = addProficiencyExp;
 window.checkProficiencyUpgrade = checkProficiencyUpgrade;
 window.getNextLevelRequiredExp = getNextLevelRequiredExp;
+window.getProficiencyEffectMultiplier = getProficiencyEffectMultiplier; // v25.1·试-13：熟练度乘数消费口（供打坐真元产出接线）
 window.breakthroughProficiency = breakthroughProficiency;
 window.triggerBreakthroughEffect = triggerBreakthroughEffect;
 window.addInsight = addInsight;

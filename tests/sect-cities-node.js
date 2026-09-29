@@ -409,5 +409,31 @@ console.log('\n[G] 进城见闻');
     ok(env.logs.some(l => l.includes('龙幡') && l.includes('仙凡分治')), 'G5 长安是朝廷的');
 }
 
+// ---------- H · 分舵歇息回气（v25.1·P9：不再硬卡 100 上限、日志如实报数） ----------
+console.log('\n[H] 分舵歇息回气');
+{
+    const env = makeSandbox({});
+    const W = env.W;
+    // H1：筑基期 maxQi=500，从 80 回 30 → 110（旧码 Math.min(100,…) 会硬卡到 100）
+    W.currentCharData = { name: '李长风', realm: '筑基', qi: 80, maxQi: 500 };
+    env.logs.length = 0;
+    W.doBranchRest('洛水城');
+    eq(W.currentCharData.qi, 110, 'H1 回气读真实 maxQi，不被常量 100 硬卡');
+    ok(!env.stt.qi, 'H2 不再走全库无定义的 W.restoreQi 死入口');
+    ok(env.logs.some(l => l.includes('真气+30')), 'H3 日志如实报数（真气+30）');
+    // H4：优先吃 getEffectiveMax（功法上限通电），金丹期 maxQi 上千也回得上去
+    W.getEffectiveMax = function (kind) { return kind === 'maxQi' ? 1200 : null; };
+    W.currentCharData = { name: '李长风', realm: '金丹', qi: 900, maxQi: 100 };
+    env.logs.length = 0;
+    W.doBranchRest('洛水城');
+    eq(W.currentCharData.qi, 930, 'H4 getEffectiveMax 在场时以其为上限');
+    // H5：真气已满时不虚报
+    W.currentCharData = { name: '李长风', realm: '金丹', qi: 1200, maxQi: 1200 };
+    env.logs.length = 0;
+    W.doBranchRest('洛水城');
+    eq(W.currentCharData.qi, 1200, 'H5 已满不再溢回');
+    ok(env.logs.some(l => l.includes('真气已满')), 'H6 满了就如实说满，不谎报回了三十');
+}
+
 console.log('\n========== sect-cities+gala: ' + pass + ' 通过, ' + fail + ' 失败 ==========');
 process.exit(fail ? 1 : 0);

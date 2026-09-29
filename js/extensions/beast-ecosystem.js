@@ -54,7 +54,10 @@
         '玄龟': 'beast_xuangui', '雷兽': 'beast_thunderbeast', '仙鹤': 'beast_crane', '黑熊': 'beast_blackbear',
         '五色鹿': 'beast_fivecolordeer', '金乌': 'beast_goldencrow', '鲲鹏': 'beast_kunpeng',
         '云角鹿': 'beast_cloudhorndeer', '罡风鹤': 'beast_gangwindcrane', '血鬃魔犬': 'beast_bloodmarehound', '幽脉蟒': 'beast_netherveinserpent',
-        '火焰虎': 'beast_flametiger', '影豹': 'beast_shadowpanther'
+        '火焰虎': 'beast_flametiger', '影豹': 'beast_shadowpanther',
+        // v25.1·试-22：进化形也要认得——风狼王/炎虎王/成年火凤（beast-taming 进化表全量三只目标）此前查无此名，
+        //   normalizeBeastId 原样吐回，BEAST_BUFFS 查空：兽越进化增益越蒸发（风狼王丢「陆路旅行-20%」、成年火凤丢「火候+10%」）
+        '风狼王': 'beast_windwolf', '炎虎王': 'beast_flametiger', '成年火凤': 'beast_firephoenix'
     };
     // v20.0：模板名 → 生态 id 双映射（tamedBeasts 用模板名，生态用 beast_ 前缀）
     var TEMPLATE_TO_ECO = {
@@ -65,6 +68,9 @@
         cloud_horn_deer: 'beast_cloudhorndeer', gangwind_crane: 'beast_gangwindcrane',
         bloodmare_hound: 'beast_bloodmarehound', nethervein_serpent: 'beast_netherveinserpent',
         flame_tiger: 'beast_flametiger', shadow_panther: 'beast_shadowpanther',
+        // v25.1·试-22：进化目标 id（beast-taming.js evolve.to 全量：wind_wolf_king/flame_tiger_king/fire_phoenix_adult，
+        //   逐一核对无遗漏）映射回本系生态 id——进化后 templateId 换成进化形，生态增益照旧跟走
+        wind_wolf_king: 'beast_windwolf', flame_tiger_king: 'beast_flametiger', fire_phoenix_adult: 'beast_firephoenix',
         beast_lingfox: 'beast_lingfox', beast_windwolf: 'beast_windwolf', beast_icesnake: 'beast_icesnake',
         beast_thundereagle: 'beast_thundereagle', beast_dragonturtle: 'beast_dragonturtle', beast_firephoenix: 'beast_firephoenix'
     };

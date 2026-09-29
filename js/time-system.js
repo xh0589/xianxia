@@ -319,12 +319,23 @@ function onNewDay(oldDay, newDay) {
     
     if (window.npcManager) {
         var npcs = window.npcManager.getAllNPCs();
+        // v25.1·试-23：道侣情绪账只落道侣头上——旧写法对全体 NPC 日调用 updateDaoCompanionMood，
+        //   而该函数（sects-system）内部不查 bond：只聊过一句的铁匠、乃至仇人，一周不见也 -5/-10/-20 每日叠加、
+        //   10%/日/人弹「💔 孤单」，人脉面板集体跌谷。正规读法与全仓一致（dao-bridge/sect-kin/festival-bridge 同款）：
+        //   currentCharData.bonds[npcId].type === 'dao_companion'；另认 NPC 身上的 dao_companion 旗（事件线 setFlag 落的）。
+        var _daoBonds = (window.currentCharData && window.currentCharData.bonds) || null;
         for (var i = 0; i < npcs.length; i++) {
             if (typeof npcs[i].dailyStressRecovery === 'function') {
                 npcs[i].dailyStressRecovery();
             }
             if (typeof window.updateDaoCompanionMood === 'function') {
-                window.updateDaoCompanionMood(npcs[i].id);
+                var _bond = _daoBonds ? _daoBonds[npcs[i].id] : null;
+                var _isDao = !!(_bond && _bond.type === 'dao_companion');
+                if (!_isDao) {
+                    var _rel = npcs[i].relationship;
+                    _isDao = !!(_rel && _rel.flags && typeof _rel.flags.has === 'function' && _rel.flags.has('dao_companion'));
+                }
+                if (_isDao) window.updateDaoCompanionMood(npcs[i].id);   // 非道侣不进这条衰减
             }
         }
     }

@@ -87,7 +87,8 @@ function _advance(mins, label) {
 function calmByMeditation() {
     if (getQD() <= 0) { if (window.showMessage) window.showMessage('气机平顺，无乱可化。', 'info'); return false; }
     var got = calmQiDeviation(20);
-    _advance(30, '静坐化解紊乱');
+    // v25.1·试-29：文案「耗时半日」= 720 分钟——旧账只收 30 分钟，与「化解皆占时辰」的自我宣称差 24 倍
+    _advance(720, '静坐化解紊乱');
     if (window.showMessage) window.showMessage('🧘 你盘膝静坐，意守丹田，一缕一缕理顺逆行的真气。（紊乱-' + Math.round(got) + '，耗时半日）', 'success');
     return true;
 }
@@ -95,7 +96,8 @@ function calmByMeditation() {
 function calmByYield() {
     if (getQD() <= 0) { if (window.showMessage) window.showMessage('气机平顺，无乱可化。', 'info'); return false; }
     var got = calmQiDeviation(40);
-    _advance(60, '顺势化解紊乱');
+    // v25.1·试-29：文案「耗时一整日」= 1440 分钟——旧账只收 60 分钟，差 24 倍
+    _advance(1440, '顺势化解紊乱');
     if (window.showMessage) window.showMessage('🌊 你不与逆气相抗，引它顺着经脉归入气海——如导洪流入渠。（紊乱-' + Math.round(got) + '，耗时一整日）', 'success');
     return true;
 }
@@ -115,7 +117,8 @@ function calmByGuard() {
     if (!best) { if (window.showMessage) window.showMessage('你尚无道侣——这一途，走不得。', 'warning'); return false; }
     var got = calmQiDeviation(30);
     if (typeof best.npc.changeAffection === 'function') best.npc.changeAffection(2);
-    _advance(30, '道侣护法化解紊乱');
+    // v25.1·试-29：文案「耗时半日」= 720 分钟——旧账只收 30 分钟，与静坐压制同款穿帮
+    _advance(720, '道侣护法化解紊乱');
     if (window.showMessage) window.showMessage('💞 ' + best.npc.name + '坐在你身后，掌心贴着你大椎，真气缓缓渡入——逆气一寸一寸顺了回去。（紊乱-' + Math.round(got) + '，' + best.npc.name + '情分+2，耗时半日）', 'success');
     return true;
 }

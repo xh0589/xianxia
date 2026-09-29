@@ -327,7 +327,9 @@
         var template = window.itemById && window.itemById[templateId];
         var oldQ = (template && template._forgeQuality != null) ? qualityIndex(template._forgeQuality) : -1;
         if (window.itemById && (!template || qualityIndex(quality.id) >= oldQ)) {
-            window.itemById[templateId] = {
+            // v25.1·试-08：模子同时记进 _moduleState.compoundTemplates——它随 StateRegistry('forgingConfig')
+            // 落档，读档时回填 window.itemById；此前只写内存，重载后背包里的名炉兵器全变「来历不明的一格」
+            var _compoundTpl = {
                 id: templateId,
                 name: finalName,
                 type: 'equipment',
@@ -344,6 +346,9 @@
                 _forgeQuality: quality.id,
                 desc: '由' + slotPick.main.concat(slotPick.assist).join('/') + '炼成的' + finalName + '（' + quality.name + '·工评' + qr.score + '）'
             };
+            window.itemById[templateId] = _compoundTpl;
+            _moduleState.compoundTemplates[templateId] = JSON.parse(JSON.stringify(_compoundTpl));
+            _compoundLoadedIds[templateId] = 1;
         }
         // 极品出炉成双：同款多一件（可赠可卖）
         var outCount = Math.max(1, recipe.result.count || 1) + (quality.id === 'imperial' ? 1 : 0);
@@ -393,10 +398,13 @@
     }
 
     // ============== 7. 模块级状态（StateRegistry 兼容） ==============
+    // v25.1·试-08：本页面会话里注册进 window.itemById 的模子 id 账（读档/reset 时对账摘幽灵用）
+    var _compoundLoadedIds = {};
     var _moduleState = {
         lastWeapons: [],
         imprintCount: 0,
-        preferTags: {} // tag -> count
+        preferTags: {}, // tag -> count
+        compoundTemplates: {} // v25.1·试-08：templateId -> 动态注册的名炉兵器模子（纯数据，随档往返）
     };
 
     function _exportState() { return JSON.parse(JSON.stringify(_moduleState)); }
@@ -405,11 +413,34 @@
         if (Array.isArray(s.lastWeapons)) _moduleState.lastWeapons = s.lastWeapons.slice(0, 20);
         _moduleState.imprintCount = s.imprintCount || 0;
         _moduleState.preferTags = s.preferTags || {};
+        // v25.1·试-08：读档回填动态模子——背包格只存 templateId，itemById 查无模子即成「来历不明的一格」。
+        // 模子内容全是数据字段（attrs/combatBonus 为普通对象），JSON 往返无损，无需补函数引用。
+        _moduleState.compoundTemplates = (s.compoundTemplates && typeof s.compoundTemplates === 'object') ? s.compoundTemplates : {};
+        if (window.itemById) {
+            // 先摘掉本局已注册、但这份档里没有的旧模子（读旧档不夹带上一局的幽灵货）
+            Object.keys(_compoundLoadedIds).forEach(function (tid) {
+                if (!_moduleState.compoundTemplates[tid] && window.itemById[tid] && window.itemById[tid]._forgeQuality) {
+                    delete window.itemById[tid];
+                }
+            });
+            Object.keys(_moduleState.compoundTemplates).forEach(function (tid) {
+                var t = _moduleState.compoundTemplates[tid];
+                if (t && t.id) { window.itemById[tid] = JSON.parse(JSON.stringify(t)); _compoundLoadedIds[tid] = 1; }
+            });
+        }
     }
     function _resetState() {
+        // v25.1·试-08：新开局把上一世动态注册的模子从物品表摘干净，不留幽灵货
+        if (window.itemById) {
+            Object.keys(_compoundLoadedIds).forEach(function (tid) {
+                if (window.itemById[tid] && window.itemById[tid]._forgeQuality) delete window.itemById[tid];
+            });
+        }
+        _compoundLoadedIds = {};
         _moduleState.lastWeapons = [];
         _moduleState.imprintCount = 0;
         _moduleState.preferTags = {};
+        _moduleState.compoundTemplates = {};
     }
 
     if (window.StateRegistry && typeof window.StateRegistry.register === 'function') {

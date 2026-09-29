@@ -72,7 +72,10 @@
                 if (_moodMulR !== 1) bonus *= _moodMulR;
             }
         } catch (eMoodR) {}
-        var mainSkillId = global.currentSkills && global.currentSkills.skill_main;
+        // v25.1·试-06：槽里放的是功法对象（equipSkill 直接存 def，NEW-22 同款病）——
+        // 旧写法拿对象当熟练度键，48 点/日全记到 '[object Object]' 垃圾键上。对象/字符串双兼容取 .id。
+        var _mainSlot = global.currentSkills && global.currentSkills.skill_main;
+        var mainSkillId = _mainSlot ? (typeof _mainSlot === 'object' ? (_mainSlot.id || null) : _mainSlot) : null;
         if (mainSkillId) bonus *= 1.10;
 
         return { essence: Math.max(1, Math.floor(base * mul * bonus)), mainSkillId: mainSkillId || null };
@@ -207,6 +210,9 @@
         if (!spendSpiritStones(cost)) return null;
 
         var startDay = global.timeSystem.gameTime ? global.timeSystem.gameTime.currentDay : 1;
+        // v25.1·试-28：固定档闭关也要逐日比对寿元账——此前只有「闭关至事件」一家消费 getPlayerDeathDay，
+        // 快死的人预付整档灵石进关，"死"在关中而闭关照跑满、死亡结算和出关结算叠在同一屏。
+        var deathDay = getPlayerDeathDay();
         var totalEssence = 0;
         var mainSkillId = null;
         var actualDays = 0;
@@ -246,11 +252,30 @@
                     var flag2 = opts.getDueFlag() || {};
                     if (flag2.stop) { stoppedReason = flag2.reason || 'due'; break; }
                 }
+                // v25.1·试-28：固定档闭关逐日比对寿元账——到「闭关至事件」同一道界限（deathDay-1）就提前出关，
+                // 不再让快死的人预付整档灵石却"死"在关中、闭关照跑满。
+                if (Number.isFinite(deathDay)) {
+                    var _curDayL = global.timeSystem.gameTime ? global.timeSystem.gameTime.currentDay : (startDay + actualDays);
+                    if (_curDayL >= deathDay - 1) { stoppedReason = '寿元将尽'; break; }
+                }
             }
         } finally {
             global._isInLongRetreat = oldRetreat;
             global._suppressTimeFlowMessages = oldSuppress;
         }
+
+        // v25.1·试-28：提前出关按实际天数结算灵石——进关时全额预付了 plannedDays 天，
+        // 多扣的退回（与 spendSpiritStones 同一本账：写 currency、同步 charData、刷货币 UI）。
+        var refunded = 0;
+        if (actualDays < plannedDays) {
+            refunded = (plannedDays - actualDays) * costPerDay;
+            if (refunded > 0 && global.inventory && global.inventory.currency) {
+                global.inventory.currency.spiritStones = (Number(global.inventory.currency.spiritStones) || 0) + refunded;
+                if (global.currentCharData) global.currentCharData.spiritStones = global.inventory.currency.spiritStones;
+                if (typeof global.updateCurrencyUI === 'function') global.updateCurrencyUI();
+            }
+        }
+        var netCost = Math.max(0, cost - refunded);
 
         player.essence = (Number(player.essence) || 0) + totalEssence;
         player.qi = Number(player.maxQi) || player.qi || 0;
@@ -267,16 +292,18 @@
             var endDay = global.timeSystem.gameTime ? global.timeSystem.gameTime.currentDay : startDay + actualDays;
             var extra = insightGain > 0 ? '，领悟点+' + insightGain : '';
             var stopNote = stoppedReason ? '（提前出关：' + stoppedReason + '）' : '';
+            // v25.1·试-28：提前出关退回多预付的灵石——回执如实报退款
+            var refundNote = refunded > 0 ? '，阵法未跑满退回灵石' + refunded : '';
             var _rtNote = (_rtNotes.enlighten ? '，途中灵光顿悟×' + _rtNotes.enlighten : '') +
                 (_rtNotes.deviation ? '，心魔滋扰×' + _rtNotes.deviation + '（气机微乱，静养可复）' : '');
             // 第七十三波：出关回执报心境折头（平平常常不开口——与打坐结算单同一张嘴）
             var _moodNoteR = '';
             try { if (global.MoodSystem && typeof global.MoodSystem.cultivationNote === 'function') _moodNoteR = global.MoodSystem.cultivationNote(); } catch (eMn) {}
-            global.showMessage('🔒 闭关结束：第' + startDay + '天 → 第' + endDay + '天，' + actualDays + '日' + stopNote + '，真元+' + totalEssence + extra + _rtNote + (_moodNoteR ? '。' + _moodNoteR : ''), 'success');
+            global.showMessage('🔒 闭关结束：第' + startDay + '天 → 第' + endDay + '天，' + actualDays + '日' + stopNote + refundNote + '，真元+' + totalEssence + extra + _rtNote + (_moodNoteR ? '。' + _moodNoteR : ''), 'success');
             var summary = buildRetreatSummary(startDay, endDay);
             if (summary) global.showMessage(summary, 'info');
         }
-        return { days: actualDays, plannedDays: plannedDays, essence: totalEssence, insight: insightGain, mainSkillId: mainSkillId, cost: cost, stoppedReason: stoppedReason, startDay: startDay, endDay: (global.timeSystem && global.timeSystem.gameTime) ? global.timeSystem.gameTime.currentDay : startDay + actualDays };
+        return { days: actualDays, plannedDays: plannedDays, essence: totalEssence, insight: insightGain, mainSkillId: mainSkillId, cost: netCost, refunded: refunded, stoppedReason: stoppedReason, startDay: startDay, endDay: (global.timeSystem && global.timeSystem.gameTime) ? global.timeSystem.gameTime.currentDay : startDay + actualDays };
     }
 
     function startLongRetreat(days) {

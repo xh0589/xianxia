@@ -233,7 +233,8 @@ global.FESTIVAL_DEFS = defsBackup;
 
 // ==================== F · 双钱包 ====================
 console.log('\n[F] 双钱包（一处扣款、两处同账）');
-assert(appSrc.indexOf('day: 1, spiritStones: 10, copper: 100,') >= 0, 'F1 创角镜像初值与背包真账一致（10灵石/100铜钱，不再开局即分叉）');
+// v25.1·试-30：day 死字段已从创角模板删除（恒 1、全仓零读方），镜像初值断言随之去掉 day 前缀——10灵石/100铜钱口径未动
+assert(appSrc.indexOf('spiritStones: 10, copper: 100,') >= 0, 'F1 创角镜像初值与背包真账一致（10灵石/100铜钱，不再开局即分叉）');
 assert(gsSrc.indexOf("global.inventory.currency = { copper: 100, spiritStones: 10 };") >= 0, 'F2 背包真账初值原样（权威余额没动）');
 var esSrc = src('js/enhanced-shop.js');
 var buySeg = esSrc.slice(esSrc.indexOf('window.inventory.currency.spiritStones = stones - total;'), esSrc.indexOf('if (item.stock != null)'));

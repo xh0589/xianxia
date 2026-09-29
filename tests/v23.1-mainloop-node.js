@@ -23,7 +23,7 @@ function read(rel) { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); }
     ok(/advanceTime\(_brewMin, template\.subtype === 'food' \? '用饭' : '炼化药力'\)/.test(inv), 'A4 服用入口有耗时（丹15分/草药5分/饭10分）');
     ok(/_potency = 0\.85 \+ Math\.random\(\) \* 0\.3/.test(inv) && inv.indexOf('_useTemplate') >= 0, 'A5 药力吸收波动85%~115%（不再恒定直加）');
     ok(/function learnSecretArt[\s\S]{0,3000}_manualProgress/.test(inv), 'A6 秘籍渐进研读（进度随角色存档）');
-    ok(/function learnSecretArt[\s\S]{0,3000}prog >= 100[\s\S]{0,3500}consumed: true/.test(inv), 'A7 读满一百才入门、入门才耗书');
+    ok(/function learnSecretArt[\s\S]{0,3000}prog >= 100[\s\S]{0,3800}consumed: true/.test(inv), 'A7 读满一百才入门、入门才耗书'); // v25.0：接线注释把距离顶长，窗口 3500→3800，判据未松
     const learnFn = inv.slice(inv.indexOf('function learnSecretArt'), inv.indexOf('// ============ 获取背包物品数量'));
     ok(learnFn.indexOf('alert(') < 0, 'A8 研读全程无原生 alert（系统腔清除）');
     ok(learnFn.indexOf('_studyMin = 120') >= 0 && learnFn.indexOf('advanceTime(_studyMin') >= 0 && learnFn.indexOf('energy') >= 0, 'A9 每次研读耗时两个时辰+精力（第二十四波：藏书阁可省时，底价仍是两个时辰）');
@@ -48,7 +48,8 @@ function read(rel) { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); }
     // （_咬钩/_入桶/鱼账/_跑了/_收杆，709 字），把奇遇钩从 1818 推到 2518 字符处（实测）。
     // 旧值 2500 在本批之后已够不到钩子；新值 2527 仍留 9 字符余量，且不放宽任何语义——
     // 「逐字匹配 goFishing…maybeTrigger('wild')」这一句本身一字未松，只是窗口够得着它了。
-    ok(/goFishing[\s\S]{0,2527}QiyuEncounters\.maybeTrigger\('wild'\)/.test(app), 'A25 钓鱼补挂奇遇钩（旧版全域唯独它没有）');
+    // 窗口 2527→3400：v25.1·试-25 在 goFishing 头上加了海域位置门（约 530 字符），钩子实测推到 3057 字符处
+    ok(/goFishing[\s\S]{0,3400}QiyuEncounters\.maybeTrigger\('wild'\)/.test(app), 'A25 钓鱼补挂奇遇钩（旧版全域唯独它没有）');
 
     const rm = read('js/map/randomMap.js');
     ok(/_gRisk < 0\.10[\s\S]{0,400}openBattleWithEntity/.test(rm), 'A26 野外节点采集：惊动守食野兽');

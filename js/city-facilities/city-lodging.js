@@ -69,9 +69,9 @@
         return { ok: false, note: '' };
     }
     function spendTime(min, why) {
-        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(min, why); else if (window.advanceTime) window.advanceTime(min, why); } catch (e) {}
+        try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(min, why); else if (window.advanceTime) window.advanceTime(min, why); } catch (e) { console.warn('[静默失败] js/city-facilities/city-lodging.js:72 · spendTime：住店的时辰没扣——店钱付了、夜却没过去', e && e && e.message); }
     }
-    function refresh() { try { if (window.updateCharacterStatus) window.updateCharacterStatus(); } catch (e) {} }
+    function refresh() { try { if (window.updateCharacterStatus) window.updateCharacterStatus(); } catch (e) { console.warn('[静默失败] js/city-facilities/city-lodging.js:74 · refresh：住店后面板没刷新——HUD 上的精力还是旧数', e && e && e.message); } }
 
     // ============ 赁约（cd._lodging 单字段，归一化只认不补写） ============
     function ledger() {

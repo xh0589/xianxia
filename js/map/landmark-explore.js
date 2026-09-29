@@ -260,21 +260,24 @@ function _resolveLandmark(key) {
     } catch (e) {}
     return null;
 }
+// v25.1·试-19：本函数现在报账——成行返回 true，被三道闸（未知地标/已探满/精力不济）拦下返回 false。
+//   调用侧（野外图 exploreWildRuin）凭返回值决定那笔 90 分钟的路费收不收：旧写法先扣 90 再进闸，
+//   「已完全探索」再点一次也白烧一个半时辰。
 function exploreLandmark(landmarkName) {
     var resolved = _resolveLandmark(landmarkName);
-    if (!resolved) { showMessage('未知的地标', 'warning'); return; }
+    if (!resolved) { showMessage('未知的地标', 'warning'); return false; }   // v25.1·试-19
     var landmark = resolved.lm;
     landmarkName = resolved.name;
 
     if (landmark.exploreProgress >= landmark.maxProgress) {
         showMessage('这个地标已经被你完全探索了。', 'info');
-        return;
+        return false;   // v25.1·试-19：探满了就是没成行，调用侧不许收时辰
     }
     // v23.0 探索是力气活：精力不足寸步难行（旧版零成本连点刷进度）
     var cdE = window.currentCharData;
     if (cdE && (cdE.energy || 0) < 15) {
         showMessage('你已精疲力竭，攀岩涉水皆要力气——先歇息或服些丹药再来。', 'warning');
-        return;
+        return false;   // v25.1·试-19
     }
     if (cdE) {
         cdE.energy = Math.max(0, (cdE.energy || 0) - 15);
@@ -320,6 +323,7 @@ function exploreLandmark(landmarkName) {
 
     // 显示探索结果
     showLandmarkProgressUI(landmark);
+    return true;   // v25.1·试-19：真探索了一趟（30 分钟已在 :285 扣过），调用侧据此再收 90 分钟脚程
 }
 
 // ============ v23.0 岩中古剑：死文本兑现成真交互 ============

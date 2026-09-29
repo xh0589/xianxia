@@ -480,7 +480,8 @@ function showSectDeepTasks(sectName) {
     var tasks = window.COMMON_TASKS;
     if (!tasks) return;
     var ds = window.discipleState || {};
-    var rank = ds.rank || 7;
+    // v25.1·P9 试-16：`ds.rank || 7` 把掌门 rank 0（falsy）折成 7 最低档——改空值判断
+    var rank = (ds.rank == null || isNaN(Number(ds.rank))) ? 7 : Number(ds.rank);
     var day = (typeof window.getAbsoluteDay === 'function') ? window.getAbsoluteDay() : 1;
     if (ds._sectTaskDay !== day) {
         ds._sectTaskDay = day;
@@ -501,7 +502,10 @@ function showSectDeepTasks(sectName) {
     
     var shown = 0;
     tasks.forEach(function(task) {
-        if (task.minRank > rank) return;
+        // v25.1·P9 试-16：账本语义「rank 数值越小职位越高」（7=杂役…0=掌门，见本文件 :378 与 sects-system.js acceptTask :432 注释），
+        // minRank 是职位门槛：rank ≤ minRank 才够格。旧式 `task.minRank > rank → return` 方向与结算闸（:548 curRank > minRank 拒绝）相反，
+        // 造成「能看的做不了、能做的不显示」，同参弟子(rank=-2)更是被 minRank > -2 恒真过滤光。现与 :548 及 SECT_EVENTS 池(:301)同向。
+        if (task.minRank != null && rank > task.minRank) return;
         if (ds._sectTaskDone && ds._sectTaskDone.indexOf(task.id) >= 0) return;
         if (shown >= remaining) return;
         shown++;
@@ -544,7 +548,7 @@ function sectCompleteTask(sectName, taskId) {
     if (!task) return false;
     // v20.53 复核：不在宗门、或职级不够格接的差事，按钮点了也不作数
     if (!ds.isInSect) { if (window.showMessage) window.showMessage('你并未在此门中，做不得门派差事。', 'warning'); return false; }
-    var curRank = Number(ds.rank) || 7;
+    var curRank = (ds.rank == null || isNaN(Number(ds.rank))) ? 7 : Number(ds.rank); // v25.1·P9 试-16：掌门 rank=0 不再被 `|| 7` 折成最低档
     if (task.minRank && curRank > task.minRank) {
         if (window.showMessage) window.showMessage('此差事需 ' + (task.minRank) + ' 级以上职位方可承接。', 'warning');
         return false;
@@ -880,7 +884,7 @@ function showSectDeepOverview(sectName) {
     }
     
     var ds = window.discipleState || {};
-    var rank = ds.rank || 7;
+    var rank = (ds.rank == null || isNaN(Number(ds.rank))) ? 7 : Number(ds.rank); // v25.1·P9 试-16：同型病——掌门 rank=0 别再被折成杂役展示
     var ranks = window.COMMON_RANKS;
     var rankName = ranks ? (ranks.find(function(r) { return r.id === rank; })?.name || '杂役弟子') : '杂役弟子';
     

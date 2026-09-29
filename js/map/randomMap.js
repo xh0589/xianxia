@@ -3521,8 +3521,11 @@ function 退还RuinDug(poi) {
 function exploreWildRuin(poi) {
     // 有名有姓的地标走探索系统；无名遗迹按它的来历结账
     if (poi.type === 'landmark' && typeof window.exploreLandmark === 'function') {
-        advanceWildTime(90, '探索地标');
-        window.exploreLandmark(poi.name || poi.refId);   // 第三十四波：传中文名对得上探索名录（旧账传英文键，永远「未知的地标」还白扣一个半时辰）
+        // v25.1·试-19：exploreLandmark 现返回「是否成行」——未知地标/已探满/精力不济被闸住时返回 false，
+        //   此时那笔 90 分钟脚程一分不收（旧写法先扣 90 再进闸，探满了再点也白烧一个半时辰）。
+        //   成行则：90（野外脚程，本行）＋30（探索本身，landmark-explore :285 已扣）＝设计总账 120 分钟。
+        const went = window.exploreLandmark(poi.name || poi.refId);   // 第三十四波：传中文名对得上探索名录（旧账传英文键，永远「未知的地标」还白扣一个半时辰）
+        if (went) advanceWildTime(90, '探索地标');   // v25.1·试-19：只在真成行时收脚程
         renderWildSidebar();
         return;
     }
@@ -4594,7 +4597,9 @@ function openWildernessMap(regionName) {
     const titleEl = document.getElementById('random-map-title');
     if (titleEl) titleEl.textContent = '📍 ' + regionName + ' · 野外';
 
-    const leftSidebar = document.querySelector('.lg\\:w-64');
+    // v25.1·试-21：旧选择器 '.lg\:w-64' 是死的——第九十六波 UI-09 把左栏改成了 lg:w-[19rem]（仙侠.html 有改动注释在案），
+    //   querySelector 永远 null，左栏从没被收起过。换成真在的选择器（scoped 到 #panel-map，全页仅此一处）。
+    const leftSidebar = document.querySelector('#panel-map .lg\\:w-\\[19rem\\]');
     if (leftSidebar) { leftSidebar._savedDisplay = leftSidebar.style.display; leftSidebar.style.display = 'none'; }
     const md = document.getElementById('map-detail');
     if (md) md.classList.add('hidden');
@@ -4614,7 +4619,8 @@ function openWildernessMap(regionName) {
 function closeRandomMap() {
     const section = document.getElementById('random-map-section');
     if (section) section.classList.add('hidden');
-    const leftSidebar = document.querySelector('.lg\\:w-64');
+    // v25.1·试-21：与 openWildernessMap 同一支真选择器（旧 '.lg\:w-64' 死账，左栏永远收不起也放不开）
+    const leftSidebar = document.querySelector('#panel-map .lg\\:w-\\[19rem\\]');
     if (leftSidebar) leftSidebar.style.display = leftSidebar._savedDisplay || '';
     saveWildState();
 }

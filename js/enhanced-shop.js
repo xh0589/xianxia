@@ -64,7 +64,9 @@ class Shop {
         if (!this.unlockCondition) return true;
         
         for (const [key, requiredValue] of Object.entries(this.unlockCondition)) {
-            const playerValue = this.getNestedValue(window.gameState || {}, key);
+            // v24.5 死读修复：window.gameState 零挂载——玩家状态真身是 currentCharData。
+            // 现行货架无人配 unlockCondition（配置用量 0），此修不改变今日行为，只为将来条件货架不踩空。
+            const playerValue = this.getNestedValue(window.currentCharData || window.gameState || {}, key);
             if (typeof requiredValue === 'object' && requiredValue.operator) {
                 switch (requiredValue.operator) {
                     case 'gt': if (!(playerValue > requiredValue.value)) return false; break;
@@ -128,11 +130,9 @@ class Shop {
         // 商人折扣
         price = Math.round(price * (1 - this.merchant.discount));
 
-        // 玩家声望影响
-        if (window.playerReputation) {
-            const reputationDiscount = Math.min(0.2, window.playerReputation * 0.001);
-            price = Math.round(price * (1 - reputationDiscount));
-        }
+        // v24.5 死块拆除：window.playerReputation 全仓零写方（wave113 已立案「按不存在计」）——
+        // 这块「玩家声望影响」从未生效过；真声望折扣是上面 :120 的 getReputationDiscount(city)（城市声望六档）。
+        // 留着它，将来谁真写了 window.playerReputation 就会双重折扣——拆。
 
         // F3: 口才影响商店价格（口才100→20%折扣）
         if (typeof window.getPlayerSpeechDiscount === 'function') {
@@ -208,33 +208,14 @@ class Shop {
         }
 
         // 先尝试入包，失败则不扣费
+        // v24.2 裸格子除根：旧兜底手写「有名字没模板方法」的 plain object 格子（DES-63 死格子同族、
+        // FIX-01 定案点名的根病）——inventory.js 必导出 addItem，兜底在真实游戏里是死路，整段撤掉；
+        // 收不下如实报失败、分文不扣（扣款在这段之后）。
         let added = false;
         if (typeof window.addItem === 'function') {
             added = !!window.addItem(realId, quantity);
-        }
-        if (!added && window.inventory.slots) {
-            for (let i = 0; i < window.inventory.slots.length; i++) {
-                const s = window.inventory.slots[i];
-                if (s && s.templateId === realId) {
-                    s.count += quantity;
-                    added = true;
-                    break;
-                }
-            }
-            if (!added) {
-                for (let i = 0; i < window.inventory.slots.length; i++) {
-                    if (!window.inventory.slots[i]) {
-                        window.inventory.slots[i] = {
-                            templateId: realId,
-                            name: item.name,
-                            count: quantity,
-                            icon: item.icon || '📦'
-                        };
-                        added = true;
-                        break;
-                    }
-                }
-            }
+        } else if (window.inventory && typeof window.inventory.addItem === 'function') {
+            added = !!window.inventory.addItem(realId, quantity);
         }
         if (!added) {
             showMessage('背包已满，无法购买', 'error');
@@ -255,6 +236,9 @@ class Shop {
 
         if (window.gameLog?.add) window.gameLog.add(`从${this.name}购买了 ${quantity}x ${item.name}，花费 ${total} 灵石`, 'info');
         showMessage(`购买成功：${item.name} ×${quantity}（-${total}灵石）`, 'success');
+        // v25.1·试-18：「第一次买卖」引导原来只挂在 app.js buyFromCityShop（死函数，零调用方）——
+        // 真实购买链在这里，成交当场补触点（防御式，姿势照抄 sects-system.js:211）
+        if (typeof window.codexHint === 'function') { try { window.codexHint('tut_first_trade'); } catch (e) {} }
         // v20.94 熟能生巧：成交价被口才折着，讨价还价偶尔长嘴皮子（四分之一机会，防站着刷技能）
         if (typeof window.growLifeSkill === 'function' && Math.random() < 0.25) window.growLifeSkill('口才', 1, { reason: '买卖讲价' });
         if (window.updateInventoryUI) window.updateInventoryUI();
@@ -903,7 +887,9 @@ const TradeService = {
             // v20.94 熟能生巧：售价被口才抬着，成交偶尔长嘴皮子
             if (typeof window.growLifeSkill === 'function' && Math.random() < 0.25) window.growLifeSkill('口才', 1, { reason: '货卖出去了' });
         }
-        
+        // v25.1·试-18：出售链同样补「第一次买卖」引导触点（买入/出售任一成交都算经历过买卖）
+        if (typeof window.codexHint === 'function') { try { window.codexHint('tut_first_trade'); } catch (e) {} }
+
         return true;
     },
     

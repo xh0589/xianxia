@@ -232,11 +232,33 @@ function sendChildToSect(idx) {
         lineage: { parents: c.parentNpcId ? ['player', c.parentNpcId] : ['player'], children: [], master: null, inheritor: null, daoCompanion: null, birthDay: c.bornDay || 0, isFounder: false }
     };
     var added = false;
+    // v25.1·试-04：addNPC 真身带 `instanceof NPC` 闸（npc-system.js NPCManager.addNPC）——
+    // 纯对象字面量被无声拒收，「血脉归山门」的成功回执造出的是名册查无此人的幽灵。
+    // 有真身构造器时按正确姿势 new window.NPC(...) 入册（参照 js/sects/sect-internal.js registerSectNPCs），
+    // 灵根/血脉/荷包等扩展字段挂到实例上；无 NPC 构造器的无头桩环境仍走纯对象（其 addNPC 无闸）。
+    var regNpc = newNpc;
     try {
-        if (window.npcManager && typeof window.npcManager.addNPC === 'function') { window.npcManager.addNPC(newNpc); added = true; }
-        else if (window.npcManager && Array.isArray(window.npcManager.npcs)) { window.npcManager.npcs.push(newNpc); added = true; }
+        if (typeof window.NPC === 'function') {
+            regNpc = new window.NPC(npcId, newNpc.name, {
+                gender: gender, age: 18, location: home,
+                occupation: home + '弟子',
+                combat: newNpc.combat,
+                appearance: newNpc.appearance,
+                personality: newNpc.personality
+            });
+            regNpc.spiritualRoots = roots;
+            regNpc.isPlayer = false;
+            regNpc._purse = 0;
+            regNpc.lineage = newNpc.lineage;
+            if (regNpc.relationship) regNpc.relationship.affection = 80;
+        }
+    } catch (eNpc) { regNpc = newNpc; }
+    try {
+        // v25.1·试-04：收 addNPC 返回值——旧版无视回执恒 `added = true`，被闸拒收也谎报成功
+        if (window.npcManager && typeof window.npcManager.addNPC === 'function') added = !!window.npcManager.addNPC(regNpc);
+        else if (window.npcManager && Array.isArray(window.npcManager.npcs)) { window.npcManager.npcs.push(regNpc); added = true; }
     } catch (e2) {}
-    if (!added) { if (window.showMessage) window.showMessage('人物名册未就绪——改日再来。', 'warning'); return false; }
+    if (!added) { if (window.showMessage) window.showMessage('人物名册未就绪，孩子没能入册——改日再来。', 'warning'); return false; }
     var r = null;
     try { r = window.PlayerSect.recruitDisciple(ps.id, npcId); } catch (e3) {}
     if (!r || !r.ok) { if (window.showMessage) window.showMessage('入门的口没走通——改日再试。', 'warning'); return false; }

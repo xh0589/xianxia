@@ -30,6 +30,23 @@ var mockWindow = {
                 if (h.export) out[k] = { version: h.version || 1, data: h.export() };
             });
             return out;
+        },
+        // v25.1·试-08：补上 importAll/resetAll（对齐 js/core/state-registry.js 真账），存档往返测试要用
+        importAll: function (snapshot) {
+            snapshot = snapshot || {};
+            Object.keys(mockWindow.StateRegistry._handlers).forEach(function (k) {
+                var h = mockWindow.StateRegistry._handlers[k];
+                if (!h.import || !Object.prototype.hasOwnProperty.call(snapshot, k)) return;
+                var entry = snapshot[k];
+                var data = entry && Object.prototype.hasOwnProperty.call(entry, 'data') ? entry.data : entry;
+                h.import(JSON.parse(JSON.stringify(data)), entry && entry.version);
+            });
+        },
+        resetAll: function () {
+            Object.keys(mockWindow.StateRegistry._handlers).forEach(function (k) {
+                var h = mockWindow.StateRegistry._handlers[k];
+                if (h.reset) h.reset();
+            });
         }
     },
     timeSystem: { advanceTime: function (n) {} },
@@ -237,6 +254,43 @@ assert(qteSrc.includes('openForgeFireQTE') && qteSrc.includes('_forgingFireBonus
 assert(qteSrc.includes('openFireQTE') && qteSrc.includes('_alchemyFireBonus'), '炼丹的老口子原样还在');
 var cuiSrc = fs.readFileSync(_ROOT + '/js/crafting/compound-ui.js', 'utf8');
 assert(cuiSrc.includes('_cfFire') && cuiSrc.includes('火候试炼（亲可控火，定品相）'), '炼器面板有火候试炼按钮');
+
+// ---- 12. v25.1·试-08：名炉模子随档往返（重载不再是「来历不明的一格」） ----
+section('12) v25.1·试-08 名炉模子随档持久化');
+mockWindow.currentCharData.qi = 1000;
+mockWindow.currentCharData.lifeSkills['锻造'] = 100;
+var rSv = F.executeCompoundForging('recipe_sword_open', { embryo: 'sword', main: ['mat_star_iron'], assist: ['mat_mithril', 'mat_meteorite'], rune: ['mat_phoenix_blood'] }, { randomSource: _mulberry32(2025) });
+assert(rSv.ok, '锻出一把名炉剑 (reason=' + rSv.reason + ')');
+var forgedTpl = mockWindow.itemById['wpn_compound_sword'];
+assert(!!forgedTpl, '开炉后 wpn_compound_sword 已注册进 itemById');
+// 存档：走 StateRegistry 全量导出 + JSON 往返（模拟落盘再读盘）
+var snapSv = JSON.parse(JSON.stringify(mockWindow.StateRegistry.exportAll()));
+assert(snapSv.forgingConfig && snapSv.forgingConfig.data && snapSv.forgingConfig.data.compoundTemplates
+    && snapSv.forgingConfig.data.compoundTemplates['wpn_compound_sword'], 'compoundTemplates 随档序列化（模子在账上）');
+var svName = forgedTpl.name;
+var svBonus = JSON.stringify(forgedTpl.combatBonus);
+var svAttrs = JSON.stringify(forgedTpl.attrs);
+// 模拟重载：动态模子从内存物品表蒸发（静态物品文件里从无此 id）
+delete mockWindow.itemById['wpn_compound_sword'];
+assert(!mockWindow.itemById['wpn_compound_sword'], '重载后 itemById 查无模子（症状现场）');
+// 读档：StateRegistry.importAll 回填
+mockWindow.StateRegistry.importAll(snapSv);
+var rlTpl = mockWindow.itemById['wpn_compound_sword'];
+assert(!!rlTpl, '读档后模子回填 itemById（背包格 getTemplate() 不再返回 null）');
+assert(rlTpl && rlTpl.name === svName, '名字原样（' + (rlTpl && rlTpl.name) + '）');
+assert(rlTpl && JSON.stringify(rlTpl.combatBonus) === svBonus, 'combatBonus 数值原样（combat-stats 回查命中且同账）');
+assert(rlTpl && JSON.stringify(rlTpl.attrs) === svAttrs, 'attrs 原样');
+assert(rlTpl && rlTpl._forgeQuality === forgedTpl._forgeQuality, '品相定模的品相随档（名品定模跨重载仍只升不降）');
+assert(rlTpl && rlTpl !== forgedTpl, '回填的是副本不是旧引用（存档 JSON 往返不夹带活对象）');
+// 序列化安全：模子必须纯数据（有函数就 JSON 掉不动/丢字段）
+var funcLeak = JSON.stringify(rlTpl).indexOf('function') >= 0;
+assert(!funcLeak, '模子纯数据零函数（序列化无损）');
+// 真未知物品兜底不变：不在账上的 id 读档后依然查无（_invUnknownSlot 的丢弃出口仍是唯一出路）
+assert(!mockWindow.itemById['wpn_never_forged'], '账外 id 不会被凭空回填（真未知物品兜底不变）');
+// reset 清账：新开一局不留上一世的幽灵模子
+mockWindow.StateRegistry.resetAll();
+assert(!mockWindow.itemById['wpn_compound_sword'], 'reset 后幽灵模子从物品表摘除');
+assert(Object.keys(F.getState().compoundTemplates).length === 0, 'reset 后模子账清空');
 
 console.log('\n=========================================');
 console.log('forging-compound v19.5: ' + pass + ' passed, ' + fail + ' failed');

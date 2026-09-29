@@ -42,3 +42,6 @@ REFACTOR-NOTES.md
 改良说明.md
 # CDP 试玩工具的浏览器 profile（含 localStorage 存档）
 .scratch/cdp-profile/
+# Python 字节码缓存
+__pycache__/
+*.pyc

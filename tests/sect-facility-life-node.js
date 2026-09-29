@@ -44,7 +44,8 @@ function makeWorld(opts) {
         eventFlags: opts.flags || {},
         discipleState: opts.ds || { isInSect: true, sectId: '少林寺', sectName: '少林寺', rank: 5, contribution: 200 },
         currentCharData: { realm: '筑基', layer: 3, name: '测试', health: 100, qi: 100 },
-        currentSkills: { skill_main: 'art_shaolin_quan' },
+        // v25.1·试-06：槽里放功法对象（真实装备流即如此）——mock 必须用对象才能拦住 '[object Object]' 垃圾键回归
+        currentSkills: { skill_main: { id: 'art_shaolin_quan', name: '少林拳' } },
         inventory: { currency: { spiritStones: opts.stones != null ? opts.stones : 500 }, slots: opts.slots || [] },
         currentEquipment: opts.equipment || { mainHand: null },
         SECT_FACILITY_EXTRAS: { '少林寺': [{ id: 'fx_sl_damo', name: '达摩洞' }] },
@@ -67,7 +68,7 @@ function makeWorld(opts) {
             return rem <= 0;
         },
         getFacilityLevel: function (fid) { return (opts.facLevels && opts.facLevels[fid]) || 1; },
-        addProficiencyExp: function () {},
+        addProficiencyExp: function (skillId, exp) { (W._profCalls = W._profCalls || []).push({ skillId: skillId, exp: exp }); },
         openSectLedger: function () { W._ledgerOpened = true; },
         updateSectUI: function () {}, updateInventoryUI: function () {},
         StateRegistry: { register: function () {} },
@@ -96,6 +97,11 @@ function makeWorld(opts) {
     var L = W.discipleState._facLife;
     ok(L.sparStreak === 1 && L.sparMomentum === 1 && W.discipleState.contribution > c0, 'B4 胜：连胜+1、势头+1、贡献真入账');
     ok((W._notes || []).some(function (n) { return n.r.indexOf('演武场切磋') >= 0; }), 'B5 切磋贡献走账本记账口（批一同源）');
+    // v25.1·试-06：切磋胜的功法熟练度落在真 id 上，不产生 '[object Object]' 垃圾键
+    ok((W._profCalls || []).length >= 1 && W._profCalls[0].skillId === 'art_shaolin_quan',
+        'B5b 切磋熟练度落在真 id "art_shaolin_quan" 上（对象槽取 .id）');
+    ok(!(W._profCalls || []).some(function (p) { return String(p.skillId) === '[object Object]'; }),
+        'B5c 切磋熟练度不产生 "[object Object]" 垃圾键');
     W.settleSectSpar(true); W.settleSectSpar(true);
     ok(L.sparStreak === 3 && L.sparBest === 3 && L.sparMomentum === 3, 'B6 连胜累积、纪录留档');
     // 对手随连胜变强

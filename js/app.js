@@ -50,7 +50,7 @@ function parseSaveSlotsSafe(raw) {
             // 损坏键隔离重命名，保住取证可能；下次写入会重建空索引
             window.saveToStorage('xianxia_saves_corrupt_backup', raw || '');
             localStorage.removeItem('xianxia_saves');
-        } catch (e2) {}
+        } catch (e2) { console.warn('[静默失败] js/app.js:53 · parseSaveSlotsSafe：损坏存档隔离重命名失败——坏索引还赖在档位列表里，读档继续打转', e2 && e2 && e2.message); }
         if (window.console && console.error) console.error('[存档索引] xianxia_saves 损坏，已隔离备份并重置为空列表', e);
         return [];
     }
@@ -226,6 +226,14 @@ function startGame() {
         alert('请输入修仙者姓名！');
         return;
     }
+    // v25.1·P16：页面承诺「总和严格100%」——旧代码五灵根全填 0 也照单全收，
+    // 带着「灵气×0」的废号入局且无任何提示。99/101 这类滑块舍入仍由 F-12 归一兜底，这里只拦全零。
+    var _rootSumChk = 0;
+    for (var _rsi = 0; _rsi < (rootValues || []).length; _rsi++) _rootSumChk += Math.round(rootValues[_rsi] || 0);
+    if (_rootSumChk <= 0) {
+        alert('五灵根总和须为 100%（当前 0%）——请分配灵根后再踏入仙途。');
+        return;
+    }
 
     // B1：新游戏清空角色级世界状态，避免串档
     if (window.GameState && typeof window.GameState.resetWorldForNewGame === 'function') {
@@ -235,6 +243,24 @@ function startGame() {
     }
 
     const charData = collectCharacterData(charName);
+    // v25.1·试-14/15：新游戏+继承终于有了消费口——旧 checkNewGamePlus 全仓零调用，「二周目续缘」是空话。
+    // 写进 mainAttributes（中文键），下面 setCurrentCharData 的 syncCharAttrsFromMain 会自动同步 attrs 英文账。
+    try {
+        var _ngData = (typeof checkNewGamePlus === 'function') ? checkNewGamePlus() : null;
+        if (_ngData) {
+            charData.ngPlus = _ngData.ngPlus || 1;
+            var _en2cn = window.ATTRIBUTE_EN_TO_CN || {};
+            ['strength', 'dexterity', 'intelligence', 'constitution', 'willpower', 'meridian'].forEach(function (k) {
+                var v = parseInt(_ngData[k], 10);
+                if (isNaN(v)) return;
+                v = Math.max(0, Math.min(100, v));
+                var cn = _en2cn[k] || (k === 'intelligence' ? '神识' : null);
+                if (cn) charData.mainAttributes[cn] = v;
+            });
+            localStorage.removeItem('xianxia_ngplus');
+            showMessage('🌟 新游戏+（第 ' + charData.ngPlus + ' 周目）：前世的资质落进了这具身体。', 'success');
+        }
+    } catch (eNg) {}
     // v9.8：统一入口，同步 window.currentCharData + attrs
     if (typeof window.setCurrentCharData === 'function') {
         window.setCurrentCharData(charData);
@@ -283,7 +309,7 @@ function startGame() {
             window.locationSystem.currentLocation = '帝都·长安';
             if (typeof window.locationSystem.saveLocationData === 'function') window.locationSystem.saveLocationData();
         }
-    } catch (e) {}
+    } catch (e) { console.warn('[静默失败] js/app.js:286 · startGame：开局所在地点（帝都·长安）没落盘——刷新后人会回退到旧位置', e && e && e.message); }
 
     document.getElementById('char-creation').style.display = 'none';
     document.getElementById('game-world').style.display = 'flex';
@@ -297,6 +323,11 @@ function startGame() {
     // v11.0：Admin检测
     if (window.DebugPanel && typeof window.DebugPanel.checkAdminStatus === 'function') {
         window.DebugPanel.checkAdminStatus();
+    }
+    // v25.1·P1：建号完成即标脏——旧标脏只认时辰/位置/击杀四类事件，建号零时辰，
+    // 刷新页面 onBeforeUnload 直接放行，角色整个丢掉（接任务/拜师等零时辰动作同病，已在订阅表扩充）。
+    if (window.ContinueSave && typeof window.ContinueSave.markDirty === 'function') {
+        try { window.ContinueSave.markDirty(); } catch (e) {}
     }
 }
 
@@ -331,7 +362,8 @@ function collectCharacterData(name) {
         // 时间/资源
         // 第八十二波·ECO-01：镜像初值与背包真账对齐（权威余额是背包 currency：10灵石/100铜钱，
         // 新开一局先跑 resetWorldForNewGame 设背包、再造角色——旧镜像记 100/50，两套初值开局即分叉）
-        day: 1, spiritStones: 10, copper: 100,
+        // v25.1·试-30：删掉恒为 1 的 day 死字段——世界天数走时间系统账，此键全仓零读方，只会随存档传幽灵数字
+        spiritStones: 10, copper: 100,
         // 位置
         currentMap: 'main'
     };
@@ -351,10 +383,12 @@ function collectCharacterData(name) {
         delete data.mainAttributes['智力'];
     }
     document.querySelectorAll('#combat-skills-container input').forEach(input => {
-        data.combatSkills[input.dataset.attr] = parseInt(input.value, 10) || 0;
+        // v25.1·试-24：战斗技能同 F-12 口径 clamp [0,100]——旧代码手输 999 照单全收，直接进战斗攻击公式
+        data.combatSkills[input.dataset.attr] = Math.max(0, Math.min(100, parseInt(input.value, 10) || 0));
     });
     document.querySelectorAll('#life-skills-container input').forEach(input => {
-        data.lifeSkills[input.dataset.attr] = parseInt(input.value, 10) || 0;
+        // v25.1·试-24：生活技能同款 clamp（采伐/挖矿等下游真消费这些值）
+        data.lifeSkills[input.dataset.attr] = Math.max(0, Math.min(100, parseInt(input.value, 10) || 0));
     });
     data.spiritualRoots = {
         metal: Math.round(rootValues[0]),
@@ -725,6 +759,19 @@ function renderBodyDurability() {
     const listContainer = document.getElementById('body-durability-list');
     if (listContainer) {
         listContainer.innerHTML = '';
+        // v25.1·P23：空态折叠——开局全身完好时 20 条一模一样的绿条占据首屏相当篇幅，
+        // 折成一行摘要，点开看明细；任何部位受损就照旧全量展开（受伤信息不该藏着）。
+        var _allWhole = bodyParts.every(function (part) {
+            var _v = bodyDurability[part.id] != null ? bodyDurability[part.id] : 100;
+            return _v >= 100;
+        });
+        if (_allWhole && !window._bodyListExpanded) {
+            listContainer.innerHTML = `
+            <div class="body-part-row flex items-center justify-between bg-gray-800 p-2 rounded cursor-pointer hover:bg-gray-700" onclick="window._bodyListExpanded = true; if (typeof renderBodyDurability === 'function') renderBodyDurability();">
+                <span class="body-part-name text-gray-300 text-sm font-bold">🧍 ${bodyParts.length} 个身体部位</span>
+                <span class="body-part-label text-xs" style="color:#22c55e">✅ 全部完好 · 点击展开明细</span>
+            </div>`;
+        } else {
         bodyParts.forEach(part => {
             // 「没有这一格」才兜 100；0 是打烂了的真值（同页 SVG 那支用的就是 != null）
             const value = bodyDurability[part.id] != null ? bodyDurability[part.id] : 100;
@@ -751,6 +798,13 @@ function renderBodyDurability() {
                 </div>
             </div>`;
         });
+        if (_allWhole) {
+            listContainer.innerHTML += `
+            <div class="body-part-row flex items-center justify-center bg-gray-800/60 p-1.5 rounded cursor-pointer hover:bg-gray-700" onclick="window._bodyListExpanded = false; if (typeof renderBodyDurability === 'function') renderBodyDurability();">
+                <span class="body-part-label text-xs text-gray-500">▲ 全部完好 · 点击收起明细</span>
+            </div>`;
+        }
+        }
     }
 
     // 更新状态面板 SVG 人体图颜色（必须执行）
@@ -879,6 +933,9 @@ function renderAvoidancePriority() {
 
 // ==================== 面板切换 ====================
 function switchPanel(panelId) {
+    // v25.1·试-26：首战引导的触点从 globalStartBattle（仗打起来才教）前移到这里——
+    // 打开地图那一刻就告诉玩家「仗是赶路赶出来的」，教得着。
+    if (panelId === 'map' && typeof window.codexHint === 'function') { try { window.codexHint('tut_first_combat'); } catch (e) {} }
     if (window.PanelLifecycle && typeof window.PanelLifecycle.beforeMainSwitch === 'function') {
         window.PanelLifecycle.beforeMainSwitch(panelId);
     }
@@ -1182,9 +1239,16 @@ function renderFacilitiesList(containerId, facilityIds, type) {
 function renderSectFacilitiesList(sectName) {
     const container = document.getElementById('sect-facilities-list');
     if (!container) return;
-    
+
     container.innerHTML = '';
-    
+
+    // v24.3 还魂＋正名：这栏的容器在早前 HTML 重排时遗失，本函数每次静默夭折（NEW-77 立案）。
+    // 复活时把语义也钉正——八个按钮全走 useFacility，操作的是「自己门派」的账（职位/份例/冷却
+    // 全认 discipleState），挂在别家门派的介绍下就是张冠李戴：看着少林的介绍、点的却是自家演武场。
+    // 所以只有点的是自己所在门派才渲染；别家保持纯介绍（selectSect 的本意），并清掉上一家的残留。
+    var _dsSf = window.discipleState || {};
+    if (!(_dsSf.isInSect && (_dsSf.sectId === sectName || _dsSf.sectName === sectName))) return;
+
     SECT_FACILITIES.forEach(facility => {
         const div = document.createElement('div');
         div.className = 'p-3 bg-gray-800 rounded border border-gray-700 hover:border-yellow-600 transition cursor-pointer';
@@ -1311,7 +1375,7 @@ function restAtInn() {
     currentCharData.qi = maxQ;
     currentCharData.energy = maxE;
     currentCharData.health = Math.min(maxH, (currentCharData.health || 0) + Math.floor(maxH * 0.4));
-    try { if (typeof window.restoreBodyDurability === 'function') window.restoreBodyDurability(10); } catch (e) {}
+    try { if (typeof window.restoreBodyDurability === 'function') window.restoreBodyDurability(10); } catch (e) { console.warn('[静默失败] js/app.js:1314 · restAtInn：住店休息该回的部位耐久没回——伤还挂着，房钱白花一截', e && e && e.message); }
     // 危急伤检测（流血/危重伤口非睡觉可愈）
     var _hasCriticalWound = false;
     try {
@@ -1326,7 +1390,7 @@ function restAtInn() {
         if (bonus && bonus.recovery) {
             currentCharData.energy = Math.min(maxE, currentCharData.energy + Math.floor(10 * (bonus.recovery - 1)));
         }
-    } catch (e) {}
+    } catch (e) { console.warn('[静默失败] js/app.js:1329 · restAtInn：城池恢复加成没加上——精力比牌面宣传的少回一截', e && e && e.message); }
     // 第五十四波 · 客栈住店也解状态：安睡一宿走一遍周天，压得比野地狠一档（数值在野图真源，这里只调口）
     try {
         if (window.wildMapApi && window.wildMapApi.relief && typeof window.wildMapApi.relief.sleep === 'function') {
@@ -1400,7 +1464,22 @@ function toggleDurationGrid() {
 // 选择时长并开始修炼
 function selectDuration(id) {
     window._durExpanded = false;
+    // v25.1·P12：先落定选择、再执行——真气不足被拒时选择也保住（旧行为：意图整个丢弃，重开弹窗又回 5 分钟）
+    var _durSel = CULTIVATE_DURATIONS.find(function (d) { return d.id === id; });
+    if (_durSel) _selectedDuration = _durSel;
+    _refreshDurationSelectorInPlace();
     cultivationMeditate(id);
+}
+
+// v25.1·P12：就地重绘时长选择器（弹窗开着时选中态/耗气标注即时更新）
+function _refreshDurationSelectorInPlace() {
+    try {
+        var host = document.getElementById('dur-selector');
+        if (!host) return;
+        var tmp = document.createElement('div');
+        tmp.innerHTML = _renderDurationSelector();
+        if (tmp.firstChild) host.replaceWith(tmp.firstChild);
+    } catch (e) {}
 }
 
 function startCultivation() {
@@ -1431,10 +1510,24 @@ function startCultivation() {
     } catch (eMoodUi) {}
     var content = '<p class="text-gray-300 mb-4">选择修炼方式：</p>' + moodHtml;
     content += '<div class="mb-3">' + durHtml + '</div>';
+    // v25.1·P10：副标题不再写死「达标」字样——把三项门槛与当前值算成实数挂脸上，
+    // 玩家不用点了才知道差多少（旧行为：先关窗后弹 toast，提示恰好落在视线移开的瞬间）。
+    var _btSub = '真元达标+历练达标+真气≥80%';
+    try {
+        var _cdBt = window.currentCharData;
+        if (_cdBt && typeof window.getRealmIndex === 'function') {
+            var _riBt = window.getRealmIndex(_cdBt.realm), _lyBt = _cdBt.layer || 1;
+            if (_riBt >= 0) {
+                _btSub = '真元 ' + Math.floor(_cdBt.essence || 0) + '/' + window.getEssenceRequired(_riBt, _lyBt)
+                    + ' · 历练 ' + Math.floor(_cdBt.tempering || 0) + '/' + window.getTemperingRequired(_riBt, _lyBt)
+                    + ' · 真气≥' + Math.round(getQiMax(_riBt, _lyBt) * 0.8);
+            }
+        }
+    } catch (eBtSub) {}
     content += `
-        <button onclick="this.closest('.fixed').remove(); if(typeof window._performBreakthroughNew==='function')window._performBreakthroughNew(); else if(typeof performBreakthrough==='function')performBreakthrough();" class="w-full bg-yellow-700 hover:bg-yellow-600 p-3 rounded text-left">
+        <button onclick="if(typeof window._performBreakthroughNew==='function'){ if(window._performBreakthroughNew()) this.closest('.fixed').remove(); } else { this.closest('.fixed').remove(); if(typeof performBreakthrough==='function')performBreakthrough(); }" class="w-full bg-yellow-700 hover:bg-yellow-600 p-3 rounded text-left">
             <span class="text-yellow-400 font-bold">⬆️ 尝试突破</span><br>
-            <span class="text-xs text-gray-400">真元达标+历练达标+真气≥80%</span>
+            <span class="text-xs text-gray-400">${_btSub}</span>
         </button>
         <button onclick="this.closest('.fixed').remove(); if(window.openGuideQiMiniGame)openGuideQiMiniGame(); else if(window.guideQiCultivation)guideQiCultivation();" class="w-full bg-cyan-700 hover:bg-cyan-600 p-3 rounded text-left mt-2">
             <span class="text-cyan-400 font-bold">🌊 引导灵气</span><br>
@@ -1461,17 +1554,23 @@ function _renderDurationSelector() {
     var sel = _selectedDuration;
     var shortLabel = sel.shortLabel;
     var expanded = window._durExpanded ? '' : 'hidden';
+    // v25.1·P11：每档明码标耗气、付不起的置灰——旧行为五档一律亮色，低境界玩家只能逐个试错
+    var _qiNow = Math.floor((window.currentCharData && window.currentCharData.qi) || 0);
     var gridHtml = '<div id="dur-grid" class="grid grid-cols-2 gap-1.5 mt-1 ' + expanded + '">';
     CULTIVATE_DURATIONS.forEach(function(d, idx) {
         if (idx === 0) {
             // 第一列第一格已被展开按钮占位，跳过
             return;
         }
-        gridHtml += '<button onclick="selectDuration(\'' + d.id + '\')" class="bg-indigo-700 hover:bg-indigo-600 text-white py-1.5 px-2 rounded text-xs text-center">' + d.label + '</button>';
+        var _afford = _qiNow >= d.qiCost;
+        var _isSel = sel && sel.id === d.id;
+        var _cls = !_afford ? 'bg-gray-700 text-gray-400'
+            : (_isSel ? 'bg-indigo-500 ring-1 ring-indigo-300 text-white' : 'bg-indigo-700 hover:bg-indigo-600 text-white');
+        gridHtml += '<button onclick="selectDuration(\'' + d.id + '\')" title="' + (_afford ? '' : '真气不足（需' + d.qiCost + '，当前' + _qiNow + '）——') + '耗真气' + d.qiCost + '" class="' + _cls + ' py-1.5 px-2 rounded text-xs text-center">' + d.label + ' · ' + d.qiCost + '气</button>';
     });
     gridHtml += '</div>';
-    
-    return '<div class="bg-gray-800 rounded-lg p-2">' +
+
+    return '<div id="dur-selector" class="bg-gray-800 rounded-lg p-2">' +
         '<button onclick="toggleDurationGrid()" class="flex items-center gap-2 w-full text-left">' +
         '<span class="text-indigo-400 font-bold text-sm">🧘 打坐修炼</span>' +
         '<span class="text-xs text-gray-400 ml-auto">' + (window._durExpanded ? '▲' : '▼') + ' <span class="text-indigo-300">' + shortLabel + '</span></span>' +
@@ -1598,6 +1697,11 @@ function cultivationMeditate(durationId) {
         // 1.7 前世记忆：主修功法是前世功法则修炼更快（+30%）
         var _plmMul = (typeof window.pastLifeSkillBonus === 'function') ? window.pastLifeSkillBonus(mainSkillId) : 1.0;
         if (_plmMul !== 1) essenceGain = Math.floor(essenceGain * _plmMul);
+        // v25.1·试-13：功法熟练度「效果：×N」不再是空头条——按当前熟练等级乘进真元产出（无功法/查不到=1）
+        if (typeof window.getProficiencyEffectMultiplier === 'function') {
+            var _profMul = window.getProficiencyEffectMultiplier(mainSkillId);
+            if (_profMul && _profMul !== 1) essenceGain = Math.floor(essenceGain * _profMul);
+        }
         // 1.9 丹毒惩罚：高丹毒降修炼效率（50丹毒-25%、100丹毒-50%）
         var _ppPen = (typeof window.getPillPoisonPenalty === 'function') ? window.getPillPoisonPenalty() : 0;
         if (_ppPen > 0) essenceGain = Math.floor(essenceGain * (1 - _ppPen));
@@ -1768,27 +1872,15 @@ function buyFromCityShop(itemId, itemName, price) {
         return;
     }
 
+    // v24.2 裸格子除根：旧兜底手写「无 uid 无 getTemplate」的 plain object 塞进格子——
+    // 渲染链会因它抛 TypeError 再被空 catch 吞掉、整屏背包空白（FIX-01 定案点名的根病）。
+    // inventory.js 必导出 addItem，这条兜底在真实游戏里是死路，能产出的只有病格子——整段撤掉；
+    // 收不下就如实报失败、分文不扣（扣款在这段之后）。
     let added = false;
     if (typeof window.addItem === 'function') {
         added = !!window.addItem(itemId, 1);
-    }
-    if (!added && window.inventory.slots) {
-        for (const slot of window.inventory.slots) {
-            if (slot && slot.templateId === itemId) {
-                slot.count += 1;
-                added = true;
-                break;
-            }
-        }
-        if (!added) {
-            for (let i = 0; i < window.inventory.slots.length; i++) {
-                if (!window.inventory.slots[i]) {
-                    window.inventory.slots[i] = { templateId: itemId, name: itemName, count: 1 };
-                    added = true;
-                    break;
-                }
-            }
-        }
+    } else if (window.inventory && typeof window.inventory.addItem === 'function') {
+        added = !!window.inventory.addItem(itemId, 1);
     }
     if (!added) {
         showMessage('背包已满！', 'error');
@@ -1801,7 +1893,7 @@ function buyFromCityShop(itemId, itemName, price) {
     try {
         var gbfMark = window.discipleState && window.discipleState._gbFaction;
         if (gbfMark && gbfMark.side === 'dirty') gbfMark.buyMarks = (gbfMark.buyMarks || 0) + 1;
-    } catch (eGbf) {}
+    } catch (eGbf) { console.warn('[静默失败] js/app.js:1804 · buyFromCityShop：丐帮污衣戒律的购物留痕没记上——戒律抽查会少数一笔', eGbf && eGbf && eGbf.message); }
 
     showMessage(`购买了 ${itemName}（-${price}灵石）`, 'success');
     if (window.updateInventoryUI) window.updateInventoryUI();
@@ -2202,7 +2294,7 @@ function performEnhancementAction(action) {
     // 关闭当前降级弹窗
     document.querySelectorAll('.fixed.inset-0').forEach(function(el) {
         if (el.querySelector && el.querySelector('h3') && /铁匠铺/.test(el.textContent || '')) {
-            try { el.remove(); } catch (e) {}
+            try { el.remove(); } catch (e) { console.warn('[静默失败] js/app.js:2205 · performEnhancementAction：铁匠铺残留弹窗没拆掉——可能挡住界面上的按钮', e && e && e.message); }
         }
     });
 
@@ -2356,7 +2448,7 @@ function switchListMode(mode) {
             if (window.currentCharData && window.EventBus) {
                 window.EventBus.emit('location:visited', { locationId: 'sect_list', locationName: '门派列表' });
             }
-        } catch (e) { /* 静默 */ }
+        } catch (e) { console.warn('[静默失败] js/app.js:2359 · switchListMode：location:visited 事件被吞——听「到访门派列表」的成就/任务收不到', e && e && e.message); }
     }
 }
 
@@ -2376,21 +2468,33 @@ function generateRegionList() {
         // 玩家照着「整行可点」的样子点下去，点空的那一下没人认账——热区不许撒谎。行为一字未改，只把两笔各写各的名字
         // 摆法：行 flex-wrap ＋ 名字 shrink-0 nowrap ＋ 钮组 ml-auto。装得下是一行，装不下整组钮掉到第二行——
         // 折只折在「名字／动作」这道语义界上，城名内部永不劈（UI-22 同一支笔）
-        const citiesHtml = data.cities.map(city => `
+        // v25.1·P21 备案：试玩清单嫌长地名折行打乱节奏，但 UI-09 这套摆法有 v24.0 ㉑-㉓ 还原尺背书
+        // （truncate 截字被 ⑩c 明令禁止）——保持原摆法不动，P21 按「设计取舍」结案。
+        // v25.1·P13：位面城（灵界/魔界）的「前往」在列表里就置灰标门槛——旧版一律亮黄可点，点了才知去不了（可发现性差）
+        const citiesHtml = data.cities.map(city => {
+            var _plane = (typeof window.getPlaneOf === 'function') ? window.getPlaneOf(city) : null;
+            var _planeReq = _plane === '灵界' ? '须元婴' : (_plane === '魔界' ? '须化神' : '');
+            var _goBtn = _plane
+                ? `<button onclick="event.stopPropagation(); travelToCityFromList('${city}', '${prov}')" title="${_planeReq}，两条腿走不到——去修行界面的「位面之门」渡界" class="cursor-pointer text-xs bg-gray-700 text-gray-400 font-bold px-2 py-0.5 rounded transition">渡界</button>`
+                : `<button onclick="event.stopPropagation(); travelToCityFromList('${city}', '${prov}')" class="cursor-pointer text-xs bg-yellow-600 hover:bg-yellow-500 text-gray-900 font-bold px-2 py-0.5 rounded transition">前往</button>`;
+            return `
             <div class="city-list-item px-2 py-1 text-xs text-gray-400 hover:text-yellow-400 hover:bg-gray-700 rounded flex flex-wrap items-center gap-x-1 gap-y-0.5">
-                <span class="shrink-0 whitespace-nowrap">🏙️ ${city}</span>
+                <span class="shrink-0 whitespace-nowrap">🏙️ ${city}</span>${_plane ? `<span class="shrink-0 whitespace-nowrap text-purple-400">（${_planeReq}·位面之门）</span>` : ''}
                 <span class="flex items-center gap-1 shrink-0 ml-auto">
                     <button onclick="event.stopPropagation(); selectCityFromList('${city}', '${prov}')" class="cursor-pointer text-xs text-gray-300 border border-gray-600 hover:text-yellow-400 hover:border-yellow-600 px-2 py-0.5 rounded transition">介绍</button>
-                    <button onclick="event.stopPropagation(); travelToCityFromList('${city}', '${prov}')" class="cursor-pointer text-xs bg-yellow-600 hover:bg-yellow-500 text-gray-900 font-bold px-2 py-0.5 rounded transition">前往</button>
+                    ${_goBtn}
                 </span>
             </div>
-        `).join('');
-    
+        `;
+        }).join('');
+
     // 野外也加前往（野外没有「介绍」这一笔，名字仍是纯文本，只一枚钮）
+    // v25.1·P13：位面州（灵界/魔界/天界）的野外钮同款置灰——动作侧 WorldMap.setOut 本就拦，这里只补可发现性
+        var _wildPlane = ['灵界', '魔界', '天界'].indexOf(prov) >= 0;
         const wildernessHtml = `
             <div class="city-list-item px-2 py-1 text-xs text-purple-400 hover:text-purple-300 hover:bg-gray-700 rounded mt-2 border-t border-gray-700 pt-2 flex flex-wrap items-center gap-x-1 gap-y-0.5">
-                <span class="shrink-0 whitespace-nowrap">🌲 野外 (${prov})</span>
-                <button onclick="event.stopPropagation(); openWildernessForRegion('${prov}')" class="cursor-pointer shrink-0 ml-auto text-xs bg-purple-600 hover:bg-purple-500 text-white font-bold px-2 py-0.5 rounded transition">前往</button>
+                <span class="shrink-0 whitespace-nowrap">🌲 野外 (${prov})${_wildPlane ? '<span class="text-gray-400">（界膜之上·位面之门）</span>' : ''}</span>
+                <button onclick="event.stopPropagation(); openWildernessForRegion('${prov}')" title="${_wildPlane ? '界膜之上，须走修行界面的「位面之门」' : ''}" class="cursor-pointer shrink-0 ml-auto text-xs ${_wildPlane ? 'bg-gray-700 text-gray-400' : 'bg-purple-600 hover:bg-purple-500 text-white'} font-bold px-2 py-0.5 rounded transition">前往</button>
             </div>
         `;
 
@@ -2626,7 +2730,14 @@ window.travelToCityFromList = travelToCityFromList;
 function selectSectFromList(sectName) {
     // 只显示门派介绍，不进入面板（"前往"按钮才进入面板）
     selectSect(sectName);
-    document.querySelector('.map-sect')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // v25.1·P3：滚到详情卡本体——旧码滚 .map-sect（山门标记默认收起，永远滚到空气，?. 又把失败吞掉），
+    // 介绍其实渲染了却落在滚动区视口外，「介绍」按钮点了像没反应
+    var _sectDetailEl = document.getElementById('sect-detail');
+    if (_sectDetailEl) {
+        _sectDetailEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+        document.querySelector('.map-sect')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
 }
 
 // ============ 从地区列表前往门派（第一百一十四波 DES-10：并入城市脚力口径） ============
@@ -2783,7 +2894,8 @@ function saveGame(opts) {
                 ? window.questSystem.getQuestProgressSnapshot()
                 : (window.playerQuestProgress || { activeQuests: [], completedQuests: [], totalCompleted: 0 }),
             partyData: window.partyData || { members: [], formation: 'standard' },
-            discipleState: window.discipleState || { sectName: null, position: '散修', contribution: 0 },
+            // v25.1·P24：兜底结构与 game-state.js 重置路径、joinSect 真身对齐（无 position 死字段）
+            discipleState: window.discipleState || { isInSect: false, sectId: null, sectName: null, contribution: 0, rank: null },
             eventFlags: window.eventFlags || {},
             achievementData: window.achievementData || null,
             proficiencyData: window.proficiencyData || null,
@@ -3204,10 +3316,10 @@ function deleteSave() {
         if (window.GameState && typeof window.GameState.clearCharacterStorage === 'function') {
             window.GameState.clearCharacterStorage({ alsoAccount: false });
         } else {
-            try { localStorage.removeItem('xianxia_save'); } catch (e) {}
-            try { localStorage.removeItem('xianxia_beasts'); } catch (e) {}
-            try { localStorage.removeItem('xianxia_inventory'); } catch (e) {}
-            try { localStorage.removeItem('xianxia_house'); } catch (e) {}
+            try { localStorage.removeItem('xianxia_save'); } catch (e) { console.warn('[静默失败] js/app.js:3207 · deleteSave：xianxia_save 没删掉——删了角色档还留着，跨角色残留的根', e && e && e.message); }
+            try { localStorage.removeItem('xianxia_beasts'); } catch (e) { console.warn('[静默失败] js/app.js:3208 · deleteSave：xianxia_beasts 没删掉——灵兽档残留，下个角色可能白得灵兽', e && e && e.message); }
+            try { localStorage.removeItem('xianxia_inventory'); } catch (e) { console.warn('[静默失败] js/app.js:3209 · deleteSave：xianxia_inventory 没删掉——背包档残留，下个角色可能白得物品', e && e && e.message); }
+            try { localStorage.removeItem('xianxia_house'); } catch (e) { console.warn('[静默失败] js/app.js:3210 · deleteSave：xianxia_house 没删掉——房产档残留，下个角色可能白得房子', e && e && e.message); }
         }
         refreshSaveSlots();
         showSaveToast('🗑️ 所有存档与角色数据已删除');
@@ -3671,7 +3783,7 @@ function closeBattle() {
                 currentCharData.health = Math.max(0, Math.min(100, Math.round(currentBattle.player.physiology.bloodVolume)));
             }
         }
-    } catch (e) {}
+    } catch (e) { console.warn('[静默失败] js/app.js:3674 · closeBattle：战后血量没写回角色档——面板 HP 与战报实际值对不上', e && e && e.message); }
     
     // 第九十五波·NEW-47：收尾三行此前裸取无守卫——面板万一不在，TypeError 抛在 currentBattle=null 之前，
     // 战斗状态永远清不掉，Esc 从此只走战斗分支、再也关不掉任何弹窗。判空 + 状态先清：
@@ -4532,7 +4644,7 @@ function interactTalk() {
         window.timeSystem.advanceTime(1, '问候');
     }
     if (npc && typeof npc.recordPlayerAction === 'function') {
-        try { npc.recordPlayerAction('greet', 'positive'); } catch (e) {}
+        try { npc.recordPlayerAction('greet', 'positive'); } catch (e) { console.warn('[静默失败] js/app.js:4535 · interactTalk：问候没记进 NPC 记忆——好感与谋面次数不涨，对方转身就忘', e && e && e.message); }
     }
     // 轻微好感（若有系统）
     try {
@@ -4593,7 +4705,7 @@ function openNpcDeepTalk() {
         window.timeSystem.advanceTime(5, '与NPC详谈');
     }
     if (npc && typeof npc.recordPlayerAction === 'function') {
-        try { npc.recordPlayerAction('talk', 'positive'); } catch (e) {}
+        try { npc.recordPlayerAction('talk', 'positive'); } catch (e) { console.warn('[静默失败] js/app.js:4596 · openNpcDeepTalk：详谈没记进 NPC 记忆——好感与谋面次数不涨', e && e && e.message); }
     }
     closeInteraction();
     window.showNPCDialog(npcId);
@@ -5247,6 +5359,9 @@ function showBattleUI(battle) {
     modal.classList.remove('hidden');
     document.getElementById('battle-actions').classList.remove('hidden');
     document.getElementById('battle-result').classList.add('hidden');
+    // v25.1·试-01：开战即清上一场的结算按钮，防陈旧「下一波/收服」残留
+    var _extraSlotReset = document.getElementById('battle-result-extra');
+    if (_extraSlotReset) _extraSlotReset.innerHTML = '';
     document.getElementById('battle-body-view').classList.add('hidden');
     currentBodyView = 'player'; // 重置为玩家视图
     _selectedMove = null; // 重置招式选择
@@ -5278,29 +5393,33 @@ function showBattleUI(battle) {
             try { if (typeof window._onArenaBattleEnd === 'function') window._onArenaBattleEnd(winner); } catch (e) {}
         }
         var actionsHtml = '<p class="text-xl font-bold ' + (winner === 'player' ? 'text-green-400' : 'text-red-400') + '">' + (winner === 'player' ? '🎉 胜利！' : '💀 败北...') + '</p>';
+        // v25.1·试-01：动态结算按钮单独收集，最后同时挂进 battle-result-extra（可见）与 battle-actions（isFinished 后被隐藏，仅兼容保留）
+        var extraHtml = '';
         // v10.0：战后可收服灵兽（非竞技场对手）
         // v12.9：noSpoils（敌人遁走）时不提供收服入口
         if (winner === 'player' && currentBattle && currentBattle.enemy && !currentBattle.enemy._isArenaOpponent && !(currentBattle.noSpoils)) {
             if (typeof window.canCaptureDefeatedEnemy === 'function' && window.canCaptureDefeatedEnemy(currentBattle.enemy)) {
-                actionsHtml += '<button onclick="window.captureBeastAfterBattle(currentBattle.enemy); closeBattle();" class="bg-green-600 hover:bg-green-500 px-4 py-2 rounded text-white font-bold mt-2">🐾 收服灵兽</button> ';
+                extraHtml += '<button onclick="window.captureBeastAfterBattle(currentBattle.enemy); closeBattle();" class="bg-green-600 hover:bg-green-500 px-4 py-2 rounded text-white font-bold mt-2">🐾 收服灵兽</button> ';
             }
         }
         // v20.0：清剿兽潮还没打完 → 出"下一波"按钮
         if (winner === 'player' && currentBattle && currentBattle._isBeastTideRaid && window._tideRaid && window._tideRaid.wave < window._tideRaid.waves) {
-            actionsHtml += '<button onclick="continueBeastTideRaid()" class="bg-orange-600 hover:bg-orange-500 px-4 py-2 rounded text-white font-bold mt-2">下一波（' + (window._tideRaid.wave + 1) + '/' + window._tideRaid.waves + '）</button> ';
+            extraHtml += '<button onclick="continueBeastTideRaid()" class="bg-orange-600 hover:bg-orange-500 px-4 py-2 rounded text-white font-bold mt-2">下一波（' + (window._tideRaid.wave + 1) + '/' + window._tideRaid.waves + '）</button> ';
         }
         // v20.0 1.1 天劫：渡劫期多波雷劫，胜利后出"迎接下一道天雷"按钮（仿兽潮多波）
         if (winner === 'player' && currentBattle && currentBattle._isHeavenlyTribulation && window._trib && window._trib.wave < window._trib.waves) {
-            actionsHtml += '<button onclick="continueTribWave()" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded text-white font-bold mt-2">⚡ 迎接下一道天雷（' + (window._trib.wave + 1) + '/' + window._trib.waves + '）</button> ';
+            extraHtml += '<button onclick="continueTribWave()" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded text-white font-bold mt-2">⚡ 迎接下一道天雷（' + (window._trib.wave + 1) + '/' + window._trib.waves + '）</button> ';
         }
         // v20.1 主线多阶段 Boss：中间阶段胜利 → 出"下一阶段"按钮（最后一阶段由 settle 结算）
         if (winner === 'player' && currentBattle && currentBattle._isMainStoryBoss && typeof window.getMainBossProgress === 'function') {
             var _msp = window.getMainBossProgress();
             if (_msp && _msp.phase < _msp.phases - 1) {
-                actionsHtml += '<button onclick="continueBossPhase()" class="bg-red-700 hover:bg-red-600 px-4 py-2 rounded text-white font-bold mt-2">⚔️ 迎战下一阶段（' + (_msp.phase + 2) + '/' + _msp.phases + '）</button> ';
+                extraHtml += '<button onclick="continueBossPhase()" class="bg-red-700 hover:bg-red-600 px-4 py-2 rounded text-white font-bold mt-2">⚔️ 迎战下一阶段（' + (_msp.phase + 2) + '/' + _msp.phases + '）</button> ';
             }
         }
-        actionsHtml += '<button onclick="closeBattle()" class="bg-yellow-600 hover:bg-yellow-500 px-6 py-2 rounded text-gray-900 font-bold">继续</button>';
+        var _extraSlot = document.getElementById('battle-result-extra');
+        if (_extraSlot) _extraSlot.innerHTML = extraHtml;
+        actionsHtml += extraHtml + '<button onclick="closeBattle()" class="bg-yellow-600 hover:bg-yellow-500 px-6 py-2 rounded text-gray-900 font-bold">继续</button>';
         document.getElementById('battle-actions').innerHTML = actionsHtml;
         if (winner === 'player' && currentBattle) {
             // 战利品系统 v1.0：战斗胜利不掉落物品，物品通过搜刮(人类)/解剖(野兽)获得
@@ -5443,8 +5562,8 @@ function showBattleUI(battle) {
                 if (typeof window.checkAchievementsNow === 'function') {
                     window.checkAchievementsNow();
                 }
-            } catch (e) {}
-            if (window.showEffect) try { window.showEffect('quest_done'); } catch (e) {}
+            } catch (e) { console.warn('[静默失败] js/app.js:5446 · showBattleUI：战后成就检查被吞——该跳的成就一声不吭', e && e && e.message); }
+            if (window.showEffect) try { window.showEffect('quest_done'); } catch (e) { console.warn('[静默失败] js/app.js:5447 · showBattleUI：任务完成特效没放出来——屏上少了那声彩', e && e && e.message); }
             // 战斗胜利：将敌人标记为尸体（不直接移除）
             // v12.9：noSpoils（敌人遁走）时不标记尸体
             try {
@@ -5542,7 +5661,7 @@ function showBattleUI(battle) {
             }
             // v20.0：清剿兽潮战败 → 带伤结算（扣气血/精力/真气 + 城望 + 大事记 + 就医提示）
             if (currentBattle && currentBattle._isBeastTideRaid && typeof window.settleBeastTideRaid === 'function') {
-                try { window.settleBeastTideRaid(false); } catch (eTideLose) {}
+                try { window.settleBeastTideRaid(false); } catch (eTideLose) { console.warn('[静默失败] js/app.js:5545 · showBattleUI：兽潮战败结算被吞——气血/精力不扣、城望不降、就医提示不出', eTideLose && eTideLose && eTideLose.message); }
             }
             // v20.0 1.1 天劫战败 → 标记天劫失败（残魂态/转世由下方 maybeEnterSoulState + handleDefeatRevival 既有流程接管）
             if (currentBattle && currentBattle._isHeavenlyTribulation && typeof window.settleTribulation === 'function') {
@@ -5611,7 +5730,7 @@ function showBattleUI(battle) {
             }
             // 时间跳半天（720分钟 = 12小时）
             if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
-                try { window.timeSystem.advanceTime(720, '战败昏迷'); } catch (e) {}
+                try { window.timeSystem.advanceTime(720, '战败昏迷'); } catch (e) { console.warn('[静默失败] js/app.js:5614 · showBattleUI：战败昏迷的半天时辰没走——昏迷一场分文不花', e && e && e.message); }
             }
             // P0-5 死亡仙侠化：金丹+且肉身被毁 → 神魂离体（残魂态），接管本次战败
             // v25.0 例外：《灵气之尽》剧情战的败北是剧本的一部分（可再战），不走残魂与转世
@@ -7290,6 +7409,8 @@ function _updateCharacterStatusImpl() {
             const essenceRequired = window.getEssenceRequired(realmIndex, layer);
             const essence = currentCharData.essence || 0;
             essenceDisplay.textContent = `真元: ${essence}/${essenceRequired}`;
+            // v25.1·P17：真元/真气/历练/精力四本账名字太像，界面从不说清关系——挂上明白话
+            essenceDisplay.title = '真元＝修炼积累的突破进度（打坐增长），与顶部「真气」（可消耗的储量）是两本账';
         }
         if (temperingDisplay && typeof window.getTemperingRequired === 'function') {
             const realmIndex = window.getRealmIndex(currentCharData.realm);
@@ -7297,12 +7418,20 @@ function _updateCharacterStatusImpl() {
             const temperingRequired = window.getTemperingRequired(realmIndex, layer);
             const tempering = currentCharData.tempering || 0;
             temperingDisplay.textContent = `历练: ${tempering}/${temperingRequired}`;
+            temperingDisplay.title = '历练＝突破的门槛计数（演武场训练、战斗、行事积累），与「精力」（行动消耗）是两本账';
         }
         if (qiLimitDisplay && typeof window.getQiMax === 'function') {
             const realmIndex = window.getRealmIndex(currentCharData.realm);
             const layer = currentCharData.layer || 1;
             const qiMax = window.getQiMax(realmIndex, layer);
-            qiLimitDisplay.textContent = `境界提供${qiMax}真气上限`;
+            // v25.1·P17：旧文案「境界提供50真气上限」配着满格 100/100 的条，另 50 的来源无说明——
+            // 把总账与境界账都摆出来，差值注明来自何处
+            var _qiEffMax = (typeof window.getEffectiveMax === 'function')
+                ? window.getEffectiveMax('maxQi') : (currentCharData.maxQi || qiMax);
+            qiLimitDisplay.textContent = (_qiEffMax > qiMax)
+                ? `真气上限 ${_qiEffMax} ＝ 境界 ${qiMax} ＋ 体质/装备等 ${_qiEffMax - qiMax}`
+                : `境界提供${qiMax}真气上限`;
+            qiLimitDisplay.title = '真气＝可消耗的储量（打坐/施法/旅行都烧它），回补靠静室、灵泉、歇息与定时恢复';
         }
     }
 }
@@ -7355,6 +7484,15 @@ function talkToNPC(npcId) {
         return;
     }
 
+    // v25.2·P27：同地守卫——深谈（executeDeepTalkSubOption）与情感线（executeEmotionInteraction）
+    // 早就有「隔空喊话是听不见的」这道闸，唯独闲聊没有：人在天涯也能找任意 NPC「聊」一局，
+    // 白赚 15 分钟推进 + 随机好感，而 NPC 记忆一笔不记（showNPCDialog 判成远程连 greet 都不落）。
+    // 现在与深谈同规：不在一处就如实拒绝，不扣时辰不动好感。
+    if (typeof window.npcNotCoLocated === 'function' && window.npcNotCoLocated(npc)) {
+        showMessage('你与' + npc.name + '并不在一处——隔空喊话是听不见的。', 'warning');
+        return;
+    }
+
     if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
         window.timeSystem.advanceTime(15, '与NPC对话');
     }
@@ -7365,6 +7503,12 @@ function talkToNPC(npcId) {
     } else {
         npc.relationship = npc.relationship || { affection: 0 };
         npc.relationship.affection = Math.max(-100, Math.min(100, (npc.relationship.affection || 0) + affectionChange));
+    }
+    // v25.2·P27：闲聊必须记进 NPC 记忆（meetCount/firstMet/impressions）——全仓 7 处恋爱/关系
+    // 门禁读的就是这两个字段，旧版闲聊一笔不记，靠说话认识的人永远算「不认识」。
+    // noAffection：好感已由上方骰子直接结算，账房不再重复 +1（F-18 gift 同判例，试玩清单·二建议3）。
+    if (typeof npc.recordPlayerAction === 'function') {
+        try { npc.recordPlayerAction('talk', affectionChange >= 0 ? 'positive' : 'negative', { noAffection: true }); } catch (e) { console.warn('[静默失败] talkToNPC：闲聊没记进 NPC 记忆', e && e.message); }
     }
 
     const aff = npc.relationship?.affection || 0;
@@ -7701,6 +7845,18 @@ function handleDefeatRevival(battleOverride) {
                     playerEntity.durabilities[pid] = Math.min(max, playerEntity.durabilities[pid] + Math.floor(max * 0.3));
                 }
             }
+            // v25.1·试-20：+30% 回写场外耐久账——旧代码只写进即将被丢弃的战斗实体，
+            // closeBattle 早已把战败那一刻的 0 耐久快照进 _savedDurabilities（下一场战斗的唯一来源），
+            // 面板读的 bodyDurability 也不同步，导致「耐久恢复三成」的承诺蒸发、下一场照旧 0 耐久开打。
+            window._savedDurabilities = Object.assign({}, playerEntity.durabilities);
+            if (playerEntity.maxDurabilities) {
+                window._savedMaxDurabilities = Object.assign({}, playerEntity.maxDurabilities);
+            }
+            if (typeof bodyDurability !== 'undefined') {
+                Object.keys(playerEntity.durabilities).forEach(function (k) {
+                    bodyDurability[k] = playerEntity.durabilities[k];
+                });
+            }
         }
         // 清除所有伤口
         if (playerEntity.physiology.wounds) {
@@ -7894,7 +8050,7 @@ function claimDailyIncome(silentIfClaimed = false) {
         if (window.gameLog && typeof window.gameLog.add === 'function') {
             window.gameLog.add(`每日收入入账：${spiritStoneIncome}灵石 + ${goldIncome}铜钱（第${dayKey}天）`, 'economy');
         }
-    } catch (eIncomeLog) {}
+    } catch (eIncomeLog) { console.warn('[静默失败] js/app.js:7897 · claimDailyIncome：每日收入没落进审计账本——钱到账了，gameLog 里查无对证', eIncomeLog && eIncomeLog && eIncomeLog.message); }
     showMessage(`每日收入：${goldIncome}铜钱 + ${spiritStoneIncome}灵石（基础+门派+境界）`, 'success');
     if (window.updateCharacterStatus) window.updateCharacterStatus();
     if (window.updateCurrencyUI) window.updateCurrencyUI();
@@ -7955,9 +8111,15 @@ function sellGatheredItems() {
 function getCurrentRegionForGathering() {
     // 尝试从多个来源获取当前区域
     if (window.currentRegionForMap) return window.currentRegionForMap;
-    if (window.currentLocation) {
+    // v25.0：改前读 window.currentLocation——location-system 顶层 let 的同名幽灵（从不挂 window），
+    // 恒 undefined → 不在随机图上时这条「按当前城市反查区域」的支路多年死透，采集产出拿不到区域。
+    // 改走真 getter getCurrentLocation()（location-system 顶层 function，真在 window 上）；
+    // 比对按 DES-57 口径两边去空白（mapData 写「帝都 · 长安」，定位账可能是「帝都·长安」）。
+    var _loc = (typeof getCurrentLocation === 'function') ? getCurrentLocation() : '';
+    if (_loc) {
+        var _locKey = String(_loc).replace(/\s+/g, '');
         for (const [region, data] of Object.entries(window.mapData || {})) {
-            if (data.cities && data.cities.includes(window.currentLocation)) {
+            if (data.cities && data.cities.some(function (c) { return String(c).replace(/\s+/g, '') === _locKey; })) {
                 return region;
             }
         }
@@ -8058,23 +8220,13 @@ function mineOre() {
             if (typeof window.addItem === 'function') {
                 got = Number(window.addItem(r.item, count)) || 0;
                 这一笔账 = window.addItemFailReason || null;
-            } else if (window.inventory && window.inventory.slots) {
-                let added = false;
-                for (const slot of window.inventory.slots) {
-                    if (slot && slot.templateId === r.item) {
-                        slot.count += count;
-                        added = true;
-                        break;
-                    }
-                }
-                if (!added) {
-                    for (let i = 0; i < window.inventory.slots.length; i++) {
-                        if (!window.inventory.slots[i]) {
-                            window.inventory.slots[i] = { templateId: r.item, name: r.name, count: count };
-                            break;
-                        }
-                    }
-                }
+            } else if (window.inventory && typeof window.inventory.addItem === 'function') {
+                got = Number(window.inventory.addItem(r.item, count)) || 0;
+                这一笔账 = window.addItemFailReason || null;
+            } else {
+                // v24.2 裸格子除根：没有正式入袋通道就如实按零收（下面的「没带走」话术兜底），
+                // 旧写法照写 plain object 病格子、还把 got 谎报成全额
+                got = 0;
             }
             if (got > 0) gained.push(`${displayName} ×${got}`);
             if (got < count) { 没带走 += (count - got); 矿账.push(这一笔账); }
@@ -8104,18 +8256,20 @@ function gatherHerbs() {
     currentCharData.energy -= 10;
     
     if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
-    if (typeof window.getWeatherGatheringBonus === 'function') {
-        try { window._gatherWeatherBonus = window.getWeatherGatheringBonus() || 1; } catch (e) { window._gatherWeatherBonus = 1; }
-    }
         window.timeSystem.advanceTime(15, '采集灵药');
     }
-    
+
     // 获取区域加成
     const region = getCurrentRegionForGathering();
     let regionBonus = 1.0;
     if (region && window.getRegionBonus) {
         const bonus = window.getRegionBonus(region);
         if (bonus && bonus.herb) regionBonus = bonus.herb;
+    }
+    // v25.1·试-17：天气采集加成真正乘进收益——旧代码只把倍率写进 window._gatherWeatherBonus（全仓零读方的死账），
+    // 雷雨天采药一丝不涨，与 mineOre(:8060)/野图采集两套口径对不上。这里照 mineOre 同款真乘。
+    if (typeof window.getWeatherGatheringBonus === 'function') {
+        try { regionBonus *= (window.getWeatherGatheringBonus() || 1); } catch (e) {}
     }
     // v20.48 境界质变补电：炼气「灵气感应」采集效率+20%（herb×1.2）—— 此前无人读
     try {
@@ -8615,8 +8769,36 @@ var FISH_SPOTS = {
     }
 };
 
+// v25.1·P25：主线第 3 章《首次猎妖》要 kill 妖兽×5，但 14 个面板没有一个能主动触发野外战斗的入口
+// （战斗系统/目标匹配/战利品管线全都在，纯粹缺门）——在「活动」面板补一扇：出城猎妖。
+// 成本与采集同尺（10 精力 + 30 分钟脚程），遭遇走 startBattle('wild_beast') 既有管线。
+function huntWildBeasts() {
+    if (!currentCharData) { showMessage('请先创建角色', 'warning'); return; }
+    if ((currentCharData.energy || 0) < 10) { showMessage('精力不足！出城猎妖需要 10 精力', 'error'); return; }
+    currentCharData.energy -= 10;
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(30, '出城猎妖');
+    showMessage('🗡️ 你循着兽径出城搜猎——前方妖气浮动，有东西盯上了你！', 'info');
+    if (typeof window.startBattle === 'function') {
+        window.startBattle('wild_beast');
+    } else {
+        showMessage('战斗系统未加载，无法猎妖。', 'error');
+    }
+    if (window.updateCharacterStatus) window.updateCharacterStatus();
+}
+window.huntWildBeasts = huntWildBeasts;
+
 function goFishing(spotType) {
     if (!currentCharData) { showMessage('请先创建角色', 'warning'); return; }
+    // v25.1·试-25：水域有门——旧代码在内陆帝都也能「海域钓鱼」钓上金枪鱼，叙事穿帮、海产第一天无门槛可得。
+    // 海域点要求身处沿海州（东南海域/北冥）；查不到所在州（位面等）时放行，不做软锁。
+    if (spotType === 'sea') {
+        var _fishRegion = (typeof getCurrentRegionForGathering === 'function') ? getCurrentRegionForGathering() : null;
+        var _coastalRegions = { '东南海域': 1, '北冥': 1 };
+        if (_fishRegion && !_coastalRegions[_fishRegion]) {
+            showMessage('🌊 此地无海——「' + _fishRegion + '」深处内陆，海域垂钓须去东南海域或北冥的沿海之地。就近可钓河流/湖泊。', 'warning');
+            return;
+        }
+    }
     var energy = currentCharData.energy ?? 100;
     if (energy < 10) { showMessage('精力不足！', 'error'); return; }
     currentCharData.energy = energy - 10;
@@ -8669,23 +8851,34 @@ function goFishing(spotType) {
 
 // ==================== v6.4 二周目/多周目系统 ====================
 function startNewGamePlus() {
-    if (!confirm('开启新游戏+？保留境界和部分属性重新开始。')) return;
+    // v25.1·试-15：门槛——面板文案写着「通关后开启」，旧代码零检查，新手第一天就能点；
+    // 通关口径：已超脱凡尘（飞升/金仙）或寿元已尽接受过结局。
+    var _cdNg = window.currentCharData;
+    var _ascendedNg = !!_cdNg && (_cdNg.realm === '飞升' || _cdNg.realm === '金仙');
+    var _lifeEndedNg = !!(_cdNg && _cdNg.flags && _cdNg.flags.lifespanEnded);
+    if (!_ascendedNg && !_lifeEndedNg) {
+        showMessage('🌟 新游戏+要在通关后才开启——飞升超脱（飞升/金仙）或寿元已尽接受结局者，方可带着记忆转世。', 'info');
+        return;
+    }
+    if (!confirm('开启新游戏+？继承前世的资质（六维属性）与周目数，修为从头再来。')) return;
+    // v25.1·试-15：六维读 attrs 真账——旧代码读顶层 _cdNg.strength 恒 undefined，JSON.stringify 直接丢键，
+    // 存下来的"继承数据"是个空壳。
+    var _attrsNg = (_cdNg && _cdNg.attrs) || {};
     var saveData = {
-        name: currentCharData?.name,
-        gender: currentCharData?.gender,
-        realm: currentCharData?.realm,
-        layer: currentCharData?.layer,
-        level: currentCharData?.level,
-        strength: currentCharData?.strength,
-        dexterity: currentCharData?.dexterity,
-        intelligence: currentCharData?.intelligence,
-        constitution: currentCharData?.constitution,
-        willpower: currentCharData?.willpower,
-        meridian: currentCharData?.meridian,
-        ngPlus: (currentCharData?.ngPlus || 0) + 1
+        name: _cdNg?.name,
+        gender: _cdNg?.gender,
+        strength: _attrsNg.strength,
+        dexterity: _attrsNg.dexterity,
+        intelligence: _attrsNg.intelligence,
+        constitution: _attrsNg.constitution,
+        willpower: _attrsNg.willpower,
+        meridian: _attrsNg.meridian,
+        ngPlus: (_cdNg?.ngPlus || 0) + 1
     };
     localStorage.setItem('xianxia_ngplus', JSON.stringify(saveData));
-    showMessage('数据已保存，请重新开始游戏以继承属性。', 'success');
+    showMessage('🌟 前尘记忆已凝成玉——回到资质录入，重新「踏入仙途」即带资质转世。', 'success');
+    // v25.1·试-14：不再只丢一句「请重新开始游戏」的空头支票——真把人送回创角界面
+    if (typeof backToCreation === 'function') backToCreation();
 }
 
 function checkNewGamePlus() {
@@ -8987,17 +9180,9 @@ function exchangeContribution(itemId, cost) {
     } else if (window.inventory && typeof window.inventory.addItem === 'function') {
         got = Number(window.inventory.addItem(realItemId, count)) || 0;
     } else {
-        // 手动添加
-        var 搁下 = 0;
-        for (let i = 0; i < window.inventory.slots.length && 搁下 < count; i++) {
-            if (!window.inventory.slots[i]) {
-                const 份 = count - 搁下;
-                window.inventory.slots[i] = { templateId: realItemId, count: 份 };
-                搁下 += 份;
-                break;
-            }
-        }
-        got = 搁下;
+        // v24.2 裸格子除根：旧「手动搁货」兜底手写 plain object 病格子（FIX-01 根病）——
+        // 两条正式通道都不存在时它是死路，按零收，下面的退款分支会把贡献原样退回
+        got = 0;
     }
     const itemName = window.itemById[realItemId]?.name || realItemId;
     if (got <= 0) {
@@ -9157,9 +9342,9 @@ function haggleWanderItem(index, priceMul) {
     const item = wanderMerchantStock[index];
     if (item._haggled) { showMessage('这件货的价已经谈过了——游商瞥你一眼，不再搭腔。', 'info'); return; }
     item._haggled = true;
-    try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(5, '讨价还价'); } catch (e) {}
+    try { if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(5, '讨价还价'); } catch (e) { console.warn('[静默失败] js/app.js:9160 · haggleWanderItem：讨价还价的 5 分钟没扣——谈了价却没花时间', e && e && e.message); }
     var eloquence = 0;
-    try { if (typeof window.getLifeSkill === 'function') eloquence = window.getLifeSkill('口才') || 0; } catch (e2) {}
+    try { if (typeof window.getLifeSkill === 'function') eloquence = window.getLifeSkill('口才') || 0; } catch (e2) { console.warn('[静默失败] js/app.js:9162 · haggleWanderItem：口才技艺读取失败——成功率按 0 算，白谈输一局', e2 && e2 && e2.message); }
     var chance = Math.min(0.85, 0.35 + eloquence * 0.01);
     if (Math.random() < chance) {
         item._haggleMul = 0.8;
@@ -9432,7 +9617,7 @@ function onDungeonBattleResolved(won) {
         dungeonState.active = false;
         // F-1.2 重构：补全 dungeon:completed 事件 emit（仅通关最终层时）
         if (window.EventBus && typeof window.EventBus.emit === 'function') {
-            try { window.EventBus.emit('dungeon:completed', { dungeonId: dungeonState.id, dungeonName: dungeonState.name }); } catch (e) {}
+            try { window.EventBus.emit('dungeon:completed', { dungeonId: dungeonState.id, dungeonName: dungeonState.name }); } catch (e) { console.warn('[静默失败] js/app.js:9435 · onDungeonBattleResolved：dungeon:completed 事件被吞——听秘境通关的任务/成就不会推进', e && e && e.message); }
         }
         // DES-97（第一百四十批／真机屏证抓出）：本处是中段位——回退串后面还接 + '秘境不会因此重开'（无句号，属散文原样）。前两把尺看不见 || '回退串') 右边接 + 这一层。句尾支 addItemFailText 带句号会破句，改用中段支 addItemFailPhrase 并去掉回退串句号。
         showMessage(dungeonState.name + '通关！获得 ' + clearBonus + ' 灵石' + (_通关件 > 0 ? '与稀有装备' : '——那件稀有装备没能带走：' + ((typeof window.addItemFailPhrase === 'function' && window.addItemFailPhrase('稀有装备')) || '这一件先还留在原处') + '秘境不会因此重开'), _通关件 > 0 ? 'success' : 'warning');
@@ -9638,7 +9823,7 @@ function exploreDungeonFloor() {
         currentCharData.dungeonProgress = currentCharData.dungeonProgress || {}; currentCharData.dungeonProgress[dungeonState.id] = 1; dungeonState.active = false;
         // F-1.2 重构：补全 dungeon:completed 事件 emit
         if (window.EventBus && typeof window.EventBus.emit === 'function') {
-            try { window.EventBus.emit('dungeon:completed', { dungeonId: dungeonState.id, dungeonName: dungeonState.name }); } catch (e) {}
+            try { window.EventBus.emit('dungeon:completed', { dungeonId: dungeonState.id, dungeonName: dungeonState.name }); } catch (e) { console.warn('[静默失败] js/app.js:9641 · exploreDungeonFloor：dungeon:completed 事件被吞——听秘境通关的任务/成就不会推进', e && e && e.message); }
         }
         // DES-90（第一百三十九批）：问不到账时不许由站点断言满包；秘境是一次性内容，选②
         // DES-97（第一百四十批／真机屏证抓出）：本处是中段位——回退串后面还接 + '仍留在秘境内，秘境不会因此重开'。前两把尺看不见 || '回退串') 右边接 + 这一层。注意：此处回退串『它没有跟你走』本来就没有句号，只需换支名（addItemFailText → addItemFailPhrase），回退串一个字不许动。
@@ -9842,7 +10027,8 @@ function globalStartBattle(typeOrData, extra) {
     // 第一百一十波 · FIX-05：开战先收掉残留的运行时弹窗——演武场训练窗此前赖在战斗面板上，
     // 把攻击按钮都拦得点不动（静态面板 battle/reincarnation/entity-interaction 在保护名单里，不会误伤）
     try { if (typeof window.closeRuntimeModals === 'function') window.closeRuntimeModals(); } catch (eCM) {}
-    if (typeof window.codexHint === 'function') { try { window.codexHint('tut_first_combat'); } catch (e) {} }
+    // v25.1·试-26：首战引导不再挂在这里——仗已经打起来了才教「怎么开战」，时机倒错。
+    // 触点前移到 switchPanel('map')（打开地图那一刻教「赶路会遭遇/演武场练手」，见下）。
         var charData = window.currentCharData;
         if (!charData) {
             if (window.showMessage) window.showMessage('请先创建角色', 'warning');
@@ -10231,7 +10417,7 @@ window._fireDeptAct = function (mode) {
                 window.inventory.currency.spiritStones = (window.inventory.currency.spiritStones || 0) + n;
                 if (window.currentCharData) window.currentCharData.spiritStones = window.inventory.currency.spiritStones;
             }
-        } catch (e) {}
+        } catch (e) { console.warn('[静默失败] js/app.js:10234 · _fireDeptAct._pay：火政司的灵石账没动——钱包与角色档分文未变，领了个空', e && e && e.message); }
     };
     // DES-48：本页两笔账都走统一通道，而通道会夹逼（业障 ±100、城市声望 0~10000），
     // 照抄开价就在触顶时多印一截——名目沿用本页原有的「功德」「本城声望」，
@@ -10430,7 +10616,22 @@ function openMedicalClinic() {
     var _hpNeed = player.health !== undefined && (player.health || 0) < (player.maxHealth || 100);
     var _bleedNeed = _woundsNow.some(function (w) { return w && w.bleeding && !w.stabilized; });
     var _poisonNeed = !!player._poisoned;
-    var needOuter = _hpNeed || _bleedNeed || _poisonNeed;
+    // v25.1·试-09：深伤/结构损伤也算「有外伤要治」——旧代码全仓 severity 递减的两处（自愈/医师）都排除 depth>=3，
+    // 状态面板却永久挂「深伤×N（需就医馆）」，医馆实际只止血：承诺不兑现。现医馆开「正骨续脉」深伤分支。
+    var _deepNeed = false;
+    try {
+        _deepNeed = _woundsNow.some(function (w) { return w && !w.healed && (w.depth || 0) >= 3; });
+        if (!_deepNeed) {
+            var _pe0 = window._playerPhysiology && window._playerPhysiology.physiology;
+            if (_pe0 && _pe0.parts) {
+                _deepNeed = Object.keys(_pe0.parts).some(function (k) {
+                    var p = _pe0.parts[k];
+                    return p && ((p.structuralDamage || 0) > 0 || (p.nerveDamage || 0) > 0 || (p.swelling || 0) > 0 || p.fracture);
+                });
+            }
+        }
+    } catch (eDeep0) {}
+    var needOuter = _hpNeed || _bleedNeed || _poisonNeed || _deepNeed;
     // 里症预检（与坐堂账同口径：毒负荷/神魂震伤/伤疼超轻症线，或风寒未散）
     var needInner = false;
     try {
@@ -10511,18 +10712,43 @@ function openMedicalClinic() {
                 if (_stabilized > 0) log.add('大夫为你止血包扎，稳定了 ' + _stabilized + ' 处伤口。', 'success');
             }
         } catch (e) {}
-        // 轻伤：部位耐久 +2（若有）
+        // v25.1·试-09：「正骨续脉」——深伤与部位结构损伤的恢复出口（医士级 30 灵石/severity-20/depth-1，
+        // 医馆是设施级，同档略强：50 灵石一诊，深伤 severity-25/depth-1，结构-25/神经-20/肿胀-30，骨折待结构清零复位）。
+        // 逐次递减不是一步登天；旧「轻伤部位耐久+2」分支读 parts.durability——部位账上根本没有该字段，是死枝，一并由此替代。
         try {
-            var pe = window._playerPhysiology && window._playerPhysiology.physiology;
-            if (pe && pe.parts) {
-                Object.keys(pe.parts).forEach(function(k) {
-                    var p = pe.parts[k];
-                    if (p && p.durability != null && p.maxDurability != null && p.durability < p.maxDurability) {
-                        p.durability = Math.min(p.maxDurability, p.durability + 2);
-                    }
+            var _deepWounds = (_woundsNow || []).filter(function (w) { return w && !w.healed && (w.depth || 0) >= 3; });
+            var _pe2 = window._playerPhysiology && window._playerPhysiology.physiology;
+            var _structParts = [];
+            if (_pe2 && _pe2.parts) {
+                Object.keys(_pe2.parts).forEach(function (k) {
+                    var p = _pe2.parts[k];
+                    if (p && ((p.structuralDamage || 0) > 0 || (p.nerveDamage || 0) > 0 || (p.swelling || 0) > 0 || p.fracture)) _structParts.push(p);
                 });
             }
-        } catch (e) {}
+            if (_deepWounds.length || _structParts.length) {
+                var _boneFee = 50;
+                var _stones2 = (window.XianXia && window.XianXia.DataManager) ? window.XianXia.DataManager.getSpiritStones()
+                    : ((window.inventory && window.inventory.currency && window.inventory.currency.spiritStones) || 0);
+                if (_stones2 >= _boneFee) {
+                    if (window.XianXia && window.XianXia.DataManager) window.XianXia.DataManager.deductSpiritStones(_boneFee);
+                    else if (window.inventory && window.inventory.currency) window.inventory.currency.spiritStones -= _boneFee;
+                    _deepWounds.forEach(function (w) {
+                        w.severity = Math.max(0, (w.severity || 0) - 25);
+                        w.depth = Math.max(0, (w.depth || 0) - 1);
+                        if ((w.severity || 0) <= 0 && (w.depth || 0) <= 0) { w.healed = true; w.bleeding = false; w.stabilized = true; }
+                    });
+                    _structParts.forEach(function (p) {
+                        p.structuralDamage = Math.max(0, (p.structuralDamage || 0) - 25);
+                        p.nerveDamage = Math.max(0, (p.nerveDamage || 0) - 20);
+                        p.swelling = Math.max(0, (p.swelling || 0) - 30);
+                        if (p.fracture && (p.structuralDamage || 0) <= 0) p.fracture = false;
+                    });
+                    log.add('🦴 大夫施以「正骨续脉」：药力顺着经络续上断损——深伤 ' + _deepWounds.length + ' 处、结构旧损 ' + _structParts.length + ' 处各退一层（诊金' + _boneFee + '灵石）。陈旧痼疾宜按疗程复诊，一次减一层。', 'success');
+                } else {
+                    log.add('🦴 大夫指着你的旧伤：「这是伤进骨子里的痼疾，止血包扎治不了——正骨续脉一次 ' + _boneFee + ' 灵石，囊中羞涩就攒够了再来。」', 'warning');
+                }
+            }
+        } catch (eBone) {}
     }
     // 第六十二波 · 坐堂看里症：里症账按病各自收诊金（没病不收）——外伤诊金不含里症，两本分明
     if (needInner) {
@@ -10981,7 +11207,7 @@ function settleBeastTideRaid(won) {
                 if (window.gameLog && window.gameLog.add) window.gameLog.add('🌊 潮头遗宝：兽潮退去，滩上留下「' + ((_pt && _pt.name) || tidePrize) + '」——大潮压箱的货，归于挡潮的人。', 'success');
             } else { tidePrize = null; }
         }
-    } catch (e) {}
+    } catch (e) { console.warn('[静默失败] js/app.js:10984 · settleBeastTideRaid：潮头遗宝没发出去——挡住兽潮该得的宝贝没进包，屏上也无话', e && e && e.message); }
     var 总话 = 货账话(raid.漏账, '潮水的兽核');
     if (window.showMessage) window.showMessage('🐾 兽潮清剿完毕。共得兽核 ×' + raid.cores + '，历练 +' + raid.tempering + (raid.lostCores ? '（另有 ' + raid.lostCores + ' 枚滚回潮水里了' + (总话 ? '：' + 总话 : '，没能落进你的行囊') + '）' : '') + (tidePrize ? '。潮头遗宝「' + ((window.itemById[tidePrize] || {}).name || tidePrize) + '」已入背包' : '') + '。', raid.lostCores ? 'warning' : 'success');
     if (window.WorldJournal && typeof window.WorldJournal.record === 'function') {

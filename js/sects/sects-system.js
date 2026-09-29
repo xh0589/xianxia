@@ -300,6 +300,10 @@ function joinSect(sectId, evalResult) {
         isConcubine: isConcubineFlag,
         concubineFavor: isConcubineFlag ? 0 : undefined
     });
+    // v25.1·P9 P24：game-state 重置路径写的是另一套结构 {sectName:null, position:'散修', ...}（无 isInSect），
+    // Object.assign 只覆盖不清键 → 入门后存档里 isInSect:true 与残留 position:'散修' 并存。
+    // position 全仓零读者（仅 game-state 重置在写），是死字段——入门时显式删掉，不留自相矛盾的脏键。
+    delete discipleState.position;
     // 改造批：入门（或叛门改投）底子清零重练——旧派的功夫带不走，新派的底子从头攒
     discipleState._passive = { xp: 0 };
 
@@ -311,6 +315,7 @@ function joinSect(sectId, evalResult) {
             : ((window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') ? window.timeSystem.getAbsoluteDay() : 1);
         discipleState._sectEventDay = _joinAbsDay;
         discipleState._pendingSectEvent = null;
+        discipleState.joinDay = _joinAbsDay; // v25.1·P9 P6：记下入门的游戏日——leaveSect 据此拦「入门当日即退」
     } catch (eJoinEvt) {}
 
     // 「入门即震动江湖势力格局」这一支刻意没接：退派只有 confirm（零代价）、入门在名册上一键可点，
@@ -363,24 +368,55 @@ function leaveSect(silent = false) {
         if (!silent) alert('你还没有加入任何门派！');
         return false;
     }
-    
+
     const sectName = discipleState.sectId;
-    
-    if (!silent && !confirm(`确定要退出 ${sectName} 吗？退出后将失去所有门派资源和权限。`)) {
-        return false;
+
+    // v25.1·P9 P6：退门不再零代价一键走人——
+    // ① 入门当日不可退（joinDay 由 joinSect 按 getAbsoluteDay 记下；旧档无 joinDay 不受此限）；
+    // ② 确认层如实列出下面 Object.assign 真会清掉的账，不再只有一句「失去所有门派资源和权限」。
+    // silent=true（叛门改投等内部路径，已有自己的代价与确认）不走这两道。
+    if (!silent) {
+        try {
+            var _leaveAbsDay = (typeof window.getAbsoluteDay === 'function') ? window.getAbsoluteDay()
+                : ((window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') ? window.timeSystem.getAbsoluteDay() : null);
+            if (_leaveAbsDay != null && discipleState.joinDay != null && _leaveAbsDay === discipleState.joinDay) {
+                if (typeof window.showMessage === 'function') {
+                    window.showMessage('你今日才在山门磕头立誓——入门当日便要退门，门规虽宽，脸面总要留些。明日再来吧。', 'warning');
+                } else {
+                    alert('你今日刚入门，当日不可退门。明日再来吧。');
+                }
+                return false;
+            }
+        } catch (eLeaveDay) {}
+        var _lostRankName = discipleState.rankName || '弟子';
+        var _lostContrib = Number(discipleState.contribution) || 0;
+        var _lostPoints = Number(discipleState.points) || 0;
+        var _lostLevel = Number(discipleState.level) || 0;
+        var _hadMaster = !!discipleState._masterName;
+        if (!confirm('确定要退出 ' + sectName + ' 吗？踏出山门，这些账即刻清掉：\n\n'
+            + '· 职位「' + _lostRankName + '」丧失，重归散修\n'
+            + '· 累计贡献 ' + _lostContrib + ' 点全部清零\n'
+            + '· 门派积分 ' + _lostPoints + '、弟子等级 Lv.' + _lostLevel + ' 一并抹去\n'
+            + '· 每日俸禄、门派功法加持、住宿/藏经阁等门中特权即刻失效\n'
+            + (_hadMaster ? '· 与师父「' + discipleState._masterName + '」的门中师徒名分就此断了\n' : '')
+            + '\n日后再想回来，须重走脚程、重新过入门考核，职位从最低做起。')) {
+            return false;
+        }
     }
-    
+
     // 重置状态（使用 Object.assign 保留引用）
     Object.assign(discipleState, {
         isInSect: false,
         sectId: null,
-        rank: 0,
-        rankName: '外门弟子',
+        sectName: null,   // v25.1·P9 P24：此前退门漏清 sectName，与 game-state 重置路径语义对齐
+        rank: null,       // v25.1·P9 P24：此前写 rank:0——0 在账本里是「掌门」，退门反倒成了最高职；对齐重置路径改 null
+        rankName: null,
         contribution: 0,
         points: 0,
         level: 0,
         tasksCompleted: 0,
         joinTime: null,
+        joinDay: null,    // v25.1·P9 P6：入门日账随退门清掉
         // F-31：叛门/退派时清除师徒与派系运行时字段
         // 此前不清 _masterId → 新门派拜师时 if(ds._masterId) 误判"已有师父"
         _masterId: null,
@@ -393,6 +429,7 @@ function leaveSect(silent = false) {
         _pendingSectEvent: null
         // 注：_leftMasters 是离师历史记录，跨退派保留，不清
     });
+    delete discipleState.position; // v25.1·P9 P24：死字段（全仓零读者），退门后不留在存档里
     
     // 更新UI
     updateSectUI();
@@ -829,15 +866,30 @@ function updateTaskUI() {
 }
 
 // ============ 打开加入门派界面 ============
+// v25.1·P9 P5：此前这里点一下就 joinSect——无脚程、无考核、直接杂役弟子，与「地图→山门→申请入门」
+// 那条 30 分钟脚程+入门考核的路终点相同、代价天差地别。现「加入」行为收归山门：名录只负责送到山门口
+//（travelToSectFromList：内部 enterSect + chargeFootJourney，与地图侧同一支账），真正拜入走山门考核。
+function sectListGoToGate(sectId) {
+    if (typeof window.travelToSectFromList === 'function') {
+        window.travelToSectFromList(sectId);
+        return;
+    }
+    // 兜底：行脚入口未装载时也不悄悄零代价入门——指路让玩家从地图上山
+    if (typeof window.showMessage === 'function') {
+        window.showMessage('山门行脚未就绪——请从地图点「' + sectId + '」上山，再申请入门。', 'warning');
+    }
+}
+window.sectListGoToGate = sectListGoToGate;
+
 function openJoinSectUI() {
     const modal = document.createElement('div');
     modal.className = 'fixed inset-0 bg-black/70 flex items-center justify-center z-50';
     modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-    
+
     const sectOptions = Object.keys(sectsData || {}).map(sectId => {
         const sect = sectsData[sectId];
         return `
-            <div class="bg-gray-800 border border-gray-600 rounded-lg p-4 hover:border-yellow-500 cursor-pointer" onclick="joinSect('${sectId}'); this.closest('.fixed').remove();">
+            <div class="bg-gray-800 border border-gray-600 rounded-lg p-4 hover:border-yellow-500 cursor-pointer" onclick="sectListGoToGate('${sectId}'); this.closest('.fixed').remove();">
                 <div class="flex justify-between items-center mb-2">
                     <h4 class="font-bold text-yellow-400">${sectId}</h4>
                     <span class="text-xs px-2 py-1 rounded ${sect.type === '正道' ? 'bg-green-600' : (sect.type === '邪派' ? 'bg-red-600' : 'bg-gray-600')}">${sect.type}</span>
@@ -847,23 +899,24 @@ function openJoinSectUI() {
                     <p>位置：${sect.location || '未知'}</p>
                     <p>武器：${sect.weapons || '未知'}</p>
                 </div>
+                <p class="text-xs text-green-400 mt-2">🚶 前往山门 → 到山门后点「申请入门」过考核</p>
             </div>
         `;
     }).join('');
-    
+
     modal.innerHTML = `
         <div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-2xl w-full max-h-[80vh] overflow-y-auto mx-4">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold text-yellow-500">🏛️ 加入门派</h3>
+                <h3 class="text-xl font-bold text-yellow-500">🏛️ 门派名录</h3>
                 <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
             </div>
-            <p class="text-sm text-gray-400 mb-4">选择一个门派加入，你将获得任务、资源和修炼指导</p>
+            <p class="text-sm text-gray-400 mb-4">选一门前往山门（脚程约 30 分钟、耗些精力）；拜入须在山门通过入门考核，考核结果定你的初始职位</p>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 ${sectOptions}
             </div>
         </div>
     `;
-    
+
     document.body.appendChild(modal);
 }
 
@@ -1547,6 +1600,7 @@ if (window.StateRegistry) {
                 level: Number(ds.level) || 1,
                 tasksCompleted: Number(ds.tasksCompleted) || 0,
                 joinTime: ds.joinTime || null,
+                joinDay: ds.joinDay != null ? ds.joinDay : null,   // v25.1·P9 P6：入门游戏日持久化，存读档后「当日不可退」仍生效
                 _gbFaction: ds._gbFaction || null,
                 // F-6 修复：师徒/侍妾/藏经阁参悟/门派事件/任务日/发薪日等下划线字段
                 // 之前未导出，存读档后师徒关系丢失可重拜、藏经阁参悟归零、侍妾变杂役、晋升按钮重出
@@ -1590,6 +1644,7 @@ if (window.StateRegistry) {
             ds.level = Number(data.level) || 1;
             ds.tasksCompleted = Number(data.tasksCompleted) || 0;
             ds.joinTime = data.joinTime || null;
+            ds.joinDay = data.joinDay != null ? data.joinDay : null;   // v25.1·P9 P6
             ds._gbFaction = data._gbFaction || null;
             // F-6 修复：恢复师徒/侍妾/藏经阁/门派事件/任务日/发薪日
             ds._masterId = data._masterId || null;
@@ -1626,6 +1681,7 @@ if (window.StateRegistry) {
             ds.level = 1;
             ds.tasksCompleted = 0;
             ds.joinTime = null;
+            ds.joinDay = null;   // v25.1·P9 P6：清入门日账，避免残留 joinDay 误拦下次退门
             ds._gbFaction = null;
             // F-6 修复：reset 也要清这些字段
             ds._masterId = null;

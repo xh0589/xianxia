@@ -126,10 +126,18 @@ var playerBottleneck = {
     attempts: 0            // 尝试突破次数
 };
 
+// v25.1·试-12：已化解瓶颈的持久账（按境界记）——旧版化解成功只清 isInBottleneck 内存旗，
+// checkBottleneck(realm,layer) 现推恒真、applyBottleneckEffect 下次打坐又把旗置回，等于无限抽税。
+// 走 StateRegistry 随完整存档序列化（照 difficulty-config.js 的既有注册口径）。
+var _bottleneckCleared = {};
+
 // ============ 检查是否处于瓶颈期 ============
 function checkBottleneck(realm, layer) {
     var config = BOTTLENECK_CONFIG[realm];
-    return config && layer >= config.layer;
+    if (!config || layer < config.layer) return false;
+    // v25.1·试-12：本境界瓶颈已化解过 → 放行（换境界后新境界的瓶颈照常）
+    if (_bottleneckCleared[realm]) return false;
+    return true;
 }
 
 // ============ 应用瓶颈效果 ============
@@ -225,14 +233,20 @@ function executeBottleneckSolution(solutionIndex) {
         playerBottleneck.heartDemonChance = 0;
         playerBottleneck.attempts = 0;
 
+        // v25.1·试-12：化解成功记进持久账（按境界）——旧版只清内存旗，下次打坐 applyBottleneckEffect
+        // 又把 isInBottleneck 置回、checkBottleneck 现推恒真，同一瓶颈可被无限次付费"化解"抽税。
+        var _clearedRealm = playerBottleneck.bottleneckRealm || (charData && charData.realm) || '';
+        if (_clearedRealm) _bottleneckCleared[_clearedRealm] = true;
+
         // 增加大量经验
         if (typeof window.addProficiencyExp === 'function') {
             // 给所有装备功法增加经验
             var skills = window.currentSkills || {};
             for (var key in skills) {
-                if (skills[key]) {
-                    window.addProficiencyExp(skills[key].id, 200);
-                }
+                // v25.1·试-06 顺带：槽里可能是对象也可能是字符串 id——双兼容，防 'undefined' 垃圾键
+                var _sk = skills[key];
+                var _skId = _sk ? (typeof _sk === 'object' ? (_sk.id || null) : _sk) : null;
+                if (_skId) window.addProficiencyExp(_skId, 200);
             }
         }
 
@@ -326,4 +340,20 @@ if (typeof window !== 'undefined') {
     window.playerBottleneck = playerBottleneck;
     window.BOTTLENECK_SOLUTIONS = BOTTLENECK_SOLUTIONS;
     window.applyCultivationBottleneckPenalty = applyCultivationBottleneckPenalty;
+    // v25.1·试-12：把「已化解瓶颈」持久账挂上 StateRegistry——随完整存档存/读、新游戏清空。
+    // 就地增删同一个对象引用（checkBottleneck 读的闭包变量与 window 暴露口始终是同一本账）。
+    window._bottleneckCleared = _bottleneckCleared;
+    if (window.StateRegistry && typeof window.StateRegistry.register === 'function') {
+        window.StateRegistry.register('bottleneck', {
+            version: 1,
+            export: function () { return { cleared: _bottleneckCleared }; },
+            import: function (data) {
+                for (var k in _bottleneckCleared) delete _bottleneckCleared[k];
+                if (data && data.cleared && typeof data.cleared === 'object') {
+                    for (var r in data.cleared) { if (data.cleared[r]) _bottleneckCleared[r] = true; }
+                }
+            },
+            reset: function () { for (var k2 in _bottleneckCleared) delete _bottleneckCleared[k2]; }
+        });
+    }
 }

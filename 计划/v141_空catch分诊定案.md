@@ -371,3 +371,32 @@
 | `js/sects/sect-war.js` | 713 |
 | `js/sects/sect-war.js` | 729 |
 | `js/status-effects.js` | 218 |
+
+---
+
+## 插桩进度账
+
+### v24.2 批（2026-09-28）：A 档头部两块落桩，共 43 处
+
+按定案「从 A 档最上面开始」，本批把表头部两大块全部落桩（同行原位改写，零行号漂移）：
+
+- **js/app.js 全量 25 处**（parseSaveSlotsSafe／startGame／restAtInn×2／buyFromCityShop／
+  performEnhancementAction／switchListMode／deleteSave×4／closeBattle／interactTalk／
+  openNpcDeepTalk／showBattleUI×4／claimDailyIncome／haggleWanderItem×2／
+  onDungeonBattleResolved／exploreDungeonFloor／_fireDeptAct._pay／settleBeastTideRaid）
+- **次批 18 处**：battle.js（constructor 时间线）、beast-taming.js（importBeastState／releaseBeastNow）、
+  city-depth.js（addTime 中枢）、city-jobs／city-lodging／festival-fair／street-stall／teahouse-leisure
+  的 spendTime·refresh·say、daily-events.js（_deAddContribution／_deAdvance×2／saveDailyEventState）
+
+**人工判决跳过的 4 处**（按 FIX_NOTES「有意守卫（不动）」口径，不插桩不刷数）：
+
+| 位置 | 判决理由 |
+|---|---|
+| `js/building-effects.js:286` | 第八十二批·FIX-05 特意加的守卫（开战前收训练弹窗，尽力而为） |
+| `js/building-effects.js:722` | 吃饭 feed 失败有诚实兜底（老写法补账＋showMessage 报数），守卫是正确写法 |
+| `js/core/daily-events.js:108` | 战斗中探测（getElementById/classList 能力探测族），实质 C 档 |
+| `js/core/daily-events.js:996` | catch 包的是 console.warn 本身（报警路径的最后兜底），再包一层无意义 |
+
+**读数**（wave141 棘轮，全绿）：真空 catch 总 1974→1956（本批 -43，v24.1 合并已自行收掉一批）、
+A 档 288 基线 → 现读 **170**、C 档 111 未动、留痕 73→**116**。
+每处留痕带站点名＋玩家损失描述＋`e && e && e.message` 空值守卫，过 F3/F4 两把尺。

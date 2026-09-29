@@ -81,6 +81,25 @@ assert(r3.relationship.love === 34 && r3.relationship.fear === 8 && r3.relations
     && r3.relationship.respect === 40 && r3.relationship.hatred === 5,
     'R3 好感/信任/深情/威压/情面/敬重/怨恨七色账全部往返不丢（新通电的三本账在内）');
 
+// ============ R3b 弟子培养进度与荷包（v25.1·试-05）============
+// 真账写点在 js/sects/master-teach.js:58-65/119（传功只写 _teachProgress，出师云游攒 _purse）。
+// 旧版 serialize 白名单漏了这两键——读档一次，传功投资与弟子荷包全蒸发。
+var ntp = new NPC('sect_leader_test', '测试弟子', { gender: 'male' });
+ntp._teachProgress = 55;
+ntp._purse = 120;
+var rtp = NPC.deserialize(JSON.parse(JSON.stringify(ntp.serialize())));
+assert(rtp._teachProgress === 55 && rtp._purse === 120,
+    'R3b 培养进度 _teachProgress=55 / 荷包 _purse=120 存→JSON→读 等值回来（v25.1·试-05 修复点）');
+// 对照：从未写过账的 NPC 存 null（不是 0），deserialize 后保持 null——
+// 让 master-teach.js teachProg() 的「_teachProgress==null 则从 _cultivationProgress 迁移」旧档活路不被堵死。
+var nFresh = new NPC('sect_x', '新弟子', { gender: 'female' });
+var sFresh = nFresh.serialize();
+assert(sFresh._teachProgress === null && sFresh._purse === null,
+    'R3b2 未记账的 NPC 两键存 null（不写 0，避免误锁旧档迁移路径）');
+var rFresh = NPC.deserialize(JSON.parse(JSON.stringify(sFresh)));
+assert(rFresh._teachProgress == null && rFresh._purse == null,
+    'R3b3 旧档无这两键时 deserialize 保持 null（迁移活路仍在）');
+
 // ============ R4/R5 角色级账本（钱庄/当铺/节日账）源码级防线 ============
 var gs = loadScript('js/core/game-state.js');
 assert(gs.indexOf('charData._bank') >= 0 && gs.indexOf('charData._pawn') >= 0

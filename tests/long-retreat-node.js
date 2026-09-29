@@ -20,6 +20,7 @@ var vm = require('vm');
 // ============ 最小 window mock ============
 var showMessageLog = [];
 var advanceTimeLog = [];
+var profExpLog = [];   // v25.1·试-06：捕获熟练度落键
 var timeAdvanceCount = 0;
 var currentDay = 1;
 
@@ -35,7 +36,9 @@ var mockWindow = {
     // 角色
     currentCharData: null,
     inventory: { currency: { spiritStones: 10000, copper: 0 } },
-    currentSkills: { skill_main: 'test_skill' },
+    // v25.1·试-06：槽里放的是功法对象（equipment.js 直接存 def）——mock 必须用对象才能拦住
+    // '[object Object]' 垃圾键回归（旧 mock 用字符串 'test_skill'，把这条病在测试里遮住了）
+    currentSkills: { skill_main: { id: 'test_skill', name: '测试功法' } },
     playerLifespan: { maxAge: 100, currentAge: 18, remainingDays: 36500, isImmortal: false },
     // 剩余任务#3：出关时价快照依赖 MarketDynamic
     MarketDynamic: { priceMul: function (city, cat) { return cat === '丹药' ? 1.2 : 1.0; } },
@@ -46,7 +49,8 @@ var mockWindow = {
     checkSoulBlock: function () { return false; },
     updateCurrencyUI: function () {},
     updateCharacterStatus: function () {},
-    addProficiencyExp: function () {},
+    // v25.1·试-06：捕获熟练度落键，断言落在真 id 上、不产生 '[object Object]' 垃圾键
+    addProficiencyExp: function (skillId, exp) { profExpLog.push({ skillId: skillId, exp: exp }); },
     getRealmIndex: function () { return 0; },
     getEssenceGainByRealm: function () { return 5; },
     getRootCultivationBonus: function () { return 1; },
@@ -98,6 +102,7 @@ function reset(retreatScript) {
     delete require.cache[path.resolve(__dirname, '..', 'js', 'cultivation', 'long-retreat.js')];
     showMessageLog = [];
     advanceTimeLog = [];
+    profExpLog = [];   // v25.1·试-06：清空熟练度落键捕获
     timeAdvanceCount = 0;
     currentDay = 1;
     mockWindow.timeSystem.gameTime.currentDay = 1;
@@ -147,6 +152,11 @@ assert(mockWindow.currentCharData.essence > 0, '应积累真元');
 assert(showMessageLog.some(function (m) { return m.msg.indexOf('闭关结束') >= 0; }), '应弹"闭关结束"消息');
 assert(showMessageLog.some(function (m) { return m.msg.indexOf('闭关') >= 0 && m.msg.indexOf('期间') >= 0; }), '应弹出关摘要');
 assert(currentDay === 8, '当前应到第 8 天');
+// v25.1·试-06：熟练度落在真 id 键上，不产生 '[object Object]' 垃圾键
+assert(profExpLog.length === 7, '主修功法应逐日获得熟练度（7 日 7 次）');
+assert(profExpLog.every(function (e) { return e.skillId === 'test_skill'; }), '熟练度应落在真 id "test_skill" 上');
+assert(!profExpLog.some(function (e) { return String(e.skillId) === '[object Object]'; }), '不应产生 "[object Object]" 垃圾键');
+assert(profExpLog.every(function (e) { return e.exp === 48; }), '每日熟练度 +48');
 
 // 2) startLongRetreatUntilEvent('auction', 90)：有目标事件
 reset();
@@ -266,6 +276,19 @@ assert(r10 && r10.days === 9, 'E2E 应闭关 9 日');
 assert(r10.targetDay === 10, 'targetDay 应为 10');
 assert(currentDay === 10, '应推进到第 10 天');
 assert(r10.stoppedReason && r10.stoppedReason.indexOf('E2E坊市') >= 0, 'stoppedReason 应含 E2E坊市');
+
+// 11) v25.1·试-28：固定档闭关逐日查寿元账——快死的人不在关中跑满整档，灵石按未跑天数退回
+reset();
+runRetreatScript();
+mockWindow.playerLifespan.remainingDays = 10;   // 寿元只剩 10 日 → deathDay=11，到第 10 日停
+var stones0 = mockWindow.inventory.currency.spiritStones;   // 10000
+var r11 = mockWindow.startLongRetreat(90);      // 一季死关：90 日 × 5 = 450 灵石全额预付
+assert(r11 && r11.days === 9, '试-28：寿元 10 日、90 日闭关应提前在 9 日出关（deathDay-1）');
+assert(r11 && r11.stoppedReason === '寿元将尽', '试-28：stoppedReason 应为「寿元将尽」');
+assert(r11 && r11.refunded === (90 - 9) * 5, '试-28：退回未跑天数 (90-9)×5=405 灵石');
+assert(r11 && r11.cost === 9 * 5, '试-28：净收按实际 9 日 = 45 灵石');
+assert(mockWindow.inventory.currency.spiritStones === stones0 - 9 * 5, '试-28：灵石净减 45（预付 450、退回 405）');
+assert(showMessageLog.some(function (m) { return m.msg.indexOf('退回灵石') >= 0; }), '试-28：出关回执应如实报退款');
 
 // ============ 收尾 ============
 console.log('=========================================');

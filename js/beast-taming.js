@@ -281,7 +281,7 @@ function importBeastState(data) {
             activeBeastIndex: activeBeastIndex,
             activeMountIndex: activeMountIndex
         }));
-    } catch (e) {}
+    } catch (e) { console.warn('[静默失败] js/beast-taming.js:284 · importBeastState：导入的灵兽队伍没落盘——刷新后打回原形，导进来的兽白导', e && e && e.message); }
 }
 
 function initBeastTaming() {
@@ -1272,7 +1272,7 @@ window.releaseBeastNow = function (index) {
             if (window.BeastLore && typeof window.BeastLore.learnFromSighting === 'function') {
                 window.BeastLore.learnFromSighting(b.templateId, homeRegion, homeTerrain || null, '亲手放生');
             }
-        } catch (eLearn) {}
+        } catch (eLearn) { console.warn('[静默失败] js/beast-taming.js:1275 · releaseBeastNow：灵兽手记没记下「亲手放生」这笔确讯——手记收集缺一格、驭兽阅历也没长', eLearn && eLearn && eLearn.message); }
         if (typeof window.growLifeSkill === 'function') window.growLifeSkill('驭兽', 4, { reason: '送兽归山' });
         if (window.showMessage) window.showMessage('🕊️ 你在' + homeRegion + '打开兽栏——' + nm + '绕着你转了两圈，一步三回头地奔入山野。它认得回家的路，手记记下：往后这里就是它的家。（驭兽阅历+4）', 'success');
     } else {

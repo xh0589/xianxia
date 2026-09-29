@@ -142,8 +142,8 @@ console.log('\n[C] 产出点普查：全仓有多少张卡指望着这条规则'
     });
     eq(点.length, 17, '产出点恰好 17 处（新增一处就重数：它自动有衣服穿，但宿主签名要记进 [B]）');
     const 有门派 = 点.filter(p => p.indexOf('js/sects/sects-system.js') === 0);
-    eq(有门派.join(','), 'js/sects/sects-system.js:763,js/sects/sects-system.js:794',
-        '本批那两张卡就在门派任务窗里：763 没有在办的差事／794 可接的差事（第一百三十八批在文件上方补了抄账那几行，行号各往下挪 8）');
+    eq(有门派.join(','), 'js/sects/sects-system.js:800,js/sects/sects-system.js:831',
+        '本批那两张卡就在门派任务窗里：800 没有在办的差事／831 可接的差事（第一百三十八批挪 8；v25.1 门派簇在文件上方补退门粘性/名录归一等行，再各往下挪 37）');
     const 弹窗户 = 点.filter(p => /^(js\/enhanced-shop\.js|js\/gameplay\/arena-system\.js|js\/sects\/sects-system\.js)/.test(p));
     eq(弹窗户.length, 6, '落在 body 弹窗里的产出点 6 处——旧名单只登记了两家，另两家（门派）从没上过榜');
 })();

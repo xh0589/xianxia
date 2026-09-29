@@ -757,7 +757,7 @@ window.XianXia = window.XianXia || {};
         if (!data.level) data.level = 1;
         if (data.exp == null) data.exp = 0;
         if (data.spiritStones == null) data.spiritStones = 100;
-        if (data.day == null) data.day = 1;
+        // v25.1·试-30：不再兜底 day 字段——恒 1 的死账（世界天数走时间系统），新角色模板已删此键
         if (typeof data._masterId === 'undefined') data._masterId = null;
         if (!data.currentMap) data.currentMap = 'main';
         // 第九十五波·NEW-36：进唯一写入口就装上钱包访问器（背包钱包是唯一权威）

@@ -27,14 +27,30 @@
 
     function capture() {
         var inv = global.inventory;
+        var cd = global.currentCharData || null;
+        // v24.2 快照扩容（FIX_NOTES 第一百四十三批 ② 点名）：旧快照只收 slots/maxSlots/currency/charCurrency
+        // 四项，qi/energy/health/contribution/discipleState/mood/karma/fame/lifeSkills 九字段落在快照外——
+        // 事务中途出岔「灵石退了、精力不退」。扩容口径：
+        // ① 只记「当时真有」的值（null=当时没有，restore 对它一个字不动，不凭空造值）；
+        // ② discipleState 整本深拷、回写时逐键并回原对象——不换对象本体，各系统手里的引用不悬空。
         return {
             slots: inv && inv.slots ? inv.slots.map(slotSnapshot) : [],
             maxSlots: inv ? inv.maxSlots : 30,
             currency: inv && inv.currency ? clone(inv.currency) : { copper: 0, spiritStones: 0 },
-            charCurrency: global.currentCharData ? {
-                copper: global.currentCharData.copper,
-                spiritStones: global.currentCharData.spiritStones
-            } : null
+            charCurrency: cd ? {
+                copper: cd.copper,
+                spiritStones: cd.spiritStones
+            } : null,
+            charState: cd ? {
+                qi: cd.qi != null ? cd.qi : null,
+                energy: cd.energy != null ? cd.energy : null,
+                health: cd.health != null ? cd.health : null,
+                mood: cd.mood != null ? cd.mood : null,
+                karma: cd.karma != null ? cd.karma : null,
+                fame: cd.fame != null ? cd.fame : null,
+                lifeSkills: cd.lifeSkills ? clone(cd.lifeSkills) : null
+            } : null,
+            discipleState: global.discipleState ? clone(global.discipleState) : null
         };
     }
 
@@ -61,6 +77,25 @@
         if (global.currentCharData && snapshot.charCurrency) {
             global.currentCharData.copper = snapshot.charCurrency.copper != null ? snapshot.charCurrency.copper : inv.currency.copper;
             global.currentCharData.spiritStones = snapshot.charCurrency.spiritStones != null ? snapshot.charCurrency.spiritStones : inv.currency.spiritStones;
+        }
+        // v24.2 快照扩容：只回写「capture 当时真记下的」（null 那一档一个字不动，不凭空造值）
+        if (global.currentCharData && snapshot.charState) {
+            var _cd = global.currentCharData, _cs = snapshot.charState;
+            var _ks = ['qi', 'energy', 'health', 'mood', 'karma', 'fame'];
+            for (var _ki = 0; _ki < _ks.length; _ki++) {
+                if (_cs[_ks[_ki]] != null) _cd[_ks[_ki]] = _cs[_ks[_ki]];
+            }
+            if (_cs.lifeSkills) _cd.lifeSkills = clone(_cs.lifeSkills);
+        }
+        if (global.discipleState && snapshot.discipleState) {
+            // 逐键并回原对象（保引用）：快照里没有的键＝事务里新冒出来的，回滚就该抹掉
+            var _ds = global.discipleState, _snap = clone(snapshot.discipleState), _k;
+            for (_k in _ds) {
+                if (Object.prototype.hasOwnProperty.call(_ds, _k) && !Object.prototype.hasOwnProperty.call(_snap, _k)) delete _ds[_k];
+            }
+            for (_k in _snap) {
+                if (Object.prototype.hasOwnProperty.call(_snap, _k)) _ds[_k] = _snap[_k];
+            }
         }
         if (typeof global.updateInventoryUI === 'function') global.updateInventoryUI();
         if (typeof global.updateCurrencyUI === 'function') global.updateCurrencyUI();

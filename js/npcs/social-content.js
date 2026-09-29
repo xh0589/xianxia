@@ -848,12 +848,13 @@
     }
 
     // ==================== 治疗接22部位（v14.11 审计5） ====================
-    // request_heal 成功后：止血稳定/轻伤清创/镇痛安神；重伤仍提示需就医馆
+    // request_heal 成功后：止血稳定/轻伤清创/镇痛安神；深伤亦可续骨缓治（v25.1·试-09a）
     function treatWoundsByHealer(npc) {
         var ent = window._playerPhysiology;
         var phys = ent && ent.physiology;
         if (!phys) return;
         var treated = [];
+        var deepCount = 0;
         (phys.wounds || []).forEach(function (w) {
             if (!w) return;
             // 同一伤口同诊两步：先止血稳定，再做清创减症
@@ -863,14 +864,42 @@
                 w.depth = Math.max(0, (w.depth || 0) - 1);
                 if ((w.severity || 0) === 0) w.healed = true;
                 if (treated.indexOf('清创') < 0) treated.push('清创');
+            } else if ((w.depth || 0) >= 3 && !(w.severity <= 0)) {
+                deepCount++;
             }
         });
+        // v25.1·试-09a：深伤不再被永久排除——旧闸 `depth<3` 把深伤整类挡死，与版本记录（五十三/五十四波）
+        // 「深伤话术指去医士」的设计口径脱节：医士是话术指的出口，代码却拒收，深伤零恢复出口。
+        // 现医士可治深伤：每次 severity-20 / depth-1（比轻伤清创 15/1 更缓一档，慢病慢治不奇迹），
+        // 诊金 30 灵石一诊（同 npc-system NPCRequestSystem 'heal' 既有诊金刻度）；付不起则如实相告。
+        var deepTreated = 0;
+        var deepPaid = true;
+        if (deepCount > 0) {
+            var _dm = window.DataManager;
+            if (_dm && typeof _dm.deductSpiritStones === 'function') deepPaid = !!_dm.deductSpiritStones(30);
+            if (deepPaid) {
+                (phys.wounds || []).forEach(function (w) {
+                    if (!w || (w.depth || 0) < 3 || (w.severity || 0) <= 0) return;
+                    w.severity = Math.max(0, (w.severity || 0) - 20);
+                    w.depth = Math.max(0, (w.depth || 0) - 1);
+                    if ((w.severity || 0) === 0) w.healed = true;
+                    deepTreated++;
+                });
+                if (deepTreated > 0) treated.push('续骨');
+            }
+        }
         if ((phys.painLoad || 0) > 0) { phys.painLoad = Math.max(0, phys.painLoad * 0.6); treated.push('镇痛'); }
         if ((phys.neuralShock || 0) > 0) { phys.neuralShock = Math.max(0, phys.neuralShock * 0.7); treated.push('安神'); }
         try { if (window.renderBodyDurability) window.renderBodyDurability(); } catch (e) {}
         try { if (window.updateBodySVG) window.updateBodySVG(); } catch (e) {}
         if (treated.length) {
-            window.showMessage('💊 ' + npc.name + ' 施针用药：' + treated.join('、') + '。深重的旧伤仍需就医馆调理。', 'success');
+            // v25.1·试-09a：尾注随深伤处置结果如实改口——医士能治深伤了，不再一律推去医馆
+            var tail = '';
+            if (deepTreated > 0) tail = '深重的旧伤已行续骨一诊（伤势与创深各减一档）——慢伤需缓治，隔些日子再来复诊。';
+            else if (deepCount > 0) tail = '深重的旧伤续骨需诊金 30 灵石——手头宽裕了再来，或就医馆调理。';
+            window.showMessage('💊 ' + npc.name + ' 施针用药：' + treated.join('、') + '。' + tail, 'success');
+        } else if (deepCount > 0 && !deepPaid) {
+            window.showMessage('💊 ' + npc.name + '：「你这深重的旧伤须得续骨慢治，诊金 30 灵石——囊中羞涩的话，先攒攒再来。」', 'warning');
         }
     }
 

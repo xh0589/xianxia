@@ -501,7 +501,7 @@
                                 <div class="flex gap-2">
                                     <button onclick="openSectTaskUI()" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1 rounded text-sm">门派任务</button>
                                     <button onclick="openFacilityUI()" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-sm">门派设施</button>
-                                    <button onclick="openJoinSectUI()" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-3 py-1 rounded text-sm font-bold">加入门派</button>
+                                    <button onclick="openJoinSectUI()" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-3 py-1 rounded text-sm font-bold">门派名录</button><!-- v25.1·P5：弹窗已改为「看名录→前往山门→考核入门」，按钮名不再谎称一键加入 -->
                                 </div>
                             </div>
                             <div id="sect-info">
@@ -1099,7 +1099,10 @@
                                 <p class="text-white" id="sect-detail-desc">--</p>
                             </div>
                         </div>
-                        
+                        <!-- v24.3：本派设施快捷栏容器——早前 HTML 重排时遗失，renderSectFacilitiesList 因缺容器每次静默夭折。
+                             只在点的是「自己所在门派」时填充（renderSectFacilitiesList 侧判成员），别家门派保持纯介绍。 -->
+                        <div id="sect-facilities-list" class="mt-3 space-y-2"></div>
+
                     </div>
                     </div>
                     </div>
@@ -1617,6 +1620,8 @@
                             <button onclick="mineOre()" class="bg-orange-600 hover:bg-orange-500 text-white px-3 py-2 rounded text-sm">⛏️ 采矿</button>
                             <button onclick="gatherHerbs()" class="bg-green-600 hover:bg-green-500 text-white px-3 py-2 rounded text-sm">🌿 采药</button>
                             <button onclick="chopWood()" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-2 rounded text-sm">🪓 伐木</button>
+                            <!-- v25.1·P25：猎妖入口——主线第3章《首次猎妖》与布告栏猎妖委托此前全 14 面板无路可走 -->
+                            <button onclick="huntWildBeasts()" class="bg-red-700 hover:bg-red-600 text-white px-3 py-2 rounded text-sm">⚔️ 出城猎妖</button>
                         </div>
                     </div>
                 </div>
@@ -1804,6 +1809,9 @@
             </div>
             <div id="battle-result" class="hidden mt-4 text-center">
                 <p class="text-xl font-bold" id="battle-result-text"></p>
+                <!-- v25.1·试-01：战斗结束后的动态按钮（收服灵兽/兽潮下一波/天劫下一雷/Boss下一阶段）挂这里——
+                     旧代码把它们注进 battle-actions，而 updateBattleUI 在 isFinished 时把整个 battle-actions 隐藏，四条内容线全断头 -->
+                <div id="battle-result-extra" class="mt-2 flex flex-wrap justify-center gap-2"></div>
                 <button onclick="closeBattle()" class="mt-2 bg-yellow-600 hover:bg-yellow-500 px-6 py-2 rounded text-gray-900 font-bold">继续</button>
             </div>
             </div><!-- /#battle-foot -->

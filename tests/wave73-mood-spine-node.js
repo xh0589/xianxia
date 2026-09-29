@@ -287,7 +287,9 @@ assert(msSrc.indexOf('window._isInLongRetreat') >= 0 && msSrc.indexOf('_isInLong
 var lrSrc = fs.readFileSync(path.join(ROOT, 'js/cultivation/long-retreat.js'), 'utf8');
 assert(lrSrc.indexOf('global._isInLongRetreat = true') >= 0, 'F3 闭关旗的真源在闭关账里（老位置未动）');
 var lrSeg = lrSrc.slice(lrSrc.indexOf('第七十三波·境由心转：闭关收成认心境'), lrSegEnd(lrSrc));
-function lrSegEnd(s) { return s.indexOf('var mainSkillId = global.currentSkills'); }
+// v25.1·试-06：心境块的尾界原锚在 `var mainSkillId = global.currentSkills`，那行被试-06 双兼容改写重命名了。
+// 改锚到心境块真正的收尾 `catch (eMoodR)`（第七十三波自己的代码，未被本批改过）——段界不变，仍验「块内零骰」。
+function lrSegEnd(s) { return s.indexOf('catch (eMoodR)'); }
 eq(lrSeg.indexOf('Math.random'), -1, 'F4 闭关心境块零骰（顿悟/心魔的老骰一枚不添）');
 eq((lrSrc.match(/Math\.random/g) || []).length, 1, 'F5 闭关全文仍只有一枚骰（每日顿悟/心魔那一枚老的）');
 var btSeg = btSrc.slice(btSrc.indexOf('第七十三波·境由心转'), btSrc.indexOf('// 封顶'));

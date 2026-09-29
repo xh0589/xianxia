@@ -141,6 +141,11 @@
 
     // ============ 人此刻在哪一州 ============
     // 野外图开着，人就站在那片山河里；回城落脚了，就看那座城归哪一州
+    // v25.1·试-21：「在野外」从一条判据收成两条——野图 section 未隐藏，且城市面板没开着。
+    //   旧版只看 section 可见性：进城没人收野图时（location-system 已改进城即收，这里是双保险），
+    //   人在洛阳城，脚下却按上一回的野区域结算，点旧区域关隘就能「出旧区域」瞬移。
+    //   ⚠️ 不能改成「城池名匹配无条件优先」：进野图从不改写 location（randomMap 全程不碰它），
+    //   人站在东荒野外时 location 还写着上一座的城——城名优先会把野外的人错判回城里那州。
     function currentRegion() {
         var loc = null;
         try {
@@ -158,7 +163,15 @@
             var sec = global.document && global.document.getElementById ? global.document.getElementById('random-map-section') : null;
             inWild = !!(sec && sec.classList && !sec.classList.contains('hidden'));
         } catch (e2) {}
-        if (inWild && global.currentRegionForMap && global.currentMap && global.currentMap.length) {
+        // v25.1·试-21：城市面板开着（或大地图为进城让过位）＝人坐在城里，残影野图不作数
+        var inCity = false;
+        try {
+            var doc = global.document && global.document.getElementById ? global.document : null;
+            var cp = doc ? doc.getElementById('city-panel') : null;
+            var mp = doc ? doc.getElementById('panel-map') : null;
+            inCity = !!(cp && cp.style && cp.style.display === 'block') || !!(mp && mp._hiddenForCity);
+        } catch (e3) {}
+        if (inWild && !inCity && global.currentRegionForMap && global.currentMap && global.currentMap.length) {
             return global.currentRegionForMap;
         }
         if (!loc) return null;
@@ -171,6 +184,10 @@
                 var c = clean(cs[i]);
                 if (c === want || c.indexOf(want) >= 0 || want.indexOf(c) >= 0) return r;
             }
+        }
+        // v25.1·试-21 兜底：城名匹不上而野图确实开着、人也不在城里（进城闸刚收过图之类的边角），仍认脚下那片山河
+        if (!inCity && inWild && global.currentRegionForMap && global.currentMap && global.currentMap.length) {
+            return global.currentRegionForMap;
         }
         return null;
     }
@@ -387,7 +404,11 @@
         var g = svgEl(doc, 'g', { 'class': 'world-here', 'pointer-events': 'none' });
         g.appendChild(svgEl(doc, 'circle', { cx: a.x, cy: a.y, r: 13, fill: 'none', stroke: '#fbbf24', 'stroke-width': 1.2, opacity: 0.65, 'class': 'world-here-pulse' }));
         g.appendChild(svgEl(doc, 'circle', { cx: a.x, cy: a.y, r: 4.5, fill: '#fbbf24', stroke: '#fff', 'stroke-width': 1.2 }));
-        var t = svgEl(doc, 'text', { x: a.x, y: a.y - 18, 'font-size': 10, 'text-anchor': 'middle', fill: '#fbbf24', 'font-weight': 'bold' });
+        // v25.1·P20：三层文字叠字——旧落笔 (a.x, a.y-18) 居中，正压在州名（仙侠.html 静态层，与锚点同坐标）头上，
+        //   中州还与城名「长安」(400,238) 挤成一条竖排。挪到金圈右上、改左对齐起笔，逐州核过七处锚点：
+        //   与城名/州名/山门幡/洞府幡/关名牌均不再交叠（州名与城名同列的静态层根子在仙侠.html，此处只动自己这层）。
+        var t = svgEl(doc, 'text', { x: a.x + 18, y: a.y - 20, 'font-size': 10, 'text-anchor': 'start', fill: '#fbbf24', 'font-weight': 'bold',
+            style: 'paint-order:stroke;stroke:rgba(8,12,20,.85);stroke-width:3px;stroke-linejoin:round' });
         t.textContent = '你在此';
         g.appendChild(t);
         svg.appendChild(g);

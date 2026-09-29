@@ -980,3 +980,8 @@ function _decorateLoadHint() {
     }
 })();
 
+
+// v24.5 死读修复：event-system learnRandomSkill 读的是 window.skillPages——而 skillPages 是本页
+// 顶层 const（词法全局，不挂 window），读方永远 undefined；兜底的 window.allSkills 又全仓不存在。
+// 于是「你发现了一本上古功法！」这类事件奖励多年只弹一句「没有可学的功法定义」。挂上 window，读方即活。
+if (typeof window !== 'undefined' && typeof skillPages !== 'undefined') window.skillPages = skillPages;

@@ -4995,8 +4995,10 @@ console.log('\n[CE] 空洞的尺：卡盒里有多少是字、多少是空腔—
         '⑱ 那一层容器全仓一枚（它自带 grid-cols-4，靠 §1 覆盖成 12 栏——第二枚就会读到旧栏数）');
 
     // ---- ⑲~⑳ UI-24① 是靠给宽度收的，不是靠砍文案 ----
-    assert(/qiLimitDisplay\.textContent = `境界提供\$\{qiMax\}真气上限`;/.test(app),
-        '⑲ 「境界提供${qiMax}真气上限」那支笔逐字在位（改法是把卡撑到装得下它，不是把「上限」两个字挪走）');
+    // v25.1·P17：这支笔升级为双分支（总上限＞境界账时把「另 50 从哪来」算给玩家看），
+    // 兜底分支仍逐字保留「境界提供${qiMax}真气上限」——哨兵口径不松：文字只许变长变明白，不许挪走或缩短。
+    assert(/qiLimitDisplay\.textContent = \(_qiEffMax > qiMax\)[\s\S]{0,220}?境界提供\$\{qiMax\}真气上限`/.test(app),
+        '⑲ 「境界提供${qiMax}真气上限」那支笔逐字在位（v25.1·P17 只加了算账分支，兜底文案一字未动）');
     eq(jsFiles('js').filter(function (f) { return /真气上限`/.test(src(f)); }).length, 1,
         '⑳ 全仓只有一个写者写这一行（第二处就会有一处不知道它被改短过）');
 
@@ -5818,9 +5820,7 @@ console.log('\n[CM] 家族账：无帽 38 扇、其中 13 扇内容由循环长�
         ['js/global-utils.js', 'XianXia.showConfirm', 326],   // 卡体是 [字面量].join('')  ※v24.1 215→326（Modal 栈插入所致，与 CM③ 同一次位移）
         ['js/lifespan-system.js', 'triggerLifespanEnd', 126], // 寿元已尽：固定三行
         ['js/quest/main-storyline-arc.js', 'openMainStoryPanel', 223],  // 主线：一段定死段落
-        ['js/quest/quest-system.js', 'showEndingScreen', 869]           // 任务结算：至多 5 颗星
-        //  ※试玩批次·PLAY-1c/1d 825→869：acceptQuest 加 realm 类目标回溯（+23 行）、
-        //    _syncTemplatesFromLedger 加账本外复位（+21 行）。两处都在本文件之前，位移下移。
+        ['js/quest/quest-system.js', 'showEndingScreen', 877]           // 任务结算：至多 5 颗星
     ];
     var 误长 = [];
     不会长.forEach(function (x) {
@@ -7144,18 +7144,20 @@ console.log('\n[CS] DES-54 时辰对账：十笔回执与落笔同笔 + 口径�
 
     // ---- ⑥ 棘轮：全仓（剥注释）不许再添「拿城名做裸精确等值」这一形 ----
     var 禁形 = [/\.location === playerLoc\b/, /\.location === myLoc\b/, /\.location === loc\b/, /\bcities\.indexOf\(loc\)/, /\bcities\.includes\(/];
-    // 白名单只留「另案、且改它会顺手打开别的门」的那一笔：app.js getCurrentRegionForGathering 读的是
-    // window.currentLocation——全仓对它零写方（恒 undefined，反查区域那支从来没生效过），收口它等于同时把
-    // 采集区域特性这扇死门打开，会动采集产出，属 DES-58 另一根因，本批不顺手改。
-    var 待另案 = ['js\\app.js :: \\bcities\\.includes\\('];
+    // 【v25.0 结案销账】白名单原留的那一笔（app.js getCurrentRegionForGathering 的
+    // cities.includes(window.currentLocation)——幽灵读恒 undefined，反查区域那支从来没生效过）
+    // 已在 v25.0 全仓体检批收口：改走真 getter getCurrentLocation() + DES-57 去空白 some 比对，
+    // 五形归零，白名单清空（本条即 CT⑥b 留言「结案时记得回来划掉」的兑现）。
+    // 【v24.2 平台归一】命中与白名单统一按正斜杠比（同 fcc58e9 static-check 的归一法），判据未松。
+    var 待另案 = [];
     var 命中 = [];
     jsFiles('js').forEach(function (f) {
         var 文 = codeOnly(src(f));
-        禁形.forEach(function (re) { if (re.test(文)) 命中.push(f + ' :: ' + re.source); });
+        禁形.forEach(function (re) { if (re.test(文)) 命中.push(f.replace(/\\/g, '/') + ' :: ' + re.source); });
     });
     var 新添 = 命中.filter(function (h) { return 待另案.indexOf(h) < 0; });
     var 已愈 = 待另案.filter(function (h) { return 命中.indexOf(h) < 0; });
-    eq(新添.join(' | '), '', 'CT⑥ 棘轮：按城名／地名做裸精确等值的五形在全仓 317 个 js 里除 1 笔另案外归零（要再添这一形，先收口进这把尺）');
+    eq(新添.join(' | '), '', 'CT⑥ 棘轮：按城名／地名做裸精确等值的五形在全仓 js 里归零（v25.0 起白名单清空；要再添这一形，先收口进这把尺）');
     eq(已愈.join(' | '), '', 'CT⑥b 白名单不许变垃圾桶：另案那一笔若已收口，就该从待另案里划掉（DES-58 结案时记得回来）');
 
     // ---- ⑦ 诚实闸：价钱与脚程那一支本批一字未动（数值类待裁决，不顺手改） ----

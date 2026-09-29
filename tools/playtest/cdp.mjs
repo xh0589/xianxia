@@ -219,6 +219,12 @@ const commands = {
           '--user-data-dir=' + profile,
           '--no-first-run',
           '--no-default-browser-check',
+          // ↓↓↓ 关键：不加这三条，headless 下 document.visibilityState === 'hidden'，
+          // requestAnimationFrame 永不触发 ⇒ 走 rAF 的渲染看着"不刷新"，
+          // 会被误判成 UI bug（我栽过一次：状态栏 stale 报成缺陷，代码其实是对的）。
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding',
           '--disable-features=Translate,OptimizationGuideModelDownloading',
           'http://127.0.0.1:8931/%E4%BB%99%E4%BE%A0.html',
         ],
@@ -242,10 +248,19 @@ const commands = {
   async goto() {
     const url = String(flag('url', 'http://127.0.0.1:8931/%E4%BB%99%E4%BE%A0.html'));
     const t = await getTarget();
-    await send(t.webSocketDebuggerUrl, 'Page.enable');
-    await send(t.webSocketDebuggerUrl, 'Page.navigate', { url });
+    // ⚠️ 必须先禁缓存：python http.server 不发 Cache-Control，Chrome 会缓存 app.js 等脚本。
+    //    换了一份 js/ 之后 goto 仍加载旧脚本，导致"修复没生效"的假结论（我为此白查一轮）。
+    await session(t.webSocketDebuggerUrl, [
+      { method: 'Network.enable' },
+      { method: 'Network.setCacheDisabled', params: { cacheDisabled: true } },
+      { method: 'Page.enable' },
+      { method: 'Page.navigate', params: { url } },
+    ], 30000);
     await sleep(3000);
-    console.log('已打开 ' + url);
+    const [t2] = await session(t.webSocketDebuggerUrl, [
+      { method: 'Runtime.evaluate', params: { expression: 'location.href' } },
+    ], 10000);
+    console.log('已打开 ' + ((t2 && t2.result && t2.result.value) || url) + '（已禁用缓存）');
   },
 
   /** eval：代码从 stdin 读（也支持 --file 传脚本路径）。异常绝不外泄，作为 {__err} 返回 */
@@ -364,6 +379,36 @@ const commands = {
     let arr;
     try { arr = typeof v === 'string' ? JSON.parse(v) : v; } catch { arr = { 解析失败: v }; }
     console.log(JSON.stringify(arr, null, 2));
+  },
+
+  /**
+   * front：把页面切到前台并强制可见。
+   *
+   * ⚠️ 必读：headless Chrome 默认 document.visibilityState === 'hidden'，
+   * 此时 requestAnimationFrame 永不触发——凡是走 rAF 的渲染
+   * （如 global-utils.js 的 coalesceRender 合并器）在页面上看着"不刷新"，
+   * 极易被误判成 UI bug。**下任何"界面没更新"的结论之前先跑这个。**
+   * 我为此误判过一次：把状态栏 stale 报成了缺陷，实际代码完全正确。
+   */
+  async front() {
+    const t = await getTarget();
+    await session(t.webSocketDebuggerUrl, [
+      { method: 'Page.bringToFront' },
+      { method: 'Page.setWebLifecycleState', params: { state: 'active' } },
+    ], 15000);
+    await sleep(600);
+    const [vis] = await session(t.webSocketDebuggerUrl, [
+      { method: 'Runtime.evaluate', params: { expression: 'document.visibilityState + "|" + document.hidden' } },
+    ], 15000);
+    const v = (vis && vis.result && vis.result.value) || '';
+    if (String(v).indexOf('visible') >= 0) {
+      console.log('页面可见性：' + v + '  ✓ 可正常观察 rAF 渲染');
+    } else {
+      console.log('页面可见性：' + v + '  ★仍隐藏★');
+      console.log('  rAF 队列不会触发，走 rAF 的渲染看着像"不刷新"。');
+      console.log('  修法：关闭浏览器后用带防后台化参数的方式重开（launch 已内置该组参数，');
+      console.log('        若你是复用旧实例，需先 stop 再 launch）。');
+    }
   },
 
   /**

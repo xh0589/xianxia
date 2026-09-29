@@ -255,5 +255,25 @@ while ((m2 = reName.exec(scSrc))) visible.push(m2[1]);
 var leaks = visible.filter(function (s) { return /[a-zA-Z]{3,}/.test(s); });
 ok(visible.length >= 60 && leaks.length === 0, 'F 玩家可见文案无英文漏翻（' + visible.length + ' 条）' + (leaks.length ? '：' + leaks.slice(0, 3).join(' | ') : ''));
 
+// ============ G v25.1·试-06：宗门设施「参悟」(addSkillExp) 熟练度落在真 id 上 ============
+// 槽里放功法对象（真实装备流即如此）——旧写法拿对象当键，参悟经验全记到 '[object Object]' 垃圾键。
+(function () {
+    var profCalls = [];
+    W.currentSkills = { skill_main: { id: 'art_wu_0601', name: '测试功法' } };
+    W.addProficiencyExp = function (id, e) { profCalls.push({ id: id, e: e }); };
+    var msgs = [];
+    W.executeAction({ type: 'addSkillExp', value: 5 }, msgs, 'sect_library');
+    ok(profCalls.length === 1 && profCalls[0].id === 'art_wu_0601',
+        'G1 参悟熟练度落在真 id "art_wu_0601" 上（对象槽取 .id）');
+    ok(!profCalls.some(function (p) { return String(p.id) === '[object Object]'; }),
+        'G2 参悟不产生 "[object Object]" 垃圾键');
+    ok(msgs.join('').indexOf('主修功法熟练度') >= 0, 'G3 参悟回执如实报数');
+    // 字符串槽（老档/兼容）也应原样落键
+    profCalls = [];
+    W.currentSkills = { skill_main: 'art_str_legacy' };
+    W.executeAction({ type: 'addSkillExp', value: 5 }, [], 'sect_library');
+    ok(profCalls.length === 1 && profCalls[0].id === 'art_str_legacy', 'G4 字符串槽双兼容：原样落真 id');
+})();
+
 console.log('passed=' + passed + ' failed=' + failed);
 process.exit(failed > 0 ? 1 : 0);

@@ -573,6 +573,14 @@ function renderCityBuildings(cityName) {
     if (mapDetail) mapDetail.classList.add('hidden');
     const sectDetail = document.getElementById('sect-detail');
     if (sectDetail) sectDetail.classList.add('hidden');
+    // v25.1·试-21：进城顺手收野图——旧版只藏大地图那几块，#random-map-section 没人管，
+    //   人在城里野图还开着照走格，舆图「你在此」漂在旧野区域，还能借旧区域的关隘按「出野」结算瞬移。
+    //   走 closeRandomMap 正规出口（存档 + 放开的左栏一并料理），没这个函数再退回直接加 hidden。
+    const wildSection = document.getElementById('random-map-section');
+    if (wildSection && !wildSection.classList.contains('hidden')) {
+        if (typeof window.closeRandomMap === 'function') { try { window.closeRandomMap(); } catch (eWild) { wildSection.classList.add('hidden'); } }
+        else wildSection.classList.add('hidden');
+    }
     
     // 渲染建筑列表（按分类）
     const buildingList = document.getElementById('city-building-list');
@@ -998,7 +1006,10 @@ function useBuilding(buildingId) {
     if (window.buildingEffects && window.buildingEffects.openBuildingUI) {
         window.buildingEffects.openBuildingUI(buildingId);
     } else if (typeof window.executeFacilityAction === 'function') {
-        var fac = (window.CITY_FACILITIES || {})[buildingId];
+        // v24.5 死读修复：CITY_FACILITIES 是 app.js 顶层 const（词法全局，不挂 window）——旧读法恒 undefined，
+        // 这条兜底支永远落到「打开XX...」系统腔。改认词法全局（typeof 防 Node 沙箱未装 app.js；window 侧留给测试桩）。
+        var _cf = (typeof CITY_FACILITIES !== 'undefined' && CITY_FACILITIES) ? CITY_FACILITIES : (window.CITY_FACILITIES || {});
+        var fac = _cf[buildingId];
         if (fac && fac.action) window.executeFacilityAction(fac.action, buildingId);
         else showMessage('打开' + buildingId + '...', 'info');
     } else {
@@ -1055,7 +1066,11 @@ function triggerSpecialFeature(featureName) {
         '血池': function() { if (window.planeBloodPool) window.planeBloodPool(city); else showMessage('血池翻着泡。', 'info'); }
     };
     if (handlers[featureName]) {
+        // v25.1·试-19：handler 自带账——过闸的自扣 30~90 分钟（观星台 60、诗会 90 等），被 _gate/灵石闸拒的直接 return。
+        //   旧写法无条件再叠 20 分钟：成行双扣（观星一次 60+20），被拒也照扣（皇宫声望闸拦人时辰照烧）。
+        //   下面剧本分支早就写明「剧本自带耗时结算，不再叠加」，专属 handler 同理，外层这笔一律不收。
         handlers[featureName]();
+        return;
     } else if (window.scenarioEngine && window.scenarioEngine.facilities && window.scenarioEngine.facilities[featureName]
         && typeof window.openFacilityScenario === 'function') {
         // v21.4 特色景致真剧本：24 处景致已注册进情境引擎（场景+选择+成本+成败分支），
@@ -1064,10 +1079,12 @@ function triggerSpecialFeature(featureName) {
         return;
     } else {
         // 通用兜底（未注册景致）：真耗精力、每日一处、奖励削薄——不再白给历练
-        genericFeatureVisit(featureName, city);
-    }
-    if (window.timeSystem && window.timeSystem.advanceTime) {
-        window.timeSystem.advanceTime(20, '特色探索:' + featureName);
+        // v25.1·试-19：20 分钟只在这条兜底支收，且要真成行（每日一次闸与精力闸都过了）才收；被拒不扣
+        if (genericFeatureVisit(featureName, city) !== false) {
+            if (window.timeSystem && window.timeSystem.advanceTime) {
+                window.timeSystem.advanceTime(20, '特色探索:' + featureName);
+            }
+        }
     }
 }
 
@@ -1584,24 +1601,26 @@ function visitLighthouse(city) {
 // 现在：真耗精力、每处景致每日一次、奖励削薄到有成本可对价的量级。
 // （24 处有名气的景致已注册专属真剧本，走情境引擎，不进这里；这里只兜未知景致。）
 var genericFeatureVisits = {};   // { '景致名|绝对日': 1 }
+// v25.1·试-19：报账——真逛了一圈返回 true，被闸（今日已逛/精力不济/无角色）拦下返回 false；调用侧凭此收不收那 20 分钟
 function genericFeatureVisit(name, city) {
     var p = window.currentCharData;
-    if (!p) return;
+    if (!p) return false;
     var day = (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') ? window.timeSystem.getAbsoluteDay() : 0;
     var key = name + '|' + day;
     if (genericFeatureVisits[key]) {
         if (window.showMessage) window.showMessage('「' + name + '」你今天已经逛过了——景致还是那个景致，明天再来。', 'info');
-        return;
+        return false;
     }
     if ((p.energy || 0) < 15) {
         if (window.showMessage) window.showMessage('探访「' + name + '」要爬坡过坎，你精力不济，改日再来。', 'warning');
-        return;
+        return false;
     }
     p.energy = (p.energy || 0) - 15;
     genericFeatureVisits[key] = 1;
     if (window.showMessage) window.showMessage('你仔细探访「' + name + '」，走了一圈，有所见闻。精力-15，历练+5。', 'info');
     p.tempering = (p.tempering || 0) + 5;
     if (typeof window.addReputation === 'function' && city) window.addReputation(city, 1);
+    return true;
 }
 
 

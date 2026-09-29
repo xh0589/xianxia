@@ -521,7 +521,9 @@
             // 盟家被围：给你一日窗口——风云册上可提兵相助，明日掷骰自决
             f['sect_world_tide_pending'] = { sect: victim, lv: lv, day: absDay(), resolveDay: absDay() + 1 };
             log('🐾 风云急报：盟家「' + victim + '」的山门让「' + tideName() + '」的兽群围了——盟书上的字还热着。（江湖风云册里可提兵相助，赶在明日落定之前）', 'warning');
-            street('「' + victim + '」山门告急：「' + tideName() + '」的兽群把山围了——沿山的村子都听见了兽吼。');
+            // v25.0：改前这行裸调 street(...)——全仓只有 streetOf，没有 street：
+            // 盟家被兽潮围山的那一刻直接 ReferenceError，后头的风云志 chronOf 也一起吞掉。
+            streetOf('「' + victim + '」山门告急：「' + tideName() + '」的兽群把山围了——沿山的村子都听见了兽吼。');
             chronOf(victim, '「' + tideName() + '」的兽群围了山门——门中上下凭墙死守，已向盟家递了血书。');
             return;
         }

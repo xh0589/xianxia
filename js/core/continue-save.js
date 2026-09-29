@@ -24,6 +24,9 @@
     var _dirty = false;            // 有未落档的进展
     var _lastSnapAt = 0;           // 上次成功落盘的真实时间戳
     var _failWarned = false;
+    // v25.1·P1：「这一世到底落过档没有」。建号不耗时辰、四路世界事件一路都不发的玩家，
+    // 刷新即丢角色——HUD 得如实说「尚未落档」，落过一次（或读档而来）就不再喊。
+    var _everSaved = false;
 
     function inGame() { return !!global.currentCharData; }
 
@@ -44,6 +47,10 @@
         if (_dirty) {
             el.className = 'text-xs text-amber-400 mt-1 cursor-pointer';
             el.textContent = '● 未存档（已行 ' + _dur(_pendingMinutes) + '，点此落档）';
+        } else if (!_everSaved) {
+            // v25.1·P1：已建号但这一世从未落过档——不脏也要说真话，给一次可点的补救入口
+            el.className = 'text-xs text-amber-400 mt-1 cursor-pointer';
+            el.textContent = '● 尚未落档（点此保存）';
         } else {
             el.className = 'text-xs text-gray-500 mt-1';
             el.textContent = _lastSnapAt ? '✓ 已落档' : '';
@@ -54,6 +61,8 @@
         if (el._continueSaveClick || typeof el.addEventListener !== 'function') return;
         el._continueSaveClick = function () {
             if (!_dirty) {
+                // v25.1·P1：从未落过档的新角色，点这里也走 saveGame 正门补一笔
+                if (!_everSaved && inGame() && typeof global.saveGame === 'function') { global.saveGame(); return; }
                 if (global.showMessage) global.showMessage('本局进展已经落档，不必再存。', 'info');
                 return;
             }
@@ -85,6 +94,9 @@
     function markDirty(minutes) {
         _dirty = true;
         if (minutes > 0) _pendingMinutes += minutes;
+        // v25.1·P1：外部调用方（如 app.js startGame 建号处）只喊一声 markDirty，
+        // HUD 红点当场刷新，不再等下一次世界事件才亮
+        renderHud();
     }
 
     // ============ 事件：世界动了 ============
@@ -118,6 +130,7 @@
         _lastSnapAt = Number(ts) || (global.Date ? global.Date.now() : 0);
         _dirty = false;
         _pendingMinutes = 0;
+        _everSaved = true;   // v25.1·P1：这一世落过档了，「尚未落档」提示从此收声
         renderHud();
         return true;
     }
@@ -127,6 +140,7 @@
         _dirty = false;
         _pendingMinutes = 0;
         _lastSnapAt = 0;
+        _everSaved = true;   // v25.1·P1：能从盘里读出来＝世上已有这一世的档，不算「从未落档」
         renderHud();
     }
 
@@ -143,6 +157,17 @@
     function onNewDayEvent() { onWorldEvent('day'); }
     function onArriveEvent() { onWorldEvent('arrive'); }
     function onBattleEvent() { onWorldEvent('battle'); }
+    // v25.1·P1：以下全是「零时辰但有价值」的变更——建号后接任务/拜师/得宝/合成/突破/通关/受赏
+    // 一格时辰都不动，旧订阅表一路都听不见，_dirty 恒 false ⇒ beforeunload 首行 return，刷新即丢角色。
+    // 标脏只是让离开前补落一次盘，宁可多接，无副作用。
+    function onQuestAcceptedEvent() { onWorldEvent('quest'); }
+    function onSectJoinedEvent() { onWorldEvent('sect'); }
+    function onItemObtainedEvent() { onWorldEvent('item'); }
+    function onItemCraftedEvent() { onWorldEvent('craft'); }
+    function onBreakthroughEvent() { onWorldEvent('breakthrough'); }
+    function onCultivationDoneEvent() { onWorldEvent('cultivation'); }
+    function onDungeonDoneEvent() { onWorldEvent('dungeon'); }
+    function onRewardEvent() { onWorldEvent('reward'); }
 
     function subscribe() {
         if (global._continueSaveSubscribed) return;
@@ -153,6 +178,15 @@
             B.on('newDay', onNewDayEvent);
             B.on('location:visited', onArriveEvent);
             B.on('enemy:defeated', onBattleEvent);
+            // v25.1·P1：零时辰变更也标脏（事件名均为全仓真实 emit 点，quest:accepted 由本批在 acceptQuest 补发）
+            B.on('quest:accepted', onQuestAcceptedEvent);
+            B.on('sect:joined', onSectJoinedEvent);
+            B.on('item:obtained', onItemObtainedEvent);
+            B.on('item:crafted', onItemCraftedEvent);
+            B.on('cultivation:breakthrough', onBreakthroughEvent);
+            B.on('cultivation:completed', onCultivationDoneEvent);
+            B.on('dungeon:completed', onDungeonDoneEvent);
+            B.on('reward:applied', onRewardEvent);
         }
         if (global.addEventListener && !global._continueSaveUnloadWired) {
             global._continueSaveUnloadWired = true;
@@ -165,6 +199,7 @@
         maybeSnap: maybeSnap,
         markDirty: markDirty,
         isDirty: function () { return _dirty; },
+        everSaved: function () { return _everSaved; },   // v25.1·P1：给回归测试与 HUD 判「从未落档」用
         pendingMinutes: function () { return _pendingMinutes; },
         lastSnapshotAt: function () { return _lastSnapAt; },
         onSaved: onSaved,

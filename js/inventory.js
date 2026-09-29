@@ -700,7 +700,9 @@ function learnSecretArt(item, template) {
         }
         if (typeof window.showMessage === 'function') window.showMessage('📖 掩卷长吁——《' + template.name + '》通读入门！（' + (result.msg || '') + '）', 'success');
         if (typeof renderEquipmentPanel === 'function') renderEquipmentPanel();
-        if (typeof updateSkillPanels === 'function') updateSkillPanels();
+        // v25.0：改前调 updateSkillPanels——全仓无此函数，typeof 守卫恒假纯空转：
+        // 读通功法后技能栏从不刷新（回退支更是连一个刷新都没有）。接真身 renderSkillSlotsInline（app.js 顶层）。
+        if (typeof renderSkillSlotsInline === 'function') renderSkillSlotsInline();
         if (typeof renderSkillBrowse === 'function') renderSkillBrowse();
         return { success: true, consumed: true };
     }
@@ -712,7 +714,9 @@ function learnSecretArt(item, template) {
     if (!window.learnedSecrets.includes(template.id)) {
         window.learnedSecrets.push(template.id);
         if (typeof window.showMessage === 'function') window.showMessage('📖 你读通了功法：' + template.name + '！', 'success');
-        if (typeof updateSkillPanels === 'function') updateSkillPanels();
+        // v25.0：改前调 updateSkillPanels——全仓无此函数，typeof 守卫恒假纯空转：
+        // 读通功法后技能栏从不刷新（回退支更是连一个刷新都没有）。接真身 renderSkillSlotsInline（app.js 顶层）。
+        if (typeof renderSkillSlotsInline === 'function') renderSkillSlotsInline();
         return { success: true, consumed: true };
     } else {
         if (typeof window.showMessage === 'function') window.showMessage('你已经学过这门功法了！', 'info');
@@ -1816,8 +1820,16 @@ function equipItemFromInventory(uid) {
     }
     
     // 装备物品
+    // v25.1·试-07：卸下时（F-29）把强化/精炼/附魔/耐久保在了背包格实例上，但再装备
+    // 只把 _slotTemplate 的全局模板递给 equipItem，实例上保的字段无人读 → +5 脱下再穿上变 +0。
+    // 这里把实例保留字段并进模板浅拷贝再传；equipItem 内部本就 Object.assign 浅克隆，
+    // 其余直接调 window.equipItem(slot, template) 的调用方零破坏。
     if (typeof window.equipItem === 'function') {
-        window.equipItem(targetSlot, template);
+        var _eqPayload = Object.assign({}, template);
+        ['enhancementLevel', 'refineLevel', 'enchantType', 'armorDurability', 'durability'].forEach(function (f) {
+            if (slot[f] !== undefined && slot[f] !== null) _eqPayload[f] = slot[f];
+        });
+        window.equipItem(targetSlot, _eqPayload);
     }
     
     // 从背包移除（或减少数量）
@@ -2143,6 +2155,11 @@ function saveInventory() {
             templateId: s.templateId,
             count: s.count,
             durability: s.durability,
+            // v25.1·试-07：卸下装备保在实例上的强化字段随小档走（F-29 只保到内存，重载即丢）
+            enhancementLevel: s.enhancementLevel,
+            refineLevel: s.refineLevel,
+            enchantType: s.enchantType,
+            armorDurability: s.armorDurability,
             markedForSale: s.markedForSale || false
         } : null),
         maxSlots: inventory.maxSlots,
@@ -2171,6 +2188,10 @@ function loadInventory() {
             // 第八十二波：裸格子旧档不再把新生成的 uid 覆盖回 undefined（与 game-state 主路径同款条件覆盖）
             if (slotData.uid) instance.uid = slotData.uid;
             if (slotData.durability != null) instance.durability = slotData.durability;
+            // v25.1·试-07：强化字段随小档还原（与 saveInventory 对称）
+            ['enhancementLevel', 'refineLevel', 'enchantType', 'armorDurability'].forEach(function (f) {
+                if (slotData[f] !== undefined && slotData[f] !== null) instance[f] = slotData[f];
+            });
             instance.markedForSale = slotData.markedForSale || false;
             return instance;
         });
