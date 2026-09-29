@@ -314,9 +314,10 @@ const commands = {
     }
     const t = await requireLivePage();
     // 双层包裹：内层抓用户代码异常，外层再兜一层，保证 evaluate 永远 resolve
+    // 内层是 async：脚本里可以直接 await（配合 CDP 的 awaitPromise）
     const wrapped =
-      `(() => { try { const __v = (function(){ ${code} })();
-        return JSON.stringify({ok:true, v: __v === undefined ? null : __v}); }
+      `(() => { try { return (async () => { const __v = await (async function(){ ${code} })();
+        return JSON.stringify({ok:true, v: __v === undefined ? null : __v}); })(); }
         catch (e) { return JSON.stringify({ok:false, err: (e && e.message) || String(e),
           stack: (e && e.stack || '').split('\\n').slice(0,4).join(' | ')}); }
       })()`;
