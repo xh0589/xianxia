@@ -522,6 +522,50 @@ const commands = {
   },
 
   /**
+   * clicktext：按可见文字直接点，彻底绕开坐标漂移。
+   * 为什么要有这条——这个游戏的列表/折叠/情境窗会随操作重排，
+   * 「先 find 拿坐标、再 clickat」两步之间坐标经常已经漂了
+   * （点到了旁边的行、折叠标题、甚至 null）。批量 grind 时这一步
+   * 几乎必然踩空。clicktext 在**同一次 Runtime.evaluate** 里
+   * 定位 → scrollIntoView → 重算 rect → 回传坐标，再由 CDP 派发
+   * 真实鼠标事件到那个坐标，坐标必然是当下的。
+   * 用法：clicktext <文字> [--nth N] [--within <容器选择器>]
+   */
+  async clicktext() {
+    // argv 里混着命令名与 flag 及其值，needle 取第一个既非 flag、
+    // 也非纯数字、且不是命令名本身的参数
+    const self = 'clicktext';
+    const needle = String(argv.find(a => a !== self && a !== '--nth' && a !== '--within' && !/^\d+$/.test(a) && !a.startsWith('--')) || '');
+    if (!needle) return console.error('用法: clicktext <文字> [--nth N] [--within <选择器>]');
+    const nthIdx = (() => { const i = argv.indexOf('--nth'); return i >= 0 ? Number(argv[i + 1]) || 0 : 0; })();
+    const within = (() => { const i = argv.indexOf('--within'); return i >= 0 ? argv[i + 1] : ''; })();
+    const t = await requireLivePage();
+    const js = `(() => {
+      const n = ${JSON.stringify(needle)};
+      const scope = ${JSON.stringify(within)} ? document.querySelector(${JSON.stringify(within)}) : document;
+      if (!scope) return {ok:false, err:'容器没找到 ' + ${JSON.stringify(within)}};
+      const cands = [...scope.querySelectorAll('button,[onclick],a,[role=button]')]
+        .filter(el => (el.innerText||el.textContent||'').trim().indexOf(n) >= 0);
+      if (!cands.length) return {ok:false, err:'没找到含「'+n+'」的可点元素'};
+      const el = cands[${nthIdx}] || cands[0];
+      const label = (el.innerText||'').trim().replace(/\\s+/g,' ').slice(0,40);
+      el.scrollIntoView({ block:'center' });
+      const r = el.getBoundingClientRect();
+      const x = Math.round(r.left + r.width/2), y = Math.round(r.top + r.height/2);
+      const top = document.elementFromPoint(x,y);
+      return {ok:true, x, y, label,
+        hit: top ? top.tagName+'.'+String(top.className).slice(0,40) : 'null',
+        hitIsTarget: top === el || el.contains(top)};
+    })()`;
+    const r = await send(t.webSocketDebuggerUrl, 'Runtime.evaluate', { expression: js, returnByValue: true });
+    const info = (r && r.result && r.result.value) || { ok: false, err: '定位失败' };
+    if (!info.ok) { console.log(JSON.stringify(info, null, 2)); return; }
+    await clickAt(t, info.x, info.y);
+    await sleep(400);
+    console.log('已点「' + info.label + '」@(' + info.x + ',' + info.y + ')，落点=' + info.hit + '，命中目标=' + info.hitIsTarget);
+  },
+
+  /**
    * clickat：按 find 报出的坐标点。
    * 为什么要有这条——这个游戏大量元素的 onclick 内嵌中文名册
    * （`toggleSectRegion('南疆')`、`travelToSectFromList('百花谷')`），
