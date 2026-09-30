@@ -540,10 +540,9 @@ const commands = {
       returnByValue: true,
     });
     const top = (probe && probe.result && probe.result.value) || '(读不到)';
-    for (const type of ['mousePressed', 'mouseReleased']) {
-      await send(t.webSocketDebuggerUrl, 'Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1, buttons: type === 'mousePressed' ? 1 : 0 });
-      await sleep(40);
-    }
+    // 走 session 而非 send：带 confirm() 的按钮（如「尝试突破」）点下去会弹原生对话框，
+    // 单发连接收不到 javascriptDialogOpening，页面就永久停等 → 后面连 eval 都超时。
+    await clickAt(t, x, y);
     await sleep(400);
     console.log('已在 (' + x + ',' + y + ') 点击；该点最上层元素 = ' + top);
   },
