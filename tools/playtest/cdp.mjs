@@ -13,6 +13,9 @@
  *   node tools/playtest/cdp.mjs eval   <jsFile|-> [--port 9222]
  *   node tools/playtest/cdp.mjs text   [--port 9222]          页面可见文字
  *   node tools/playtest/cdp.mjs click  <selector> [--port 9222]
+ *   node tools/playtest/cdp.mjs clickat <x> <y>                  按坐标点（find 的输出）
+ *   node tools/playtest/cdp.mjs type   <text> [--enter]          真键盘事件打字
+ *   node tools/playtest/cdp.mjs dialogs                         处理挂起的原生对话框
  *   node tools/playtest/cdp.mjs find   <text>                按文字定位可点元素
  *   node tools/playtest/cdp.mjs logs   [--port 9222]          控制台错误
  *   node tools/playtest/cdp.mjs stop   [--port 9222]
@@ -21,6 +24,10 @@
  *   - eval 一律包 try/catch，异常作为 {__err} 返回，绝不让页面崩
  *   - 所有命令都先确认页面存在（about:blank 直接报错而非乱操作）
  *   - 每次调用都是独立进程 → 天然幂等，崩了不影响下一次
+ *   - 原生 confirm()/alert() 会把 CDP 调用挂死（页面 JS 停等），
+ *     所以每个交互命令都挂 Page.javascriptDialogOpening 监听，
+ *     弹窗一出现就按 acceptDialog 策略自动应答，并把文案记到窗口
+ *     ——否则「突破」这种带 confirm() 的按钮一点就超时，后续全废
  */
 
 import { spawn } from 'node:child_process';
@@ -177,6 +184,29 @@ async function session(wsUrl, steps, timeoutMs = 30000) {
       reject(new Error('连接错误: ' + (e.message || 'unknown')));
     };
   });
+}
+
+/**
+ * 交互动作统���走这一条：在**同一连接**里 Page.enable → 派发事件。
+ *
+ * 为什么不能继续用 send()（一条命令一条连接）：
+ *   原生 confirm()/alert() 会让页面 JS 停等，此时派发事件的那次调用
+ *   永远收不到回应 → 命令超时，页面被永久卡住，后续全部命令跟着挂。
+ *   session() 在同一连接上 Page.enable 并监听 javascriptDialogOpening，
+ *   弹窗一出现就自动应答（CDP_DIALOG_DECLINE=1 可改为取消），
+ *   点「突破」这种带 confirm() 的按钮才点得动。
+ */
+async function act(t, steps) {
+  const all = [{ method: 'Page.enable' }].concat(steps);
+  return session(t.webSocketDebuggerUrl, all, 30000);
+}
+
+async function clickAt(t, x, y) {
+  await act(t, [
+    { method: 'Input.dispatchMouseEvent', params: { type: 'mouseMoved', x, y, buttons: 0 } },
+    { method: 'Input.dispatchMouseEvent', params: { type: 'mousePressed', x, y, button: 'left', clickCount: 1, buttons: 1 } },
+    { method: 'Input.dispatchMouseEvent', params: { type: 'mouseReleased', x, y, button: 'left', clickCount: 1, buttons: 0 } },
+  ]);
 }
 
 /** 建一条 CDP 连接，发一条命令，收一条同 id 的结果 */
@@ -422,16 +452,50 @@ const commands = {
     let info;
     try { info = typeof v === 'string' ? JSON.parse(v) : v; } catch { info = { 解析失败: v }; }
     if (!info || info.ok !== true) { console.log(JSON.stringify(info, null, 2)); return; }
-    for (const type of ['mousePressed', 'mouseReleased']) {
-      await send(t.webSocketDebuggerUrl, 'Input.dispatchMouseEvent', {
-        type, x: info.x, y: info.y, button: 'left', clickCount: 1,
-      });
-    }
+    await clickAt(t, info.x, info.y);   // 走 session：带 confirm() 的按钮才点得动
     await sleep(500);
     console.log(JSON.stringify(info, null, 2));
   },
 
-  /** find：按可见文字找可点元素，报出稳定选择器 */
+  /**
+   * dialogs：解冻被原生对话框卡住的页面。
+   *
+   * 为什么会卡住：原生 confirm()/alert() 让页面 JS 停等，等你点确定。
+   * 若那次派发事件的连接没开 Page.enable（老版本 click/clickat 就是这样，
+   * 一条命令一条连接），弹窗事件没人应答，页面就永久停在那里——
+   * 此后连 eval 都超时，因为整个渲染进程都在等那个对话框。
+   *
+   * 用法：
+   *   dialogs            应答所有挂起对话框（默认接受）
+   *   dialogs --decline  改为取消（CDP_DIALOG_DECLINE 同效）
+   */
+  async dialogs() {
+    const t = await requireLivePage();
+    const accept = !flag('decline', false) && !process.env.CDP_DIALOG_DECLINE;
+    // 顺序要紧：页面被冻住时 Page.enable 自己也会超时，
+    // 所以先无条件发一次 handleJavaScriptDialog 把冻解开，再开 enable 接住后续的。
+    // 「No dialog is showing」是良性情形——上一条命令的连接断开时浏览器
+    // 已把对话框自动关掉了，此时该做的是确认页面还活着。
+    let r;
+    try {
+      r = await session(t.webSocketDebuggerUrl, [
+        { method: 'Page.handleJavaScriptDialog', params: { accept } },
+        { method: 'Page.enable' },
+      ], 15000);
+    } catch (e) {
+      if (/No dialog is showing/.test(e.message)) {
+        r = await session(t.webSocketDebuggerUrl, [{ method: 'Page.enable' }], 15000)
+          .catch(e2 => [{ error: { message: e2.message } }]);
+      } else throw e;
+    }
+    console.log('已向页面发出 handleJavaScriptDialog（accept=' + accept + '）。'
+      + (r && r[0] && r[0].error ? ' 注意：Page.enable 报 ' + JSON.stringify(r[0].error) : '')
+      + ' 若仍超时，说明没有挂起对话框。');
+  },
+
+  /**
+   * find：按可见文字找可点元素，报出稳定选择器
+   */
   async find() {
     const needle = String(argv[1]);
     const t = await requireLivePage();
@@ -455,6 +519,65 @@ const commands = {
     let arr;
     try { arr = typeof v === 'string' ? JSON.parse(v) : v; } catch { arr = { 解析失败: v }; }
     console.log(JSON.stringify(arr, null, 2));
+  },
+
+  /**
+   * clickat：按 find 报出的坐标点。
+   * 为什么要有这条——这个游戏大量元素的 onclick 内嵌中文名册
+   * （`toggleSectRegion('南疆')`、`travelToSectFromList('百花谷')`），
+   * 选择器里必须带引号，PowerShell 5.1 会把引号吃掉，于是 find 能看见、
+   * click 却点不着。本命令直接吃 find 输出的 x/y，中间不经过选择器。
+   * 用法：clickat <x> <y>
+   */
+  async clickat() {
+    const x = Number(argv[1]);
+    const y = Number(argv[2]);
+    if (!isFinite(x) || !isFinite(y)) return console.error('用法: clickat <x> <y>（坐标取自 find 的输出）');
+    const t = await requireLivePage();
+    // 先报落点是谁，避免"点了没反应"时不知道点到了什么
+    const probe = await send(t.webSocketDebuggerUrl, 'Runtime.evaluate', {
+      expression: `(()=>{const e=document.elementFromPoint(${x},${y});return e?e.tagName+'.'+String(e.className).slice(0,50)+' ['+(e.innerText||'').trim().replace(/\\s+/g,' ').slice(0,40)+']':'null'})()`,
+      returnByValue: true,
+    });
+    const top = (probe && probe.result && probe.result.value) || '(读不到)';
+    for (const type of ['mousePressed', 'mouseReleased']) {
+      await send(t.webSocketDebuggerUrl, 'Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1, buttons: type === 'mousePressed' ? 1 : 0 });
+      await sleep(40);
+    }
+    await sleep(400);
+    console.log('已在 (' + x + ',' + y + ') 点击；该点最上层元素 = ' + top);
+  },
+  /**
+   * type：像玩家一样往当前焦点里打字。
+   * 为什么要有这条——建号页的「姓名」是纯文字输入，不给 type 就只能靠
+   * evaluate 直接写 .value，那是 `FIX_NOTES.md:1273` 明令禁止的
+   * 「evaluate 造物」，也违反 `强制规则.md` 的「UI 是真理」。
+   * 这里派发真实的 Input.dispatchKeyEvent（含 keyDown/char/keyUp），
+   * 走的是和玩家键盘完全同一条路，页面自己的 input 监听会正常触发。
+   * 另 --enter 在打完字后回车。
+   */
+  async type() {
+    const text = argv.slice(1).filter(a => a !== '--enter').join(' ');
+    const pressEnter = argv.includes('--enter');
+    const t = await requireLivePage();
+    // 逐字符派发：keyDown → char → keyUp，与真实键盘事件序列一致
+    for (const ch of String(text)) {
+      await send(t.webSocketDebuggerUrl, 'Input.dispatchKeyEvent', { type: 'keyDown', text: ch, unmodifiedText: ch });
+      await send(t.webSocketDebuggerUrl, 'Input.dispatchKeyEvent', { type: 'keyUp' });
+      await sleep(25);
+    }
+    if (pressEnter) {
+      await send(t.webSocketDebuggerUrl, 'Input.dispatchKeyEvent', { type: 'rawKeyDown', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, key: 'Enter', code: 'Enter' });
+      await send(t.webSocketDebuggerUrl, 'Input.dispatchKeyEvent', { type: 'char', text: '\r' });
+      await send(t.webSocketDebuggerUrl, 'Input.dispatchKeyEvent', { type: 'keyUp', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, key: 'Enter', code: 'Enter' });
+    }
+    await sleep(200);
+    // 回读实际落进输入框的值，让「打进去了没有」可核对
+    const r = await send(t.webSocketDebuggerUrl, 'Runtime.evaluate', {
+      expression: '(()=>{const a=document.activeElement;return a?((a.id||a.tagName)+"="+String(a.value!==undefined?a.value:(a.innerText||"")).slice(0,40)):"(无焦点)"})()',
+      returnByValue: true,
+    });
+    console.log('已输入 ' + text.length + ' 字；焦点处 = ' + ((r && r.result && r.result.value) || '(读不到)'));
   },
 
   /**
