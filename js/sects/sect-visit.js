@@ -673,7 +673,7 @@ function initSectDiplomacy() {
 }
 
 function saveSectDiplomacy() {
-    try { localStorage.setItem('xianxia_sect_diplomacy', JSON.stringify(SECT_DIPLOMACY_STATE)); } catch(e) { console.warn('[静默失败] js/sects/sect-visit.js:660 · 外交关系存档：结盟/仇怨/通商的账没存上，读档后两家关系打回原形，玩家的外交努力全白费', e && e.message); }
+    try { if (window.saveToStorage) { if (!window.saveToStorage('xianxia_sect_diplomacy', JSON.stringify(SECT_DIPLOMACY_STATE))) throw new Error('xianxia_sect_diplomacy' + ' 未落盘'); } else localStorage.setItem('xianxia_sect_diplomacy', JSON.stringify(SECT_DIPLOMACY_STATE)); } catch(e) { console.warn('[静默失败] js/sects/sect-visit.js:660 · 外交关系存档：结盟/仇怨/通商的账没存上，读档后两家关系打回原形，玩家的外交努力全白费', e && e.message); }
 }
 
 function getSectRelationLabel(value) {

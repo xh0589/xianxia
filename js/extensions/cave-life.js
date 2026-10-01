@@ -139,6 +139,16 @@
                 if (_rng() < chance) {
                     var guest = _pick(friends);
                     var hasTea = _hasFacility('fac_tea_stove');
+                    // v25.6 会客：客人到了门口，把招待权交还玩家——弹得出接待窗就走接待账
+                    // （CaveReception 自己写起居注与天下见闻），弹不出（闭关/战斗中/无模态）落回自动文本。
+                    // 两本账一笔不重、一笔不漏：received 为真时下面整段不再走。
+                    var received = false;
+                    try {
+                        if (window.CaveReception && typeof window.CaveReception.receive === 'function') {
+                            received = !!window.CaveReception.receive(guest, { hasTea: hasTea, hasGuestRoom: _hasFacility('fac_guest_room') });
+                        }
+                    } catch (eRecv) { console.warn('[静默失败] js/extensions/cave-life.js · 会客交接：接待弹窗没弹起来，这位客人落回自动文本', eRecv && eRecv.message); }
+                    if (!received) {
                     var line = _pick(hasTea ? VISIT_TEA_LINES : VISIT_LINES).replace('{name}', guest.name);
                     scenes.push({ kind: 'visit', text: line, name: guest.name });
                     // 茶灶待客，知己也不空手——带点山货回礼（真入账，来路是他自己的行囊）
@@ -171,6 +181,7 @@
                             window.WorldJournal.record({ type: 'cave_visit', title: '知己来访', text: guest.name + ' 寻到洞府来了。', refs: { npc: guest.id || guest.name } });
                         }
                     } catch (eJ) {}
+                    } // v25.6 会客：自动文本段收口（received 为真时整段跳过）
                 }
             }
         } else if (_rng() < 0.3) {

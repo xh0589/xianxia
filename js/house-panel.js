@@ -202,6 +202,11 @@
             var ley = window.getCaveLey && window.getCaveLey();
             if (ley && ley.kind === 'cultivation' && ley.pct > 0) chips.push(['地脉·' + ley.name, '+' + ley.pct + '%']);
         } catch (eLey) {}
+        // v25.5 风水布置：吉煞收口也挂签——摆得合不合气，账面上看得见
+        try {
+            var fsMul = window.getFengshuiMul && Number(window.getFengshuiMul());
+            if (fsMul && fsMul !== 1) chips.push(['风水', '×' + fsMul.toFixed(2)]);
+        } catch (eFs) {}
         var html = '<p class="x-h2 mb-1">修炼倍率 <span class="x-num">×' + total.toFixed(2) + '</span></p>';
         if (chips.length) {
             html += '<div class="flex flex-wrap gap-1 mb-2">' + chips.map(function (c) {
@@ -603,6 +608,15 @@
         var owned = (h && h.furniture) || [];
         var FURN = window.HOUSE_FURNITURE || {};
         html += '<p class="x-h2 mb-2">🪑 家具 <span class="x-note">（每件都有一份实在的加成）</span></p>';
+        // v25.5 风水布置入口：家具摆进八方位才有吉煞——账在 fengshui.js，破山洞立不住方位不画
+        if (h && h.type && h.type !== 'ruin' && typeof window.openFengshuiUI === 'function') {
+            var _fsMul = 1;
+            try { _fsMul = Number(window.getFengshuiMul && window.getFengshuiMul()) || 1; } catch (eFs2) {}
+            html += '<div class="x-card mb-3 flex items-center justify-between">' +
+                '<div><p class="x-val">🧭 风水布置 <span class="x-chip x-chip--flat">修炼 ×' + _fsMul.toFixed(2) + '</span></p>' +
+                '<p class="x-meta mt-1">静室八方位各秉方位之气——摆件安对吉位提速，安到煞位反噬气机。</p></div>' +
+                '<button onclick="window.openFengshuiUI()" class="x-btn x-btn--sm">布方位</button></div>';
+        }
         var ownedKeys = Object.keys(FURN).filter(function (fid) { return owned.indexOf(fid) >= 0; });
         var shopKeys = Object.keys(FURN).filter(function (fid) { return owned.indexOf(fid) < 0; });
         if (ownedKeys.length) {

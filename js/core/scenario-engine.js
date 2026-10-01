@@ -424,6 +424,54 @@ const scenarioEngine = {
             }
         }
 
+        // v25.6 押货跑商：eff.caravan = {op:'open'}——契约所柜台开行情板与货担（caravan-trade.js 正门）。
+        // 板本身是只读行情 + 装卸货正门，开不开得成由那本模块说了算；剧本层只递话，不另立账。
+        if (eff.caravan && typeof eff.caravan === 'object') {
+            if (eff.caravan.op !== 'open' || typeof window.openCaravanBoard !== 'function') {
+                return { success: false, reason: 'caravan', error: '商行柜上眼下没有这条路' };
+            }
+            window.openCaravanBoard();
+            var crest = [];
+            for (var ck in eff) { if (ck !== 'caravan' && ck !== 'msg' && ck !== 'msgType' && ck !== 'time') crest.push(ck); }
+            if (crest.length === 0) {
+                if (eff.msg) log.add(eff.msg, eff.msgType || 'info');
+                if (eff.time && window.advanceTime) window.advanceTime(eff.time, '设施交互');
+                return { success: true, messages: [] };
+            }
+        }
+
+        // v25.8 黑道批：eff.teller = {op:'coerce'}——钱庄柜娘那条黑路（npc-crime.js 正门）。
+        // 成败、冷却、闭门三日全由那本账自理；剧本层只递话，拦下的缘由原样上屏。
+        if (eff.teller && typeof eff.teller === 'object') {
+            if (eff.teller.op !== 'coerce' || !window.NpcCrime || typeof window.NpcCrime.coerceTeller !== 'function') {
+                return { success: false, reason: 'teller', error: '柜上眼下没有这条路' };
+            }
+            window.NpcCrime.coerceTeller();
+            var trest = [];
+            for (var tk in eff) { if (tk !== 'teller' && tk !== 'msg' && tk !== 'msgType' && tk !== 'time') trest.push(tk); }
+            if (trest.length === 0) {
+                if (eff.msg) log.add(eff.msg, eff.msgType || 'info');
+                if (eff.time && window.advanceTime) window.advanceTime(eff.time, '设施交互');
+                return { success: true, messages: [] };
+            }
+        }
+
+        // v25.8 黑道批：eff.crime = {op:'payBounty'}——司法堂柜上缴清悬赏销案（npc-crime.js 正门）。
+        if (eff.crime && typeof eff.crime === 'object') {
+            if (eff.crime.op !== 'payBounty' || !window.NpcCrime || typeof window.NpcCrime.payBounty !== 'function') {
+                return { success: false, reason: 'crime', error: '堂上眼下没有这条路' };
+            }
+            var cRes = window.NpcCrime.payBounty();
+            if (!cRes || cRes.error) return { success: false, reason: 'crime', error: (cRes && cRes.error) || '悬赏销不了案' };
+            var qrest = [];
+            for (var qk2 in eff) { if (qk2 !== 'crime' && qk2 !== 'msg' && qk2 !== 'msgType' && qk2 !== 'time') qrest.push(qk2); }
+            if (qrest.length === 0) {
+                if (eff.msg) log.add(eff.msg, eff.msgType || 'info');
+                if (eff.time && window.advanceTime) window.advanceTime(eff.time, '设施交互');
+                return { success: true, messages: [] };
+            }
+        }
+
         // v20.86：eff.facility = {id}——门派设施结算钩子：真设施管道原样走一遍
         // （门禁/真气/贡献成本/每日份例/冷却全由设施系统自理，剧本层不另立账）。
         // 设施结算失败则整笔不成交——与钱庄账本同一条纪律，拦下的缘由原样上屏。
@@ -444,11 +492,12 @@ const scenarioEngine = {
         }
 
         var result;
-        // 账本键（bank/pawn/fence/peddler）已在上方钩子成交，不得再随 eff 进统一结算
+        // 账本键（bank/pawn/fence/peddler/caravan/teller/crime）已在上方钩子成交，不得再随 eff 进统一结算
         //（RewardService 认不得这些键会整笔失败）——剥掉后传净表。
+        // v25.8 顺带修一处旧账：caravan 此前不在剥单里——它带着别的键走到这儿会被 RewardService 整笔拒掉。
         var plain = {};
         for (var qk in eff) {
-            if (qk === 'bank' || qk === 'pawn' || qk === 'fence' || qk === 'facility' || qk === 'peddler') continue;
+            if (qk === 'bank' || qk === 'pawn' || qk === 'fence' || qk === 'facility' || qk === 'peddler' || qk === 'caravan' || qk === 'teller' || qk === 'crime') continue;
             plain[qk] = eff[qk];
         }
         if (window.RewardService) {

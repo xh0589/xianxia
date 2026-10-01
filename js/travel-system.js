@@ -269,9 +269,12 @@ function initTravelSystem() {
 
 // ============ 保存旅行数据 ============
 function saveTravelData() {
-    localStorage.setItem('xianxia_travel_data', JSON.stringify({
-        unlockedTeleports: Array.from(unlockedTeleports)
-    }));
+    // v25.3（存档写失败可见批）：原为裸 setItem——配额一满这行直接抛给调用方（解锁/旅行链遍布）。
+    // 接进单一 owner window.saveToStorage（js/global-utils.js）：失败玩家听得到（去重弹一次），函数不再抛。
+    var _v = JSON.stringify({ unlockedTeleports: Array.from(unlockedTeleports) });
+    try {
+        if (window.saveToStorage) { if (!window.saveToStorage('xianxia_travel_data', _v)) throw new Error('xianxia_travel_data' + ' 未落盘'); } else localStorage.setItem('xianxia_travel_data', _v);
+    } catch (e) { console.warn('[静默失败] js/travel-system.js · 旅行存档：解锁的传送点没写进本地存储，读档后传送网络打回原形', e && e.message); }
 }
 
 // ============ 开始旅行 ============

@@ -427,7 +427,7 @@ function getBeastTideDetailHtml() {
 
 // 存档
 function saveWorldEvents() {
-    try { localStorage.setItem('xianxia_world_events', JSON.stringify(activeWorldEvents)); } catch (e) { console.warn('[静默失败] js/world-events.js:430 · 世界事件存档：异宝寻没寻到、兽潮打没打完全没存上，读档后这场天降异宝等于从没发生过', e && e.message); }
+    try { if (window.saveToStorage) { if (!window.saveToStorage('xianxia_world_events', JSON.stringify(activeWorldEvents))) throw new Error('xianxia_world_events' + ' 未落盘'); } else localStorage.setItem('xianxia_world_events', JSON.stringify(activeWorldEvents)); } catch (e) { console.warn('[静默失败] js/world-events.js:430 · 世界事件存档：异宝寻没寻到、兽潮打没打完全没存上，读档后这场天降异宝等于从没发生过', e && e.message); }
 }
 function loadWorldEvents() {
     try {
@@ -477,7 +477,7 @@ function loadCityTempModifiers() {
     } catch (e) {}
 }
 function saveCityTempModifiers() {
-    try { localStorage.setItem('xianxia_city_temp', JSON.stringify(cityTempModifiers)); } catch (e) { console.warn('[静默失败] js/world-events.js:480 · 城市临时修正存档：城池 Buff 没存上，读档后本该有的加成原样丢掉', e && e.message); }
+    try { if (window.saveToStorage) { if (!window.saveToStorage('xianxia_city_temp', JSON.stringify(cityTempModifiers))) throw new Error('xianxia_city_temp' + ' 未落盘'); } else localStorage.setItem('xianxia_city_temp', JSON.stringify(cityTempModifiers)); } catch (e) { console.warn('[静默失败] js/world-events.js:480 · 城市临时修正存档：城池 Buff 没存上，读档后本该有的加成原样丢掉', e && e.message); }
 }
 function getGameDaySafe() {
     if (typeof window.getAbsoluteDay === 'function') {

@@ -105,17 +105,25 @@ window.XianXia = window.XianXia || {};
             'success': 'bg-green-600 border-green-400',
             'error': 'bg-red-600 border-red-400',
             'warning': 'bg-yellow-600 border-yellow-400',
-            'info': 'bg-blue-600 border-blue-400'
+            // UI评审·B4-2（2026-10-01）：info 从 bg-blue-600 实心降为深底半透明——
+            // 实心亮蓝与九州舆图的东部海域撞色，UI 评审时被误读成「地图右上角的引导窗」
+            // （截图恰好截到 3 秒存活期内的 info toast）。降饱和后仍是蓝系可辨识，
+            // 但不再从暗色地图背景里浮出来抢视线。
+            'info': 'bg-blue-900/85 border-blue-500/60'
         };
         const msg = document.createElement('div');
         msg.className = `${colors[type] || colors.info} text-white px-4 py-3 rounded border-l-4 shadow-lg max-w-sm`;
         msg.textContent = message;
         msgDiv.appendChild(msg);
+        // UI评审·B4-2：时长按文本长度自适应——3 秒只够读短句，创角引导类长文本
+        // （40+ 字）实测读不完就淡出，改 6 秒；仍读不完的超长（70+）给 8 秒。
+        const _len = String(message).length;
+        const _ms = _len >= 70 ? 8000 : (_len >= 40 ? 6000 : 3000);
         setTimeout(() => {
             msg.style.opacity = '0';
             msg.style.transition = 'opacity 0.5s';
             setTimeout(() => msg.remove(), 500);
-        }, 3000);
+        }, _ms);
     }
 
     // 初始化消息系统（DOMContentLoaded后调用）

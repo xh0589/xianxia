@@ -320,9 +320,9 @@ function addReputationFromTrade(cityName, amount) {
 // ============ 存档 ============
 function saveReputation() {
     try {
-        localStorage.setItem('xianxia_reputation', JSON.stringify(cityReputation));
+        if (window.saveToStorage) { if (!window.saveToStorage('xianxia_reputation', JSON.stringify(cityReputation))) throw new Error('xianxia_reputation' + ' 未落盘'); } else localStorage.setItem('xianxia_reputation', JSON.stringify(cityReputation));
     } catch (e) {
-        console.error('保存声望数据失败:', e);
+        console.error('[静默失败] js/reputation-system.js · 声望存档：各城声望没写进本地存储，读档后名声打回原形', e && e.message);
     }
 }
 

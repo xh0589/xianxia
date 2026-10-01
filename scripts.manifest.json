@@ -3,8 +3,8 @@
   "generated": "2026-09-28",
   "note": "script 加载序列唯一真源。entries 顺序=defer 执行顺序=文档出现顺序。行格式：<script defer src=\"…\"></script> 可带行尾注释；comment 条目=分层注释。改完跑 tools/manifest-scripts.py gen 写回 HTML，check 校验同步。",
   "stats": {
-    "scripts": 315,
-    "layerComments": 25
+    "scripts": 330,
+    "layerComments": 26
   },
   "entries": [
     {
@@ -1753,6 +1753,111 @@
       "kind": "script",
       "indent": "    ",
       "src": "js/extensions/cave-life.js",
+      "comment": null
+    },
+    {
+      "kind": "script",
+      "indent": "    ",
+      "src": "js/extensions/fengshui.js",
+      "comment": null
+    },
+    {
+      "kind": "comment",
+      "indent": "    ",
+      "text": " v25.6 玩家心愿批（第一百四十八批）：望风榜/生平传记/洞府会客/洞府守卫战/押货跑商 "
+    },
+    {
+      "kind": "script",
+      "indent": "    ",
+      "src": "js/extensions/jianghu-rank.js",
+      "comment": null
+    },
+    {
+      "kind": "script",
+      "indent": "    ",
+      "src": "js/extensions/biography.js",
+      "comment": null
+    },
+    {
+      "kind": "script",
+      "indent": "    ",
+      "src": "js/extensions/cave-reception.js",
+      "comment": null
+    },
+    {
+      "kind": "script",
+      "indent": "    ",
+      "src": "js/extensions/cave-siege.js",
+      "comment": null
+    },
+    {
+      "kind": "script",
+      "indent": "    ",
+      "src": "js/economy/caravan-trade.js",
+      "comment": null
+    },
+    {
+      "kind": "comment",
+      "indent": "    ",
+      "text": " v25.7 市井烟火批（第一百四十九批）：市井总门/街头闲逛/澡堂/下馆子/赌坊/书肆/施舍（丐帮眼线） "
+    },
+    {
+      "kind": "script",
+      "indent": "    ",
+      "src": "js/city-facilities/street-life.js",
+      "comment": null
+    },
+    {
+      "kind": "script",
+      "indent": "    ",
+      "src": "js/city-facilities/bathhouse.js",
+      "comment": null
+    },
+    {
+      "kind": "script",
+      "indent": "    ",
+      "src": "js/city-facilities/eatery.js",
+      "comment": null
+    },
+    {
+      "kind": "script",
+      "indent": "    ",
+      "src": "js/city-facilities/gamble-den.js",
+      "comment": null
+    },
+    {
+      "kind": "script",
+      "indent": "    ",
+      "src": "js/city-facilities/bookshop.js",
+      "comment": null
+    },
+    {
+      "kind": "script",
+      "indent": "    ",
+      "src": "js/city-facilities/beggar-alms.js",
+      "comment": null
+    },
+    {
+      "kind": "comment",
+      "indent": "    ",
+      "text": " v25.8 黑道与人情批（第一百五十批）：威胁·抢劫·通缉追捕·钱庄柜娘·职业黑面 / 街面人物志·打劫街坊 / 还物·邀约·打听·请客·雇镖·占卜·托付秘密·拜师 "
+    },
+    {
+      "kind": "script",
+      "indent": "    ",
+      "src": "js/npcs/npc-crime.js",
+      "comment": null
+    },
+    {
+      "kind": "script",
+      "indent": "    ",
+      "src": "js/city-facilities/citizen-life.js",
+      "comment": null
+    },
+    {
+      "kind": "script",
+      "indent": "    ",
+      "src": "js/npcs/npc-bond.js",
       "comment": null
     },
     {

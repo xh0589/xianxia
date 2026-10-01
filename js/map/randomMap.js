@@ -195,7 +195,7 @@ function getMapSeed() {
             if (saved) MAP_SEED = saved;
             else {
                 MAP_SEED = DEFAULT_SEED + '_' + Date.now().toString(36);
-                localStorage.setItem(MAP_SEED_KEY, MAP_SEED);
+                if (window.saveToStorage) window.saveToStorage(MAP_SEED_KEY, MAP_SEED); else localStorage.setItem(MAP_SEED_KEY, MAP_SEED);
             }
         } catch (e) {
             MAP_SEED = DEFAULT_SEED;
@@ -206,7 +206,7 @@ function getMapSeed() {
 
 function setMapSeed(seed) {
     MAP_SEED = seed;
-    try { localStorage.setItem(MAP_SEED_KEY, seed); } catch (e) {}
+    try { if (window.saveToStorage) window.saveToStorage(MAP_SEED_KEY, seed); else localStorage.setItem(MAP_SEED_KEY, seed); } catch (e) {}
     wildState.regions = {};   // 换种子 = 换一片山河，旧探索作废
     return MAP_SEED;
 }
@@ -5127,11 +5127,15 @@ window.REGION_TERRAIN_WEIGHTS = WildTerrain.REGION_PROFILES;
         const provs = provinces().map(provRow).join('');
         const nSect = svg.querySelectorAll('.map-sect').length;
         const nCity = svg.querySelectorAll('.map-city').length;
-        return `<div class="x-map-legend-top">
-            <span class="x-map-legend-h">📖 图例</span>
+        // UI评审·B4（2026-09-30）：三组图例默认折叠——占地图垂直空间过大，
+        // 且属次要信息（初见看一次就够）。标题行改按钮切换，默认收起；
+        // 记住玩家选择（x-map-legend-on 常驻 panel class，重渲染不丢）。
+        const open = panel && panel.classList.contains('x-map-legend-on');
+        return `<div class="x-map-legend-top" id="x-map-legend-toggle" role="button" tabindex="0" aria-expanded="${!!open}" title="点开/收起图例">
+            <span class="x-map-legend-h">📖 图例<i class="x-map-legend-caret">${open ? '▾' : '▸'}</i></span>
             <span class="x-map-now"></span>
         </div>
-        <div class="x-map-cols">
+        <div class="x-map-cols${open ? '' : ' x-map-legend-folded'}">
             <div class="x-map-col x-map-pair">
                 <p class="x-map-grp-h">州域色块（点了看州情）</p>
                 <ul>${provs}</ul>
@@ -5160,6 +5164,27 @@ window.REGION_TERRAIN_WEIGHTS = WildTerrain.REGION_PROFILES;
                 </ul>
             </div>
         </div>`;
+    }
+
+    // UI评审·B4（2026-09-30）：图例折叠——标题行即开关（点/回车切 x-map-legend-on），
+    // 只切 class 不重渲染（provRows 的事件不重绑）；选择记在 panel class 上，重渲染不丢。
+    function mountLegendToggle() {
+        if (!legend || !panel) return;
+        const t = legend.querySelector('#x-map-legend-toggle');
+        if (!t || t.dataset.bound) return;
+        t.dataset.bound = '1';
+        const fire = function () {
+            const on = panel.classList.toggle('x-map-legend-on');
+            const cols = legend.querySelector('.x-map-cols');
+            if (cols) cols.classList.toggle('x-map-legend-folded', !on);
+            const caret = legend.querySelector('.x-map-legend-caret');
+            if (caret) caret.textContent = on ? '\u25BE' : '\u25B8';
+            t.setAttribute('aria-expanded', String(!!on));
+        };
+        t.addEventListener('click', fire);
+        t.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fire(); }
+        });
     }
 
     // 门派名开关与「🧭 路线标记」同住图上那一组（#map-tools）。
@@ -5310,6 +5335,7 @@ window.REGION_TERRAIN_WEIGHTS = WildTerrain.REGION_PROFILES;
             provRows = arr(legend.querySelectorAll('.x-map-prov'));
         }
         mountLabelToggle();
+        mountLegendToggle();   // UI评审·B4：图例折叠开关
 
         // 只盯 style：app.js 每改一次描边/透明度就是一次选中动作，rAF 合帧防抖
         new MutationObserver(() => {

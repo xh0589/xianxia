@@ -78,4 +78,29 @@
             }
         }
     });
+
+    // v25.6 押货跑商：与上面的跑单帮**分账另立一出**（不改 peddler_run 的柜面选项，
+    // 那出是 wave69 钉死的存量戏）。跑单帮是柜面现结的虚拟货担；押货跑商是真把货从行囊扣走
+    // 装上肩、看六区行情差价、路上有被截道的风声（caravan-trade.js 正门，剧本层只递话）。
+    if (typeof window.openCaravanBoard === 'function') {
+        window.facilityAugment('contract_hall', {
+            id: 'caravan_run', name: '押货跑商', icon: '🐴',
+            desc: '把行囊里的货真装上肩，带去价高地界卸货出手——差价是脚力的钱，路上有失',
+            startNode: 'cv_start',
+            nodes: {
+                cv_start: {
+                    desc: function () {
+                        return '契约所侧厢的押货柜台。与跑单帮的柜面生意不同：这里押的是你行囊里真真切切的货——\n' +
+                            '装上一担，货就从行囊里扣走挂在你肩上；到价高的地界卸回行囊，照当地行市卖给铺子，差价就是脚力的钱。\n' +
+                            '⚠️ 货在身上过一天，就有一天被截道的风声——货越贵越招风，仇家也可能亲自来。\n\n' +
+                            '柜上摊开的是六区行情板：绿字是该品类最贱的地界（低买），红字是最俏的地界（高卖）。';
+                    },
+                    choices: [
+                        { text: '🐴 看行情板 · 装货上肩 / 卸货入囊', next: null, effects: { caravan: { op: 'open' }, time: 10 } },
+                        { text: '👋 离了柜前', next: null }
+                    ]
+                }
+            }
+        });
+    }
 })();

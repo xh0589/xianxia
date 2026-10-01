@@ -87,7 +87,12 @@
             nodes: {
                 court_start: {
                     desc: function () {
-                        return '司法堂今日开堂——' + courtCaseToday().brief + '\n\n堂外包干立着一块「缉查委托」的木牌，隔壁偏厅还有两户人家等着调解。';
+                        // v25.8 黑道批：堂外那块悬赏牌不再只是文案——通缉账在 npc-crime.js，牌面如实播报
+                        var line = '司法堂今日开堂——' + courtCaseToday().brief + '\n\n堂外包干立着一块「缉查委托」的木牌，隔壁偏厅还有两户人家等着调解。';
+                        try {
+                            if (window.NpcCrime && typeof window.NpcCrime.wantedLine === 'function') line += window.NpcCrime.wantedLine();
+                        } catch (eW) { console.warn('[静默失败] js/city-facilities/facility-offices.js · court：悬赏牌没念出来——牌面照旧', eW && eW.message); }
+                        return line;
                     },
                     choices: [
                         { text: '⚖️ 旁听今日堂审（精力5）', require: { energy: 5 }, effects: { cost: { energy: 5 }, time: 30, exp: 2, msg: function () { return '你在堂下站了半个时辰。' + courtCaseToday().brief + ' 见一次世情，长一分见识。历练+2。'; } } },
@@ -96,6 +101,7 @@
                             win: { exp: 8, rep: 2, copper: 200, msg: '你领签押随班头缉查至深夜，赃物起获、苦主登门道谢，官府另给200铜跑腿钱。历练+8，本城声望+2。', msgType: 'success' },
                             lose: { exp: 4, msg: '你查到后半夜，线索断在一处空宅里。班头拍拍你："断线也是线，记档，明天接着查。"历练+4。' }
                         } } },
+                        { text: '🪧 缴清头上的悬赏（销案）', next: null, effects: { crime: { op: 'payBounty' } } },
                         { text: '🤝 帮调解户婚纠纷（吃口才）', require: { energy: 15 }, effects: { cost: { energy: 15 }, time: 40, roll: {
                             prob: skillProb('口才', 0.4),
                             win: { karma: 2, rep: 2, exp: 3, msg: '两家为儿女婚约的聘礼吵了两个月，你一人一句来回递话，末了两家各让一步，当堂握手。主簿捋须："比判还难的事，你办成了。"因果+2，本城声望+2，历练+3。', msgType: 'success' },

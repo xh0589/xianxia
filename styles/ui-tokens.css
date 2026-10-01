@@ -229,3 +229,15 @@ html #continue-save-state:empty { display: none; }
         transition-duration: .01ms !important;
     }
 }
+
+
+/* ---------- UI评审·A2（2026-10-01）：导航三层分组 ---------- */
+/* 小节标题：不参与点击、只分层级（「行走江湖」） */
+.nav-group-h { cursor: default; }
+/* 「更多 ▾」toggle 行：沿用 nav-item 视觉（悬停同款底色）但文字灰一档，
+   caret 靠右——它是组开关不是面板入口 */
+.nav-more-toggle .nav-more-caret { transition: transform 0.15s; }
+.nav-more-toggle:hover .nav-more-caret { color: #fbbf24; }
+/* 折叠组：display:none 走 class 开关（toggleNavMore 控制），不用 hidden 属性——
+   hidden 会被某些 .hidden 恢复逻辑（closeRuntimeModals 类通配）误伤 */
+.nav-more-folded { display: none; }

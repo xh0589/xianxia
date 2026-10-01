@@ -31,7 +31,7 @@
             var all = {};
             try { all = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); } catch (e) {}
             all[npcId] = choice;
-            try { localStorage.setItem(LS_KEY, JSON.stringify(all)); } catch (e) {}
+            try { if (window.saveToStorage) window.saveToStorage(LS_KEY, JSON.stringify(all)); else localStorage.setItem(LS_KEY, JSON.stringify(all)); } catch (e) {}
         };
     }
 

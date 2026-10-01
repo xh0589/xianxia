@@ -1233,7 +1233,7 @@ function resetPersonalEventFlags() {
 
 function savePersonalEventFlags() {
     // 写入 localStorage（兼容旧方式）
-    try { localStorage.setItem('xianxia_personal_event_flags', JSON.stringify(personalEventFlags)); } catch(e) { console.warn('[静默失败] js/npcs/npc-personal-events.js:1232 · 个人事件标志存档：某条 NPC 感情线的剧情进度没存上，读档后这条线打回原形，玩家以为还挂着的进展全没了', e && e.message); }
+    try { if (window.saveToStorage) { if (!window.saveToStorage('xianxia_personal_event_flags', JSON.stringify(personalEventFlags))) throw new Error('xianxia_personal_event_flags' + ' 未落盘'); } else localStorage.setItem('xianxia_personal_event_flags', JSON.stringify(personalEventFlags)); } catch(e) { console.warn('[静默失败] js/npcs/npc-personal-events.js:1232 · 个人事件标志存档：某条 NPC 感情线的剧情进度没存上，读档后这条线打回原形，玩家以为还挂着的进展全没了', e && e.message); }
     // 同步到 window 全局变量，确保 GameState.collectFullGameState 能读取
     window.personalEventFlags = personalEventFlags;
 }

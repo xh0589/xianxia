@@ -968,7 +968,11 @@ function showSectDeepOverview(sectName) {
     html += '<button onclick="showSectMasters(\'' + sectName + '\')" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-3 py-1 rounded text-xs font-bold">📖 拜师</button>';
     html += '<button onclick="showSectRanks(\'' + sectName + '\')" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded text-xs">⬆️ 晋升</button>';
     html += '<button onclick="showSectDeepTasks(\'' + sectName + '\')" class="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded text-xs">📋 任务</button>';
-    html += '<button onclick="showSectFactions(\'' + sectName + '\')" class="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1 rounded text-xs">🏛️ 派系</button>';
+    // v25.4：无派系数据的门派不再画这颗按钮——旧版无条件渲染，天山/蓬莱/五仙教/百花谷/铁掌帮/
+    // 大隐阁/天书阁七派点了只弹一句「暂无派系信息」，是张承诺了交互的死按钮（丐帮两脉入口在面板内特判，一并保住）
+    if ((data.factions && data.factions.length) || sectName === '丐帮') {
+        html += '<button onclick="showSectFactions(\'' + sectName + '\')" class="bg-cyan-600 hover:bg-cyan-500 text-white px-3 py-1 rounded text-xs">🏛️ 派系</button>';
+    }
     // v19.0 P0-3 批次 B5：仅长老及以上显示"宗门管理"
     var sectRole = (typeof window.getPlayerSectRole === 'function') ? window.getPlayerSectRole() : null;
     if (sectRole === 'elder' || sectRole === 'leader') {

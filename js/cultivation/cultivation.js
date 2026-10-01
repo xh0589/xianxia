@@ -528,11 +528,20 @@ function updateCultivationUI() {
                     '<button onclick="window.forgeBondedArtifact()" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-3 py-1 rounded text-xs">凝聚炼制</button>' +
                     '</div>';
             } else {
+                // v25.5 器灵养成：3 阶可唤醒，唤醒后能交感——器灵等级进同一战斗乘区（+2%/级）
+                var _sp = _ba.spirit;
+                var _spTxt = (_sp && _sp.awakened)
+                    ? ' · 器灵「' + _sp.name + '」' + _sp.level + '级（' + (_sp.exp||0) + '/' + (_sp.expMax||50) + '）'
+                    : ((_ba.level >= 3) ? ' · 灵性已足，器灵可唤醒' : '');
+                var _spBtn = (_sp && _sp.awakened)
+                    ? '<button onclick="window.communeWithSpirit()" class="bg-yellow-800 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs">器灵交感</button>'
+                    : ((_ba.level >= 3) ? '<button onclick="window.awakenArtifactSpirit()" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded text-xs">唤醒器灵</button>' : '');
                 html += '<div class="bg-yellow-900/30 p-3 rounded border border-yellow-600/50 flex items-center justify-between">' +
                     '<div><span class="text-lg">🔱</span><span class="font-bold text-yellow-400 ml-2">' + _ba.name + '</span>' +
-                    '<span class="text-xs text-yellow-300 ml-2">' + _ba.level + '阶 · 经验' + (_ba.exp||0) + '/' + (_ba.expMax||50) + ' · 攻防+' + ((_ba.level-1)*5) + '%</span></div>' +
+                    '<span class="text-xs text-yellow-300 ml-2">' + _ba.level + '阶 · 经验' + (_ba.exp||0) + '/' + (_ba.expMax||50) + ' · 攻防+' + ((_ba.level-1)*5) + '%' + _spTxt + '</span></div>' +
+                    '<div class="flex gap-2">' + _spBtn +
                     '<button onclick="window.feedArtifact()" class="bg-yellow-700 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs">喂材料</button>' +
-                    '</div>';
+                    '</div></div>';
             }
         }
         // 1.10 高位面入口：元婴+入灵界、化神+入魔界（御剑飞行暴露供旅行系统接）
@@ -629,6 +638,18 @@ function updateCultivationUI() {
                 '<button onclick="window.craftCustomPill()" class="bg-orange-600 hover:bg-orange-500 text-white px-3 py-1 rounded text-xs">炼制丹方</button>' +
                 '</div>';
         }
+        // 2.12b 功法融合（v25.4 玩家乐趣闭环批）：两门已掌握功法可融成更胜一筹的一门——
+        // mergeSkills 死代码自此有了入口；炉底不足两门时整块不画（不摆点不动的空头按钮）
+        if (typeof _mergeableSkillList === 'function') {
+            var _mergeable = _mergeableSkillList();
+            if (_mergeable.length >= 2) {
+                html += '<div class="bg-sky-900/30 p-3 rounded border border-sky-600/50 flex items-center justify-between">' +
+                    '<div><span class="text-lg">☯️</span><span class="font-bold text-sky-400 ml-2">功法融合</span>' +
+                    '<span class="text-xs text-sky-300 ml-2">已掌握 ' + _mergeable.length + ' 门可作炉底</span></div>' +
+                    '<button onclick="window.openSkillMergeUI()" class="bg-sky-600 hover:bg-sky-500 text-white px-3 py-1 rounded text-xs">融汇功法</button>' +
+                    '</div>';
+            }
+        }
         // 2.19 天机占卜：元婴+占卜气运/机缘（v20.39：一卦 → 四问卦阵）
         if (_tier >= 4 && typeof window.openDivination === 'function') {
             html += '<div class="bg-violet-900/30 p-3 rounded border border-violet-600/50 flex items-center justify-between">' +
@@ -648,6 +669,21 @@ function updateCultivationUI() {
                     '<span class="text-xs ' + _qdColor + ' ml-2">紊乱 ' + Math.round(_qd) + ' · ' + _qdNote + '</span></div>' +
                     '<button onclick="window.calmQiChoice()" class="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded text-xs">化解</button>' +
                     '</div>';
+            }
+        }
+        // v25.5 魔道：入魔程度不再是只进不出的暗账——面板露出，能燃魔焰借力，也能压回去
+        if (typeof window.getDemonicTierInfo === 'function') {
+            var _dc = window.getDemonicCorruption();
+            if (_dc >= 20) {
+                var _dt = window.getDemonicTierInfo(_dc);
+                var _flameOn = !!(window.activeBuffs && window.activeBuffs.demonic_flame);
+                html += '<div class="bg-purple-900/30 p-3 rounded border border-purple-600/50 flex items-center justify-between">' +
+                    '<div><span class="text-lg">😈</span><span class="font-bold text-purple-400 ml-2">魔道</span>' +
+                    '<span class="text-xs text-purple-300 ml-2">入魔 ' + Math.round(_dc) + '% · ' + _dt.name + (_flameOn ? ' · 魔焰正燃' : '') + '</span></div>' +
+                    '<div class="flex gap-2">' +
+                    (_flameOn ? '' : '<button onclick="window.embraceDemonicFlame()" class="bg-purple-700 hover:bg-purple-600 text-white px-3 py-1 rounded text-xs" title="烧 10% 入魔程度换三日战力大涨，气机与业障付出代价">燃动魔焰</button>') +
+                    '<button onclick="window.suppressDemonicHeart()" class="bg-indigo-700 hover:bg-indigo-600 text-white px-3 py-1 rounded text-xs" title="灵石 100 + 一个时辰，入魔程度压回 10%">压制魔心</button>' +
+                    '</div></div>';
             }
         }
         // v20.41 丹毒：丹药的甜里带毒——面板露出 + 解毒三途入口
@@ -1060,78 +1096,223 @@ function getElementalDamageMul(atkElement, defElement) {
 // 第八十一波·死账清理：功法间五行相性查询（getElementInteraction）删除——
 // 零调用死函数，且用户铁律「不准五行相克」（功法之间的相克/相生都不做，系统特意更自由）
 
-// 功法融合（两种功法→新功法）
-function mergeSkills(skill1Id, skill2Id, mergeMaterial) {
-    // 检查是否有融合材料
-    if (!window.inventory) {
-        showMessage('背包系统未就绪', 'error');
-        return false;
+// 功法融合（两种已掌握功法 → 更胜一筹的新功法）
+// v25.4 玩家乐趣闭环批接线：此函数早年写完整、挂了 window，却全仓零调用零 UI——
+// 「系统写完没接线」的经典死路（道侣名册 v20.24、悬赏榜 v20.21 同款病史）。
+// 旧版还自带三处硬伤：①融合功法只塞功法表、不进知识账，运不了功也吃不到被动；
+// ②effect 是句空话「融合之力」，art-effects 解析器读不出任何数值——融了白融；
+// ③grade 用 Math.max 算「九品」这种字符串，得出 NaN；④不落盘，读档后融合功法凭空消失。
+// 本批全部补齐：掌握门槛、代价前置（灵石+时辰）、效果=双亲逐键取高再抬五成后
+// 重生成标准效果串（解析器保证读得回）、入知识账、注册表持久化（经单一存盘 owner）、
+// 融合功法不可再融（堵连锁滚雪球）、同一对不可重复融。
+var MERGE_COST_STONES = 300;
+var MERGE_COST_MINUTES = 120;
+var MERGED_SAVE_KEY = 'xianxia_merged_skills';
+// 解析键 → 标准效果句（与 art-effects._parseSkillEffect 的口径一一对应，改那边必改这边）
+var _MERGE_EFFECT_TEXT = {
+    sword: '剑法伤害', dao: '刀法伤害', fist: '拳掌伤害', spear: '枪法伤害', odd: '奇门伤害',
+    attack: '攻击', defensePct: '防御', dodgePct: '闪避', critPct: '暴击',
+    qiRegen: '真气恢复', hpRegen: '生命恢复', maxQiPct: '真气上限'
+};
+var _MERGE_ELEM_TEXT = { fire: '火系', ice: '冰系', water: '水系', metal: '金系', wood: '木系', earth: '土系', thunder: '雷系', wind: '风系', void: '暗系' };
+
+function _skillIsMastered(id) {
+    if (window.KnowledgeSystem && typeof window.KnowledgeSystem.canEquip === 'function') {
+        try { if (window.KnowledgeSystem.canEquip(id)) return true; } catch (eKs) { console.warn('[静默失败] js/cultivation/cultivation.js · 功法掌握查询：知识册没答上来，回落旧账', eKs && eKs.message); }
     }
-    
-    var hasMaterial = false;
+    return !!(window.learnedSecrets && window.learnedSecrets.indexOf(id) >= 0);
+}
+
+function _markSkillLearned(id) {
+    if (window.KnowledgeSystem && typeof window.KnowledgeSystem.unlock === 'function') {
+        try { window.KnowledgeSystem.unlock(id, 'learned', { source: 'merge', completeness: 1 }); return; } catch (eKu) { console.warn('[静默失败] js/cultivation/cultivation.js · 融合功法入知识册：回落旧账 learnedSecrets', eKu && eKu.message); }
+    }
+    if (!window.learnedSecrets) window.learnedSecrets = [];
+    if (window.learnedSecrets.indexOf(id) < 0) window.learnedSecrets.push(id);
+}
+
+// 可当炉底的已掌握原版功法（融合出来的不算——再融会滚雪球）
+function _mergeableSkillList() {
+    var out = [];
+    var pages = window.skillPages || [];
+    for (var p = 0; p < pages.length; p++) {
+        var page = pages[p] || [];
+        for (var i = 0; i < page.length; i++) {
+            var sk = page[i];
+            if (!sk || !sk.id || String(sk.id).indexOf('merged_') === 0) continue;
+            if (_skillIsMastered(sk.id)) out.push(sk);
+        }
+    }
+    return out;
+}
+
+// 双亲效果合一炉：逐键取高再抬五成，重生成解析器读得回的标准效果串
+function _composeMergedEffect(s1, s2) {
+    var parse = (window.ArtEffects && typeof window.ArtEffects.parseSkillEffect === 'function')
+        ? window.ArtEffects.parseSkillEffect : null;
+    if (!parse) return [s1.effect, s2.effect].filter(Boolean).join('，') || '融合之力';
+    var a = parse(s1.effect) || {}, b = parse(s2.effect) || {};
+    var merged = {}, has = false;
+    Object.keys(a).concat(Object.keys(b)).forEach(function (k) {
+        var v = Math.max(Number(a[k]) || 0, Number(b[k]) || 0);
+        if (v > 0) { merged[k] = Math.ceil(v * 1.5); has = true; }
+    });
+    if (!has) return '攻击+8%';   // 双亲效果都解析不出数值：给条保底，不写空话
+    var parts = [];
+    for (var k in merged) {
+        if (_MERGE_EFFECT_TEXT[k]) parts.push(_MERGE_EFFECT_TEXT[k] + '+' + merged[k] + '%');
+        else if (k.indexOf('elem_') === 0 && _MERGE_ELEM_TEXT[k.slice(5)]) parts.push(_MERGE_ELEM_TEXT[k.slice(5)] + '伤害+' + merged[k] + '%');
+    }
+    return parts.length ? parts.join('，') : '攻击+8%';
+}
+
+// 注册表持久化：融合功法读档后不凭空消失（走 v25.3 单一存盘 owner，夹具世界回落裸写）
+function _loadMergedRegistry() {
+    try {
+        var raw = localStorage.getItem(MERGED_SAVE_KEY);
+        var list = raw ? JSON.parse(raw) : [];
+        return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+}
+function _saveMergedRegistry(list) {
+    var raw = JSON.stringify(list || []);
+    if (window.saveToStorage) { if (!window.saveToStorage(MERGED_SAVE_KEY, raw)) throw new Error(MERGED_SAVE_KEY + ' 未落盘'); } else localStorage.setItem(MERGED_SAVE_KEY, raw);
+}
+
+function _registerMergedSkill(def) {
+    // def 进功法表（findSkillById 查得到、浏览页看得见）+ 知识账（运功/被动都认）
+    if (window.skillPages) {
+        var found = false;
+        for (var p = 0; p < window.skillPages.length && !found; p++) {
+            var page = window.skillPages[p] || [];
+            for (var i = 0; i < page.length; i++) if (page[i] && page[i].id === def.id) { found = true; break; }
+        }
+        if (!found) {
+            var lastPage = window.skillPages[window.skillPages.length - 1];
+            if (lastPage && lastPage.length < 5) lastPage.push(def);
+            else window.skillPages.push([def]);
+        }
+    }
+    _markSkillLearned(def.id);
+}
+
+// 重载回册：注册表存的是完整 def，刷新后重建进功法表与知识账（与存档里的 learnedSecrets 双保险）
+function rehydrateMergedSkills() {
+    var list = _loadMergedRegistry();
+    if (!list.length) return 0;
+    if (!window.skillPages) return -1;   // 功法表还没加载（脚本顺序），由 load 事件重试
+    for (var i = 0; i < list.length; i++) {
+        var d = list[i];
+        if (d && d.id && d.name) _registerMergedSkill(d);
+    }
+    return list.length;
+}
+if (rehydrateMergedSkills() === -1 && typeof window !== 'undefined' && window.addEventListener) {
+    window.addEventListener('load', function () {
+        try { rehydrateMergedSkills(); } catch (eRh) { console.warn('[静默失败] js/cultivation/cultivation.js · 融合功法重载回册：旧融合功法没能重建进功法表', eRh && eRh.message); }
+    });
+}
+
+function mergeSkills(skill1Id, skill2Id, mergeMaterial) {
+    if (!window.currentCharData) { showMessage('请先创建角色', 'error'); return false; }
+    if (!skill1Id || !skill2Id || skill1Id === skill2Id) { showMessage('融合要挑两门不同的功法。', 'warning'); return false; }
+    if (String(skill1Id).indexOf('merged_') === 0 || String(skill2Id).indexOf('merged_') === 0) {
+        showMessage('融合功法气机已杂，不能再当炉底二次融合。', 'warning'); return false;
+    }
+    var skill1 = (typeof findSkillById === 'function') ? findSkillById(skill1Id) : null;
+    var skill2 = (typeof findSkillById === 'function') ? findSkillById(skill2Id) : null;
+    if (!skill1 || !skill2) { showMessage('功法不存在', 'error'); return false; }
+    if (!_skillIsMastered(skill1Id) || !_skillIsMastered(skill2Id)) {
+        var _notMine = !_skillIsMastered(skill1Id) ? skill1.name : skill2.name;
+        showMessage('「' + _notMine + '」你尚未掌握——没吃透的功法强融，只会两败俱伤。', 'warning'); return false;
+    }
+    var mergedId = 'merged_' + [String(skill1Id), String(skill2Id)].sort().join('_');
+    if (_skillIsMastered(mergedId)) { showMessage('这两门功法已经融过一体，再融不出新东西了。', 'info'); return false; }
+
+    // 代价前置：安神灵香（灵石）——失败也烧掉，成功多得一门
+    if (window.DataManager && typeof window.DataManager.deductSpiritStones === 'function') {
+        if (!window.DataManager.deductSpiritStones(MERGE_COST_STONES)) {
+            showMessage('融合一炉需 ' + MERGE_COST_STONES + ' 灵石买安神灵香——你凑不出这个数。', 'warning'); return false;
+        }
+    }
+    // 兼容旧签名：显式传入的融合材料（传了就必须有，先吃掉）
     if (mergeMaterial) {
-        for (var i = 0; i < window.inventory.slots.length; i++) {
-            var slot = window.inventory.slots[i];
-            if (slot && slot.templateId === mergeMaterial && slot.count >= 1) {
-                hasMaterial = true;
-                slot.count -= 1;
-                if (slot.count <= 0) window.inventory.slots[i] = null;
-                break;
+        var hasMaterial = false;
+        if (window.inventory) {
+            for (var mi = 0; mi < window.inventory.slots.length; mi++) {
+                var mslot = window.inventory.slots[mi];
+                if (mslot && mslot.templateId === mergeMaterial && mslot.count >= 1) {
+                    hasMaterial = true;
+                    mslot.count -= 1;
+                    if (mslot.count <= 0) window.inventory.slots[mi] = null;
+                    break;
+                }
             }
         }
-        if (!hasMaterial) {
-            showMessage('缺少融合材料！', 'error');
-            return false;
-        }
+        if (!hasMaterial) { showMessage('缺少融合材料！', 'error'); return false; }
     }
-    
-    // 获取两个功法
-    var skill1 = findSkillById(skill1Id);
-    var skill2 = findSkillById(skill2Id);
-    if (!skill1 || !skill2) {
-        showMessage('功法不存在', 'error');
-        return false;
-    }
-    
-    // 融合成功率（受熟练度影响）
+    if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') window.timeSystem.advanceTime(MERGE_COST_MINUTES, '融合功法');
+
+    // 成功率：五成打底，双方熟练度每级 +3%，封顶八成五
     var prof1 = getProficiencyInfo(skill1Id);
     var prof2 = getProficiencyInfo(skill2Id);
-    var baseRate = 0.5 + (prof1.level + prof2.level) * 0.03;
-    var success = Math.random() < baseRate;
-    
-    if (success) {
-        // 融合成功：生成新功法
-        var newSkillName = skill1.name + '·' + skill2.name + '融合';
-        var newSkill = {
-            id: 'merged_' + skill1Id + '_' + skill2Id,
-            name: newSkillName,
-            icon: '☯️',
-            type: '融合功法',
-            grade: Math.max(skill1.grade || 1, skill2.grade || 1) + 1,
-            desc: skill1.desc + ' + ' + skill2.desc + ' 融合而成',
-            effect: '融合之力',
-            qiCost: (skill1.qiCost || 0) + (skill2.qiCost || 0)
-        };
-        
-        // 注册到功法系统
-        if (window.skillPages) {
-            // 找到最后一页添加
-            var lastPage = window.skillPages[window.skillPages.length - 1];
-            if (lastPage && lastPage.length < 5) {
-                lastPage.push(newSkill);
-            } else {
-                window.skillPages.push([newSkill]);
-            }
-        }
-        
-        showMessage('融合成功！获得新功法：' + newSkillName, 'success');
-        return newSkill;
-    } else {
-        // 融合失败：损失材料
-        showMessage('融合失败！材料已消耗。', 'error');
+    var rate = Math.min(0.85, 0.5 + ((prof1.level || 0) + (prof2.level || 0)) * 0.03);
+    if (Math.random() >= rate) {
+        showMessage('💥 融合失败！两道气机互冲而散，' + MERGE_COST_STONES + ' 灵石的香钱打了水漂。（两门功法无损；熟练度越高越稳）', 'error');
         return false;
     }
+    var newSkill = {
+        id: mergedId,
+        name: skill1.name + '·' + skill2.name,
+        icon: '☯️',
+        type: '融合功法',
+        grade: skill1.grade || skill2.grade || '无品',
+        desc: '「' + skill1.name + '」与「' + skill2.name + '」融为一炉——气机互补，更胜单独任何一门。',
+        effect: _composeMergedEffect(skill1, skill2),
+        element: 'neutral',
+        qiCost: (skill1.qiCost || 0) + (skill2.qiCost || 0)
+    };
+    _registerMergedSkill(newSkill);
+    try {
+        var reg = _loadMergedRegistry();
+        reg.push(newSkill);
+        _saveMergedRegistry(reg);
+    } catch (eSv) { console.warn('[静默失败] js/cultivation/cultivation.js · 融合功法注册表：这一炉没写进本地存储，刷新后功法仍在但重载会丢', eSv && eSv.message); }
+    showMessage('☯️ 融合成功！得新功法「' + newSkill.name + '」——' + newSkill.effect + '。已自动入知识账，可运功、可吃被动。', 'success');
+    try { if (typeof updateCultivationUI === 'function') updateCultivationUI(); } catch (eUI) { console.warn('[静默失败] js/cultivation/cultivation.js · 融合成功后面板刷新：面板没刷出来，数值下次打开即在', eUI && eUI.message); }
+    return newSkill;
 }
+
+// 融合面板：挑两门已掌握的功法，一炉融了
+function openSkillMergeUI() {
+    var list = _mergeableSkillList();
+    if (list.length < 2) { showMessage('可当炉底的已掌握功法不足两门——先去多参悟几门吧。', 'warning'); return false; }
+    if (typeof window.showModal !== 'function') { showMessage('功法融合要在浏览器里才能开炉。', 'info'); return false; }
+    function opts(selId) {
+        return list.map(function (sk) {
+            var info = getProficiencyInfo(sk.id);
+            return '<option value="' + sk.id + '"' + (sk.id === selId ? ' selected' : '') + '>' + (sk.icon || '📘') + ' ' + sk.name + '（熟练 ' + (info.level || 0) + ' · ' + (sk.effect || '无效果') + '）</option>';
+        }).join('');
+    }
+    var body = '<p class="text-xs text-gray-400 mb-3">耗 ' + MERGE_COST_STONES + ' 灵石 + ' + MERGE_COST_MINUTES + ' 分钟静悟。成功率=五成+双方熟练度每级3%（至多八成五）；失败烧灵石、功法无损。成功则双亲效果逐条取高再抬五成，合为一门自动掌握。</p>'
+        + '<label class="text-xs text-gray-300">功法甲</label><select id="merge-skill-a" class="w-full bg-gray-700 text-gray-100 text-xs rounded p-2 mb-2">' + opts(list[0].id) + '</select>'
+        + '<label class="text-xs text-gray-300">功法乙</label><select id="merge-skill-b" class="w-full bg-gray-700 text-gray-100 text-xs rounded p-2 mb-3">' + opts(list[1].id) + '</select>'
+        + '<button onclick="window.doSkillMerge()" class="w-full bg-sky-700 hover:bg-sky-600 text-white text-sm px-3 py-2 rounded">☯️ 融为一炉</button>';
+    window.showModal('☯️ 功法融合', body);
+    return true;
+}
+function doSkillMerge() {
+    var a = document.getElementById('merge-skill-a');
+    var b = document.getElementById('merge-skill-b');
+    var aid = a && a.value, bid = b && b.value;
+    if (!aid || !bid || aid === bid) { showMessage('要挑两门不同的功法。', 'warning'); return false; }
+    var ov = document.getElementById('xianxia-modal-overlay');
+    if (ov && ov.remove) ov.remove();
+    return mergeSkills(aid, bid);
+}
+window.openSkillMergeUI = openSkillMergeUI;
+window.doSkillMerge = doSkillMerge;
+window.rehydrateMergedSkills = rehydrateMergedSkills;
 
 // ==================== v6.2 心魔系统 ====================
 
@@ -1392,6 +1573,160 @@ function breakthroughWithHeartDemon() {
     return demon !== null;
 }
 
+// ==================== v25.5 魔道：入魔转变线（第一百四十七批 · 玩法立项批） ====================
+// 心魔「屈服」此前只把 _demonicCorruption 记进暗账（battle.js 认它、game-state.js 存它），
+// 玩家看不见、也没有任何后续——堕落是一条只有入口没有路的断头线。这批把路修通：
+// ① 修炼面板露出「魔道」块（入魔 ≥20%）；② 燃动魔焰：烧 10% 入魔换三日战力大涨
+//    （window.activeBuffs 与门派设施同一管道，六维全额生效、到期自动清、随档持久）；
+// ③ 压制魔心：灵石 + 时辰把入魔压回去，业障回善；④ 入魔 ≥50% 每日失控判定（气机紊乱/
+//    暴走折损/盛怒毁物三选一），且魔性日涨——≥50% 后不压制只会越陷越深；⑤ 复活死字段
+//    _demonicPower（此前零读者零存档）：屈服与燃焰都会攒它，魔焰的力道由它决定。
+var DEMONIC_FLAME_HOURS = 72;        // 魔焰持续（游戏时辰 3 日）
+var DEMONIC_FLAME_COST_CORRUPTION = 10;
+var DEMONIC_FLAME_MIN_CORRUPTION = 20;
+var DEMONIC_SUPPRESS_STONES = 100;
+var DEMONIC_SUPPRESS_MINUTES = 120;  // 回执的时长由它生成
+var DEMONIC_PANEL_MIN = 20;          // 面板露出门槛
+var DEMONIC_RAMPAGE_MIN = 50;        // 每日失控判定门槛
+
+function getDemonicCorruption() {
+    var cd = window.currentCharData;
+    return cd ? (Number(cd._demonicCorruption) || 0) : 0;
+}
+
+// 分档（面板文案与魔焰力道共用一把尺）：0 无 / 1 魔气入体 / 2 半魔之躯 / 3 一步入魔
+function getDemonicTierInfo(c) {
+    c = (c == null) ? getDemonicCorruption() : Number(c) || 0;
+    if (c >= 80) return { tier: 3, name: '一步入魔' };
+    if (c >= 50) return { tier: 2, name: '半魔之躯' };
+    if (c >= 20) return { tier: 1, name: '魔气入体' };
+    return { tier: 0, name: '魔气未显' };
+}
+
+function _demonicNowMinute() {
+    if (window.GameScheduler && typeof window.GameScheduler.nowMinute === 'function') return window.GameScheduler.nowMinute();
+    return (window.timeSystem && window.timeSystem.gameTime) ? (Number(window.timeSystem.gameTime.totalMinutes) || 0) : 0;
+}
+
+function isDemonicFlameActive() {
+    var b = window.activeBuffs && window.activeBuffs.demonic_flame;
+    return !!(b && b.effects && (b.expiryGameMinute || 0) > _demonicNowMinute());
+}
+
+function _clampKarma(cd, delta) {
+    cd.karma = Math.max(-100, Math.min(100, (Number(cd.karma) || 0) + delta));
+}
+
+// 燃动魔焰：烧 10% 入魔换三日六维大涨（力道随分档与 _demonicPower），代价：业障/气机/精力
+function embraceDemonicFlame() {
+    var cd = window.currentCharData;
+    if (!cd) { if (window.showMessage) window.showMessage('请先创建角色。', 'warning'); return false; }
+    var c = getDemonicCorruption();
+    if (c < DEMONIC_FLAME_MIN_CORRUPTION) {
+        if (window.showMessage) window.showMessage('入魔程度不足 ' + DEMONIC_FLAME_MIN_CORRUPTION + '%（现 ' + Math.round(c) + '%），魔焰点不着。', 'warning');
+        return false;
+    }
+    if (isDemonicFlameActive()) {
+        if (window.showMessage) window.showMessage('魔焰正燃着——等它烧完再说。', 'info');
+        return false;
+    }
+    var tier = getDemonicTierInfo(c).tier;
+    cd._demonicCorruption = c - DEMONIC_FLAME_COST_CORRUPTION;
+    // 死字段复活：每次燃焰都往 _demonicPower 里存一笔，力道账越滚越沉（随档走，见 game-state 白名单）
+    var powerGain = Math.max(1, Math.floor((Number(cd.level) || 10) * 0.5));
+    cd._demonicPower = (Number(cd._demonicPower) || 0) + powerGain;
+    var effects = {
+        strength: 5 + tier * 5 + Math.floor((cd._demonicPower || 0) / 4),
+        constitution: 3 + tier * 3,
+        dexterity: 2 + tier * 2
+    };
+    if (typeof window.applyBuff === 'function') {
+        window.applyBuff('demonic_flame', effects, DEMONIC_FLAME_HOURS);
+    } else {
+        if (!window.activeBuffs) window.activeBuffs = {};
+        window.activeBuffs.demonic_flame = { effects: effects, expiryGameMinute: _demonicNowMinute() + DEMONIC_FLAME_HOURS * 60, duration: DEMONIC_FLAME_HOURS };
+    }
+    _clampKarma(cd, -5);
+    try { if (typeof window.addQiDeviation === 'function') window.addQiDeviation(8); } catch (eQd) { console.warn('[静默失败] js/cultivation/cultivation.js · 魔焰的气机紊乱：这一笔没接住，代价没落账', eQd && eQd.message); }
+    cd.energy = Math.max(0, (cd.energy ?? 100) - 20);
+    cd.mood = Math.max(0, (cd.mood ?? 50) - 10);
+    if (window.showMessage) {
+        window.showMessage('😈 你放开识海最后一道闸——黑焰自心口烧遍四肢百骸！\n魔焰燃起（三日）：力道+' + effects.strength + ' 体魄+' + effects.constitution + ' 身法+' + effects.dexterity
+            + '\n代价：入魔程度烧去 ' + DEMONIC_FLAME_COST_CORRUPTION + '%（余 ' + Math.round(cd._demonicCorruption) + '%），业障+5（向恶），气机紊乱+8，精力-20。', 'warning');
+    }
+    if (window.updateCharacterStatus) window.updateCharacterStatus();
+    try { updateCultivationUI(); } catch (eUI) { console.warn('[静默失败] js/cultivation/cultivation.js · 魔道面板重绘：这一笔没接住，面板还是旧账', eUI && eUI.message); }
+    return true;
+}
+
+// 压制魔心：灵石 100 + 一个时辰静坐，入魔程度压回 10%，业障回善
+function suppressDemonicHeart() {
+    var cd = window.currentCharData;
+    if (!cd) { if (window.showMessage) window.showMessage('请先创建角色。', 'warning'); return false; }
+    var c = getDemonicCorruption();
+    if (c <= 0) { if (window.showMessage) window.showMessage('你身上没有魔气可压。', 'info'); return false; }
+    if (window.DataManager && window.DataManager.deductSpiritStones && !window.DataManager.deductSpiritStones(DEMONIC_SUPPRESS_STONES)) {
+        if (window.showMessage) window.showMessage('请高人护法、焚香静心要 ' + DEMONIC_SUPPRESS_STONES + ' 灵石，钱袋不够。', 'warning');
+        return false;
+    }
+    var mins = DEMONIC_SUPPRESS_MINUTES;   // 回执的时长由它生成
+    if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') window.timeSystem.advanceTime(mins, '压制魔心');
+    cd._demonicCorruption = Math.max(0, c - 10);
+    _clampKarma(cd, 3);
+    cd.willpower = (Number(cd.willpower) || 0) + 1;
+    if (window.showMessage) {
+        window.showMessage('🧘 你焚香静坐，一寸寸把黑焰压回识海深处——入魔程度 ' + Math.round(c) + '% → ' + Math.round(cd._demonicCorruption) + '%，业障-3（回善），意志+1。', 'success');
+    }
+    if (window.updateCharacterStatus) window.updateCharacterStatus();
+    try { updateCultivationUI(); } catch (eUI2) { console.warn('[静默失败] js/cultivation/cultivation.js · 魔道面板重绘（压制口）：这一笔没接住，面板还是旧账', eUI2 && eUI2.message); }
+    return true;
+}
+
+// 每日判定：≥50% 有几率失控（气机紊乱/暴走折损/盛怒毁物三选一），且魔性日涨；
+// 20~49% 魔气自散（日 -1）——压制与等待的取舍：危险的深度等不来好转，只会更深
+function demonicDailyTick() {
+    try {
+        var cd = window.currentCharData;
+        if (!cd) return;
+        var c = getDemonicCorruption();
+        if (c <= 0) return;
+        if (c >= DEMONIC_RAMPAGE_MIN) {
+            cd._demonicCorruption = c + 1;   // 魔性日涨
+            if (Math.random() < 0.25) {
+                var roll = Math.random();
+                if (roll < 0.4) {
+                    if (typeof window.addQiDeviation === 'function') window.addQiDeviation(6);
+                    if (window.showMessage) window.showMessage('😈 半夜魔焰焚心，你几乎压不住杀意——气机紊乱 +6。（入魔 ' + Math.round(cd._demonicCorruption) + '%，压制魔心可压回去）', 'warning');
+                } else if (roll < 0.75) {
+                    cd.energy = Math.max(0, (cd.energy ?? 100) - 15);
+                    cd.mood = Math.max(0, (cd.mood ?? 50) - 15);
+                    if (window.showMessage) window.showMessage('😈 你半夜暴走，一掌劈碎了静室的石案才清醒过来——精力-15，心境-15。（入魔 ' + Math.round(cd._demonicCorruption) + '%）', 'warning');
+                } else {
+                    var lost = 0;
+                    if (window.DataManager && typeof window.DataManager.getSpiritStones === 'function' && typeof window.DataManager.deductSpiritStones === 'function') {
+                        lost = Math.max(1, Math.min(50, Math.floor(window.DataManager.getSpiritStones() * 0.05)));
+                        if (!window.DataManager.deductSpiritStones(lost)) lost = 0;
+                    }
+                    if (window.showMessage) window.showMessage('😈 你盛怒之下毁了不少物件，醒来满地狼藉——' + (lost > 0 ? ('赔修灵石 -' + lost) : '好在没伤着人') + '。（入魔 ' + Math.round(cd._demonicCorruption) + '%）', 'warning');
+                }
+                if (window.updateCharacterStatus) window.updateCharacterStatus();
+            }
+        } else {
+            cd._demonicCorruption = Math.max(0, c - 1);   // 浅层魔气自散（日 -1）——危险的深度等不来好转
+        }
+    } catch (e) { console.warn('[静默失败] js/cultivation/cultivation.js · 魔道每日判定：这一笔没接住，今日的涨落与失控未落账', e && e.message); }
+}
+if (window.timeSystem && typeof window.timeSystem.onNewDaySubscribe === 'function') {
+    try { window.timeSystem.onNewDaySubscribe(demonicDailyTick); } catch (e) {}
+}
+
+window.getDemonicCorruption = getDemonicCorruption;
+window.getDemonicTierInfo = getDemonicTierInfo;
+window.isDemonicFlameActive = isDemonicFlameActive;
+window.embraceDemonicFlame = embraceDemonicFlame;
+window.suppressDemonicHeart = suppressDemonicHeart;
+window.demonicDailyTick = demonicDailyTick;
+
 // ==================== 灵根系统（v9.6.2 简化版） ====================
 // 灵根结构：{ metal: 0-100, wood: 0-100, water: 0-100, fire: 0-100, earth: 0-100 }
 // 规则：灵根值% = 对应功法修炼速度% = 功法发挥%
@@ -1616,6 +1951,23 @@ window.INSIGHT_TYPES = INSIGHT_TYPES;
 window.insightEffects = insightEffects;
 window.initProficiencyData = initProficiencyData;
 window.saveProficiencyData = saveProficiencyData;
+// ===== v25.2·修复（案底：FIX_NOTES「换角色串熟练度」实弹坐实）=====
+// 病链三层：① game-state.js 换档守卫调 resetProficiencyData（此前全库零定义，永远走
+// else 挂 window.proficiencyData 空对象——死键，闭包与 LS 全没清）；② 存档收集口读
+// window.proficiencyData（恒 null）→ 熟练度从不进档；③ 唯一持久化是全局 LS 键
+// xianxia_proficiency（跨档跨角色共享）→ 新角色继承上局熟练度。
+// 修法：真函数补齐（reset 清闭包+清 LS；snapshot 供存档收集读闭包真身）。
+function resetProficiencyData() {
+    proficiencyData = {};
+    try { localStorage.removeItem('xianxia_proficiency'); } catch (e) {}
+    if (typeof window.saveToStorage === 'function') { try { window.saveToStorage('xianxia_proficiency', '{}'); } catch (e) {} }
+}
+function getProficiencyDataSnapshot() {
+    // 深拷贝防档收集后闭包继续被修炼改动污染快照
+    return JSON.parse(JSON.stringify(proficiencyData || {}));
+}
+window.resetProficiencyData = resetProficiencyData;
+window.getProficiencyDataSnapshot = getProficiencyDataSnapshot;
 window.getProficiencyInfo = getProficiencyInfo;
 window.addProficiencyExp = addProficiencyExp;
 window.checkProficiencyUpgrade = checkProficiencyUpgrade;

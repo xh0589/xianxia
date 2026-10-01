@@ -41,7 +41,8 @@ const BUILDING_TYPES = {
     ESCORT_OFFICE: { id: 'escort_office', name: '镖局', icon: '🐎', color: 'text-amber-500', category: 'quest' },
     CHARITY_HALL: { id: 'charity_hall', name: '善堂', icon: '🍚', color: 'text-green-300', category: 'social' },
     ODDITY_MUSEUM: { id: 'oddity_museum', name: '异闻馆', icon: '🦉', color: 'text-purple-300', category: 'social' },
-    GARDEN_VILLA: { id: 'garden_villa', name: '园林别业', icon: '🎋', color: 'text-emerald-300', category: 'social' },
+    // v25.4 收成单一口径：地图卡旧名「别业🎋」，与设施表（app.js:1145）／弹窗扩展卡（facility-batch2.js:462）的「别苑🌺」两套名字——FIX_NOTES 立案的文案双源账，以多数两源为准
+    GARDEN_VILLA: { id: 'garden_villa', name: '园林别苑', icon: '🌺', color: 'text-emerald-300', category: 'social' },
     // v20.90 勾栏瓦舍：城中卖艺场——登台抚琴说书赚打赏，音律在此长进
     GOU_LAN: { id: 'goulan_washe', name: '勾栏瓦舍', icon: '🎭', color: 'text-pink-300', category: 'social' },
     ARENA_STAGE: { id: 'arena_stage', name: '斗法台', icon: '🥊', color: 'text-red-300', category: 'combat' },
@@ -403,11 +404,15 @@ function initLocationSystem() {
 
 // ============ 保存城市数据 ============
 function saveLocationData() {
-    localStorage.setItem('xianxia_location_data', JSON.stringify({
+    // v25.3（存档写失败可见批）：原为裸 setItem，接进单一 owner saveToStorage；夹具无 owner 走原路。
+    var _v = JSON.stringify({
         visitedCities: Array.from(visitedCities),
         buildingCooldowns: {},
         currentLocation: currentLocation || null
-    }));
+    });
+    try {
+        if (window.saveToStorage) { if (!window.saveToStorage('xianxia_location_data', _v)) throw new Error('xianxia_location_data' + ' 未落盘'); } else localStorage.setItem('xianxia_location_data', _v);
+    } catch (e) { console.warn('[静默失败] js/location-system.js · 城市足迹存档：去过的城与当前位置没写进本地存储，读档后足迹清零', e && e.message); }
 }
 
 // ============ 进入城市 ============
@@ -713,6 +718,18 @@ function renderCityBuildings(cityName) {
                 jobsEl.className = 'mt-2';
                 jobsEl.innerHTML = jobsHtml;
                 buildingList.appendChild(jobsEl);
+            }
+        }
+
+        // v25.7 市井烟火批：市井总门（闲逛/澡堂/下馆子/赌坊/书肆/施舍一张菜单；模块不在位静默）
+        if (window.StreetLife && typeof window.StreetLife.panelHtml === 'function') {
+            var streetHtml = '';
+            try { streetHtml = window.StreetLife.panelHtml(cityName) || ''; } catch (eStreet) { console.warn('[静默失败] js/location-system.js · renderCityBuildings：市井烟火口没渲染出来——这一行藏了', eStreet && eStreet.message); }
+            if (streetHtml) {
+                const streetEl = document.createElement('div');
+                streetEl.className = 'mt-2';
+                streetEl.innerHTML = streetHtml;
+                buildingList.appendChild(streetEl);
             }
         }
     }
@@ -2107,6 +2124,14 @@ function getCurrentCityEvent(cityName) {
 
 // ============ 与市民闲聊 ============
 function chatWithCitizen(cityName) {
+    // v25.8 街面人物志：市民各干各的营生，也能打劫（citizen-life.js 正门）——
+    // 在位就转交新账（随机一位街坊，带营生与黑道两排按钮）；不在位退回旧的通用闲聊窗。
+    try {
+        if (window.CitizenLife && typeof window.CitizenLife.openRandom === 'function') {
+            window.CitizenLife.openRandom(cityName);
+            return;
+        }
+    } catch (eCL) { console.warn('[静默失败] js/location-system.js · chatWithCitizen：街面人物志窗没开成，退回旧闲聊', eCL && eCL.message); }
     var citizens = getCityCitizens(cityName);
     if (citizens.length === 0) { showMessage('街上没有看到什么人。', 'info'); return; }
 
@@ -2179,7 +2204,9 @@ function exploreCity(cityName) {
             if (window.timeSystem) window.timeSystem.advanceTime(5, '探索城市');
         }},
         { text: '你发现了一家隐藏的小店，里面卖着稀奇古怪的东西。', action: function() {
-            if (typeof window.openCityShop === 'function') { window.openCityShop(cityName); }
+            // v25.7 修正口径：openCityShop 吃的是店铺类型串（useBuilding 传 'general'/'medicine'…），
+            // 此前误传城名——隐藏小店卖稀奇古怪的东西，正门是 'special' 柜（黑市/地下集市同款）。
+            if (typeof window.openCityShop === 'function') { window.openCityShop('special'); }
             else { showMessage('小店老板热情地招呼你，但店里没什么特别的。', 'info'); }
             if (window.timeSystem) window.timeSystem.advanceTime(10, '探索城市');
         }},
@@ -2564,6 +2591,10 @@ function initCityLifeSystem() {
         window.chatWithCitizen = chatWithCitizen;
         window.showCityLifeOnEnter = showCityLifeOnEnter;
         window.exploreCity = exploreCity;
+        // v25.7：市民闲话池的只读窗（账主开窗，外人不翻箱——澡堂/闲逛/施舍借它说人话，不许自抄一份）
+        window.getCitizenGossip = function () {
+            return CITIZEN_GOSSIP.map(function (g) { return { text: g.text, type: g.type }; });
+        };
         window.getCurrentCityEvent = getCurrentCityEvent;
         window.refreshCityCitizens = refreshCityCitizens;
         window.initCityLifeSystem = initCityLifeSystem;

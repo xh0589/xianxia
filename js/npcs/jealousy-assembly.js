@@ -305,7 +305,7 @@
         return _ledger;
     }
     function _ldgSave() {
-        try { localStorage.setItem(LEDGER_KEY, JSON.stringify(_ledger.slice(-60))); } catch (e) {}
+        try { if (window.saveToStorage) window.saveToStorage(LEDGER_KEY, JSON.stringify(_ledger.slice(-60))); else localStorage.setItem(LEDGER_KEY, JSON.stringify(_ledger.slice(-60))); } catch (e) {}
     }
     window._asmLedgerAdd = function (hostId, guestId, choice) {
         var ld = _ldgLoad();

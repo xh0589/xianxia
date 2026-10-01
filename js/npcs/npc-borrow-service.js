@@ -77,6 +77,10 @@
 
     function borrowFromNPC(npc) {
         if (!npc) return { success: false, msg: 'NPC不存在' };
+        // v25.8 断头账救活：memory.totalAttacks 记了多年没人翻——动过手的人记一辈子，东西不借
+        if (npc.memory && (Number(npc.memory.totalAttacks) || 0) > 0) {
+            return { success: false, msg: npc.name + ' 盯着你看了半晌，把身边的东西往怀里拢了拢——动过手的人，东西是不会借给你的。' };
+        }
         var existing = pendingForNpc(npc.id);
         if (existing) return { success: false, msg: '你还有向' + npc.name + '借的「' + existing.itemName + '」未归还' };
         var item = chooseNpcItem(npc);

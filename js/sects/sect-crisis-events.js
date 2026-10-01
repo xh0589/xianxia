@@ -34,7 +34,7 @@
         cell.relation = Math.max(-100, Math.min(100, (Number(cell.relation) || 0) + (dRel || 0)));
         cell.conflicts = (Number(cell.conflicts) || 0) + (dConf || 0);
         cell.lastEvent = (window.getAbsoluteDay ? window.getAbsoluteDay() : 0);
-        try { localStorage.setItem('xianxia_sect_diplomacy', JSON.stringify(window.SECT_DIPLOMACY_STATE)); } catch (e) {}
+        try { if (window.saveToStorage) window.saveToStorage('xianxia_sect_diplomacy', JSON.stringify(window.SECT_DIPLOMACY_STATE)); else localStorage.setItem('xianxia_sect_diplomacy', JSON.stringify(window.SECT_DIPLOMACY_STATE)); } catch (e) {}
     }
     // 同地界的邻门（矿脉穿界/山道相争找对方用）
     function _neighbors(sectName) {

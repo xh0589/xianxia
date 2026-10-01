@@ -237,6 +237,7 @@
             springBlessing: charData.springBlessing != null ? charData.springBlessing : 0,
             lastDailyClaimDay: charData.lastDailyClaimDay != null ? charData.lastDailyClaimDay : null,
             _demonicCorruption: charData._demonicCorruption != null ? charData._demonicCorruption : 0,
+            _demonicPower: charData._demonicPower != null ? charData._demonicPower : 0,
             _foundationBonus: charData._foundationBonus != null ? charData._foundationBonus : 0,
             _coreBonus: charData._coreBonus != null ? charData._coreBonus : 0,
             _primordialBonus: charData._primordialBonus != null ? charData._primordialBonus : 0,
@@ -408,7 +409,11 @@
         }
 
         // 熟练度
-        if (global.proficiencyData) {
+        // v25.2·修复：改读闭包快照——此前读 global.proficiencyData（闭包外恒 undefined）
+        // → 从不进档；真实数据在 cultivation.js 闭包里
+        if (typeof global.getProficiencyDataSnapshot === 'function') {
+            saveData.proficiencyData = global.getProficiencyDataSnapshot();
+        } else if (global.proficiencyData) {
             saveData.proficiencyData = JSON.parse(JSON.stringify(global.proficiencyData));
         }
 
@@ -832,6 +837,7 @@
             springBlessing: n(saveData.springBlessing, 0),
             lastDailyClaimDay: n(saveData.lastDailyClaimDay, null),
             _demonicCorruption: n(saveData._demonicCorruption, 0),
+            _demonicPower: n(saveData._demonicPower, 0),
             _foundationBonus: n(saveData._foundationBonus, 0),
             _coreBonus: n(saveData._coreBonus, 0),
             _primordialBonus: n(saveData._primordialBonus, 0),
@@ -1126,7 +1132,7 @@
             // 旧版 null 走 removeItem：载入一份老档/别的角色的档，会当场把现行角色的
             // 声望、地标、每日事件等真数据键从浏览器里删掉（现场 7 份档 6 份带删键效果）。
             if (val == null) return;
-            try { localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+            try { if (global.saveToStorage) global.saveToStorage(key, JSON.stringify(val)); else localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
         }
 
         writeKey('xianxia_reputation', saveData.reputation);
@@ -1177,6 +1183,13 @@
         if (saveData.partyData) writeKey('xianxia_party_data', saveData.partyData);
         if (saveData.eventFlags) writeKey('xianxia_event_flags', saveData.eventFlags);
         if (saveData.proficiencyData) writeKey('xianxia_proficiency', saveData.proficiencyData);
+        // v25.2·修复：熟练度档镜像落地后重灌闭包（writeKey 只写 LS，闭包变量在启动时
+        // 读的是旧键——不重灌则读档后闭包与档口径分裂）；老档无此字段（=空熟练度）时
+        // 显式清空，杜绝换档继承上一角色（全局 LS 键是串档通道）
+        if (typeof global.initProficiencyData === 'function') {
+            if (saveData.proficiencyData) global.initProficiencyData();
+            else if (typeof global.resetProficiencyData === 'function') global.resetProficiencyData();
+        }
 
         // NPC系统状态恢复
         if (saveData.npcs && global.npcManager && typeof global.npcManager.deserialize === 'function') {
@@ -1207,7 +1220,7 @@
             // 恢复 personalEventFlags（全局变量 + localStorage）
             if (nData.personalEventFlags) {
                 global.personalEventFlags = nData.personalEventFlags;
-                try { localStorage.setItem('xianxia_personal_event_flags', JSON.stringify(nData.personalEventFlags)); } catch (e) {}
+                try { if (global.saveToStorage) global.saveToStorage('xianxia_personal_event_flags', JSON.stringify(nData.personalEventFlags)); else localStorage.setItem('xianxia_personal_event_flags', JSON.stringify(nData.personalEventFlags)); } catch (e) {}
             }
             // 恢复运行时内存变量
             global._eventCooldowns = nData.eventCooldowns || {};

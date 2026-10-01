@@ -83,7 +83,7 @@
         } catch (e) {}
         return _cled;
     }
-    function _cledSave() { try { localStorage.setItem(CL_KEY, JSON.stringify(_cledLoad())); } catch (e) {} }
+    function _cledSave() { try { if (window.saveToStorage) window.saveToStorage(CL_KEY, JSON.stringify(_cledLoad())); else localStorage.setItem(CL_KEY, JSON.stringify(_cledLoad())); } catch (e) {} }
     window._collectiveLedgerGet = _cledLoad;
     window._collectiveLedgerReload = function () { _cled = null; return _cledLoad(); };
 

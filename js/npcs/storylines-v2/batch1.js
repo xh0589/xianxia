@@ -26,7 +26,7 @@
         return _choicesCache;
     }
     function _persistChoices() {
-        try { localStorage.setItem(LS_KEY, JSON.stringify(_choicesCache || {})); } catch (e) {}
+        try { if (window.saveToStorage) window.saveToStorage(LS_KEY, JSON.stringify(_choicesCache || {})); else localStorage.setItem(LS_KEY, JSON.stringify(_choicesCache || {})); } catch (e) {}
     }
     function recordStorylineChoice(npcId, choice) {
         _loadChoices();

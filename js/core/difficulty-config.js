@@ -51,7 +51,7 @@
         if (!DIFFICULTY_PRESETS[level]) level = DEFAULT_LEVEL;
         var cd = global.currentCharData;
         if (cd) cd.difficulty = level;
-        try { if (global.localStorage) global.localStorage.setItem(LS_KEY, level); } catch (e) {}
+        try { if (global.saveToStorage) global.saveToStorage(LS_KEY, level); else if (global.localStorage) global.localStorage.setItem(LS_KEY, level); } catch (e) {}
         return level;
     }
 

@@ -1,5 +1,118 @@
 # 外包修复说明（2026-09-17 实机测试）
 
+
+## 追记（2026-09-30 · v25.8 黑道与人情批 · 威胁/抢劫/通缉/柜娘/职业黑面 + 人情七件）
+
+> 用户「我能不能威胁NPC？随便挑一个抢劫？去钱庄威胁柜台NPC让她出卖钱庄？互动更多，还能按职业多出对应功能」，黑道五件全勾；再奉旨翻人物面板底账，人情七件（断头账救活/主动邀约/打听某人/请客吃饭/雇镖护货/占卜与托付秘密/街面人物志）又全勾——细节与 263 断言新尺（tests/v25.8-dark-bonds-node.js）见《版本记录.md》v25.8 条。本节只记**口径与边界**：
+
+- **罪行一本账**：民愤热度（heat）与悬赏金只记在 StateRegistry『crimeLedger』（npc-crime.js）——街面打劫、抢乞丐、柜娘案全部走 `NpcCrime.addHeat(n, why)` 正门记进**同一本**，不许另立第二本通缉账。**恶名（notoriety）与热度是两本账、双记是设计**：恶名是老账（正道不收/夜巡/望风榜/生平文案都读它），热度是本批的罪案账（猎人/销案/风头冷却）——一案两笔各记各的，别合并。风头冷却每日 -3 在 `coolDaily`（onNewDay 与猎人同一钩），**销案三出路**：蛰伏冷到线下、司法堂缴清（payBounty，热度-40）、被猎人拿下（缴清+热度-20）。改任何一处记得三本口径同步。
+- **四枚战斗旗纪律**：`_isNpcRobbery`（抢劫具名 NPC）/`_isBountyHunt`（赏金猎人）/`_isCitizenRob`（打劫武者街坊）/`_isBeggarWrath`（丐帮讨说法）——**唯一结算消费点在 app.js onEnd 胜负两侧**（照 _isCaravanAmbush 判例），勿在别处二次结算。开仗一律走 `NpcCrime.startFlaggedBattle(enemyData, flags, announce)`（内部查 currentBattle 防叠仗、先收对话窗）。settle 函数从 `window.currentBattle` 读旗上载荷（_robNpcId/_bountyAmt/_crobName），与跑商截道同款。
+- **柜娘不是活人账**：每城播种 persona 落在 `crimeLedger.tellers[城键]`（name/age/times/fear/lastCoerceDay），**不建 npcManager NPC**（与丐帮长老「过场仙人不接活人账」同款取舍）；她的「怕」是 t.fear 字段（勒索成功 +0.25 下回好使得多），**不接 NPC 的 fear 威压轨**（两本 fear 别串）。钱庄闭门账在 `bankBan[城键]=解禁日`，BankService 四口（存/取/借/还）的闸是**守卫式读取**（NpcCrime 不在位永不闭门）——依赖方向不许倒（bank-service 不得 require npc-crime）。`waiveDebt(why)` 是柜娘烧欠条唯一正门（只销账，业障热度由黑道账记）。
+- **情境引擎新键口径**：`eff.teller={op:'coerce'}` 与 `eff.crime={op:'payBounty'}` 照 eff.caravan 惯例「无他键早退、只递话不另立账」；payBounty 的 error 原样上屏（缴不起不吞账）。**剥单清单本批补全 caravan/teller/crime 三键**——caravan 漏剥是 v25.6 潜在 bug（带平级键会被 RewardService 整笔拒掉），顺手修了，改 _apply 时三个清单（早退路由/剥单/账本键注释）要一起动。
+- **街面市民仍是轻对象**：十一种营生与打劫的每日账全是运行时（_actLog，摸包同款「每日刷新合理」惯例，不落档）；**市民不建 NPC 实例、不接 npcRelationships**——要深层人际去用具名 NPC 那套。乞丐营生只转交 `BeggarAlms.encounter` 正门；抢乞丐只调 `BeggarAlms.robbed(20)`/`goodwill()`（**账主开窗惯例，不伸手进 _state**）；耳目让风的撤销是 watchDiscount getter 现算（goodwill<10 自动 null），**没有另设开关**——改缘分线记得这条自动性。
+- **人情账边界**：邀约/请客/打听的每日账运行时不落档；**镖师契约落档**（StateRegistry『npcBond』——玩家押了真金，读档不许抹账）。看月亮的时辰闸读 `timeSystem.gameTime.currentHour`（6~18 拒，读不到时辰放行——防御式）。提亲写 `bonds[npcId].married + level=max(2,level)`——**level≥2 是 marriage-offspring 诞育门的既有门槛**，提亲是它的正门入口，别绕开另写。托付秘密焊点唯一：`entrust` 把 background.secret 抄进 `npc.secrets.bg_heart`（unlocked，随 NPC serialize 往返）；**打听只到 background.goal 层**，秘密不经 gossip 外泄。secret-leverage **零改动**收编 bg_heart（getData 默认兜底），改筹码系统时记得这条隐式依赖。
+- **trust 轨现状**：本批给了两个玩法读点（托付秘密 ≥60 / 打听深一层 ≥40），executeRequest 威压代付与赴约 +1 等旧写点原样——track 仍偏写多读少，继续留意补读点的机会，别再立平行信任账。
+- **本批两红当场修（棘轮记功）**：① v24.0 CT⑥ 地名裸等值五形——npc-bond.js `n.location === loc` 两处中形，改 `pkCity()` 归一比较（DES-57 两串写法口径；**写地点比较一律先过 pkCity**，那把尺盯着五个变量名形）；② wave139 R1——npc-crime.js 黑面孝敬兜底文案「行囊装不下」是站点自断容量，改吃 `addItemFailPhraseFor(收.reason, 收.name)` 回执从句支（DES-86/90 同口径）。另：v25.7 H1 的清单计数钉 327→330 正当升数（旧钉随清单变更批升数是惯例，play-harness「不进清单=没测过」的教训仍然有效）。
+- **杀人不开是裁决不是遗漏**：handlePlayerKillNPC 仍无 UI 正门、杀孽连锁（仇家/门派追杀/心魔条）未接——抢劫战斗打赢不触发它（打翻搜身不是杀），具名 NPC 的生死线留作另案，**别顺手把击杀接进本批任何战斗结算**。
+
+
+## 追记（2026-09-30 · v25.7 市井烟火批 · 六路市井小玩法 + 丐帮眼线）
+
+> 用户「再按小的方面来……进入城市后可以做什么，反正想干啥就干啥」，点「都做，不过乞丐很多是丐帮的眼线，注意增加与丐帮的关联性」——细节与 121 断言新尺（tests/v25.7-street-life-node.js）见《版本记录.md》v25.7 条。本节只记**口径与边界**：
+
+- **市井总门口径**：城市面板挂口段（location-system.js renderCityBuildings 尾部）**本批只加了一段**（StreetLife）——六路小玩法共用「🏮 市井烟火」一行总门，菜单里递话到各家 open()。bathhouse/eatery/gamble-den/bookshop/beggar-alms 五本的 `panelHtml` 恒返回 ''（刻意留的空口，不占面板行）。将来若要把某一路升格成独立面板口，照 street-stall.js 那段 if 块抄进 location-system，**别两头都挂**（一行总门+一行独立口是重复入口）。
+- **闲逛口径**：`exploreCity`（location-system.js）是四出戏正门——**不重写它**，StreetLife.wander 只包一层（精力 5 自己扣、时辰由四出戏内部扣不重复收；正门不在位才兜底扣 20 分钟）。面熟账按城落档（StateRegistry『streetLife』），**每日最多记三回**（dayStamp+dayCount 按城各记一份），n 跨日不清零、m3/m6/m10 一次性旗。掏心窝子的真行情吃 MarketDynamic.priceMul 现账（最俏大区×品类，倍率>1.02 才开口），行情缺席退 `getCitizenGossip()` 只读窗，再缺席说套话——**三层兜底绝不编假消息**。乞丐遭遇（15%）只转交 BeggarAlms.encounter，施舍账不在那本里另记。
+- **exploreCity 旧伤已修**：隐藏小店一支此前把**城名当店铺类型**传 `openCityShop(cityName)`（shopType 参数吃的是 'general'/'medicine'/'special'…），落到兜底 shop_general——v25.7 改走 `openCityShop('special')`（稀奇古怪的东西名副其实）。市民闲话池 CITIZEN_GOSSIP 是模块私有，本批在 initCityLifeSystem 开了**只读窗** `window.getCitizenGossip()`（返回副本）——照 travel-journal.regionLog 的「账主开窗」惯例，澡堂/闲逛/施舍三处都借这扇窗，**不许自抄闲话池**（抄一份就会两本账说岔）。
+- **澡堂口径**：压毒/安神/缓痛**只走 `wildMapApi.relief.sleep` 正门**（与柴房 15/野营 30/客栈 40 同一本生理账 phys.poisonLoad，澡堂 20/40 按档），**不许直写 physiology 字段、也不许碰 `_poisoned` 旗**（那是丹药/医馆的账，泡汤拔不了根毒——牌面上已如实写「真要解毒还得靠方子和医馆」）。香汤一日闸走 actionGate（cooled(key,days) **为 true = 冷却中**，本批初版写反过一次，与 useSpring 同款口径对齐后过），记录挂 charData._actionCd 随角色档走、零新键。**时辰文案一律 formatShichen**（DES-22 棘轮：/60 与「时辰」同句即红，跨行也算——本批初版澡堂牌面 `(t.min/60)+' 个时辰'` 当场抓红；顺带把三处 30 分钟写成「半个时辰」的头注/菜单文案改成诚实分钟数，1 时辰=120 分钟是第九十五波定规）。
+- **下馆子口径**：饱食度闸 `satietySystem.canEat()` **必须在扣钱之前**（辟谷/吃撑诚实拒绝、整单不成——真 satiety.js 陪跑钉死）。招牌菜名吃 cityData.specialties 真源、FOOD_KEYS 关键字筛（筛不出退「老店招牌菜」，**别把'御用丹药''宫廷秘法'硬下锅**）。短时加成走 activeBuffs 通用账（`window.applyBuff` 正门优先，缺席同款直写兜底）：effects 值 <1 会被 sectBuffAttrBonus **按六维百分比折算**（0.04=+4%），到期自散、随档持久——**勿另开战斗账、勿给永久值**。每城每日一桌的当日旗是**运行时旗**（庙会节令小吃同款取舍：不落档，存读档当日重吃口子是已裁决的可接受面）。
+- **赌坊口径**：期望是明账——围骰 6/216、庄家优势≈2.8% **写上牌面**（与 facility-arena-book 台下赌盘「期望负」同一立场：赌坊是风味不是刷钱机）。骰子先掷后结算（一笔 RewardService：赢了净入、输了净扣），**输了付不起则整单作废不欠账**——这是本书裁决口径，别改成先扣后掷。每日止损/止赢（铜 300/500、灵石 30/50）与黑名单（连赢 6 禁 3 日）都随 StateRegistry『gambleDen』落档、按 dayStamp 翻页；**连赢/雅间跨天作数是故意的**（赌坊记性长）。雅间一次性解锁（vip 落档）。骰面用 ⚀⚁⚂ 字面逐把亮出，净账/连赢全摊开——赌坊不藏账。
+- **书肆口径**：货架**零骰**——hash(城+日) 播种全确定（跨世界同日同城同一架），**勿改成 Math.random 现抽**（玩家当日反复进出会刷货架）。探位是线性 +1（与书架长度互质，五本内必落位——初版步长 `1+(h>>4)` 可能与 14 本书架同余卡死，已修）。捡漏走 `KnowledgeSystem.unlock(id,'heard',{source:'bookshop'})` 正门（与奇遇 broken_art 60% 骰同口径、状态阶梯不许降级），几率=6%+学识/250（封顶 46%）；skillPages/KnowledgeSystem 缺席**静默失手**（买书照常、不硬塞、不错账）。已读账 StateRegistry『bookshop』按日+城双键翻页。珍本是池子里的高价高长进档（价 4 倍长进 4 倍），**不是新物品模板**——全批零新物品（旧书买了当场读掉，不进背包不开新货架）。
+- **施舍口径（丐帮 amendment）**：「丐帮缘分」goodwill **不是丐帮好感**——全仓没有「丐帮好感」数值（门派级 `_sectRelation` 是全门派通用数、`_gbFaction` 是净衣/污衣专属账）；本书另立的是**街面缘分一本账**（StateRegistry『beggarAlms』）。弟子行善记功走 `sectAddContribution(n, '街头施舍·行的是帮里的道')` 正门（带 ledger 缘由），**不写 _gbFaction 任何字段**（净衣/污衣账只有 sects-deep-ui 四个写点，别添第五个）；污衣派 +1 是**只读判定**（`_gbFaction.side==='dirty'`）。每日限次（非弟子 3 / 弟子 1）是防刷闸——业障与门派贡献都是真钱，**勿放宽**。三档里程碑（3 认脸 / 10 耳目 / 25 长老）一次性旗；长老是过场仙人**不接 npcManager 活人账**（他扬长去了，别给他建 NPC）。
+- **耳目递话（watchDiscount）口径**：唯一消费点是 caravan-trade.js 截道概率与 cave-siege.js 夜袭概率两处的**带守卫钩子**（`window.BeggarAlms && typeof watchDiscount === 'function'`，本账不在位/缘分不够 → null，**一分不让**）；chance 减后 `Math.max(0.02, …)` 保底——**善行减免不许把风声清零**（货越贵越招风的算学还在）。G2 反向探针钉死：拆掉让风那行，缘分再深照旧被截。改这两处概率公式时把钩子留在 `Math.random() >= chance` 判定**之前**。
+- **新套尾行口径（本批踩出的坑，记给后人）**：run-each.cjs 的合计只认**输出末行**的「通过：N」（`/通过[：:]\s*(\d+)/`）——新回归尺的收尾必须打这个格式（v25.6 是「通过：136　失败：0」），自创「结果：121 通过 / 0 失败」式样**不入账**，全量合计会对不上数（本批 4651 纹丝不动当场发现，已改）。
+
+
+## 追记（2026-09-30 · v25.6 玩家心愿批 · 六路玩家心愿一次立项）
+
+> 我再当玩家想做什么、浓缩六路呈上，用户对望风榜与生平各加一条口径（口头排名不要俸禄、生平要考虑性能），其余「都可以做」——细节与 136 断言新尺（tests/v25.6-player-wishes-node.js）见《版本记录.md》v25.6 条。本节只记**口径与边界**：
+
+- **望风榜口径**：这是**口头账不是系统真榜**——名次现算不落档（每次 computeRank 重排），只有榜上胜负与历史最佳名次随 StateRegistry『jianghuRank』落档。**上榜无俸禄**：全文件不许出现任何发钱的手（addSpiritStones/credit），新尺 A2 钉死这一条——将来谁想给榜上加奖励，先想清楚这是不是把「名声的麻烦与机会」又变回了「打卡领钱」。场面分尺（境界×1000 + 名气钳400×2 + 杀孽钳300×3 + 演武×15 + 榜上胜×40）是**说书人估的场面**，不是战力——别拿它去驱动任何数值。风声失真（恶名≥60 高一档 / 名气<40 且境界≥4 低一档）是设计，不是 bug。**境界名一律借 `window.REALM_ORDER`**（DES-92 棘轮：全仓禁自抄境界序数组，新本再抄一处即红）。杀孽读 `_killCount`（DES-76 棘轮：禁裸 `killCount`）。挑战形态照抄宿敌链（`_isRankDuel`→app.js 战后分支），**结算唯一消费点在 app.js onEnd**，勿在别处二次结算。
+- **生平传记口径**：**零实时钩子是硬约束**——不订阅事件、不挂每日 tick、无定时器，只在 openBiographyPanel 那一刻现编（新尺 B1 钉死：全文件不得出现 onNewDaySubscribe/EventBus/setInterval）。谁想给传记加「实时追踪」，先回答性能账。称号**纯派生、不带属性增益**（照 travel-journal「名分而已，不开新战力口子」成例），只有「佩戴中」一个字段落档（StateRegistry『biography』）。游历日数**问 `TravelJournal.regionLog()` 只读窗**，不许自己伸手进 `cd._travel`（CF⑰ 棘轮：全仓只有 travel-journal.js 自己碰 `_travel`）——regionLog 是纯读路，问不出账不凭空长出 `_travel`。历法换算与 time-system 同口径（30 天一月、12 月一年），别引第二套历法。
+- **寄售竞价战口径**：`buyNpcLot` 一口价、`startBidWar` 买 NPC 货的拉锯（上一批）**都原样未动**；这批的 `_sellWar` 是**玩家卖货**的反向拉锯，与 `_bidWar` 两本临时账并存、都**不进 serialize/deserialize、reset 即清**。催场钱走 EconomyTransaction.credit 正门，落槌即 `GameScheduler.cancel('auction_settle_'+id)` 撤掉原到期结算——**勿双份成交**。场子冷热吃 `saleChance(unitPrice, template)` 既有口径（coolBase = clamp(0.7-chance, 0.05, 0.55)），流拍走既有退货+压柜费账（背包满则货留柜上、到期再试、绝不吞物）。每件只催一次（`item.stoked` 落账）。**催场窗戴 B 档帽**（max-h-[85vh] 不加滚条）——与竞价拉锯同款取舍，避开 v24.0「auction-service.js 全文 overflow-y-auto==1」老钉；真要加滚条先改 1103 行口径。
+- **押货跑商口径**：与跑单帮（peddler-service，虚拟货担柜面现结）**是两本账，勿混**——跑商押的是行囊真货（removeByUid 快照托管），货担随 StateRegistry『caravan』落档、零直写 localStorage。行情板只读 MarketDynamic 真源（六区×六类 priceMul），**不自造物价**。截道是真仗（`_isCaravanAmbush`→app.js 战后分支），仇家路径复用 getRivals（宿敌链同一把仇恨尺）。**入口另立一出 facilityAugment『caravan_run』，不改 peddler_run 的柜面选项**——那出是 wave69 E9/E19 钉死的存量戏（七选项、走人在 index 6），插一个进去就双红。剧本引擎新增 `eff.caravan={op:'open'}` 效果键只递话（调 openCaravanBoard），不另立账。
+- **洞府会客口径**：**触发与人选仍归 cave-life.js**，cave-reception 只接「客人到门口之后」的招待权。交接靠 `received` 旗：receive 返回 true 则 cave-life 的自动文本段整段跳过（新尺 E1/G5 钉死这一次调用），**两本账一笔不重一笔不漏**——将来改 cave-life 访客段勿把这道旗拆了。好感账走 npc.changeAffection，回礼走 giveWithReceipt 正门（塞不进来如实交代，DES-72）。风水吃 getFengshuiMul（上一批正门），加减封顶 ±6。弹不出接待窗（闭关/战斗/无模态）必须**安全落回自动文本**，不许把客人吞了。
+- **洞府守卫战口径**：与宿敌寻仇（路上单挑）**分账**——这是打到家门口，`_isCaveSiege`→app.js 战后分支。煞位折敌读 `getFengshuiReport().filter(煞)`（上一批正门，`_countSha` 是私有的、勿去导它），道侣上墙读 `bonds[].type==='dao_companion'`，都走**战前折敌**（enemyData.attack 乘减，sect-war 护山阵/道侣上墙同款，**不动 Battle 内核**）。出战灵兽由 battle.js 既有接线自动参战，零新接线。败了被抄：灵石走 DataManager.deductSpiritStones 真扣（凑不出如实说）、行囊少一件走 removeItem（非任务非信物、点名）。账随 StateRegistry『caveSiege』落档。触发要人在自家洞府（isAtHome）且非破山洞——**空宅不打、破洞没人惦记**。
+- **加载清单口径（本批踩出的坑，记给后人）**：**play-harness 从 `scripts.manifest.json` 取脚本，不是从 仙侠.html**。加新脚本的正确姿势是**改清单 → 跑 `tools/refactor/manifest-scripts.py gen` 写回 HTML → `check` 校验同步**，不是手改 HTML。v25.5 直接手改 HTML 加了 fengshui.js 却没进清单，导致试玩机一直只拉 315 个、fengshui 从没被真正加载（上批「315/315」是假绿）——本批已归位（321）。**改完脚本区务必跑 `manifest-scripts.py check`**：它会同时校验 marker 区一致、src 文件存在、body 内无漏网 script。清单里的 stats.scripts 是信息字段，check 只认实际 entries 数与 body 序列一致。
+
+
+## 追记（2026-09-30 · v25.5 玩法立项批 · 六路玩法一次立项）
+
+> 用户过目玩法立项单后点「都可以做」——入魔/器灵/偷窃/风水四路「未立新系统另案」全部立项，再补拍卖竞价、悬赏抢单两路竞争玩法，恋爱线走查（P29）核销；细节与 99 断言新尺（tests/v25.5-play-ventures-node.js）见《版本记录.md》v25.5 条。本节只记**口径与边界**：
+
+- **入魔口径**：数值全部集中明示可调——燃魔焰烧 10% 入魔换 72 游戏时 buff（力道 5+档×5+`_demonicPower`/4、体魄 3+档×3、身法 2+档×2），代价业障 5/气机紊乱 8/精力 20/心境 10；压制 100 灵石+120 分钟压回 10%；失控线 ≥50 每日 25% 三选一、魔性日涨，浅层日散 1。**buff 必须走 `window.activeBuffs` 正门**（app.js buildPlayerBattleEntity 六维全额生效、sect-specialties 订阅 time:advanced 自动过期、game-state 持久化）——勿另开战斗账。`_demonicPower` 复活入档：game-state.js 存/读白名单**成对两处**（改一处必改另一处）。心魔战结算钩子在 app.js `currentBattle.onEnd` 头部，`_heartDemonBattle` 全仓唯一消费点——将来再开心魔战出口必须走同一钩子，勿在别处二次结算（会双发清明丹）。**心魔战败不是断头**：败走既有残魂/复活线是设计如此，钩子只管胜。
+- **器灵口径**：账挂 `_bondedArtifact.spirit`（awakened/name/level/exp/expMax），随既有白名单**整包深拷贝**往返——不开新存档键、不在 game-state 单列字段。战斗加成**只走 `artifactCombatMul()` 同一乘区**（battle.js `_artifactMul` 管道）——勿给器灵另开六维账，否则两处乘区打架。升级阈值/经验口径集中在 `_spiritCheckLevelUp`（expMax = 30+级×20），声口池 SPIRIT_VOICES 按级索引、数组长度即封顶级的显示档位。
+- **摸包口径**：成功率 clamp(0.30+(身法-10)×0.01+境界档×0.02, 0.15, 0.85)；赃款 (8+1d12)×`bountyRealmMul()`——**境界尺复用悬赏榜那把**，改倍率表两边一起动。三档结局的账各走正门：灵石 DataManager、城市声望 reduceReputation（报真城名）、恶名/业障角色账字段（业障 ±100 夹逼）、好感 npc.relationship；罚金拿不出**罪加一等不吞钱**（恶名+3，分文不扣）。每人每日一次账在 `_pickpocketLog`（模块级、不落档——悬赏榜同款「每日刷新合理」惯例，勿给它开存档键）。道侣/好感≥80 拦截在最前（不耗时不动账）。
+- **风水口径**：账挂 `playerHouse.fengshui {placements, owned}`，**随洞府整档走 saveHouseData()**——全文件零 localStorage 直写（v25.3 扫描棘轮下的合规姿态）。消费点**唯一**：getHouseBonus('cultivation') 末段乘 getFengshuiMul()——三个修炼消费端（app.js 主循环/building-effects/event-system）自动吃到，勿在任何消费端另算一遍。吉凶断语口径集中在 judgePlacement（同气+6/位生物+3/物生位 0/相克-4），总倍率 clamp[0.8,1.5]；ELEM_GENERATES/ELEM_OVERCOMES 两张五行表是断语唯一依据。煞位反噬每日 min(0.6, 0.15×煞数)。**新增法器/家具必须同步三处**：FENGSHUI_ITEMS（新法器）、FURNITURE_ELEMENT（既有家具五行）、HOUSE_FURNITURE（house-system 购买面）——漏一处就是摆得上断不出或买得到摆不上。破山洞（ruin）拒卖拒摆如实回 1。
+- **竞价口径**：`buyNpcLot` 一口价正门**原样未动**（v24.0 CM①c 反证钉着 open() 那扇窗，v20.54 经济尺也钉着原语义）。拉锯账 `_bidWar` 是**临时账**：不进 serialize/deserialize、reset 即清——存档恢复后没有进行中的竞价是预期行为（拍品还在架上，重开即再竞）。竞得结算走 EconomyTransaction 同一原子事务（钱不够/包满整笔回滚、拍品回架）。数值口径：六成起拍、每轮加一成、8 轮封顶、对手钱袋 0.7~1.4×挂牌、跟价意愿三档 0.8/0.55/0.15。**竞价窗戴 B 档帽**（max-h-[85vh] 不加滚条）：v24.0 老钉「auction-service.js 全文 overflow-y-auto==1」与 CM②a「无帽≤38」在此文件打架——真要给它加滚条，先改 1103 行口径（把计数改成只钉 open() 那扇）再戴 A 档帽，两处一起动。
+- **抢单口径**：**先来后到**——接取即对手撤、已接单无时限（不追溯破坏旧行为，v20.1「已接取的保留」语义不变）；未接单对手脚程 0.25~0.7/日、猎完即 snatched 摘榜补位（榜面恒三条）。`tplId` 防同榜重复模板、`_uidSeq` 防同日补位撞号——两个字段勿删。榜单 UI 对手进度显示封顶 count-1（没被抢的单不显示满进度）。悬赏板**不存档**是 v20.1 原设计（每日刷新合理），对手进度随板同命——勿给 _board 开存档键。
+- **P29 恋爱线核销**：15 本文件（heroine×5 + male-lead×4 + 婚姻集体×6）走查完毕全部完整接线，无断链——挂账销掉。将来发现具体剧情缺陷另案立案，勿再按「整体走查」重复立项。
+- **明确不算问题（防重复排查）**：夺舍设计不做（soul-state 自述唯一途径）；心魔战败走残魂线是设计；`window.updateBuffUI` 仍全仓未定义（一百四十二批已登记待拍板，魔道块的「魔焰正燃」标注是本批在自己的面板里自己露的，不依赖它）。
+
+
+## 追记（2026-09-30 · v25.4 玩家乐趣闭环批 · 五处断头玩法焊通）
+
+> 按「啥都想体验的玩家」把全仓 22 类修仙玩法盘了一遍实现状态 + 全仓扫死路，盘出五处「有趣但断头」的，一次焊通；细节与 50 断言新尺（tests/v25.4-fun-loops-node.js）见《版本记录.md》v25.4 条。本节只记**口径与边界**：
+
+- **功法融合口径**：`mergeSkills` 死代码接线（wave81 F8 留的「另一批的活」就是这批）。数值口径全部集中明示可调：代价 300 灵石+120 分钟、成功率 0.5+双方熟练度每级 0.03 封顶 0.85、**效果=双亲逐键取高 ×1.5 后重生成标准效果串**。效果串必须能被 `ArtEffects.parseSkillEffect` 读回（本批为此把解析器露成单一真源）——改 `_MERGE_EFFECT_TEXT`/`_MERGE_ELEM_TEXT` 前先对照 art-effects 的解析正则，两边口径一一对应，改一边必改另一边。融合功法**不可再当炉底**（`merged_` 前缀拦截）、同一对不可重复融（id 按字典序归一）——两道闸拆任何一道都会开出连锁滚雪球，勿动。注册表 `xianxia_merged_skills` 走 v25.3 单一 owner+else 回退惯用式，是全仓扫描棘轮下的合规写点。
+- **trade 地标口径**：v20.8「建筑使用的约束来自世界本身（精力/真气/时辰），不设每日配额」的设计宪法照常遵守——`_runTradeRoute` 只有精力 15+时辰 120 两道真账约束，产出随 output 走，回执时长由真账分钟数生成（改数即改口）。sect-resource-actions 的 switch 至此 15 类全接真交互，default 分支纯防御性兜底不可达——再新增地标类型记得同步 `_RESOURCE_ACTION_LABELS`（缺 label=按钮灰置，就是 trade 这次的病根）。
+- **派系按钮口径**：无 factions 数据的 7 派（天山/蓬莱/五仙教/百花谷/铁掌帮/大隐阁/天书阁）**不画按钮**而非弹敷衍话术；丐帮两脉入口在 showSectFactions 内特判，守卫条件里显式保住。日后给这 7 派补 factions 数据，按钮自动回来，无需改 UI。
+- **地图残片口径**：消费点只有「三片拼图」一条正路（行囊详情按钮/useItem quest 分支同口）；寻宝三档 55/30/15 与产出带（150~299/40~99/空坑）集中写在 `assembleTreasureMap` 一处。灵石落账走行囊钱袋真源+角色账镜像（与 sect-resource-actions._gainStones 同口径），勿另开双轨。
+- **文案两笔旧账销账**：黑市「姓×」占位符（本文件第 3632 行附近立案）已修；园林「别业🎋/别苑🌺」双名已按多数两源收成「园林别苑🌺」——同段立案的「改请一并收成一个真源」即此，销。
+- **盘仓明确不做的**（防下轮当新账翻出来）：夺舍（soul-state 自述设计唯一途径无夺舍）、玩家主动偷窃/劫道、器灵养成、风水布置、入魔身份转变线——都不是断头，是**未立的新系统**，要做另案另裁。onPlayerDeath 只见飞升线调用是设计如此（战败走残魂态/复活、寿元走 lifespan-end-modal），勿当死路修。
+
+
+## 追记（2026-09-30 · v25.3 存档写失败可见批 · 第一百四十三批 ①② 双双销账）
+
+> 本批把「18 个存档键写失败玩家听不到」的账彻底关死：全仓剩余 30 处写点（5 裸抛 + 9 console-only 告警 + 16 静默/设置键）全部接进第一百四十四批立的单一 owner `window.saveToStorage`。修法、惯用式与 22 断言新尺（tests/v25.3-save-write-owner-node.js）细节见《版本记录.md》v25.3 条。本节只记**口径与剩余边界**：
+
+- **① 结案**：js/ 里绕开 owner 的 `localStorage.setItem` 现读**零处**（白名单仅两文件：global-utils.js owner 本体；auto-save.js `_saveSlots`——v20.87 自带玩家可见去重告警的旧账，不是漏网，**勿再迁**以免动了它的专属文案）。新尺 A 段是全仓扫描棘轮，再冒裸写点当场红。
+- **② 结案（核实现状，非本批所修）**：EconomyTransaction 快照太窄一事 **v24.2 已扩容**（capture 收 qi/energy/health/mood/karma/fame/lifeSkills/discipleState 九项；restore 只回写 capture 当时真记下的、null 档不凭空造值；discipleState 逐键并回原对象保引用）。第一百四十三批「本批没动，只记」的那笔账，销。
+- **NG+ 谎话回执顺带根治**：转世凝玉原式裸写完必弹「🌟 已凝成玉」——写失败也报成功。现按 owner 返回值分支，失败如实弹「⚠️ 没能刻进玉里…转世资质带不过去」。同类「回执先于成败」的形状若再见到，照此修。
+- **夹具回退铁律（后续迁移新写点必须遵守）**：node 夹具世界没有 owner——每处守卫都带 `else localStorage.setItem(K, V)` 原路回退，否则 40+ 套依赖这些 save 函数的既有用例（野图种子、队伍、声望往返等）会静默变行为。**不许**为了少写一行 else 而给几十个测试夹具补 owner 桩。
+- **wave141 双棘轮口径**：本批零新增空 catch（house 导入口还消掉一处）；`[静默失败]` 留痕 118 → 125，每条带 `e && e.message` 空值守卫（F4 全合规）。留痕标签保留「静默失败」字样是**棘轮计数所系**，尽管浏览器侧已不再静默（owner 会弹玩家话术）——标签描述的是 console 这条线的本职，勿因字面改标签。
+
+## 追记（2026-09-29 · 仓库同步批 · 挂账新增）
+
+> 仓库 main 四个新提交收编进本地（`4fe6df5` 移植我的 v25.1/v25.2、`ee918ce` 打包工具、`d445bc9` Modal.adopt 收编批、`2245581` 躯体耐久重设计），详见《版本记录.md》同步批条。本节只记**待办/口径**：
+
+- **093f891 消解挂账已了结**：仓库已用本地 17 断言版 play-quest-realm-retro 整体替换其旧版，同源无双挂——此前 v25.2 追记里的「若日后合入需消解」一条作废。
+- **仓库文档落后本地三本**：版本记录.md（无 v25.1/v25.2/同步批条目）、FIX_NOTES.md（无两轮追记与 TASK-02 结案）、STRUCTURE.md（TASK-02 口径旧）——**下次上传务必带这三本**，否则仓库侧查案会拿旧账。
+- **P23 空态折叠已被用户裁决撤销**（2245581 改恒常全显+「详细描述」开关）：勿当回归修回去；v24.0-audit-fixes 判据已同步放宽。
+- **tools/adopt-regression-test.mjs / bottleneck-regression-test.mjs 本机不可跑**：硬编码仓库侧路径（/home/z/my-project/xianxia_work3/）+ 需 playwright。Modal.adopt 的浏览器行为（Esc 关、栈深、误删转世面板场景）因此**本地无 node 侧覆盖**——要补先改路径常量化。
+- **打包工具实跑口径**：产物 打包输出/ 与 BUILD-MANIFEST.txt 均已 .gitignore，不入库；包名里的版本号取自脚本内常量，升大版本时记得同步。
+
+
+## 追记（2026-09-29 · v25.2 试玩问题清单·二 · 挂账新增）
+
+> 《试玩问题清单-续.md》（用户实机 P24~P29）核对修复，修法细节见《版本记录.md》v25.2。本节只记**没修/待裁**的：
+
+- **P28 闲聊骰子（-1..+3）首次/重复分开计价**：清单建议「首次走随机，后续走衰减」属数值/平衡重设计（衰减曲线、是否照深谈 v23.3 倦意递进同款），不擅自定数——待裁。台词分档死代码已修（getDialogue），掉好感的回执本就逐次如实报 ±。
+- **清单头部「P1c/P1d 已由我修复（提交 093f891）」**：该提交不在本地树。本地 v25.1 已按同口径重新落地（acceptQuest 境界回溯 + _syncTemplatesFromLedger 复位 + tests/play-quest-realm-retro-node.js 17 断言），两版功能等价——若日后合入 093f891，按重复实现消解，勿双挂。
+- **P29 恋爱线整体走查**：清单「待验」自认女主相关 8 本文件量大未走查（heroine-aftermath/rivalry/male-lead 等），本批只修 bond_dao 死路诚实性；整线走查另案。
+
+
+## 追记（2026-09-29 · v25.1 双清单核对合修批 · 挂账新增）
+
+> 《试玩问题清单.md》（用户实机 P1~P25）×《试玩体检报告.md》（试-01~30）合并核对修复，逐条下场见《v25.1修复核对表.md》，修法细节见《版本记录.md》v25.1。本节只记**没修/待裁**的：
+
+- **P15 创角 25 属性无总点数预算**：可同时全拉满 100，「分配天赋」无取舍。属数值/平衡重设计（预算数、互斥、权重都是产品决策），不擅自定数——待裁。
+- **npc-storylines.js 唤醒与否**：试-03/10/11 已把旧式弹窗故事线修通（测试棘轮钉死），但该文件自 v12.6 起**不在加载清单**（storylines-v2 个人事件系统覆盖同批 9+1 NPC）。接回加载即九线全活，但会与 v2 对同批 NPC **双线并存/重复触发**——须先做互斥取舍，待裁。
+- **试-19a 地标探索 120 分钟两笔**：90（野外脚程）+30（探索行为）名目不同、各有出处，本批保留两笔；若产品判「只该收一笔」，删 landmark-explore.js 的 30 或 randomMap 侧的 90 即可，一行事——待裁。
+- **P18 尾巴**：悬赏楼（app.js 悬赏榜场景）的「赏格」是场景专名语境，未跟改「酬劳」——若要求全仓一个词，另行。
+- **试-18 尾巴**：app.js:1756 buyFromCityShop 内的死 codexHint 触点未删（函数本身零调用方，wave122 已立案），随「49+1 零调用函数清理案」一起走。
+- **P21 结案口径**：地区列表折行 vs 截字——v24.0 ⑩c 明令「不许截字糊过去」、㉑-㉓ 还原尺背书 UI-09 折行摆法；试玩清单的「节奏打乱」按设计取舍结案，不再改。
+
+
 ## 追记（2026-09-27 22:10 · **按「玩家会损失什么」重查一轮 · 第一百四十三批**）
 
 > 起因是一句质问：「做游戏 BUG 检查为什么这么久，六天了？」复盘发现：**我前六天全按「代码形状」找 BUG**
@@ -1296,7 +1409,7 @@
 | 编号 | 问题 | 证据等级 | 状态 |
 |---|---|---|---|
 | FIX-01 | 采药写裸格子（无uid/getTemplate）→ 摆摊失败、背包不渲染；实际灵芝3株入袋但任务0/10。**背包空白根因已定案**：裸槽令渲染链在 inventory.js:930/:834/:850 抛 TypeError，被 global-utils.js:29/:36 空 catch 吞掉，#inventory-grid 先清空后中断；搜索/筛选等全部共用此链 | 实机点击 + 页内只读复现逐槽 TypeError + 静态行号三方吻合；另 addItem 堆叠提前返回漏事件仅静态查证 | 已实证采集+背包问题；待外包修 |
-| TASK-02 | 布告委托列表空白，诊断补渲染后出现20条 | 空白现场及直接调用对照；未重建完整初始化链路 | 根因未定，不等同纯UI通过 |
+| TASK-02 | 布告委托列表空白，诊断补渲染后出现20条 | 空白现场及直接调用对照；未重建完整初始化链路 | 已结案（v24.6）：wave82 接线 switchPanel→updateRandomQuestUI，结构上不可能空白，棘轮测试锁死 |
 | FIX-05 | 演武场触发战斗后训练弹窗残留，拦截战斗按钮点击 | 实机普通点击超时明确命中 building-effect-modal；手动关闭后恢复操作并获胜退出 | 已实证，待外包修 |
 | 当铺-01 | 当铺场景硬编码「龙鳞甲」：无该物品则典当/赎回/卖断入口全不可用，玩家无法自选物品典当 | 实机三个按钮均标「缺少龙鳞」；赎回提示「你柜上没有当票」；余额零变化；`facility-batch2.js:313` require 写死 mat_dragon_scale | 已实证可达性受限；是否有其他典当入口待外包确认 |
 | ECO-01 | 开局钱包初值不一致、坊市购买未同步角色字段；并非钱庄与坊市完全不互通 | 初值源码 + 实机购买/借贷对账，见下文 | 差异已证实；玩家损失、存读档影响未验证 |
@@ -1636,7 +1749,9 @@ node -e "const fs=require('fs'),vm=require('vm');let title='';const w={currentCh
 - 触发链：`travel-system.js:125-137` wandering_merchant 事件（weight 15，炼气+）→ `app.js:7985` openShop；货单 `generateWanderStock()`（`app.js:7965-7981`，8 商品池 3-5 种，售价 base×(0.9~1.3) 再乘 priceMul 1.2 与砍价系数）。只买不卖。
 - 实机未遭遇游商事件，未能复核玩家侧两处钱包是否实际分叉；本轮不下实机结论，仅列静态风险与复现步骤（野外赶路撞事件→购买→读两处钱包）。
 
-### TASK-02：任务页布告委托空白（观察与诊断，根因未定）
+### TASK-02：任务页布告委托空白（已结案 · v24.6）
+
+> **v24.6 结案**：wave82 已把 `switchPanel('quests')` 接上 `updateRandomQuestUI`（app.js:933-935），玩家路径的渲染触发链补全；且 `updateRandomQuestUI` 结构上不可能渲染空白——20 条 random 全走 `_qgCardHtml` 卡片，0 条走 `renderXEmpty('布告栏空着')` 诚实空态。新套 `tests/v24.6-endings-revive-node.js` E 段（接线棘轮 + 行为面：20 单全出「接下」钮 / 0 单走空态）锁死。同批顺藤摸出更大的活 bug：`checkEndingCondition` 读 `window.playerQuestProgress` 幽灵名令三结局不可达，已修（见版本记录 v24.6）。
 
 - 接管空返回子代理后的页面显示「存档加载成功」，角色为「灵泉复核」。只读发现 `random-quest-list` 存在但 innerHTML 长度0；`allQuests` 有70条，其中 random 类型20条，含 random_001。不能从子代理空返回重建完整加载步骤。
 - **诊断操作边界**：主线程直接调用一次 `window.updateRandomQuestUI()`，innerHTML 长度0→12905，出现20个「接下」。这证明该状态下数据可渲染，不证明导航/读档玩家路径已通过，也不证明所有初次打开都失败。未在调用前完成“切走再切回”的对照，不能将其记为已复现。

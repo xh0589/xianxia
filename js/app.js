@@ -82,7 +82,7 @@ function generateAttributeInputs(category, containerId) {
     const container = document.getElementById(containerId);
     attributes[category].forEach(attr => {
         const div = document.createElement('div');
-        div.className = 'flex justify-between items-center bg-gray-800 p-2 rounded';
+        div.className = 'flex justify-center items-center gap-3 bg-gray-800 p-2 rounded'; // 用户批（2026-10-01）：词条靠前——整组居中
         div.innerHTML = `
             <span class="text-sm text-gray-300">${attr}</span>
             <input type="number" min="0" max="100" value="10" data-attr="${attr}" class="w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-center text-white focus:outline-none focus:border-yellow-500">
@@ -145,6 +145,42 @@ function initRootSystem() {
             activeHandleIndex = -1;
             document.body.style.cursor = 'default';
         }
+    });
+
+    // UI评审·B2（2026-10-01）：点击色条快速 ±5%——拖柄对触屏/新手过细，输入框又太重。
+    // 点段=+5（从其余最大段扣，总和守恒）；Shift 点段=-5（匀还给其余四段，最后项吃差值）。
+    // 复用 BUG-5 的整数口径：rootValues 全程整数，总和严格 100。
+    sliderContainer.addEventListener('click', (e) => {
+        if (e.target.classList && e.target.classList.contains('slider-handle')) return; // 手柄走拖动
+        const seg = e.target.closest('.root-segment');
+        if (!seg) return;
+        const idx = segments.indexOf(seg);
+        if (idx < 0) return;
+        const delta = e.shiftKey ? -5 : 5;
+        const cur = Math.round(rootValues[idx]);
+        const next = Math.max(0, Math.min(100, cur + delta));
+        if (next === cur) return;
+        const need = next - cur;
+        const others = [0, 1, 2, 3, 4].filter(i => i !== idx);
+        if (need > 0) {
+            let rem = need;
+            const order = others.slice().sort((x, y) => rootValues[y] - rootValues[x]);
+            for (const i of order) {
+                if (rem <= 0) break;
+                const take = Math.min(Math.round(rootValues[i]), rem);
+                rootValues[i] = Math.round(rootValues[i]) - take;
+                rem -= take;
+            }
+            if (rem > 0) return; // 其余全 0 而本段未满（不可能出现，防御）
+        } else {
+            const give = -need;
+            const each = Math.floor(give / 4);
+            others.forEach((i, k) => {
+                rootValues[i] = Math.round(rootValues[i]) + (k === 3 ? give - each * 3 : each);
+            });
+        }
+        rootValues[idx] = next;
+        updateRootUI();
     });
 
     // 数字输入联动
@@ -777,7 +813,7 @@ function renderBodyDurability() {
         if (hint) {
             hint.textContent = _showDesc
                 ? '部位 · 职司 → 受损影响'
-                : '部位 · 耐久（点右上「详细描述」看职司与受损影响）';
+                : '部位 · 耐久'; // 用户批（2026-10-01）：按钮自己写着「详细描述」，再教一遍怎么点是多余的
         }
         bodyParts.forEach(part => {
             // 「没有这一格」才兜 100；0 是打烂了的真值（同页 SVG 那支用的就是 != null）
@@ -797,13 +833,24 @@ function renderBodyDurability() {
             //   而这个开关的用途正是让玩家**读到**职司与受损影响；窄屏无悬停更读不到。
             //   代价是长描述会让该行变两行、网格略参差——这个代价可以接受。
             const descCls = _showDesc ? 'text-gray-500' : 'text-gray-600 hidden';
+            // UI评审·B1（2026-09-30）：全显但分层——完好行降视觉权重（半透明+紧凑行距，
+            // 悬停还原查看），受损行加亮（红环）。沿试玩批次"恒常全显"路线，不回折叠。
+            const _isWhole = value >= 99.5; // 浮点余量防 99.999 误判
+            const rowCls = _isWhole
+                ? 'body-part-row body-part-row--whole flex items-center justify-between gap-2 bg-gray-800/60 px-2 py-1 rounded opacity-60 hover:opacity-100 transition'
+                : 'body-part-row body-part-row--hurt flex items-center justify-between gap-2 bg-gray-800 p-2 rounded ring-1 ring-red-500/40';
+            // 用户批（2026-10-01）：省略态下描述藏了但 text 仍 flex-1 撑满（ui-craft.css 的
+            // #body-durability-list 特异性压过 Tailwind 类，模板里挂 flex 类根本打不进去）——
+            // 部位名与耐久条之间空一长截。改法：行挂态 class（--plain/--desc），
+            // 布局由 ui-craft.css 按态接管：省略态 gauge+bar 占 flex-1 吃掉空隙，描述态维持原布局。
+            const _stateCls = _showDesc ? 'body-part-row--desc' : 'body-part-row--plain';
             listContainer.innerHTML += `
-            <div class="body-part-row flex items-center justify-between gap-2 bg-gray-800 p-2 rounded">
-                <div class="body-part-text flex items-center gap-2 min-w-0 flex-1">
+            <div class="${rowCls} ${_stateCls}">
+                <div class="body-part-text flex items-center gap-2">
                     <span class="body-part-name text-gray-300 text-sm font-bold flex-shrink-0">${part.name}</span>
                     <span class="body-part-desc text-xs leading-tight ${descCls}" title="${desc}">${descShown}</span>
                 </div>
-                <div class="body-part-gauge flex items-center gap-2 flex-shrink-0">
+                <div class="body-part-gauge flex items-center gap-2">
                     <div class="body-part-bar w-16 sm:w-20 h-2 bg-gray-600 rounded overflow-hidden">
                         <div class="body-part-bar-fill h-full rounded" style="width:${value}%; background:${color};"></div>
                     </div>
@@ -963,7 +1010,28 @@ function switchPanel(panelId) {
     if (window.PanelLifecycle && typeof window.PanelLifecycle.beforeMainSwitch === 'function') {
         window.PanelLifecycle.beforeMainSwitch(panelId);
     }
-    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+    // UI评审·A2（2026-10-01）：长尾导航「更多 ▾」折叠——14 项平铺竖列过深，
+// 势力/成就/日程/设置四项收进折叠组；展开态记 localStorage（键沿 x- 前缀惯例）。
+// 注意本函数的 toggle 行自身带 .nav-item class（换 active 底色hover 一致），
+// 但 data-panel 没有——:973 的选中查询天然跳过它，不会误亮。
+window.toggleNavMore = function toggleNavMore() {
+    var grp = document.getElementById('nav-more-group');
+    var tgl = document.getElementById('nav-more-toggle');
+    if (!grp || !tgl) return;
+    var open = grp.classList.toggle('nav-more-folded') === false;
+    var caret = tgl.querySelector('.nav-more-caret');
+    if (caret) caret.textContent = open ? '\u25BE' : '\u25B8';
+    tgl.setAttribute('aria-expanded', String(!!open));
+    try { localStorage.setItem('x-nav-more-open', open ? '1' : '0'); } catch (e) {}
+};
+// 启动恢复展开态（HTML 默认折叠；DOM 就绪后若有记忆则还原）
+try {
+    if (localStorage.getItem('x-nav-more-open') === '1') {
+        document.addEventListener('DOMContentLoaded', function () { window.toggleNavMore(); }, { once: true });
+    }
+} catch (e) {}
+
+document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
     var navItem = document.querySelector('.nav-item[data-panel="' + panelId + '"]');
     if (navItem) {
         navItem.classList.add('active');
@@ -2922,7 +2990,10 @@ function saveGame(opts) {
             discipleState: window.discipleState || { isInSect: false, sectId: null, sectName: null, contribution: 0, rank: null },
             eventFlags: window.eventFlags || {},
             achievementData: window.achievementData || null,
-            proficiencyData: window.proficiencyData || null,
+            // v25.2·修复：改读闭包真身（快照）——此前读 window.proficiencyData 恒 null，
+            // 熟练度从不进档（saveData.proficiencyData 死字段），全靠全局 LS 键串场
+            proficiencyData: (typeof window.getProficiencyDataSnapshot === 'function')
+                ? window.getProficiencyDataSnapshot() : (window.proficiencyData || null),
             playerPhysiology: null,
         };
     }
@@ -5416,6 +5487,17 @@ function showBattleUI(battle) {
         if (currentBattle && currentBattle.enemy && currentBattle.enemy._isArenaOpponent) {
             try { if (typeof window._onArenaBattleEnd === 'function') window._onArenaBattleEnd(winner); } catch (e) {}
         }
+        // v25.5 心魔战真结算：_heartDemonBattle 自上线起全仓无人读——赢了心魔战也不走
+        // 「战胜心魔」结算（意志/清明丹/突破加成全落空），入魔线只有败没有胜。现在接上：
+        // 胜 → resolveHeartDemonSuccess；败 → 既有战败线（残魂/复活）自理，标记清掉不重复算
+        if (window._heartDemonBattle) {
+            window._heartDemonBattle = false;
+            var _hdId = window._heartDemonId;
+            window._heartDemonId = null;
+            if (winner === 'player' && typeof window.resolveHeartDemonSuccess === 'function') {
+                try { window.resolveHeartDemonSuccess(_hdId); } catch (eHD) { console.warn('[静默失败] js/app.js · 心魔战胜结算：这一笔没接住，战胜奖励未落账', eHD && eHD.message); }
+            }
+        }
         var actionsHtml = '<p class="text-xl font-bold ' + (winner === 'player' ? 'text-green-400' : 'text-red-400') + '">' + (winner === 'player' ? '🎉 胜利！' : '💀 败北...') + '</p>';
         // v25.1·试-01：动态结算按钮单独收集，最后同时挂进 battle-result-extra（可见）与 battle-actions（isFinished 后被隐藏，仅兼容保留）
         var extraHtml = '';
@@ -5490,6 +5572,34 @@ function showBattleUI(battle) {
             // v20.0 2.9 宿敌寻仇：打赢降仇恨+灵石
             if (currentBattle._isRivalDuel && typeof window.settleRivalDuel === 'function') {
                 try { window.settleRivalDuel(true); } catch (eRiv) {}
+            }
+            // v25.6 望风榜：天骄挑战打赢 → 榜上胜负落账、风声传开
+            if (currentBattle._isRankDuel && typeof window.settleRankDuel === 'function') {
+                try { window.settleRankDuel(true); } catch (eRankW) { console.warn('[静默失败] js/app.js · 望风榜挑战胜利结算：这一笔没接住，榜上胜绩白涨', eRankW && eRankW.message); }
+            }
+            // v25.6 押货跑商：打退截道的 → 货全须全尾，顺手抄了对方老窝
+            if (currentBattle._isCaravanAmbush && typeof window.settleCaravanAmbush === 'function') {
+                try { window.settleCaravanAmbush(true); } catch (eCarW) { console.warn('[静默失败] js/app.js · 跑商截道胜利结算：这一笔没接住，进项没落袋', eCarW && eCarW.message); }
+            }
+            // v25.6 洞府守卫战：守住了 → 仇家铩羽、名气小涨
+            if (currentBattle._isCaveSiege && typeof window.settleCaveSiege === 'function') {
+                try { window.settleCaveSiege(true); } catch (eSieW) { console.warn('[静默失败] js/app.js · 洞府守卫战胜利结算：这一笔没接住，守住的功劳白记', eSieW && eSieW.message); }
+            }
+            // v25.8 黑道批：抢劫打赢 → 搜TA的行囊（赃账在 npc-crime.js）
+            if (currentBattle._isNpcRobbery && typeof window.settleNpcRobbery === 'function') {
+                try { window.settleNpcRobbery(true); } catch (eRobW) { console.warn('[静默失败] js/app.js · 抢劫战胜利结算：这一笔没接住，搜走的赃物说不明白', eRobW && eRobW.message); }
+            }
+            // v25.8 黑道批：打退赏金猎人 → 搜出他半份赏钱和那张画影
+            if (currentBattle._isBountyHunt && typeof window.settleBountyHunt === 'function') {
+                try { window.settleBountyHunt(true); } catch (eBhW) { console.warn('[静默失败] js/app.js · 赏金猎人胜利结算：这一笔没接住，赏钱没落袋', eBhW && eBhW.message); }
+            }
+            // v25.8 黑道批：当街抢劫武者打赢 → 搜走彩头（账在 citizen-life.js）
+            if (currentBattle._isCitizenRob && typeof window.settleCitizenRob === 'function') {
+                try { window.settleCitizenRob(true); } catch (eCrW) { console.warn('[静默失败] js/app.js · 街面抢劫胜利结算：这一笔没接住', eCrW && eCrW.message); }
+            }
+            // v25.8 黑道批：打退上门讨说法的丐帮弟子
+            if (currentBattle._isBeggarWrath && typeof window.settleBeggarWrath === 'function') {
+                try { window.settleBeggarWrath(true); } catch (eBwW) { console.warn('[静默失败] js/app.js · 丐帮讨说法胜利结算：这一笔没接住', eBwW && eBwW.message); }
             }
             // 第一百一十一波：冲寨得手 → 寨中少一伙人。对方遁走（无战利品）不清账——
             // 守众这本册子只认真打死人，屏上那个数才敢给玩家当依据
@@ -5695,6 +5805,34 @@ function showBattleUI(battle) {
             if (currentBattle && currentBattle._isRivalDuel && typeof window.settleRivalDuel === 'function') {
                 try { window.settleRivalDuel(false); } catch (eRivLose) {}
             }
+            // v25.6 望风榜挑战战败 → 名头被压过（败北之痛照常走下方流程）
+            if (currentBattle && currentBattle._isRankDuel && typeof window.settleRankDuel === 'function') {
+                try { window.settleRankDuel(false); } catch (eRankL) { console.warn('[静默失败] js/app.js · 望风榜挑战战败结算：这一笔没接住，榜上败绩没记上', eRankL && eRankL.message); }
+            }
+            // v25.6 押货跑商截道战败 → 货被搬走三成（如实点名，不吞账）
+            if (currentBattle && currentBattle._isCaravanAmbush && typeof window.settleCaravanAmbush === 'function') {
+                try { window.settleCaravanAmbush(false); } catch (eCarL) { console.warn('[静默失败] js/app.js · 跑商截道战败结算：这一笔没接住，被搬走的货说不明白', eCarL && eCarL.message); }
+            }
+            // v25.6 洞府守卫战失守 → 洞府被抄掠一角（灵石与行囊如实落账）
+            if (currentBattle && currentBattle._isCaveSiege && typeof window.settleCaveSiege === 'function') {
+                try { window.settleCaveSiege(false); } catch (eSieL) { console.warn('[静默失败] js/app.js · 洞府守卫战失守结算：这一笔没接住，被抄走的账悬着', eSieL && eSieL.message); }
+            }
+            // v25.8 黑道批：抢劫打输 → 反被搜身（赃账两头都落在 npc-crime.js）
+            if (currentBattle && currentBattle._isNpcRobbery && typeof window.settleNpcRobbery === 'function') {
+                try { window.settleNpcRobbery(false); } catch (eRobL) { console.warn('[静默失败] js/app.js · 抢劫战战败结算：这一笔没接住，被搜走的钱说不明白', eRobL && eRobL.message); }
+            }
+            // v25.8 黑道批：赏金猎人把你拿下 → 缴清悬赏、案子销了、脸全城都认得了
+            if (currentBattle && currentBattle._isBountyHunt && typeof window.settleBountyHunt === 'function') {
+                try { window.settleBountyHunt(false); } catch (eBhL) { console.warn('[静默失败] js/app.js · 赏金猎人战败结算：这一笔没接住，赏金悬着', eBhL && eBhL.message); }
+            }
+            // v25.8 黑道批：当街抢劫武者打输 → 反被按在地上打了一顿
+            if (currentBattle && currentBattle._isCitizenRob && typeof window.settleCitizenRob === 'function') {
+                try { window.settleCitizenRob(false); } catch (eCrL) { console.warn('[静默失败] js/app.js · 街面抢劫战败结算：这一笔没接住', eCrL && eCrL.message); }
+            }
+            // v25.8 黑道批：讨说法的丐帮弟子占了上风
+            if (currentBattle && currentBattle._isBeggarWrath && typeof window.settleBeggarWrath === 'function') {
+                try { window.settleBeggarWrath(false); } catch (eBwL) { console.warn('[静默失败] js/app.js · 丐帮讨说法战败结算：这一笔没接住', eBwL && eBwL.message); }
+            }
             // 第五十一波 具名响马宿敌战败 → 被搜身（钱进他腰包走经济真账，梁子还在）
             if (currentBattle && currentBattle.enemy && currentBattle.enemy._wildNemesis && typeof window.settleWildNemesis === 'function') {
                 try { window.settleWildNemesis(false); } catch (eNemLose) {}
@@ -5798,7 +5936,7 @@ function setBattleSpeed(k) {
     if (k !== 'fast' && k !== 'normal') k = 'normal';
     window._settings = window._settings || {};
     window._settings.battleSpeed = k;
-    try { localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch (e) {}
+    try { if (window.saveToStorage) window.saveToStorage('xianxia_settings', JSON.stringify(window._settings)); else localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch (e) {}
     applyBattleSpeedUI();
     if (window.showMessage) window.showMessage(k === 'fast' ? '⚡ 战斗节奏调快——敌人出手间隔大幅缩短，刷级不再干等。' : '🐢 战斗节奏回到标准。', 'info');
 }
@@ -6946,7 +7084,34 @@ function renderArtListPanel() {
     var defs = [];
     try { defs = (typeof getLearnedSkillDefs === 'function' ? getLearnedSkillDefs() : []) || []; } catch (e) { defs = []; }
     if (!defs.length) {
-        host.innerHTML = xEmptyHtml({
+        // UI评审·A3（2026-10-01）：空态不止说「还没有」——上一张修炼账本卡，把这页
+        // 三个按钮讲明白（打坐/运功/功法修炼的分工）+ 当前进度可见。VLM 评审的
+        // 「skills 面板空荡」根源：面板本体只有标题+按钮+空态三块，新玩家无从下手。
+        // 有功法后此卡不渲染（xEmptyHtml 的功法来路指引仍在下方）。
+        var _a3 = '';
+        try {
+            var _realm = (typeof currentCharData !== 'undefined' && currentCharData && currentCharData.realm) || '炼气';
+            var _layer = (currentCharData && currentCharData.layer) || 1;
+            var _ri = (typeof window.getRealmIndex === 'function') ? window.getRealmIndex(_realm) : 0;
+            var _need = (typeof window.getEssenceRequired === 'function') ? window.getEssenceRequired(_ri, _layer) : 0;
+            var _ess = (currentCharData && currentCharData.essence) || 0;
+            var _pct = _need > 0 ? Math.min(100, Math.round(_ess / _need * 100)) : 0;
+            var _layerCn = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'][_layer] || String(_layer);
+            _a3 = '<div class="mb-4 bg-gray-800/60 border border-yellow-700/50 rounded-lg p-4">'
+                + '<p class="text-sm text-yellow-400 font-bold mb-2">🧘 此刻的修炼账本</p>'
+                + '<p class="text-sm text-gray-300 mb-2">境界 <span class="text-yellow-300 font-bold">' + window.esc(_realm + ' ' + _layerCn + '期') + '</span></p>'
+                + '<div class="flex items-center gap-2 mb-3">'
+                + '<div class="h-2 bg-gray-700 rounded flex-1 overflow-hidden"><div class="h-full bg-yellow-500/80 rounded" style="width:' + _pct + '%"></div></div>'
+                + '<span class="text-xs text-gray-400 flex-shrink-0">真元 ' + window.esc(String(_ess)) + ' / ' + window.esc(String(_need)) + '</span>'
+                + '</div>'
+                + '<p class="text-xs text-gray-500 mb-2 leading-relaxed">'
+                + '这页三枚按钮的分工：<b class="text-gray-300">打坐</b>攒真元（就是上面这条突破进度）；'
+                + '<b class="text-gray-300">运功炼气</b>慢一些，但连真气一起涨；'
+                + '<b class="text-gray-300">功法修炼</b>要有已学功法才有的谈。'
+                + '真元攒满后去「人物」页点突破。</p>'
+                + '</div>';
+        } catch (eA3) { _a3 = ''; }
+        host.innerHTML = _a3 + xEmptyHtml({
             fill: true,
             title: '一部功法都还没有',
             why: '功法不掉在怪身上。它只有两条来路：拜入宗门后在藏经阁参悟本派典籍，或是秘籍、师传这类记进知识册的来路。',
@@ -7673,6 +7838,9 @@ function confirmGiftToNPC(npcId, slotIndex, gain) {
     _gMem.giftFatigue = Math.max(0, (_gMem.giftFatigue || 0) - _gElapsed); // 按经过游戏日衰减
     var _gFatigue = _gMem.giftFatigue || 0;
     var _gFatigueMul = Math.max(-0.3, 1 - 0.3 * _gFatigue); // 0→1.0 / 3→0.1 / 4→-0.2(反感)
+    // v25.8 断头账救活：memory.totalGifts 记了多年没人翻——礼送过十回的人，TA早知你所好：
+    // 疲倦按半价折（等价于疲倦减半），反感区够不着了，但连着猛送照样递减（防刷口径不破）
+    if ((Number(_gMem.totalGifts) || 0) >= 10) _gFatigueMul = Math.max(-0.1, (1 + _gFatigueMul) / 2);
     var _gTraitMul = (typeof npc.getGiftMultiplier === 'function') ? npc.getGiftMultiplier() : 1; // 特质修正(贪婪0.7/慷慨1.3/寡言0.8)
     var effectiveGain = Math.round(totalGain * _gFatigueMul * _gTraitMul);
     if (typeof npc.changeAffection === 'function') {
@@ -8899,8 +9067,15 @@ function startNewGamePlus() {
         meridian: _attrsNg.meridian,
         ngPlus: (_cdNg?.ngPlus || 0) + 1
     };
-    localStorage.setItem('xianxia_ngplus', JSON.stringify(saveData));
-    showMessage('🌟 前尘记忆已凝成玉——回到资质录入，重新「踏入仙途」即带资质转世。', 'success');
+    // v25.3（存档写失败可见批）：原为裸 setItem——配额一满直接上抛，下面那句「凝成玉」回执根本轮不到说；
+    // 就算没抛，写没写成都照样弹「成功」（谎话）。接进单一 owner，按真结果给回执。
+    var _ngPayload = JSON.stringify(saveData);
+    var _ngOk = window.saveToStorage ? window.saveToStorage('xianxia_ngplus', _ngPayload) : (function () {
+        try { localStorage.setItem('xianxia_ngplus', _ngPayload); return true; }
+        catch (eNG) { console.warn('[静默失败] js/app.js · 前尘记忆（NG+）存档：这一世的资质没能刻进玉里', eNG && eNG.message); return false; }
+    })();
+    if (_ngOk) showMessage('🌟 前尘记忆已凝成玉——回到资质录入，重新「踏入仙途」即带资质转世。', 'success');
+    else showMessage('⚠️ 前尘记忆没能刻进玉里（浏览器存储空间可能已满）——转世资质带不过去。清理旧存档后重试。', 'error');
     // v25.1·试-14：不再只丢一句「请重新开始游戏」的空头支票——真把人送回创角界面
     if (typeof backToCreation === 'function') backToCreation();
 }
@@ -10843,7 +11018,7 @@ function toggleCityIntro() {
     var cb = document.getElementById('setting-city-intro');
     if (cb) {
         window._settings.disableCityIntro = !cb.checked;
-        try { localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch(e) {}
+        try { if (window.saveToStorage) window.saveToStorage('xianxia_settings', JSON.stringify(window._settings)); else localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch(e) {}
     }
 }
 
@@ -10883,7 +11058,7 @@ function toggleRumorDistortion() {
     var cb = document.getElementById('setting-rumor-distortion');
     if (cb) {
         window._settings.rumorDistortion = !!cb.checked;
-        try { localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch(e) {}
+        try { if (window.saveToStorage) window.saveToStorage('xianxia_settings', JSON.stringify(window._settings)); else localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch(e) {}
         if (window.showMessage) window.showMessage(cb.checked ? '🗣️ 传闻失真已开启：闲话经不同性格的人转述会走形。' : '🗣️ 传闻失真已关闭：闲话只扩散、不改口。', 'info');
     }
 }
@@ -10893,7 +11068,7 @@ function toggleAffectionDecay() {
     var cb = document.getElementById('setting-affection-decay');
     if (cb) {
         window._settings.affectionDecay = !!cb.checked;
-        try { localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch(e) {}
+        try { if (window.saveToStorage) window.saveToStorage('xianxia_settings', JSON.stringify(window._settings)); else localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch(e) {}
         if (window.showMessage) window.showMessage(cb.checked ? '💞 感情维系衰减已开启：久不联系（≥3天）好感会下降。' : '💞 感情维系衰减已关闭：好感不再因未联系而下降。', 'info');
     }
 }
@@ -10905,7 +11080,7 @@ function togglePartyUnlimited() {
     var cb = document.getElementById('setting-party-unlimited');
     if (cb) {
         window._settings.partyUnlimited = !!cb.checked;
-        try { localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch(e) {}
+        try { if (window.saveToStorage) window.saveToStorage('xianxia_settings', JSON.stringify(window._settings)); else localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch(e) {}
         if (window._settings.partyUnlimited && window.showMessage) {
             window.showMessage('👥 队伍人数上限已解除（硬顶 ' + ((window.partySystem && window.partySystem.PARTY_UNLIMITED_CAP) || 99) + ' 人）。⚠️ 提醒：敌方至多 4 个进场，人海会把平衡压死；战斗回合与战后结算随人数变长，低端设备可能卡顿——体验可能因此受损，随时可以关回来。', 'warning');
         } else if (window.showMessage) {
@@ -10921,7 +11096,7 @@ function toggleSocialEventPanel() {
     var cb = document.getElementById('setting-social-event-panel');
     if (cb) {
         window._settings.socialEventPanel = !!cb.checked;
-        try { localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch(e) {}
+        try { if (window.saveToStorage) window.saveToStorage('xianxia_settings', JSON.stringify(window._settings)); else localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch(e) {}
         if (window.showMessage) window.showMessage(cb.checked ? '📜 已开启：社交面板会直接列出个人事件清单与条件。' : '📜 已关闭：个人事件不再罗列，该发生的事会在交谈时自然发生。', 'info');
     }
 }
@@ -10954,7 +11129,7 @@ function setFontScale(k) {
     if (!FONT_SCALE_PX.hasOwnProperty(k)) k = 'normal';
     window._settings = window._settings || {};
     window._settings.fontScale = k;
-    try { localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch(e) {}
+    try { if (window.saveToStorage) window.saveToStorage('xianxia_settings', JSON.stringify(window._settings)); else localStorage.setItem('xianxia_settings', JSON.stringify(window._settings)); } catch(e) {}
     applyFontScale();
     if (window.showMessage) window.showMessage('🔠 界面字号已切到「' + FONT_SCALE_NAMES[k] + '」——全局生效，并已记住这个偏好。', 'info');
 }

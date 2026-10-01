@@ -151,6 +151,15 @@
     flex: 0 0 auto;
 }
 
+/* 用户批（2026-10-01 10:39）：省略态（描述关）下耐久条吃掉空隙——
+   旧账：text 永远 flex:1 撑满，描述一藏，部位名与耐久条之间空一长截、
+   条只摊到 w-16。省略态改由 gauge 连同 bar 占 flex-1（同文件 ID 特异性
+   高于 Tailwind 类，模板里挂 flex-1 类不生效，必须在这里续写）。
+   描述态（--desc）维持上面的原布局不动。 */
+#body-durability-list .body-part-row--plain .body-part-text { flex: 0 0 auto; }
+#body-durability-list .body-part-row--plain .body-part-gauge { flex: 1 1 0%; min-width: 0; }
+#body-durability-list .body-part-row--plain .body-part-bar  { flex: 1 1 0%; width: auto; }
+
 /* ---------- 3. 装备：四枚读数瓦片 + 左右两栏都不再撑高 ---------- */
 
 #panel-equipment #equip-combat-summary {

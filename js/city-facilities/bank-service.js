@@ -37,6 +37,16 @@
         return b;
     }
     function log(m, t) { (global.gameLog || { add: function () {} }).add(m, t || 'info'); }
+    // v25.8 黑道批：抢过柜台的人，钱庄对你闭门三日（通缉账在 npc-crime.js，本闸守卫式读取——不在位就永不闭门）
+    function banGate() {
+        try {
+            if (global.NpcCrime && typeof global.NpcCrime.bankBanned === 'function' && global.NpcCrime.bankBanned()) {
+                var d = (typeof global.NpcCrime.bankBanDays === 'function') ? global.NpcCrime.bankBanDays() : 0;
+                return { error: '钱庄的门板对你上着（还有 ' + d + ' 日）——上回柜台前的事，伙计们都记着呢。' };
+            }
+        } catch (e) { console.warn('[静默失败] js/city-facilities/bank-service.js · banGate：闭门账没问成，按开着门算', e && e.message); }
+        return null;
+    }
 
     var BankService = {
         // 只读口径（面板/情境文案共用）
@@ -54,6 +64,8 @@
         },
 
         deposit: function (amount) {
+            var ban = banGate();
+            if (ban) return ban;
             var b = ledger();
             if (!b) return { error: '钱庄不与无名氏打交道' };
             amount = Math.floor(num(amount));
@@ -79,6 +91,8 @@
         },
 
         withdraw: function () {
+            var ban = banGate();
+            if (ban) return ban;
             var b = ledger();
             if (!b) return { error: '钱庄不与无名氏打交道' };
             if (b.deposit <= 0) return { error: '你在钱庄没有存款' };
@@ -93,6 +107,8 @@
         },
 
         borrow: function (amount) {
+            var ban = banGate();
+            if (ban) return ban;
             var b = ledger();
             if (!b) return { error: '钱庄不与无名氏打交道' };
             if (b.debt > 0) return { error: '欠条未销，钱庄不再放贷' };
@@ -115,6 +131,8 @@
         // v20.53 还账口径：欠条写死借一还二成息，提前还清也按整月计息。
         // 旧版"提前还只还本金"配上存款月息五，借入即存入即是无风险套利。
         repay: function () {
+            var ban = banGate();
+            if (ban) return ban;
             var b = ledger();
             if (!b) return { error: '钱庄不与无名氏打交道' };
             if (b.debt <= 0) return { error: '你并无欠款' };
@@ -126,6 +144,19 @@
             b.debtDue = 0;
             log('你当面点清 ' + due + ' 灵石（含息），掌柜抽出欠条，就烛焚了。', 'success');
             return { success: true, messages: ['还清 ' + due + ' 灵石（含息），欠条焚毁'] };
+        },
+
+        // v25.8 黑道批：柜娘私烧欠条（npc-crime.js 勒索得手时的正门）——钱庄账面上她自己抹平，
+        // 本方法只管销账，业障与民愤热度由调用方那本黑道账记。
+        waiveDebt: function (why) {
+            var b = ledger();
+            if (!b) return { error: '钱庄不与无名氏打交道' };
+            if (b.debt <= 0) return { error: '你并无欠款' };
+            var waived = Math.round(b.debt * (1 + LOAN_RATE));
+            b.debt = 0;
+            b.debtDue = 0;
+            log('一张欠条就着烛火烧了——' + (why || '柜上销了这笔账') + '。连本带息 ' + waived + ' 灵石，账面上再无你的名字。', 'warning');
+            return { success: true, waived: waived, messages: ['欠条焚毁，连本带息 ' + waived + ' 灵石一笔勾销'] };
         },
 
         // 柜台话术（情境弹窗共用，账目如实播报）

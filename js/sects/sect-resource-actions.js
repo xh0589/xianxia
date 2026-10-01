@@ -71,7 +71,10 @@ var _RESOURCE_ACTION_LABELS = {
     intel: '🕵️ 寻个由头买消息',
     formation: '🌀 参坐观图',
     craft: '🛠️ 上手做点活',
-    torture: '🔥 自省鞭励'
+    torture: '🔥 自省鞭励',
+    // v25.4 玩家乐趣闭环批：trade 是 v20.8 那轮唯一漏掉的类型——昆仑护金/大旗镖营/血手索债/
+    // 飞蝎抽成/海阁路引五处门派专属地标因此永久灰置「暂无可执行动作」，面板头却承诺着交互
+    trade: '🪙 随商路走一趟'
 };
 function _sectResourceActionLabel(type) {
     return _RESOURCE_ACTION_LABELS[type] || '';
@@ -133,6 +136,8 @@ function useSectResource(sectName, resourceId) {
             return _routeCrafting(res, 'forging');
         case 'torture':
             return _whipSelf(res);
+        case 'trade':
+            return _runTradeRoute(res);
         default:
             if (window.showMessage) window.showMessage('【' + res.name + '】' + (res.desc || '') + '（此处暂无可执行的动作，留待日后机缘。）', 'info');
             return false;
@@ -384,6 +389,26 @@ function _whipSelf(res) {
     cd.tempering = (cd.tempering || 0) + 8;
     if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(60, '自省');
     if (window.showMessage) window.showMessage('刑罚拷打之下痛得神魂一凛，淤滞的真气反被冲开了（真气+40，伤15，历练+8）。', 'warning');
+    if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+    return true;
+}
+
+// ---- 商路（trade）：随镖队/商路走一趟——时辰与力气换灵石与贡献（v25.4 接线，此前该类型永久灰置） ----
+function _runTradeRoute(res) {
+    var cd = window.currentCharData;
+    if ((cd.energy || 0) < 15) {
+        if (window.showMessage) window.showMessage('跑商路既要力气也要眼色，精力不足15就别去添乱了。', 'warning');
+        return false;
+    }
+    cd.energy -= 15;
+    var mins = 120;   // 真账那一笔：随商路走一趟推出去的分钟数，回执的时长由它生成
+    if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(mins, '跑商路');
+    var out = res.output || 7;
+    // 商路出息随建筑效能走：output 7~9 → 约 24~38 灵石（比耳目处买消息贵不了多少，是力气钱）
+    var stones = 10 + Math.floor(out * 2) + Math.floor(Math.random() * 10);
+    _gainStones(stones);
+    if (window.discipleState) { window.discipleState.contribution = (window.discipleState.contribution || 0) + 5; try { window.sectLedgerNote && window.sectLedgerNote(5, (res.name || '商路') + '走商'); } catch (e) { console.warn('[静默失败] js/sects/sect-resource-actions.js · 商路贡献账：这一趟的5点贡献没记进宗门账本', e && e.message); } }
+    if (window.showMessage) window.showMessage('你随【' + (res.name || '商路') + '】的旗号走了一趟' + (window.formatShichen ? window.formatShichen(mins) : mins + '分钟') + '——货齐人到，事主痛快结钱：灵石+' + stones + '，执事另记贡献+5。', 'success');
     if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
     return true;
 }

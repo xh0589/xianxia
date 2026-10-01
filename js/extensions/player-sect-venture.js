@@ -393,7 +393,9 @@
         if (!homeName() && !(ds() && ds().isInSect)) return false; // 自己都没门庭，招谁去
         if (!npc || npc.isDead || npc._companionData || npc.isCompanion || npc.isDaoCompanion) return false;
         if (inAnySect(npc)) return false;
-        if (npc.type === '商人' || npc.profession === 'merchant') return false; // 铺子走不开
+        // v25.8 断头账救活：npc.profession 是 {type,level,specialization} 对象，与 'merchant' 字符串相比恒 false——
+        // 商籍门形同虚设好几年。认 profession.type 与 occupation 两个真字段。
+        if (npc.type === '商人' || npc.occupation === '商人' || (npc.profession && npc.profession.type === 'merchant')) return false; // 铺子走不开
         return true;
     }
     function recruitFromSocial(npc) {
@@ -402,7 +404,7 @@
         if (npc.isDead) return { success: false, msg: '斯人已逝。' };
         if (npc._companionData || npc.isCompanion || npc.isDaoCompanion) return { success: false, msg: '她是与你同行的人，不是门徒。' };
         if (inAnySect(npc)) return { success: false, msg: '「' + npc.name + '」已有门有派——挖墙脚的事，江湖上不体面。' };
-        if (npc.type === '商人' || npc.profession === 'merchant') return { success: false, msg: '「' + npc.name + '」的铺子走不开——人家是靠铺子吃饭的。' };
+        if (npc.type === '商人' || npc.occupation === '商人' || (npc.profession && npc.profession.type === 'merchant')) return { success: false, msg: '「' + npc.name + '」的铺子走不开——人家是靠铺子吃饭的。' };
         var built = homeName();
         if (built) {
             var sect = mine();

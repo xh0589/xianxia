@@ -314,7 +314,7 @@
         if (cb) cb.checked = on;
     }
     function setOverlayVisible(on, quiet) {
-        try { global.localStorage.setItem(OVERLAY_KEY, on ? '1' : '0'); } catch (e) {}
+        try { if (global.saveToStorage) global.saveToStorage(OVERLAY_KEY, on ? '1' : '0'); else global.localStorage.setItem(OVERLAY_KEY, on ? '1' : '0'); } catch (e) {}
         applyOverlayVisibility();
         if (!quiet) say(on ? '🧭 路线标记已开：九州关隘与里数上图。' : '🧭 路线标记已关：舆图恢复清爽。', 'info');
     }

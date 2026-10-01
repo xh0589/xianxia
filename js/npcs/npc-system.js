@@ -460,6 +460,10 @@ const OCCUPATION_SPECIFIC_ACTIONS = {
     '治疗师': {
         id: 'heal', name: '💊 诊治', desc: '治疗伤势（诊金20灵石，好感60+免费）', minAffection: 0,
         action: function(npc, player) {
+            // v25.8 断头账救活：动过手的人记一辈子——医者不肯给打过自己的人看伤
+            if (npc.memory && (Number(npc.memory.totalAttacks) || 0) > 0) {
+                return { success: false, msg: '医者看清了你的脸，把药箱往身后挪了挪：「伤你打出来的人，我不治。」' };
+            }
             const injured = player.health < (player.maxHealth || 100) || player.qi < (player.maxQi || 50);
             if (!injured) return { success: true, msg: '你状态很好，无需诊治。' };
             // v23.0 诊治要诊金、要花时间，疗效随医者手气分档（旧版免费瞬间回满，医馆都没生意了）
@@ -3769,6 +3773,11 @@ function showNPCDialog(npcId, screen = 'main') {
     if (occAction && affection >= (occAction.minAffection || 0)) {
         occHtml = `<button onclick="executeOccupationAction('${npcId}')" class="flex items-center gap-2 bg-yellow-800 hover:bg-yellow-700 px-3 py-2 rounded text-sm text-white w-full transition-colors"><span>${occAction.name}</span><span class="text-xs text-gray-400">${occAction.desc}</span></button>`;
     }
+    // v25.5 灰色营生：摸包按钮常驻对话面板——灰色路子不藏在职业后面（死者除外）
+    let stealHtml = '';
+    if (!npc.isDead) {
+        stealHtml = `<button onclick="window.executePickpocket('${npcId}')" class="mt-1 flex items-center gap-2 bg-gray-800 hover:bg-gray-700 px-3 py-2 rounded text-sm text-gray-300 w-full transition-colors"><span>🤫 摸包</span><span class="text-xs text-gray-500">险中求财——成了得灵石，败了恶名好感双赔</span></button>`;
+    }
     let categoriesHtml = '';
     for (const key in DEEP_TALK_CATEGORIES) {
         const cat = DEEP_TALK_CATEGORIES[key];
@@ -3842,6 +3851,18 @@ function showNPCDialog(npcId, screen = 'main') {
         relationsHtml = window.getRelationsNetworkHTML(npcId);
     }
 
+    // v25.8 断头账救活：容貌账（发型/眼眸/衣着/特征）写了好几年，面板上却只有头像图标——补一行真人模样
+    var _ap = npc.appearance || {};
+    var appHtml = (_ap.hair || _ap.eyes || _ap.clothing || _ap.features)
+        ? `<p class="text-xs text-gray-500">${[_ap.hair, _ap.eyes ? ('眼眸' + _ap.eyes) : '', _ap.clothing, _ap.features].filter(Boolean).join(' · ')}</p>`
+        : '';
+    // v25.8 黑道与人情：威胁/抢劫两枚黑道钮 + 还物/邀约/打听/求卦/托付/拜师一排人情钮
+    //（正门各在 npc-crime.js / npc-bond.js，模块不在位一行不出——守卫接线，不改本文件既有行为）
+    var crimeHtml = '';
+    try { if (!isRemote && !npc.isDead && typeof window.buildNpcCrimeButtons === 'function') crimeHtml = window.buildNpcCrimeButtons(npc, npcId) || ''; } catch (eCrimeBtn) { console.warn('[静默失败] js/npcs/npc-system.js · showNPCDialog：黑道按钮没挂上', eCrimeBtn && eCrimeBtn.message); crimeHtml = ''; }
+    var bondHtml = '';
+    try { if (!isRemote && typeof window.buildNpcBondButtons === 'function') bondHtml = window.buildNpcBondButtons(npc, npcId) || ''; } catch (eBondBtn) { console.warn('[静默失败] js/npcs/npc-system.js · showNPCDialog：人情按钮没挂上', eBondBtn && eBondBtn.message); bondHtml = ''; }
+
     const html = `<div class="bg-gray-800 border-2 border-blue-500 rounded-xl p-6 max-w-xl w-full mx-4 max-h-[90vh] overflow-y-auto">
         <!-- 头部：头像 + 名称 + 关系标签 + 当前活动 -->
         <div class="flex items-center gap-4 mb-4">
@@ -3849,6 +3870,7 @@ function showNPCDialog(npcId, screen = 'main') {
             <div class="flex-1">
                 <h3 class="text-xl font-bold text-white">${npc.name} ${quirkMod} ${specialRelationHtml}</h3>
                 <p class="text-sm text-gray-400">${npc.occupation || '未知职业'} · ${npc.combat?.realm || '凡人'}${npc.combat?.layer || ''}层</p>
+                ${appHtml}
                 <p class="text-xs text-blue-400">🏃 ${currentActivity} · 📍 ${location}</p>
                 <p class="text-xs ${affectionColor}">${affectionLevel} (好感:${affection} 仇恨:${hatred})</p>
                 ${relStatus ? `<p class="text-xs ${relStatus.color}">关系: ${relStatus.name}</p>` : ''}
@@ -3940,7 +3962,8 @@ function showNPCDialog(npcId, screen = 'main') {
              故事线就绪时由下方包装层的延时检查统一自然弹出。 -->
 
         <!-- 职业交互 -->
-        ${occHtml ? `<div class="mt-3">${occHtml}</div>` : ''}
+        ${(occHtml || stealHtml || crimeHtml) ? `<div class="mt-3">${occHtml}${stealHtml}${crimeHtml}</div>` : ''}
+        ${bondHtml}
         ${(typeof buildNpcRequestHtml === 'function' && buildNpcRequestHtml(npc, npcId)) || ''}
 
         <!-- 个人事件 -->
@@ -3962,6 +3985,14 @@ function showNPCDialog(npcId, screen = 'main') {
 
 // 从面板招募NPC入队
 function recruitNPCFromDialog(npcId) {
+    // v25.8 断头账救活：memory.totalAttacks 记了多年没人翻——动过手的人记一辈子，队伍不收
+    try {
+        var _rn = window.npcManager && window.npcManager.getNPC ? window.npcManager.getNPC(npcId) : null;
+        if (_rn && _rn.memory && (Number(_rn.memory.totalAttacks) || 0) > 0) {
+            showMessage(_rn.name + ' 死死盯着你伸来的手——动过手的人，是不会跟你并肩的。', 'warning');
+            return;
+        }
+    } catch (eAtt) { console.warn('[静默失败] js/npcs/npc-system.js · recruitNPCFromDialog：动过手的账没翻出来，按没动过手算', eAtt && eAtt.message); }
     if (typeof window.partySystem?.recruitNPC === 'function') {
         window.partySystem.recruitNPC(npcId);
     } else {
@@ -4340,6 +4371,79 @@ function executeOccupationAction(npcId) {
         }
     }
 }
+
+// ==================== v25.5 灰色营生：摸包（第一百四十七批 · 玩法立项批） ====================
+// 主动偷窃此前只有门派夜闯藏经阁一处（sect-disciple-life.doSneak），城里满街的人一个都摸不得。
+// 现在对话面板常驻「🤫 摸包」：成功率看身法与境界（封顶 85%），成了摸走灵石（随境界上浮），
+// 败了恶名、好感、城市声望三本账一起赔——灰色路子的价钱就是随时可能人赃并获。
+// 口径：每人每日一次（账在 _pickpocketLog，随日刷新不落档——悬赏榜同款「每日刷新合理」惯例）；
+// 道侣与挚交（好感 ≥80）下不去手；灵石走 DataManager 单一真源；声望走 reduceReputation 正门。
+var _pickpocketLog = {};   // { npcId: absoluteDay }
+
+function executePickpocket(npcId) {
+    const npc = window.npcManager && window.npcManager.getNPC ? window.npcManager.getNPC(npcId) : null;
+    if (!npc || npc.isDead) { showMessage('那人早不在这儿了。', 'info'); return false; }
+    const cd = window.currentCharData;
+    if (!cd) { showMessage('请先创建角色。', 'warning'); return false; }
+    // 道侣与挚交：下不去手
+    const aff = (npc.relationship && npc.relationship.affection) || 0;
+    var isDao = false;
+    try { isDao = !!(typeof npc.hasFlag === 'function' && npc.hasFlag('dao_companion')); } catch (eF) {}
+    if (isDao || aff >= 80) {
+        showMessage('你望着 ' + npc.name + '，手在袖中攥了攥——终究没伸出去。对这等亲近的人，你下不去手。', 'warning');
+        return false;
+    }
+    // 每人每日一次
+    var day = 0;
+    try { day = (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') ? window.timeSystem.getAbsoluteDay() : 0; } catch (eD) {}
+    if (_pickpocketLog[npcId] === day) {
+        showMessage('今天已经对 ' + npc.name + ' 出过手了——再摸就要被盯上了。', 'info');
+        return false;
+    }
+    _pickpocketLog[npcId] = day;
+    if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') window.timeSystem.advanceTime(10, '摸包');
+
+    var tier = (typeof window.getRealmTier === 'function') ? (window.getRealmTier(cd.realm) || 0) : 0;
+    var dex = Number(cd.dexterity) || 10;
+    var rate = clamp(0.30 + (dex - 10) * 0.01 + tier * 0.02, 0.15, 0.85);
+    var roll = Math.random();
+
+    if (roll < rate) {
+        // 得手：灵石随境界上浮（与悬赏榜同一把境界尺）
+        var mul = (typeof window.bountyRealmMul === 'function') ? window.bountyRealmMul() : 1;
+        var loot = Math.max(1, (8 + Math.floor(Math.random() * 12)) * mul);
+        if (window.DataManager && typeof window.DataManager.addSpiritStones === 'function') window.DataManager.addSpiritStones(loot);
+        else cd.spiritStones = (cd.spiritStones || 0) + loot;
+        cd.karma = clamp((Number(cd.karma) || 0) - 2, -100, 100);
+        cd.notoriety = (Number(cd.notoriety) || 0) + 1;
+        if (npc.relationship) npc.relationship.affection = clamp(aff - 10, -100, 100);
+        try { npc.recordPlayerAction('pickpocketed', 'negative'); } catch (eR) {}
+        if (typeof window.updateCurrencyUI === 'function') { try { window.updateCurrencyUI(); } catch (eC) {} }
+        showMessage('🤫 你借着人流一贴一错——' + npc.name + ' 的钱袋轻了一截，灵石+' + loot + '。（业障+2，恶名+1，TA若发觉好感要掉）', 'success');
+        return true;
+    }
+    if (roll < rate + 0.45) {
+        // 失手但没被抓：惊了对方，全身而退
+        if (npc.relationship) npc.relationship.affection = clamp(aff - 15, -100, 100);
+        try { npc.recordPlayerAction('pickpocket_attempt', 'negative'); } catch (eR2) {}
+        showMessage('🤫 你的指尖刚碰到钱袋，' + npc.name + ' 忽然侧身——你缩手装作整理衣袖，惊出一身冷汗。（好感-15，没抓着把柄）', 'warning');
+        return false;
+    }
+    // 人赃并获：恶名+5、城市声望-30、罚金 30 灵石（拿不出罪加一等）
+    cd.karma = clamp((Number(cd.karma) || 0) - 3, -100, 100);
+    cd.notoriety = (Number(cd.notoriety) || 0) + 5;
+    if (npc.relationship) npc.relationship.affection = clamp(aff - 25, -100, 100);
+    try { if (typeof npc.changeHatred === 'function') npc.changeHatred(20); } catch (eH) {}
+    try { npc.recordPlayerAction('pickpocket_caught', 'negative'); } catch (eR3) {}
+    var city = (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || cd.location || '';
+    if (city && typeof window.reduceReputation === 'function') { try { window.reduceReputation(city, 30); } catch (eRep) {} }
+    var fine = 30, paid = true;
+    if (window.DataManager && typeof window.DataManager.deductSpiritStones === 'function') paid = window.DataManager.deductSpiritStones(fine);
+    if (!paid) cd.notoriety += 3;
+    showMessage('🚨 人赃并获！' + npc.name + ' 一把攥住你的手腕，围观的人指指点点——' + (city ? city + '声望-30，' : '') + (paid ? ('罚金 ' + fine + ' 灵石') : ('拿不出罚金，罪加一等（恶名再+3）')) + '。（恶名+5，业障+3，好感-25，TA记恨你了）', 'error');
+    return false;
+}
+window.executePickpocket = executePickpocket;
 
 // ==================== v10.0 NPC目标与需求系统 ====================
 // NPC每阶段拥有1个主要目标，玩家可帮助/阻碍/利用/无视

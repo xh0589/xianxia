@@ -102,7 +102,7 @@
                     <!-- 第三列：灵根系统 -->
                     <div class="bg-gray-700/30 p-4 rounded-lg border border-gray-600 flex flex-col">
                         <h2 class="text-lg font-bold text-yellow-500 mb-2 border-b border-gray-600 pb-2">先天灵根 (总和严格100%)</h2>
-                        <p class="text-xs text-gray-400 mb-4">拖动滑块分配占比，或在下方直接输入数字。属性为0时无法觉醒变异灵根。</p>
+                        <p class="text-xs text-gray-400 mb-4">拖动滑块、点击色条快速 ±5%（Shift 点击为减）、或在下方直接输入数字。属性为0时无法觉醒变异灵根。</p>
                         
                         <div class="root-slider-container" id="root-slider">
                             <div class="root-segment bg-metal" id="seg-metal">金</div>
@@ -121,7 +121,7 @@
                             <div class="bg-gray-800 p-3 rounded border border-gray-700 relative overflow-hidden">
                                 <div class="absolute left-0 top-0 bottom-0 w-1 bg-yellow-500"></div>
                                 <div class="flex justify-between items-center mb-2">
-                                    <span class="font-bold text-yellow-500">金灵根</span>
+                                    <span class="ml-[25%] font-bold text-yellow-500">金灵根</span>
                                     <div class="flex items-center">
                                         <input type="number" id="input-metal" class="root-input w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-center text-yellow-400 font-bold" data-index="0">
                                         <span class="ml-1 text-gray-400">%</span>
@@ -136,7 +136,7 @@
                             <div class="bg-gray-800 p-3 rounded border border-gray-700 relative overflow-hidden">
                                 <div class="absolute left-0 top-0 bottom-0 w-1 bg-green-500"></div>
                                 <div class="flex justify-between items-center mb-2">
-                                    <span class="font-bold text-green-500">木灵根</span>
+                                    <span class="ml-[25%] font-bold text-green-500">木灵根</span>
                                     <div class="flex items-center">
                                         <input type="number" id="input-wood" class="root-input w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-center text-green-400 font-bold" data-index="1">
                                         <span class="ml-1 text-gray-400">%</span>
@@ -151,7 +151,7 @@
                             <div class="bg-gray-800 p-3 rounded border border-gray-700 relative overflow-hidden">
                                 <div class="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>
                                 <div class="flex justify-between items-center mb-2">
-                                    <span class="font-bold text-blue-500">水灵根</span>
+                                    <span class="ml-[25%] font-bold text-blue-500">水灵根</span>
                                     <div class="flex items-center">
                                         <input type="number" id="input-water" class="root-input w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-center text-blue-400 font-bold" data-index="2">
                                         <span class="ml-1 text-gray-400">%</span>
@@ -165,24 +165,28 @@
                             <!-- 火 -->
                             <div class="bg-gray-800 p-3 rounded border border-gray-700 relative overflow-hidden">
                                 <div class="absolute left-0 top-0 bottom-0 w-1 bg-red-500"></div>
-                                <div class="flex justify-between items-center">
-                                    <span class="font-bold text-red-500">火灵根</span>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="ml-[25%] font-bold text-red-500">火灵根</span>
                                     <div class="flex items-center">
                                         <input type="number" id="input-fire" class="root-input w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-center text-red-400 font-bold" data-index="3">
                                         <span class="ml-1 text-gray-400">%</span>
                                     </div>
                                 </div>
+                                <!-- UI评审·B2（2026-10-01）：金木水三卡各有变异行、火土没有，五卡
+                                     高低不齐。补同高占位行（非交互，纯对齐），别让下两张卡浮上来。 -->
+                                <p class="text-sm text-gray-600 select-none" aria-hidden="true">火土之性厚重，无变异支脉</p>
                             </div>
                             <!-- 土 -->
                             <div class="bg-gray-800 p-3 rounded border border-gray-700 relative overflow-hidden">
                                 <div class="absolute left-0 top-0 bottom-0 w-1 bg-amber-700"></div>
-                                <div class="flex justify-between items-center">
-                                    <span class="font-bold text-amber-600">土灵根</span>
+                                <div class="flex justify-between items-center mb-2">
+                                    <span class="ml-[25%] font-bold text-amber-600">土灵根</span>
                                     <div class="flex items-center">
                                         <input type="number" id="input-earth" class="root-input w-16 bg-gray-900 border border-gray-600 rounded px-2 py-1 text-center text-amber-500 font-bold" data-index="4">
                                         <span class="ml-1 text-gray-400">%</span>
                                     </div>
                                 </div>
+                                <p class="text-sm text-gray-600 select-none" aria-hidden="true">火土之性厚重，无变异支脉</p>
                             </div>
                         </div>
                     </div>
@@ -223,14 +227,9 @@
                 <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="quests" onclick="switchPanel('quests')">
                     <span class="text-lg mr-3">📋</span>任务
                 </div>
-                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="factions" onclick="switchPanel('factions')">
-                    <span class="text-lg mr-3">🏴</span>势力
-                </div>
+                <div class="nav-group-h px-4 pt-3 pb-1 text-[10px] tracking-widest text-gray-500 select-none">行走江湖</div>
                 <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="beasts" onclick="switchPanel('beasts')">
                     <span class="text-lg mr-3">🐾</span>灵兽
-                </div>
-                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="achievements" onclick="switchPanel('achievements')">
-                    <span class="text-lg mr-3">🏅</span>成就
                 </div>
                 <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="house" onclick="switchPanel('house')">
                     <span class="text-lg mr-3">🏡</span>洞府
@@ -241,13 +240,27 @@
                 <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="activities" onclick="switchPanel('activities')">
                     <span class="text-lg mr-3">🎣</span>活动
                 </div>
+                <!-- UI评审·A2（2026-10-01）：长尾四项默认折叠「更多 ▾」——14 项平铺一屏
+                     竖列过深（1440×900 下第 11 项起被折出首屏）。核心六项+常用四项直达，
+                     势力/成就/日程/设置是低频「看一眼」型面板，收进折叠；展开态记 localStorage。 -->
+                <div id="nav-more-toggle" class="nav-item nav-more-toggle flex items-center px-4 py-3 border-l-4 border-transparent text-gray-400" onclick="toggleNavMore()" role="button" tabindex="0" aria-expanded="false" aria-controls="nav-more-group" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleNavMore();}">
+                    <span class="text-lg mr-3">⭐</span>更多<i class="nav-more-caret ml-auto text-xs">▸</i>
+                </div>
+                <div id="nav-more-group" class="nav-more-folded">
+                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="factions" onclick="switchPanel('factions')">
+                    <span class="text-lg mr-3">🏴</span>势力
+                </div>
+                <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="achievements" onclick="switchPanel('achievements')">
+                    <span class="text-lg mr-3">🏅</span>成就
+                </div>
                 <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="calendar" onclick="switchPanel('calendar')">
                     <span class="text-lg mr-3">📅</span>日程
                 </div>
                 <div class="nav-item flex items-center px-4 py-3 border-l-4 border-transparent text-gray-300" data-panel="settings" onclick="switchPanel('settings')">
                     <span class="text-lg mr-3">⚙️</span>设置
                 </div>
-            </nav>
+                </div>
+</nav>
         </div>
 
         <!-- 主内容区域 -->
@@ -1431,8 +1444,9 @@
                                 <button onclick="openCodexPanel()" class="text-xs px-3 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600">📚 图鉴与新手引导</button>
                                 <button onclick="openWorldJournalPanel()" class="text-xs px-3 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600">🗞️ 世界大事记</button>
                                 <button onclick="showChoiceHistory()" class="text-xs px-3 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600">📜 回望此生 · 选择记忆</button>
+                                <button onclick="openBiographyPanel()" class="text-xs px-3 py-1 rounded border bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600">📖 我的生平 · 传记与称号</button>
                             </div>
-                            <p class="text-xs text-gray-600 mt-1">图鉴收录灵兽、秘境与世界大事，还有气运、名望等机制速览；回望此生能看到你的每一笔抉择如何被记录。</p>
+                            <p class="text-xs text-gray-600 mt-1">图鉴收录灵兽、秘境与世界大事，还有气运、名望等机制速览；回望此生能看到你的每一笔抉择如何被记录；我的生平会把你的修行编成一本书，事迹解锁的称号可佩戴（打开时现编，平时不占气力）。</p>
                         </div>
                     </div>
                     <label class="flex items-center justify-between text-sm text-gray-300 cursor-pointer">
@@ -2255,6 +2269,24 @@
     <script defer src="js/extensions/cave-facilities.js"></script>
     <script defer src="js/extensions/codex-tutorial.js"></script>
     <script defer src="js/extensions/cave-life.js"></script>
+    <script defer src="js/extensions/fengshui.js"></script>
+    <!-- v25.6 玩家心愿批（第一百四十八批）：望风榜/生平传记/洞府会客/洞府守卫战/押货跑商 -->
+    <script defer src="js/extensions/jianghu-rank.js"></script>
+    <script defer src="js/extensions/biography.js"></script>
+    <script defer src="js/extensions/cave-reception.js"></script>
+    <script defer src="js/extensions/cave-siege.js"></script>
+    <script defer src="js/economy/caravan-trade.js"></script>
+    <!-- v25.7 市井烟火批（第一百四十九批）：市井总门/街头闲逛/澡堂/下馆子/赌坊/书肆/施舍（丐帮眼线） -->
+    <script defer src="js/city-facilities/street-life.js"></script>
+    <script defer src="js/city-facilities/bathhouse.js"></script>
+    <script defer src="js/city-facilities/eatery.js"></script>
+    <script defer src="js/city-facilities/gamble-den.js"></script>
+    <script defer src="js/city-facilities/bookshop.js"></script>
+    <script defer src="js/city-facilities/beggar-alms.js"></script>
+    <!-- v25.8 黑道与人情批（第一百五十批）：威胁·抢劫·通缉追捕·钱庄柜娘·职业黑面 / 街面人物志·打劫街坊 / 还物·邀约·打听·请客·雇镖·占卜·托付秘密·拜师 -->
+    <script defer src="js/npcs/npc-crime.js"></script>
+    <script defer src="js/city-facilities/citizen-life.js"></script>
+    <script defer src="js/npcs/npc-bond.js"></script>
     <script defer src="js/extensions/player-sect.js"></script>
     <script defer src="js/extensions/player-sect-ui.js"></script>
     <script defer src="js/extensions/player-sect-bootstrap.js"></script>

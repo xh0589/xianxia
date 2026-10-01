@@ -458,6 +458,10 @@ function useItem(uid) {
                 return true;
             }
             break;
+        case 'quest':
+            // v25.4 玩家乐趣闭环批：任务物品有了第一个真用途——地图残片三片拼藏宝图（其余任务物照旧只可携带）
+            if (template.subtype === 'map') return assembleTreasureMap();
+            break;
         case 'secret_art':
             // 学习秘籍：只有成功且消耗时才扣除
             var result = learnSecretArt(slot, template);
@@ -469,9 +473,66 @@ function useItem(uid) {
             }
             return true;
     }
-    
+
     return false;
 }
+
+// ============ v25.4 玩家乐趣闭环批：地图残片拼藏宝图 ============
+// spec_map_fragment 此前有两处获取点（异闻馆抄战场舆图、宫城秘库探库）却全仓零消费点——
+// 玩家攒了就是死物品（FIX_NOTES 试玩批立案）。现在三片可在行囊拼成完整藏宝图，
+// 即日按图寻宝：多半挖出真藏，偶尔只挖个空坑。
+var TREASURE_MAP_FRAGMENT_NEED = 3;
+function assembleTreasureMap() {
+    var total = 0, fragSlots = [];
+    inventory.slots.forEach(function (s) {
+        if (s && s.templateId === 'spec_map_fragment') { total += (s.count || 0); fragSlots.push(s); }
+    });
+    if (total < TREASURE_MAP_FRAGMENT_NEED) {
+        if (typeof window.showMessage === 'function') window.showMessage('🗺️ 地图残片只有 ' + total + ' 片，凑不齐 ' + TREASURE_MAP_FRAGMENT_NEED + ' 片，拼不成整图。（传闻异闻馆的战场舆图、各处宫城秘库里藏着旧图）', 'info');
+        return false;
+    }
+    // 吃掉三片
+    var need = TREASURE_MAP_FRAGMENT_NEED;
+    for (var i = 0; i < fragSlots.length && need > 0; i++) {
+        var take = Math.min(need, fragSlots[i].count || 0);
+        _slotRemoveCount(fragSlots[i], take);
+        if (fragSlots[i].count <= 0) inventory.slots[inventory.slots.indexOf(fragSlots[i])] = null;
+        need -= take;
+    }
+    if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') window.timeSystem.advanceTime(240, '按图寻宝');
+    var cd = window.currentCharData;
+    var roll = Math.random();
+    var _addStones = function (n) {
+        // 灵石真源：行囊钱袋落账、角色数据镜像——与 sect-resource-actions._gainStones 同一口径，不另开双轨
+        if (window.inventory && window.inventory.currency) {
+            window.inventory.currency.spiritStones = (window.inventory.currency.spiritStones || 0) + n;
+            if (cd) cd.spiritStones = window.inventory.currency.spiritStones;
+        } else if (cd) {
+            cd.spiritStones = (cd.spiritStones || 0) + n;
+        }
+        if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI();
+    };
+    if (roll < 0.55) {
+        var stones = 150 + Math.floor(Math.random() * 150);
+        _addStones(stones);
+        // DES-72 同族：addItem 报的是行囊实收数，回执照实收说
+        var gotEssence = (typeof window.addItem === 'function') ? (Number(window.addItem('mat_five_element_essence', 1)) || 0) : 0;
+        if (typeof window.showMessage === 'function') window.showMessage(gotEssence > 0
+            ? '🗺️ 三片残图对上了，山川走势一目了然。你按图掘出一只蒙尘的旧箱：灵石+' + stones + '，箱底还压着一瓶五行精华！'
+            : '🗺️ 三片残图对上了，山川走势一目了然。你按图掘出一只蒙尘的旧箱：灵石+' + stones + '。箱底本该还有一瓶五行精华——' + ((typeof window.addItemFailPhrase === 'function' && window.addItemFailPhrase('五行精华')) || '它留在了箱底'), gotEssence > 0 ? 'success' : 'warning');
+    } else if (roll < 0.85) {
+        var small = 40 + Math.floor(Math.random() * 60);
+        _addStones(small);
+        if (typeof window.showMessage === 'function') window.showMessage('🗺️ 按图寻到地方，土却已被前人翻走了大半，只在坑角摸出一只被遗忘的钱袋：灵石+' + small + '。', 'success');
+    } else {
+        if (cd) { cd.qi = Math.max(0, (cd.qi || 0) - 15); cd.tempering = (cd.tempering || 0) + 8; }
+        if (typeof window.showMessage === 'function') window.showMessage('🗺️ 图上所指早被山洪改道，你白挖了半日空坑（真气-15，历练+8）——好歹认图的手熟了。', 'warning');
+        if (typeof window.updateCharacterStatus === 'function') window.updateCharacterStatus();
+    }
+    if (typeof updateInventoryUI === 'function') updateInventoryUI();
+    return true;
+}
+window.assembleTreasureMap = assembleTreasureMap;
 
 // ============ 应用消耗品效果 ============
 function applyConsumableEffect(item, template) {
@@ -1408,6 +1469,11 @@ function showItemMenu(uid) {
         
         if (template.type === 'secret_art') {
             actions += `<button onclick="useItem('${uid}'); this.closest('.fixed').remove();" class="bg-purple-600 hover:bg-purple-500 px-4 py-2 rounded text-white">学习</button>`;
+        }
+
+        // v25.4：地图残片给专属「拼藏宝图」入口（任务物品此前无任何可用按钮，攒了残片也是死物）
+        if (template.id === 'spec_map_fragment') {
+            actions += `<button onclick="assembleTreasureMap(); this.closest('.fixed').remove();" class="bg-amber-600 hover:bg-amber-500 px-4 py-2 rounded text-white">🗺️ 拼藏宝图</button>`;
         }
         
         // 丢弃按钮（除了任务物品）

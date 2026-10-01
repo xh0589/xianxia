@@ -268,7 +268,7 @@ facilityAugment('black_market', {
                         prob: 0.7,
                         win: { karma: -4, noto: 2, fence: { op: 'deal', min: -1 }, msg: '玉佩在当街当行出手，买主没多问。分赃点清，按本城行情折算成灵石——货头满意，暗巷里记你一笔能做成买卖的脸。', msgType: 'warning',
                             stones: function () { return Math.round(90 * facilitySellMod()); } },
-                        lose: { qi: -20, karma: -4, noto: 5, fence: { op: 'trust', delta: -1 }, msg: '巡夜的从巷口包抄过来，你翻了两道墙甩掉人，袖囊被抓裂。玉佩没销成，黑市里却传开了：“那姓×的，官府盯着，带累。”——办砸的买卖，信用簿上也记一笔。', msgType: 'warning' }
+                        lose: { qi: -20, karma: -4, noto: 5, fence: { op: 'trust', delta: -1 }, msg: '巡夜的从巷口包抄过来，你翻了两道墙甩掉人，袖囊被抓裂。玉佩没销成，黑市里却传开了：“那个外乡客，官府盯着，带累。”——办砸的买卖，信用簿上也记一笔。', msgType: 'warning' }
                     } } },
                 { text: '🚫 这种钱不赚', next: null }
             ]

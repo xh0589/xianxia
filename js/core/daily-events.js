@@ -363,6 +363,8 @@ var DAILY_EVENT_LIST = [
                 text: '拱手打招呼',
                 effect: function() {
                     var noto = (window.currentCharData && window.currentCharData.notoriety) || 0;
+                    // v25.8 黑道批：通缉之身，兵丁的眼神完全不同——盘查按加档恶名走（npc-crime.js 守卫接线，不在位按原恶名）
+                    try { if (window.NpcCrime && typeof window.NpcCrime.patrolBoost === 'function') noto = window.NpcCrime.patrolBoost(noto); } catch (eNpB) { console.warn('[静默失败] js/core/daily-events.js · night_patrol：通缉加档没算成，按原恶名盘查', eNpB && eNpB.message); }
                     var r = (typeof window.patrolConsequence === 'function') ? window.patrolConsequence(noto) : { action: 'none' };
                     if (r.action === 'none' && noto <= 25) {
                         _deMsg('兵丁点头：「夜里不太平，少主早些归歇。」', 'success');
@@ -398,6 +400,8 @@ var DAILY_EVENT_LIST = [
                 text: '侧身避开',
                 effect: function() {
                     var noto = (window.currentCharData && window.currentCharData.notoriety) || 0;
+                    // v25.8 黑道批：通缉之身躲夜巡，兵丁追得比谁都紧（与 greet 同一把加档尺）
+                    try { if (window.NpcCrime && typeof window.NpcCrime.patrolBoost === 'function') noto = window.NpcCrime.patrolBoost(noto); } catch (eNpB2) { console.warn('[静默失败] js/core/daily-events.js · night_patrol：通缉加档没算成，按原恶名盘查', eNpB2 && eNpB2.message); }
                     if (noto > 60) {
                         _deMsg('你一进小巷，身后灯笼齐刷刷转过来——「那个站住！」夜巡最恨躲的。你绕了三条街才甩脱，巡逻队记了脸：躲夜巡等于心虚。', 'warning');
                         if (window.currentCharData) window.currentCharData.notoriety = Math.min(100, noto + 1);

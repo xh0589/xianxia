@@ -643,3 +643,35 @@
     line-height: var(--x-lh-tight);
     color: var(--x-muted);
 }
+
+/* ===== UI评审·B4（2026-09-30）：图例折叠 ===== */
+.x-map-legend-folded { display: none; }
+.x-map-legend-caret { font-style: normal; margin-left: 0.3em; opacity: 0.6; display: inline-block; width: 0.8em; }
+#x-map-legend-toggle { cursor: pointer; user-select: none; -webkit-user-select: none; }
+#x-map-legend-toggle:hover .x-map-legend-h,
+#x-map-legend-toggle:focus-visible .x-map-legend-h { color: #fbbf24; }
+#x-map-legend-toggle:focus-visible { outline: 1px solid #fbbf24; outline-offset: 2px; border-radius: 3px; }
+
+/* ===== UI评审·B4-3（2026-10-01）：你在此脉冲 + 城点对比度 ===== */
+/* 1) 脉冲：TA 在 world-map.js:405 挂了 world-here-pulse class 但全库无 CSS 消费它——
+      意图停在案头。这里补上呼吸动画：外环缓胀缓隐，让「你在此」读成活状态而非死标记。
+      transform-box:fill-box 是 SVG 圆心缩放的前提（默认按 viewBox 原点缩，环会飘走）。 */
+#world-map .world-here-pulse {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: x-wm-pulse 2.4s ease-in-out infinite;
+}
+@keyframes x-wm-pulse {
+    0%, 100% { transform: scale(1);   opacity: 0.65; }
+    50%      { transform: scale(1.55); opacity: 0.12; }
+}
+@media (prefers-reduced-motion: reduce) {
+    #world-map .world-here-pulse { animation: none; }
+}
+/* 2) 城点对比度：.map-city 圆点原先裸 fill、无描边——金/灰/绿点漂在海色底上发虚。
+      加一圈与文字 stroke 同色的深描边（点位分类仍由 fill 色承担，描边只管「从底上浮起来」）。
+      不动 .map-sect：门派白环 stroke:#fff 2px 已够对比，再叠会糊。 */
+#world-map .map-city circle {
+    stroke: rgba(10, 14, 22, 0.85);
+    stroke-width: 1.5;
+}

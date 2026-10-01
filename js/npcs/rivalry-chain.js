@@ -76,7 +76,7 @@ function loadRevengeCd() {
     try { return JSON.parse(localStorage.getItem(CD_KEY) || '{}') || {}; } catch (e) { return {}; }
 }
 function saveRevengeCd(cd) {
-    try { localStorage.setItem(CD_KEY, JSON.stringify(cd || {})); } catch (e) { console.warn('[静默失败] js/npcs/rivalry-chain.js:79 · 宿敌链存档：这一笔存档没接住，玩家会察觉的损失在此', e && e && e.message); }
+    try { if (window.saveToStorage) { if (!window.saveToStorage(CD_KEY, JSON.stringify(cd || {}))) throw new Error(CD_KEY + ' 未落盘'); } else localStorage.setItem(CD_KEY, JSON.stringify(cd || {})); } catch (e) { console.warn('[静默失败] js/npcs/rivalry-chain.js:79 · 宿敌链存档：这一笔存档没接住，玩家会察觉的损失在此', e && e && e.message); }
 }
 function currentDayNum() {
     var t = window.timeSystem;

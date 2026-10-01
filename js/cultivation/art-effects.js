@@ -368,6 +368,9 @@
 
     var api = {
         summarize: summarize,
+        // v25.4：把 effect 字符串解析器露出去——功法融合要按同一口径读双亲效果再回写标准句，
+        // 不允许第二把解析尺（融合出的效果串必须保证本模块读得回来）
+        parseSkillEffect: _parseSkillEffect,
         combatBonus: combatBonus,
         attrBonus: attrBonus,
         weaponPct: weaponPct,

@@ -15,9 +15,14 @@ scenarioEngine.register('money_house', {
         nodes: {
             loan_start: {
                 desc: function () {
-                    return (window.BankService && typeof window.BankService.describe === 'function')
+                    // v25.8 黑道批：柜台后那位不再是文案摆设——每城一张熟面孔（npc-crime.js 柜娘账），闭门期也如实播报
+                    var base = (window.BankService && typeof window.BankService.describe === 'function')
                         ? window.BankService.describe()
                         : '钱庄掌柜热情招呼："客官存灵石月息五、随存随取，抵押公道，借贷也便。"';
+                    try {
+                        if (window.NpcCrime && typeof window.NpcCrime.tellerDescribe === 'function') base += window.NpcCrime.tellerDescribe();
+                    } catch (eT) { console.warn('[静默失败] js/city-facilities/facility-batch2.js · money_house：柜娘没站进柜台——牌面话照旧', eT && eT.message); }
+                    return base;
                 },
                 choices: [
                     { text: '📦 当一件龙鳞甲换灵石（250，卖断）', next: null, require: { items: { itemId: 'mat_dragon_scale', count: 1 } }, effects: { msg: '掌柜验了货："龙鳞甲是真货，行价250灵石，卖断不赎。"鳞甲锁进了柜台，灵石落进你的口袋。', msgType: 'success', stones: 250, take: [{ itemId: 'mat_dragon_scale', count: 1 }], time: 10 } },
@@ -26,6 +31,7 @@ scenarioEngine.register('money_house', {
                     { text: '🧳 取出存款（利息一并结清）', next: null, effects: { bank: { op: 'withdraw' }, time: 5 } },
                     { text: '💳 借贷灵石（欠条会传出去）', next: 'loan_borrow', effects: { time: 5 } },
                     { text: '🧾 还清欠柜上的账', next: null, effects: { bank: { op: 'repay' }, time: 10 } },
+                    { text: '🔪 柜台后的姑娘……（威胁她出卖钱庄）', next: null, hint: '大罪', effects: { teller: { op: 'coerce' } } },
                     { text: '👋 暂时不需要', next: null }
                 ]
             },

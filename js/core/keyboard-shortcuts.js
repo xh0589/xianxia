@@ -45,7 +45,7 @@ function setShortcutsEnabled(on) {
     var s = {};
     try { s = JSON.parse(localStorage.getItem('xianxia_settings') || '{}') || {}; } catch (e) {}
     s.shortcutsEnabled = !!on;
-    try { localStorage.setItem('xianxia_settings', JSON.stringify(s)); } catch (e) {}
+    try { if (window.saveToStorage) window.saveToStorage('xianxia_settings', JSON.stringify(s)); else localStorage.setItem('xianxia_settings', JSON.stringify(s)); } catch (e) {}
     if (window._settings) window._settings.shortcutsEnabled = !!on;
     var cb = document.getElementById('setting-shortcuts');
     if (cb) cb.checked = !!on;

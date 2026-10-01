@@ -236,7 +236,10 @@ function initPartySystem() {
 
 // ============ 保存队伍数据 ============
 function savePartyData() {
-    localStorage.setItem('xianxia_party_data', JSON.stringify(partyData));
+    // v25.3（存档写失败可见批）：原为裸 setItem，接进单一 owner saveToStorage；夹具无 owner 走原路。
+    try {
+        if (window.saveToStorage) { if (!window.saveToStorage('xianxia_party_data', JSON.stringify(partyData))) throw new Error('xianxia_party_data' + ' 未落盘'); } else localStorage.setItem('xianxia_party_data', JSON.stringify(partyData));
+    } catch (e) { console.warn('[静默失败] js/party-system.js · 队伍存档：编队与队员没写进本地存储，读档后队伍散伙', e && e.message); }
 }
 
 // ============ 第一百一十波 · NEW-98：存档桥的真接口（就地灌，不重绑） ============

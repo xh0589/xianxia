@@ -156,6 +156,9 @@
         var btn = 'class="w-full p-3 rounded mb-2 text-left text-sm text-white hover:opacity-90"';
         var html = '<p class="text-sm text-gray-400 mb-2">茶炉正旺，说书声慢——茶馆里有的是打发时辰的法子：</p>' +
             '<button onclick="TeaHouseLeisure.act(\'story\')" ' + btn.replace('p-3', 'bg-emerald-700 p-3') + '>📖 听说书（10 灵石 · 听近日江湖传闻）</button>' +
+            (typeof window.openJianghuRank === 'function'
+                ? '<button onclick="window.openJianghuRank()" ' + btn.replace('p-3', 'bg-amber-900 p-3') + '>🎋 打听望风榜（口头天骄排名 · 风声不要钱，分文不收）</button>'
+                : '') +
             '<button onclick="TeaHouseLeisure.act(\'tea\')" ' + btn.replace('p-3', 'bg-emerald-900 p-3') + '>🫖 大厅粗茶（3 铜钱 · 精力+15 心境+6，坐半个时辰）</button>' +
             '<button onclick="TeaHouseLeisure.act(\'room\')" ' + btn.replace('p-3', 'bg-teal-800 p-3') + '>🎋 雅座好茶（2 灵石 · 精力+40 真气+20 心境+10，静坐一个时辰）</button>' +
             '<button onclick="TeaHouseLeisure.act(\'go\')" ' + btn.replace('p-3', 'bg-amber-800 p-3') + '>♟️ 与茶客对弈一局（彩头 10 铜钱 · 赢了双倍奉还，棋力吃学识）</button>' +

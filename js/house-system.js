@@ -41,9 +41,9 @@ function importHouseState(data) {
     _normalizeCaveSite();   // 第一百零三波：轮回/转档进来也把坐落认到洞天上
     window.playerHouse = playerHouse;
     try {
-        if (playerHouse) localStorage.setItem('xianxia_house', JSON.stringify(playerHouse));
+        if (playerHouse) { if (window.saveToStorage) { if (!window.saveToStorage('xianxia_house', JSON.stringify(playerHouse))) throw new Error('xianxia_house' + ' 未落盘'); } else localStorage.setItem('xianxia_house', JSON.stringify(playerHouse)); }
         else localStorage.removeItem('xianxia_house');
-    } catch (e) {}
+    } catch (e) { console.warn('[静默失败] js/house-system.js · 洞府存档（导入口）：这一笔没接住，读档后洞府打回原形', e && e.message); }
     if (typeof applyHouseStorageBonus === 'function') applyHouseStorageBonus();
     _syncCaveLevel();
 }
@@ -63,7 +63,7 @@ function initHouseSystem() {
 }
 
 function saveHouseData() {
-    try { localStorage.setItem('xianxia_house', JSON.stringify(playerHouse)); } catch (e) { console.warn('[静默失败] js/house-system.js:66 · 洞府存档：这一笔存档没接住，玩家会察觉的损失在此', e && e && e.message); }
+    try { if (window.saveToStorage) { if (!window.saveToStorage('xianxia_house', JSON.stringify(playerHouse))) throw new Error('xianxia_house' + ' 未落盘'); } else localStorage.setItem('xianxia_house', JSON.stringify(playerHouse)); } catch (e) { console.warn('[静默失败] js/house-system.js:66 · 洞府存档：这一笔存档没接住，玩家会察觉的损失在此', e && e && e.message); }
     window.playerHouse = playerHouse;
 }
 
@@ -498,6 +498,10 @@ function getHouseBonus(bonusType) {
         if (_ley && _ley.kind === bonusType) {
             if (bonusType === 'cultivation') result *= (1 + (_ley.pct || 0) / 100);
             else result += (_ley.pct || 0) / 100;
+        }
+        // v25.5 风水布置：静室八方位的吉煞收口——摆件合气则修炼提速，摆煞了倒扣（账在 fengshui.js）
+        if (bonusType === 'cultivation' && typeof window.getFengshuiMul === 'function') {
+            result *= (Number(window.getFengshuiMul()) || 1);
         }
     } catch (eBuff) {}
     return result;

@@ -77,7 +77,7 @@ function enhanceSuccess(type) {
 }
 
 function savePityData() {
-    try { localStorage.setItem('xianxia_enhancement_pity', JSON.stringify(enhancementPity)); } catch (e) { console.warn('[静默失败] js/enhancement.js:80 · 强化保底存档：这一笔存档没接住，玩家会察觉的损失在此', e && e && e.message); }
+    try { if (window.saveToStorage) { if (!window.saveToStorage('xianxia_enhancement_pity', JSON.stringify(enhancementPity))) throw new Error('xianxia_enhancement_pity' + ' 未落盘'); } else localStorage.setItem('xianxia_enhancement_pity', JSON.stringify(enhancementPity)); } catch (e) { console.warn('[静默失败] js/enhancement.js:80 · 强化保底存档：这一笔存档没接住，玩家会察觉的损失在此', e && e && e.message); }
 }
 
 function loadPityData() {

@@ -15,7 +15,13 @@ var BOUNTY_TEMPLATES = [
     { id: 'bty_5', title: '荡平魔窟', desc: '深入魔窟，斩杀 20 只任意敌人。', count: 20, stones: 1200, items: [{ itemId: 'mat_chaos_stone', count: 2 }] }
 ];
 
-var _board = null; // [{id,title,desc,count,stones,items,progress,accepted,completed,claimed}]
+var _board = null; // [{id,title,desc,count,stones,items,progress,accepted,completed,claimed,rival,rivalProgress,snatched}]
+
+// v25.5 抢单竞争（第一百四十七批 · 玩法立项批）：旧榜每日整版重刷、悬赏永远等着你——
+// 「手慢无」只是说说。现在未接取的榜上有真对手：每日按各自脚程推进猎杀，猎完就把单子抢走；
+// 已接取的照旧归你（先来后到，接了对手就撤）。被抢/已领的空位随每日刷新补新单。
+var RIVAL_NAMES = ['铁面客', '独臂刀娘', '赏金猎户', '青衣剑奴', '夜枭', '独行客'];
+var _uidSeq = 0;
 
 function _today() {
     try {
@@ -41,25 +47,38 @@ function bountyRealmMul() {
 window.bountyRealmMul = bountyRealmMul;
 
 // 随机抽 3 个不同模板生成悬赏榜
-function generateBountyBoard() {
-    var pool = BOUNTY_TEMPLATES.slice();
-    var picked = [];
+function _generateOne(excludeBaseIds) {
     var mul = bountyRealmMul();
-    for (var i = 0; i < 3 && pool.length; i++) {
-        var idx = Math.floor(Math.random() * pool.length);
-        var t = pool.splice(idx, 1)[0];
-        picked.push({
-            id: t.id + '_' + _today(), // 每日唯一
-            title: t.title,
-            desc: t.desc + (mul > 1 ? '（高阶悬赏，赏金随境界上浮）' : ''),
-            count: t.count,
-            stones: t.stones * mul,
-            items: t.items,
-            progress: 0,
-            accepted: false,
-            completed: false,
-            claimed: false
-        });
+    var pool = BOUNTY_TEMPLATES.filter(function (t) { return !excludeBaseIds || excludeBaseIds.indexOf(t.id) < 0; });
+    if (!pool.length) pool = BOUNTY_TEMPLATES.slice();
+    var t = pool[Math.floor(Math.random() * pool.length)];
+    _uidSeq += 1;
+    return {
+        id: t.id + '_' + _today() + '_' + _uidSeq, // 每日唯一（补位单同模板同日也不撞号）
+        tplId: t.id,
+        title: t.title,
+        desc: t.desc + (mul > 1 ? '（高阶悬赏，赏金随境界上浮）' : ''),
+        count: t.count,
+        stones: t.stones * mul,
+        items: t.items,
+        progress: 0,
+        accepted: false,
+        completed: false,
+        claimed: false,
+        // 竞争对手：脚程 25%~70%/日——快刀客两三日内就能把单抢走
+        rival: { name: RIVAL_NAMES[Math.floor(Math.random() * RIVAL_NAMES.length)], rate: 0.25 + Math.random() * 0.45 },
+        rivalProgress: 0,
+        snatched: false
+    };
+}
+
+function generateBountyBoard() {
+    var picked = [];
+    var used = [];
+    for (var i = 0; i < 3; i++) {
+        var b = _generateOne(used);
+        used.push(b.tplId);
+        picked.push(b);
     }
     _board = picked;
     return _board;
@@ -76,8 +95,13 @@ function acceptBounty(idx) {
         if (window.showMessage) window.showMessage('该悬赏已接取或不存在。', 'info');
         return false;
     }
+    // v25.5 抢单：对手已经猎完的单，接不了——手慢无
+    if (b.snatched) {
+        if (window.showMessage) window.showMessage('手慢无——「' + ((b.rival && b.rival.name) || '同行') + '」已把「' + b.title + '」抢了先。', 'warning');
+        return false;
+    }
     b.accepted = true;
-    if (window.gameLog && window.gameLog.add) window.gameLog.add('📜 接取悬赏「' + b.title + '」：' + b.desc, 'info');
+    if (window.gameLog && window.gameLog.add) window.gameLog.add('📜 接取悬赏「' + b.title + '」：' + b.desc + '（已接的单对手即撤——先来后到）', 'info');
     if (window.showMessage) window.showMessage('已接取悬赏「' + b.title + '」。', 'success');
     // 第九十五波·NEW-05：接取成功即重绘榜单——旧版不重绘，按钮仍显示「接取」、
     // 已接的两条也不见「进度 0/N」，玩家只能关掉重开悬赏榜才看得清
@@ -140,16 +164,28 @@ function _onEnemyDefeated() {
     } catch (e) {}
 }
 
-// 每日刷新：重置未接取的悬赏（保留已接取未完成的）
+// 每日刷新（v25.5 改版）：对手先推进——未接取的悬赏每日被竞争者按脚程猎杀，猎完即被抢走；
+// 已领取/被抢的摘榜，空位补新单；已接取的照旧保留（接了对手就撤，无时限）
 function dailyBountyRefresh() {
     try {
         if (!_board) { generateBountyBoard(); return; }
-        // 全部已领/无未接取 → 重新生成
-        var hasActive = _board.some(function (b) { return b.accepted && !b.claimed; });
-        if (!hasActive) {
-            generateBountyBoard();
-            if (window.gameLog && window.gameLog.add) window.gameLog.add('📜 悬赏榜已刷新，3 条新悬赏待接取。', 'info');
+        _board.forEach(function (b) {
+            if (b.accepted || b.claimed || b.snatched || !b.rival) return;
+            b.rivalProgress = (b.rivalProgress || 0) + Math.max(1, Math.ceil(b.rival.rate * b.count));
+            if (b.rivalProgress >= b.count) {
+                b.snatched = true;
+                if (window.gameLog && window.gameLog.add) window.gameLog.add('⚡ 悬赏「' + b.title + '」被「' + b.rival.name + '」抢先猎完——手慢无。', 'warning');
+            }
+        });
+        _board = _board.filter(function (b) { return !b.claimed && !b.snatched; });
+        var used = _board.map(function (b) { return b.tplId; }).filter(Boolean);
+        while (_board.length < 3) {
+            var nb = _generateOne(used);
+            used.push(nb.tplId);
+            _board.push(nb);
         }
+        if (window.gameLog && window.gameLog.add) window.gameLog.add('📜 悬赏榜已刷新——榜上的单不止你盯着，脚程慢的会被抢。', 'info');
+        if (window.refreshBountyBoard) window.refreshBountyBoard();
     } catch (e) {}
 }
 
@@ -160,9 +196,14 @@ function refreshBountyBoard() {
     container.innerHTML = board.map(function (b, idx) {
         var state;
         if (b.claimed) state = '<span class="text-gray-500 text-xs">已领取</span>';
+        else if (b.snatched) state = '<span class="text-red-400 text-xs">被「' + ((b.rival && b.rival.name) || '同行') + '」抢了</span>';
         else if (b.completed) state = '<button onclick="claimBounty(' + idx + ')" class="bg-green-600 hover:bg-green-500 text-white text-xs font-bold px-3 py-1 rounded">🏆 领奖</button>';
         else if (b.accepted) state = '<span class="text-yellow-400 text-xs">进度 ' + b.progress + '/' + b.count + '</span>';
         else state = '<button onclick="acceptBounty(' + idx + ')" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 text-xs font-bold px-3 py-1 rounded">接取</button>';
+        // v25.5 抢单竞争：未接取的单亮出对手脚程——看着它一天天逼近，接不接自己掂量
+        var rivalTxt = (!b.accepted && !b.claimed && !b.snatched && b.rival)
+            ? '<div class="text-xs text-red-300/80 mt-1">⚔️ 「' + b.rival.name + '」也在猎这单，已斩 ' + Math.min(b.count - 1, b.rivalProgress || 0) + '/' + b.count + '——手慢无</div>'
+            : '';
         return '<div class="bg-gray-900/50 p-3 rounded border border-gray-700 mb-2">'
             + '<div class="flex justify-between items-center">'
             + '<div><span class="text-gray-200 font-bold text-sm">' + b.title + '</span> <span class="text-xs text-gray-400">· 斩' + b.count + '只</span></div>'
@@ -170,6 +211,7 @@ function refreshBountyBoard() {
             + '</div>'
             + '<div class="text-xs text-gray-400 mt-1">' + b.desc + '</div>'
             + '<div class="text-xs text-yellow-500 mt-1">奖励：灵石+' + b.stones + (b.items && b.items.length ? ' +材料' : '') + ' 声望+' + Math.floor(b.count / 2) + '</div>'
+            + rivalTxt
             + '</div>';
     }).join('');
 }
@@ -181,7 +223,7 @@ function openBountyBoard() {
     var html = '<div class="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4" id="bounty-board-modal">'
         + '<div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-md w-full" style="box-shadow:0 0 60px rgba(234,179,8,0.2)">'
         + '<h2 class="text-2xl font-bold text-yellow-500 mb-3">📜 江湖悬赏榜</h2>'
-        + '<p class="text-xs text-gray-400 mb-3">每日刷新的讨伐悬赏，奖励灵石+材料+声望。已接取的悬赏杀敌自动累计进度。</p>'
+        + '<p class="text-xs text-gray-400 mb-3">讨伐悬赏，奖励灵石+材料+声望。已接取的悬赏杀敌自动累计进度。榜上的单不止你盯着——对手每日都在猎，猎完就被抢走；接了的单对手即撤。</p>'
         + '<div id="bounty-board-list" class="space-y-2"></div>'
         + '<button onclick="document.getElementById(\'bounty-board-modal\').remove()" class="mt-3 w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 rounded">关闭</button>'
         + '</div></div>';

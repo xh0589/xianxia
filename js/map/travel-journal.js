@@ -169,12 +169,21 @@
         } catch (e) {}
     }
 
+    // v25.6 生平传记：编年卷要「初至一域」的真实日数——账主开一扇只读窗（hasMark 同款纯读路，
+    // 问不出账时不许凭空长出 _travel），外人不得直接翻账（全仓只有游历见闻自己伸手进 _travel 的老规矩）
+    function regionLog() {
+        const cd = charData();
+        if (!cd || !cd._travel || !cd._travel.regions || typeof cd._travel.regions !== 'object') return {};
+        return Object.assign({}, cd._travel.regions);
+    }
+
     window.TravelJournal = {
         noteRegion: noteRegion,
         noteLandmark: noteLandmark,
         noteStep: noteStep,
         markOnce: markOnce,
         hasMark: hasMark,
+        regionLog: regionLog,
         summary: summary,
         render: render,
         travelTitle: travelTitle,

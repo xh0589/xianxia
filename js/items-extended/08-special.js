@@ -4,7 +4,7 @@
 window.extendedSpecialItems = [
     { id: 'spec_token', name: '信物', type: 'quest', subtype: 'token', category: 'quest', quality: 'PIN9', level: 1, price: 0, stackable: true, maxStack: 10, desc: '身份信物', icon: '📜' },
     { id: 'spec_token_pass', name: '令牌', type: 'quest', subtype: 'token', category: 'quest', quality: 'PIN9', level: 1, price: 0, stackable: true, maxStack: 10, desc: '通行令牌', icon: '📜' },
-    { id: 'spec_map_fragment', name: '地图残片', type: 'quest', subtype: 'map', category: 'quest', quality: 'PIN8', level: 3, price: 0, stackable: true, maxStack: 10, desc: '藏宝图残片', icon: '🗺️' },
+    { id: 'spec_map_fragment', name: '地图残片', type: 'quest', subtype: 'map', category: 'quest', quality: 'PIN8', level: 3, price: 0, stackable: true, maxStack: 10, desc: '藏宝图残片——集齐三片可在行囊中拼成完整藏宝图，按图寻宝', icon: '🗺️' },
     { id: 'spec_key', name: '钥匙', type: 'quest', subtype: 'key', category: 'quest', quality: 'PIN9', level: 1, price: 0, stackable: true, maxStack: 10, desc: '古朴钥匙', icon: '🔑' },
     { id: 'spec_spirit_fragment', name: '灵石碎块', type: 'material', subtype: 'currency', category: 'material', quality: 'PIN9', level: 1, price: 1, stackable: true, maxStack: 9999, desc: '灵石碎块', icon: '💎' },
     { id: 'spec_spirit_stone', name: '灵石', type: 'material', subtype: 'currency', category: 'material', quality: 'PIN8', level: 3, price: 10, stackable: true, maxStack: 9999, desc: '标准灵石', icon: '💎' },

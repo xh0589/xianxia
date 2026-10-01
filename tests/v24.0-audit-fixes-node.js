@@ -894,7 +894,11 @@ console.log('\n[L] UI-12 空态一支笔 · 势力「当前冲突」');
     var app = src('js/app.js');
     var ps = src('js/party-system.js');
     var wc = src('js/core/world-calendar-ui.js');
-    assert(/host\.innerHTML = xEmptyHtml\(\{[\s\S]{0,60}fill:\s*true/.test(app), '功法列表空态走公共件且 fill');
+    // A3（UI评审·2026-10-01）给这页空态**前置**了一张「修炼账本卡」，落笔成
+    // `host.innerHTML = _a3 + xEmptyHtml({ fill: true, … })`——公共件照样走、fill 照样在，
+    // 只是等号右边不再只有 xEmptyHtml 一个。这把尺认的是「走没走公共件」，
+    // 不是「公共件前面能不能拼东西」，故放行任意前缀。
+    assert(/host\.innerHTML = [^;]{0,400}?xEmptyHtml\(\{[\s\S]{0,60}fill:\s*true/.test(app), '功法列表空态走公共件且 fill（允许前置内容，如 UI评审·A3 的修炼账本卡）');
     assert(strip(app).indexOf('尚未习得任何功法') < 0, '「尚未习得任何功法」这句不含来路的死字已撤（注释里的来历说明不算）');
     assert(/membersList\.innerHTML = xEmptyHtml\(\{[\s\S]{0,60}fill:\s*true/.test(ps), '队伍列表空态走公共件且 fill');
     assert(/xEmptyHtml\(\{[\s\S]{0,400}?getEffectiveMaxMembers\(\)/.test(ps),
@@ -5225,15 +5229,21 @@ console.log('\n[CG] 第六十批 UI-25 地标三扇模态不再顶穿视口');
     // 处置**不是把基线抬到 47**（那等于给尺的漏洞开门，此后真出现无帽新窗也不红了），
     // 而是让扇 167 跳出粗尺的统计口径：它是重构自己写的、按体例自带 max-h- 的公共模态，
     // 归 CM⑤ 那把尺管（那条已随转发链走 XianXia.Modal.open 并做过摘帽反证，仍会咬）。
-    var 弹层白名单 = { 'js/global-utils.js': [167] };   // 自带 max-h- 帽、超出粗尺 14 行窗的公共模态
+    // 认**特征串**不认行号：这扇窗一次随功能挪了 167→175（work4 移植当日），
+    // 行号锚当场失效 → 被算进「无帽」总数 46→47 假红。行号是这批里最脆的一种锚，
+    // 往文件上方插一行就断。特征串跟代码走，挪行不加行都不影响。
+    var 弹层豁免 = {
+        'js/global-utils.js': ["x-modal-layer"]   // 自带 max-h- 帽、超出粗尺 14 行窗的公共模态
+    };
     function 扫(表) {
         var n = 0, 例 = [], 跳过 = 0;
         表.forEach(function (x) {
             var 名 = String(x.名).replace(/\\/g, '/');
-            var 白 = 弹层白名单[名] || [];
+            var 白 = 弹层豁免[名] || [];
             var 行 = codeOnly(x.文).replace(/\r\n/g, '\n').split('\n');
             for (var i = 0; i < 行.length; i++) {
-                if (白.indexOf(i + 1) >= 0) { 跳过++; continue; }   // 帽子在窗外，属 CM⑤ 的账
+                var 命中豁免 = 白.some(function (sig) { return 行[i].indexOf(sig) >= 0; });
+                if (命中豁免) { 跳过++; continue; }   // 帽子在窗外，属 CM⑤ 的账
                 if (!/className\s*=\s*'fixed inset-0[^']*items-center[^']*justify-center/.test(行[i])) continue;
                 if (!/max-h-\[/.test(行.slice(i, i + 14).join('\n'))) { n++; if (例.length < 5) 例.push(名 + ':' + (i + 1)); }
             }
@@ -5793,7 +5803,7 @@ console.log('\n[CM] 家族账：无帽 38 扇、其中 13 扇内容由循环长�
     // v24.1：重构第3步在 showModal 之后插入 Modal 栈 111 行，其后的遮罩整体下移。
     // 241→352（showLoading 转圈）、215→326（XianXia.showConfirm 遮罩）都是同一次位移，
     // 两处漂移量一致已互相印证：不是新窗冒出来，是旧窗换了行号。判据一个字没动。
-    var 未定位记 = { 'js/global-utils.js': [352], 'js/mail-system-ui.js': [142], 'js/ui-immersive.js': [22, 87, 131] };
+    var 未定位记 = { 'js/global-utils.js': [385], 'js/mail-system-ui.js': [142], 'js/ui-immersive.js': [22, 87, 131] };
     var 未定位 = 数('?');
     var 漂3 = [];
     Object.keys(未定位记).forEach(function (f) {
@@ -5829,7 +5839,7 @@ console.log('\n[CM] 家族账：无帽 38 扇、其中 13 扇内容由循环长�
         'CM④a 名单里确有玩家常规流程点得到的两扇（城市特殊设施「皇家拍卖行」那格走 openRoyalAuction、宗门页两枚「查看公告」钮）——这族不是死代码堆里的数字');
     // 「判它不会长」也要能被回读：这四扇是收紧「会长」判后被移出名单的，逐条回读过源码，判据一旦改松这里就该红
     var 不会长 = [
-        ['js/global-utils.js', 'XianXia.showConfirm', 326],   // 卡体是 [字面量].join('')  ※v24.1 215→326（Modal 栈插入所致，与 CM③ 同一次位移）
+        ['js/global-utils.js', 'XianXia.showConfirm', 359],   // 卡体是 [字面量].join('')  ※v24.1 215→326（Modal 栈插入所致，与 CM③ 同一次位移）；work4 移植再 326→359，卡体写法未变
         ['js/lifespan-system.js', 'triggerLifespanEnd', 126], // 寿元已尽：固定三行
         ['js/quest/main-storyline-arc.js', 'openMainStoryPanel', 223],  // 主线：一段定死段落
         ['js/quest/quest-system.js', 'showEndingScreen', 877]           // 任务结算：至多 5 颗星

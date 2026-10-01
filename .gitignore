@@ -48,3 +48,11 @@ __pycache__/
 # 打包产物（由 tools/打包/build.bat 生成，不入库）
 打包输出/
 BUILD-MANIFEST.txt
+
+# 外包交付工作区（仓库只收落地的代码，不收交付原件）
+# xianxia_work2/ 是 2026-09-28 的旧快照，比交付树还旧，留着日后易误取
+xianxia_work2/
+# 交付树根目录是短码（任意 *-workN-* 批次），故按批次通配
+仙侠-work*-*/
+# ui-audit/ 是外包的评审留档（前后对比截图 + 提案），结论已并入 FIX_NOTES 与代码
+ui-audit/

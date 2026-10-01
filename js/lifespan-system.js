@@ -47,7 +47,7 @@ function resetLifespanForNewGame() {
 }
 
 function saveLifespan() {
-    try { localStorage.setItem('xianxia_lifespan', JSON.stringify(playerLifespan)); } catch(e) { console.warn('[静默失败] js/lifespan-system.js:47 · 寿元存档：寿命账没存上，读档后多活的几年原样丢掉，阳寿对不上', e && e.message); }
+    try { if (window.saveToStorage) { if (!window.saveToStorage('xianxia_lifespan', JSON.stringify(playerLifespan))) throw new Error('xianxia_lifespan' + ' 未落盘'); } else localStorage.setItem('xianxia_lifespan', JSON.stringify(playerLifespan)); } catch(e) { console.warn('[静默失败] js/lifespan-system.js:47 · 寿元存档：寿命账没存上，读档后多活的几年原样丢掉，阳寿对不上', e && e.message); }
 }
 
 function updatePlayerLifespan(daysPassed) {

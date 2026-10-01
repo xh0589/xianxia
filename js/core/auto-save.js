@@ -47,7 +47,7 @@ function _saveSlots(slots) {
 // v20.87 设置页开关：只管「每 7 游戏日」的定期档；突破/飞升/转世的保底档始终执行
 function toggleAutoSave(on) {
     _enabled = !!on;
-    try { localStorage.setItem(OFF_KEY, _enabled ? '0' : '1'); } catch (e) {}
+    try { if (window.saveToStorage) window.saveToStorage(OFF_KEY, _enabled ? '0' : '1'); else localStorage.setItem(OFF_KEY, _enabled ? '0' : '1'); } catch (e) {}
     if (window.showMessage) {
         window.showMessage(_enabled ? '已开启定期自动存档（每 7 游戏日）' : '已关闭定期自动存档（突破/飞升时仍会保底存档）', 'info');
     }

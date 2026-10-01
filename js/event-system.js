@@ -413,7 +413,10 @@ function initEventSystem() {
 
 // ============ 保存奇遇标志 ============
 function saveEventFlags() {
-    localStorage.setItem('xianxia_event_flags', JSON.stringify(eventFlags));
+    // v25.3（存档写失败可见批）：原为裸 setItem，接进单一 owner saveToStorage；夹具无 owner 走原路。
+    try {
+        if (window.saveToStorage) { if (!window.saveToStorage('xianxia_event_flags', JSON.stringify(eventFlags))) throw new Error('xianxia_event_flags' + ' 未落盘'); } else localStorage.setItem('xianxia_event_flags', JSON.stringify(eventFlags));
+    } catch (e) { console.warn('[静默失败] js/event-system.js · 奇遇标志存档：触发过的奇遇没写进本地存储，读档后同一场奇遇会再演一遍', e && e.message); }
 }
 
 // ============ 设置奇遇标志 ============

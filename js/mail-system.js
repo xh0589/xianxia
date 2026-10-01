@@ -536,7 +536,7 @@
 function saveMailData() {
     if (!window._mailSystemData) return;
     try {
-        localStorage.setItem('xianxia_mail_system', JSON.stringify(window._mailSystemData));
+        if (window.saveToStorage) { if (!window.saveToStorage('xianxia_mail_system', JSON.stringify(window._mailSystemData))) throw new Error('xianxia_mail_system' + ' 未落盘'); } else localStorage.setItem('xianxia_mail_system', JSON.stringify(window._mailSystemData));
     } catch (e) { console.warn('[静默失败] js/mail-system.js:540 · 邮件存档：寄出的信、收到的回音没存上，读档后信箱空了，玩家以为信还在对方手里', e && e.message); }
 }
 
