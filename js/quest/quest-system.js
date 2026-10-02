@@ -424,7 +424,12 @@ function _syncTemplatesFromLedger() {
                 q.accepted = true; q.completed = true; q.turnedIn = true;
                 return;
             }
-            if (active.indexOf(q.id) >= 0) {
+            // S-19：账本两条命中（activeQuests / questState）都算「接取过」。
+            // questState 是 saveQuestProgress(:397-408) 只为 activeQuests 里的任务写的，
+            // 它在 = 这条确实被接过。此前只认 activeQuests：若那条在读档途中掉了，
+            // 目标进度被原样恢复、accepted 却留在 false —— 任务成了「有进度、没被接」的僵尸，
+            // 面板显示不出交付按钮、重复接取门又按「没接」放行，两头都堵。
+            if (active.indexOf(q.id) >= 0 || stMap[q.id]) {
                 q.accepted = true;
                 var st = stMap[q.id];
                 if (st && Array.isArray(st.objectives) && Array.isArray(q.objectives)) {
@@ -534,8 +539,18 @@ function acceptQuest(questId) {
         return false;
     }
 
-    // 检查任务数量限制
-    if (playerQuestProgress.activeQuests.length >= 10) {
+    // S-19：上限按「注册表认可、且还没交付」的在做数算，不按存档里那份 id 列表长度。
+    // activeQuests 是落盘的账，可能与当下对不上；拿旧账卡当下的操作，
+    // 一条对不上的僵尸条目就能把玩家锁成「一单也接不了」。
+    var _doing = 0;
+    try {
+        allQuests.forEach(function (q) {
+            if (q && q.accepted && !q.completed && !q.turnedIn) _doing++;
+        });
+    } catch (eCnt) {
+        _doing = (playerQuestProgress.activeQuests || []).length;
+    }
+    if (_doing >= 10) {
         showMessage('活跃任务数量已达上限（10个）', 'error');
         return false;
     }
