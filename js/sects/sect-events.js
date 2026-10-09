@@ -18,7 +18,7 @@ const SECT_EVENTS_POOL = {
         desc: function(sectName) { return sectName + '有弟子成功突破境界，全派士气大振。'; },
         effect: function(sectName) {
             var data = getSectInternal(sectName);
-            if (data) data.morale = Math.min(100, (data.morale || 50) + 15);
+            if (data) data.morale = Math.min(100, _moraleOf(sectName) + 15);
             return '全派士气 +15';
         },
         minMorale: 0, maxMorale: 100
@@ -32,7 +32,7 @@ const SECT_EVENTS_POOL = {
                 ds.points = (ds.points || 0) + 20;
             }
             var data = getSectInternal(sectName);
-            if (data) data.morale = Math.min(100, (data.morale || 50) + 5);
+            if (data) data.morale = Math.min(100, _moraleOf(sectName) + 5);
             return '领悟 +20，全派士气 +5';
         },
         minMorale: 0, maxMorale: 100
@@ -42,7 +42,7 @@ const SECT_EVENTS_POOL = {
         desc: function(sectName) { return sectName + '内部出现意见分歧，两派弟子争执不休。'; },
         effect: function(sectName) {
             var data = getSectInternal(sectName);
-            if (data) data.morale = Math.max(0, (data.morale || 50) - 15);
+            if (data) data.morale = Math.max(0, _moraleOf(sectName) - 15);
             return '全派士气 -15';
         },
         minMorale: 20, maxMorale: 100
@@ -70,7 +70,7 @@ const SECT_EVENTS_POOL = {
                 }
             }
             var data = getSectInternal(sectName);
-            if (data) { data.morale = Math.min(100, (data.morale || 50) + 10); data.resources = (data.resources || 100) + 50; }
+            if (data) { data.morale = Math.min(100, _moraleOf(sectName) + 10); data.resources = _resourcesOf(sectName) + 50; }
             return (本派 ? '贡献 +50' + 分宝 : '你不在' + sectName + '，这桩宝藏与你无份') + '，士气 +10，资源 +50';
         },
         minMorale: 0, maxMorale: 100
@@ -95,8 +95,8 @@ const SECT_EVENTS_POOL = {
         effect: function(sectName) {
             var data = getSectInternal(sectName);
             if (data) {
-                data.morale = Math.max(0, (data.morale || 50) - 20);
-                data.resources = Math.max(0, (data.resources || 100) - 30);
+                data.morale = Math.max(0, _moraleOf(sectName) - 20);
+                data.resources = Math.max(0, _resourcesOf(sectName) - 30);
             }
             var ds = window.discipleState || {};
             if (ds.isInSect && ds.sectId === sectName) {
@@ -133,8 +133,8 @@ const SECT_EVENTS_POOL = {
         effect: function(sectName) {
             var data = getSectInternal(sectName);
             if (data) {
-                data.morale = Math.max(0, (data.morale || 50) - 30);
-                data.resources = Math.max(0, (data.resources || 100) - 50);
+                data.morale = Math.max(0, _moraleOf(sectName) - 30);
+                data.resources = Math.max(0, _resourcesOf(sectName) - 50);
             }
             return '全派士气 -30，资源 -50';
         },
@@ -146,8 +146,8 @@ const SECT_EVENTS_POOL = {
         effect: function(sectName) {
             var data = getSectInternal(sectName);
             if (data) {
-                data.morale = Math.max(0, (data.morale || 50) - 25);
-                data.disciples = Math.max(5, (data.disciples || 20) - 3);
+                data.morale = Math.max(0, _moraleOf(sectName) - 25);
+                data.disciples = Math.max(5, _disciplesOf(sectName) - 3);
             }
             var ds = window.discipleState || {};
             if (ds.isInSect && ds.sectId === sectName) {
@@ -163,8 +163,8 @@ const SECT_EVENTS_POOL = {
         effect: function(sectName) {
             var data = getSectInternal(sectName);
             if (data) {
-                data.morale = Math.max(0, (data.morale || 50) - 35);
-                data.resources = Math.max(0, (data.resources || 100) - 60);
+                data.morale = Math.max(0, _moraleOf(sectName) - 35);
+                data.resources = Math.max(0, _resourcesOf(sectName) - 60);
             }
             return '全派士气 -35，资源 -60';
         },
@@ -180,7 +180,7 @@ const SECT_EVENTS_POOL = {
                 window.applyBuff('sect_holy_land_buff', { cultivationSpeed: 1.0 }, 4);
             }
             var data = getSectInternal(sectName);
-            if (data) data.morale = Math.min(100, (data.morale || 50) + 20);
+            if (data) data.morale = Math.min(100, _moraleOf(sectName) + 20);
             return '修炼速度 +100%（4小时），全派士气 +20';
         },
         minMorale: 0, maxMorale: 100
@@ -191,8 +191,8 @@ const SECT_EVENTS_POOL = {
         effect: function(sectName) {
             var data = getSectInternal(sectName);
             if (data) {
-                data.morale = Math.min(100, (data.morale || 50) + 25);
-                data.resources = (data.resources || 100) + 30;
+                data.morale = Math.min(100, _moraleOf(sectName) + 25);
+                data.resources = _resourcesOf(sectName) + 30;
             }
             var ds = window.discipleState || {};
             var _肉 = 0, _肉该 = 0, _在场 = !!(ds.isInSect && ds.sectId === sectName);
@@ -212,8 +212,8 @@ const SECT_EVENTS_POOL = {
         effect: function(sectName) {
             var data = getSectInternal(sectName);
             if (data) {
-                data.morale = Math.min(100, (data.morale || 50) + 30);
-                data.influence = (data.influence || 50) + 20;
+                data.morale = Math.min(100, _moraleOf(sectName) + 30);
+                data.influence = _influenceOf(sectName) + 20;
             }
             return '全派士气 +30，影响力 +20';
         },
@@ -230,7 +230,7 @@ const SECT_EVENTS_POOL = {
                 ds.points = (ds.points || 0) + 30;
             }
             var data = getSectInternal(sectName);
-            if (data) data.morale = Math.min(100, (data.morale || 50) + 5);
+            if (data) data.morale = Math.min(100, _moraleOf(sectName) + 5);
             return '考核积分 +30，全派士气 +5';
         },
         minMorale: 0, maxMorale: 100
@@ -241,8 +241,8 @@ const SECT_EVENTS_POOL = {
         effect: function(sectName) {
             var data = getSectInternal(sectName);
             if (data) {
-                data.disciples = (data.disciples || 20) + 2;
-                data.morale = Math.min(100, (data.morale || 50) + 5);
+                data.disciples = _disciplesOf(sectName) + 2;
+                data.morale = Math.min(100, _moraleOf(sectName) + 5);
             }
             return '弟子 +2，全派士气 +5';
         },
@@ -257,7 +257,7 @@ const SECT_EVENTS_POOL = {
                 ds.points = (ds.points || 0) + 15;
             }
             var data = getSectInternal(sectName);
-            if (data) data.morale = Math.min(100, (data.morale || 50) + 10);
+            if (data) data.morale = Math.min(100, _moraleOf(sectName) + 10);
             return '积分 +15，全派士气 +10';
         },
         minMorale: 0, maxMorale: 100
@@ -267,7 +267,7 @@ const SECT_EVENTS_POOL = {
         desc: function(sectName) { return '友派弟子到访' + sectName + '，切磋交流，气氛热络。'; },
         effect: function(sectName) {
             var data = getSectInternal(sectName);
-            if (data) data.influence = (data.influence || 50) + 5;
+            if (data) data.influence = _influenceOf(sectName) + 5;
             var ds = window.discipleState || {};
             if (ds.isInSect && ds.sectId === sectName) {
                 ds.points = (ds.points || 0) + 15;
@@ -285,7 +285,7 @@ const SECT_EVENTS_POOL = {
                 ds.contribution = (ds.contribution || 0) + 25;
             }
             var data = getSectInternal(sectName);
-            if (data) data.influence = (data.influence || 50) + 8;
+            if (data) data.influence = _influenceOf(sectName) + 8;
             return '贡献 +25，影响力 +8';
         },
         minMorale: 0, maxMorale: 100
@@ -296,8 +296,8 @@ const SECT_EVENTS_POOL = {
         effect: function(sectName) {
             var data = getSectInternal(sectName);
             if (data) {
-                data.resources = Math.max(0, (data.resources || 100) - 25);
-                data.morale = Math.max(0, (data.morale || 50) - 8);
+                data.resources = Math.max(0, _resourcesOf(sectName) - 25);
+                data.morale = Math.max(0, _moraleOf(sectName) - 8);
             }
             return '资源 -25，士气 -8';
         },
@@ -326,12 +326,67 @@ function _sectEventConfig() {
     };
 }
 
+// ============ 门派数值读口（零值不算「没有」）============
+// W-5 收口：抽取与结算曾各写各的兜底。上一批只把抽取那一处从 `data.morale || 50`
+//   换成了 `== null` 口径，下方 15 处结算仍是旧写法 —— 于是**不对称**：
+//   抽取按真实士气 0 算（实测谷底灾难占比 53.3%），结算却还在给 50 加减。
+//   士气正好是 0 时 `0 || 50` 得 50：谷底减 15 得 35（谷底反涨）、加 15 得 65（一键半满）。
+//   士气是**取值**不是「有没有」——只有 null/undefined/非数才该落默认值。
+//   ⚠️ 本读口必须与 generateSectEvent 那段逐字同一口径，否则改完这边抽取又不一致。
+function _moraleOf(sectName) {
+    var data = getSectInternal(sectName);
+    if (!data) return 50;
+    var m = (data.morale == null) ? 50 : Number(data.morale);
+    return isFinite(m) ? m : 50;
+}
+
+// 资源同理：`resources || 100` 在本文件里被 Math.max(0, …) 反复按到 0（:99/:137/:167/:299），
+//   跨文件 sect-war.js:462 也照 0 减。资源 0 时 `0 || 100` 得 100：
+//   夺宝(:73)加 50 得 150、庆典(:195)加 30 得 130、外敌(:99)减 30 得 70（该归 0 反而富起来）。
+function _resourcesOf(sectName) {
+    var data = getSectInternal(sectName);
+    if (!data) return 100;
+    var r = (data.resources == null) ? 100 : Number(data.resources);
+    return isFinite(r) ? r : 100;
+}
+
+// 影响力同理：`influence || 50` —— 一开始我按「影响力全仓只加不减」判它不是活陷阱，
+//   后经 grep 推翻：sects-system.js:2134 是 `Math.max(0, (Number(internal.influence) || 0) - cost.influence)`、
+//   sect-court.js:215/:304 是 `Math.max(0, … - 2)`，**影响力能到 0**。
+//   影响力 0 时 `0 || 50` 得 50：老祖出关(:216)加 20 得 70（该得 20）、友派来访(:270)加 5 得 55。
+//   注：这三处本来就没有上限钳位（影响力能无上限涨），那是另一个病灶，本批不动。
+function _influenceOf(sectName) {
+    var data = getSectInternal(sectName);
+    if (!data) return 50;
+    var v = (data.influence == null) ? 50 : Number(data.influence);
+    return isFinite(v) ? v : 50;
+}
+
+// 弟子数同理：`disciples || 20` —— sect-cities.js:280 是 `Math.max(0, … - 5)`，**弟子数能到 0**。
+//   瘟疫(:150)在 0 时 `0 || 20` 得 20，扣 3 记 17 —— 一场瘟疫凭空给门里添了 17 个弟子。
+function _disciplesOf(sectName) {
+    var data = getSectInternal(sectName);
+    if (!data) return 20;
+    var v = (data.disciples == null) ? 20 : Number(data.disciples);
+    return isFinite(v) ? v : 20;
+}
+
 // ============ 生成门派事件 ============
 function generateSectEvent(sectName) {
     var data = getSectInternal(sectName);
     if (!data) return null;
     
-    var morale = data.morale || 50;
+    // W-5：旧写法 `data.morale || 50` —— 士气**正好是 0** 时 `0 || 50` 得 50，
+    //   门派跌到谷底（连着几场灾难：-35/-30/-25/-20/-8 都往 0 压，0 是能到的）
+    //   反而被当成士气 50 来抽事件：谷底的门(minMorale)不拦、加权也按 50 算。
+    //   士气是**取值**不是「有没有」，null/undefined 才该落默认值。
+    //   ⚠️ 这两行与上方 _moraleOf 是**同一套口径的两份拷贝**，改一处必须改另一处。
+    //     为什么不是直接调 _moraleOf：tests/wave142-fix-wiring-node.js Ⓒ10 逐字钉这一行，
+    //     Ⓔ0 还拿它当锚点 .replace() 回去复现「改前」那份源码。抽成读口会把那两条打断。
+    //     口径本身由 tests/legacy-morale-zero-node.js 的「抽取侧 vs 结算侧逐档比对」锁着，
+    //     比字符串比对更严：两边对任一输入算出不同的门槛值就当场红。
+    var morale = (data.morale == null) ? 50 : Number(data.morale);
+    if (!isFinite(morale)) morale = 50;
     var pool = [];
     
     // 根据士气筛选可用事件
@@ -353,9 +408,29 @@ function generateSectEvent(sectName) {
     }
 
     if (pool.length === 0) return null;
-    
+
     // 加权随机：灾难事件概率随士气降低而增加
-    var pick = pool[Math.floor(Math.random() * pool.length)];
+    // W-5（接线五处 · 第五处）：这一行此前是 `pool[Math.floor(Math.random() * pool.length)]`
+    //   ——**纯均匀随机**，注释承诺的加权从没落地（注释说了三年，代码没跟上）。
+    //   权重口径（只兑现注释那一支，不多加料）：**只有 disaster 一档随士气反向加权，其余一律 1**。
+    //     士气 0 → 灾难权重 4；士气 30 → 2.5；士气 ≥60 → 1（与旧均匀随机同档）。
+    //   仍只掷一次 Math.random（旧写法也只掷一次），骰子压力没变。
+    //   ⚠️ 权重只决定「谁更容易被抽中」，**不改池子的资格**——资格归上面 minMorale/maxMorale 那道门管。
+    //   ⚠️ 门派事件不是节令玩法（全仓唯一的节气模块是 js/world/solar-terms.js），
+    //      「节令禁掷骰」那条纪律扫不到这里，也没有任何套件断言本文件零 Math.random。
+    function _sectEventWeight(ev, morale) {
+        if (ev && ev.type === 'disaster') return 1 + Math.max(0, 60 - morale) / 20;
+        return 1;
+    }
+    var pick = null;
+    var _total = 0;
+    for (var _i = 0; _i < pool.length; _i++) _total += _sectEventWeight(pool[_i].event, morale);
+    var _roll = Math.random() * _total;
+    for (var _j = 0; _j < pool.length; _j++) {
+        _roll -= _sectEventWeight(pool[_j].event, morale);
+        if (_roll <= 0) { pick = pool[_j]; break; }
+    }
+    if (!pick) pick = pool[pool.length - 1]; // 浮点尾数兜底：总有一枚抽得中
     var eventObj = pick.event;
     
     // 这里只生成描述，不执行效果。效果必须在玩家点击“处理”时结算。
@@ -544,3 +619,8 @@ window.generateSectEvent = generateSectEvent;
 window.checkSectEvents = checkSectEvents;
 window.handleSectEvent = handleSectEvent;
 window.getSectEventDisplay = getSectEventDisplay;
+// W-5：加权口径是纯函数，导出好让套件直接量它（不导出就只能靠抽签反推，量不准）
+window.sectEventWeight = function (ev, morale) {
+    if (ev && ev.type === 'disaster') return 1 + Math.max(0, 60 - morale) / 20;
+    return 1;
+};

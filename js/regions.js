@@ -18,6 +18,57 @@ const mapData = {
 
 // ==================== 区域特性系统 ====================
 // 每个地区的独立特性：怪物池、资源分布、天气、特殊事件
+//
+// 【mining 键的来历 · v26.2·死接线批】mineOre 自 v6.0 起就写 `if (bonus && bonus.mining) regionBonus = bonus.mining;`，
+// 但七个地区的 bonus 里从来就没有 mining 这个键 ⇒ 每一次采矿 regionBonus 都停在 1.0，
+// 「区域特色影响采矿」这句话写了多年一次没生效。本批按各地区 resources.mine 的矿样池补配：
+//   中州1.10（七地区矿脉早被采了几千年，好矿已浅）  东荒0.90（林海土厚，矿埋得深）
+//   南疆1.20（火山把矿顶到地表）                    西漠1.30（region desc 明写「金城盛产灵石矿脉」）
+//   北冥1.25（冰层下的寒铁矿脉）                    蜀地1.15（剑阁铸兵之地，矿脉为剑而生）
+//   东南海域0.95（海底珊瑚砂，金属矿少）
+// 配的值不越 1.4 是有意的：mineOre 把 regionBonus 直接乘在概率上（铁矿 0.8×），
+// 西漠 1.30 会把铁矿推到 1.04（必中）。app.js 的 mineOre 已按 0.95 封顶，两头都留着——
+// 封顶后西漠与北冥的铁矿同格（都 0.95），但铜矿/锡矿仍分得出高下，不是全体一个数。
+//
+// 【bonus 键的读方登记 · v26.2·死接线批实测】
+// 全仓读 `getRegionBonus(region)` 的地方只有两处，都在 js/app.js：
+//   · mineOre     :8419 读 bonus.mining
+//   · gatherHerbs :8534 读 bonus.herb
+// 键与读方逐条对账（13 个键）：
+//   herb        东荒1.3  —— 有读方（gatherHerbs）                       活
+//   wood        东荒1.2  —— 本批接上（chopWood，app.js:8670）            活
+//   cultivation 蜀地1.1  —— 本批接上（cultivationMeditate，app.js:1704） 活
+//   mining      七地区   —— 本批补配（此前七地区一个都没这个键，
+//                            mineOre 读到的 bonus 恒为空 ⇒ 加成恒 1.0）  活
+//   —— 以下 10 键「配了但全仓零读方」，逐条理由见下方 REGION_DEAD_BONUS_KEYS ——
+//
+// 【为什么这 10 键本批不接】都不是「找不到地方插」，而是插进去就等于改公式或接进死函数：
+//   fire/poison/earth/ice/water —— 五行属性加成。全仓搜 getElementBonus / elementBonus /
+//     elementMul / ELEMENT_BONUS 命中 **0**，工程里根本没有属性加成的接入口；硬接就得写进
+//     battle.js 的伤害结算，那不是「接线」是改战斗公式。
+//   sword    蜀地1.3 —— 剑系加成该落在功法/招式倍率上（combat-stats.js、cultivation/），本批禁改。
+//   defense  西漠1.15 —— 防御加成唯一去处是 _calculateDamage，同上：改公式。
+//   luck     东南海域1.15 —— 气运加成的消费端是奇遇系统（js/extensions/qiyu-encounters.js），
+//     不在本批可改清单内。
+//   copper   中州1.2 —— 语义已被本批补配的 mining 覆盖（中州矿样池含铜矿/铁矿），再单列会对
+//     同一批矿样重复乘算；真正的铜消费端在炼器（crafting/），本批禁改。
+//   trade    中州1.15 —— 真消费端是坊市买卖价（enhanced-shop.js）与商队利（economy/caravan-trade.js），
+//     都不在本批可改清单内。app.js 里唯一沾边的 sellGatheredItems:8347 全仓零调用方（死函数），
+//     接在那里等于把加成接进没人走的门。
+var REGION_DEAD_BONUS_KEYS = {
+    copper: '已并入 mining（同为矿产富集度，重复乘算无意义）；铜的真正去处是炼器配方',
+    trade: '待接 enhanced-shop.js 买卖价 / economy/caravan-trade.js 商队利（均不在本批清单）',
+    fire: '待接属性加成结算口（工程里目前不存在该口，接进 battle.js 即改伤害公式）',
+    poison: '待接属性加成结算口（同 fire）',
+    earth: '待接属性加成结算口（同 fire）',
+    ice: '待接属性加成结算口（同 fire）',
+    water: '待接属性加成结算口（同 fire）',
+    sword: '待接功法/招式倍率口（combat-stats.js、cultivation/，本批禁改）',
+    defense: '待接 _calculateDamage 防御口——那是改伤害公式，不属接线',
+    luck: '待接 js/extensions/qiyu-encounters.js 奇遇触发率（本批禁改）'
+};
+window.REGION_DEAD_BONUS_KEYS = REGION_DEAD_BONUS_KEYS;
+
 const REGION_FEATURES = {
     '中州': {
         monsters: {
@@ -32,7 +83,7 @@ const REGION_FEATURES = {
         },
         weather: ['晴', '多云', '小雨', '阴'],
         special: '帝都拍卖会',
-        bonus: { copper: 1.2, trade: 1.15 }
+        bonus: { copper: 1.2, trade: 1.15, mining: 1.1 }
     },
     '东荒': {
         monsters: {
@@ -47,7 +98,7 @@ const REGION_FEATURES = {
         },
         weather: ['晴', '多云', '雨', '大雾'],
         special: '蓬莱仙缘',
-        bonus: { herb: 1.3, wood: 1.2 }
+        bonus: { herb: 1.3, wood: 1.2, mining: 0.9 }
     },
     '南疆': {
         monsters: {
@@ -62,7 +113,7 @@ const REGION_FEATURES = {
         },
         weather: ['晴', '酷热', '火山灰', '毒雾'],
         special: '火山爆发',
-        bonus: { fire: 1.3, poison: 1.4 }
+        bonus: { fire: 1.3, poison: 1.4, mining: 1.2 }
     },
     '西漠': {
         monsters: {
@@ -77,7 +128,7 @@ const REGION_FEATURES = {
         },
         weather: ['晴', '沙尘暴', '酷热', '干旱'],
         special: '古佛遗迹',
-        bonus: { defense: 1.15, earth: 1.3 }
+        bonus: { defense: 1.15, earth: 1.3, mining: 1.3 }
     },
     '北冥': {
         monsters: {
@@ -92,7 +143,7 @@ const REGION_FEATURES = {
         },
         weather: ['雪', '暴风雪', '阴', '极光'],
         special: '极光天象',
-        bonus: { ice: 1.4, water: 1.2 }
+        bonus: { ice: 1.4, water: 1.2, mining: 1.25 }
     },
     '蜀地': {
         monsters: {
@@ -107,7 +158,7 @@ const REGION_FEATURES = {
         },
         weather: ['晴', '多云', '雾', '雨'],
         special: '剑冢开启',
-        bonus: { sword: 1.3, cultivation: 1.1 }
+        bonus: { sword: 1.3, cultivation: 1.1, mining: 1.15 }
     },
     '东南海域': {
         monsters: {
@@ -122,7 +173,7 @@ const REGION_FEATURES = {
         },
         weather: ['晴', '多云', '台风', '海雾'],
         special: '海市蜃楼',
-        bonus: { water: 1.3, luck: 1.15 }
+        bonus: { water: 1.3, luck: 1.15, mining: 0.95 }
     }
 };
 
@@ -202,15 +253,23 @@ var CITY_DISTANCE_MAP = {
 
 function getTravelDistance(fromCity, toCity) {
     if (!fromCity || !toCity) return 120; // 默认2小时
-    var clean = function(s) { return s.replace(/\s+/g, ' ').trim(); };
-    var f = clean(fromCity);
-    var t = clean(toCity);
+    var compact = function(s) { return String(s || '').replace(/\s+/g, ''); };
+    var f = compact(fromCity);
+    var t = compact(toCity);
     if (f === t) return 0;
-    var map = CITY_DISTANCE_MAP[f];
-    if (map && map[t]) return map[t];
-    // 反向查找
-    var map2 = CITY_DISTANCE_MAP[t];
-    if (map2 && map2[f]) return map2[f];
+    function lookup(fromRaw, toRaw) {
+        var fromC = compact(fromRaw);
+        var toC = compact(toRaw);
+        for (var key in CITY_DISTANCE_MAP) {
+            if (compact(key) !== fromC) continue;
+            var map = CITY_DISTANCE_MAP[key];
+            if (map[toRaw]) return map[toRaw];
+            for (var dest in map) { if (compact(dest) === toC) return map[dest]; }
+        }
+        return 0;
+    }
+    var hit = lookup(fromCity, toCity) || lookup(toCity, fromCity);
+    if (hit) return hit;
     // 估算：不同地区=远，同地区=近
     var regionFrom = '', regionTo = '';
     for (var r in mapData) {

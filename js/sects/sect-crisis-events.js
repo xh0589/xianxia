@@ -25,6 +25,33 @@
         try { return (window.SectCrisis && window.SectCrisis._applyGains) ? window.SectCrisis._applyGains(sectName, gains) : ''; }
         catch (e) { return ''; }
     }
+    // ============ 士气读口（零值不算「没有」）============
+    // 与 js/sects/sect-events.js 的 _moraleOf / generateSectEvent 同一套口径，一个字不差。
+    // 旧写法 `c.internal.morale || 50`：JS 里 `0 || 50 === 50`，而士气**能到 0**（灾难连压：-35/-30/-25/-20/-8）。
+    // 士气是**取值**不是「有没有」：null/undefined/非有限数才落 50，0 就是 0。
+    //
+    // 逐档实测（带齐默认值后）旧读法 `m||50` 与本读法在这四道门上的**真实**差异，别照抄我第一版的判词：
+    //   邪祟夜惊 evil_haunt  `eerie && morale < 60`
+    //     morale 0 → 旧读 50，`50<60` **真** → 开；新读 0，`0<60` 也真 → 开。★同解★。
+    //     它的 weight 是 `1 + death*0.8`，不含 morale ⇒ 这一处**没有任何行为差异**，
+    //     改它只是口径收口（免得同一族两套写法；阈值一旦从 60 下移，旧写法立刻变真病灶）。
+    //     只有 `morale='abc'` 这类非数字符串两者才分道（旧 false / 新 true）。
+    //   长老请辞 elder_leave `morale >= 48` 关
+    //     morale 0 → 旧读 50 → `50>=48` 真 → **门被挡，谷底永不出内乱**；新读 0 → 开。★真差异★
+    //     权重 (50-morale)/10 也从 0 回到 5。
+    //   堂口积怨 elder_feud `morale >= 55` 关
+    //     morale 0 → 旧读 50 → `50>=55` 假 → 门**仍开**（这道门在 0 上也是同解）；
+    //     真差异在权重：`1+(55-morale)/20` 从 **3.75 掉到 1.25**——谷底内乱被降权到三成。
+    //   大考夹带 exam_crib `morale < 42` 关
+    //     morale 0 → 旧读 50 → `50<42` 假 → **门开，谷底反倒开出大考**（与 :478 注释
+    //     「门内还算安稳（morale 不塌）——才谈得上大考」相反）；新读 0 → 关。★真差异★
+    //
+    // ⚠️ 本读口与 sect-crisis-engine.js 的 applyGains 结算侧是同一口径的两处实现，改一处必改另一处。
+    // 回归门：tests/sect-morale-zero-node.js（含「evil_haunt 在 0 上同解」这条，别把它当修复夸大）。
+    function _moraleVal(internal) {
+        var m = (internal == null || internal.morale == null) ? 50 : Number(internal.morale);
+        return isFinite(m) ? m : 50;
+    }
     // 外交账落笔：动了关系要存档，否则刷新即忘
     function _diplo(sectName, other, dRel, dConf) {
         if (!other) return;
@@ -327,7 +354,7 @@
             causality: function (c) {
                 var death = c.scars.death || 0;
                 var eerie = _hit(_fears(c), ['邪祟', '反噬']);
-                if (!death && !(eerie && (c.internal.morale || 50) < 60)) return { ok: false };
+                if (!death && !(eerie && _moraleVal(c.internal) < 60)) return { ok: false };
                 return { ok: true, weight: 1 + death * 0.8,
                     reason: death ? '近来门中有伤亡，山里的夜风都不太平。' : '门中人心浮而不安，夜里的动静就多了。' };
             },
@@ -374,7 +401,7 @@
             family: 'elder', icon: '🕯️',
             // 因果：士气不振（morale 低）——门派兴旺时，长老请辞这桩事无从说起。
             causality: function (c) {
-                var morale = c.internal.morale || 50;
+                var morale = _moraleVal(c.internal);
                 if (morale >= 48) return { ok: false };
                 return { ok: true, weight: (50 - morale) / 10 + (c.scars.elder_grudge || 0) * 0.8,
                     reason: '门中士气不振，人心浮动——最资深的那位，最近话越来越少。' };
@@ -419,7 +446,7 @@
             // 因果：人多（disciples 多）且士气一般（morale 中低）——堂口积怨才烧得起来。
             causality: function (c) {
                 if ((c.strength.disciples || 0) < 22) return { ok: false };
-                var morale = c.internal.morale || 50;
+                var morale = _moraleVal(c.internal);
                 if (morale >= 55) return { ok: false };
                 return { ok: true, weight: 1 + (55 - morale) / 20,
                     reason: '人多，事就多；两个堂口为一份产业，积怨不是一天了。' };
@@ -464,8 +491,8 @@
             // 因果：门中新血足（disciples 足）且门内还算安稳（morale 不塌）——才谈得上「大考」。
             causality: function (c) {
                 if ((c.strength.disciples || 0) < 18) return { ok: false };
-                if ((c.internal.morale || 50) < 42) return { ok: false };
-                return { ok: true, weight: 1 + (c.internal.morale - 40) / 40,
+                if (_moraleVal(c.internal) < 42) return { ok: false };
+                return { ok: true, weight: 1 + (_moraleVal(c.internal) - 40) / 40,
                     reason: '门中新血渐多，传功长老早就放话要验一验成色。' };
             },
             omen: { name: '大考放话', prepareNeed: 1,

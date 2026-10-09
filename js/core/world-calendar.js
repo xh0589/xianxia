@@ -87,6 +87,50 @@
         return SEVERITY_LEVELS.indexOf(s) >= 0;
     }
 
+    // ============ 日历不是发钱口（结构性约束） ============
+    // 这张表只做索引：把「我不在时世界发生了什么」记下来，让玩家看得见、赶得上。
+    // 它**绝不能**直接往玩家兜里塞东西——按日历白给东西就是签到，签到已经被否掉过
+    // （强制规则第 10 行：禁止无叙事依据的人为计数器）。
+    // 只写在文档里靠不住，所以把它做成结构：任何声称要发给玩家的 payload 一律拒收。
+    // 正确做法照 festival-calendar.js：只 register，把裁决交给城里的制度与事件，
+    // 东西从事件/日程/制度那一侧出（坊市开市、庙会、兽汛、道侣相约），不进这张表。
+    var PAYLOAD_DELIVERY_KEYS = [
+        'give', 'gift', 'grant', 'grants', 'items', 'item', 'itemid', 'itemids', 'matid', 'mats', 'materials',
+        'reward', 'rewards', 'loot', 'drop', 'drops', 'currency', 'money', 'coin', 'copper',
+        'stone', 'stones', 'spiritstone', 'exp', 'experience', 'luck', 'buff', 'buffs', 'bonus'
+    ];
+    function payloadCarriesDelivery(payload) {
+        if (!payload || typeof payload !== 'object') return '';
+        for (var k in payload) {
+            if (!Object.prototype.hasOwnProperty.call(payload, k)) continue;
+            var lk = String(k).toLowerCase();
+            for (var i = 0; i < PAYLOAD_DELIVERY_KEYS.length; i++) {
+                if (lk === PAYLOAD_DELIVERY_KEYS[i]) return String(k);
+            }
+        }
+        return '';
+    }
+    // 老档里万一存着这类键（改这条约束之前注册过）：条目留着可追溯，**发奖的键当场剥掉**
+    function stripDeliveryKeys(payload) {
+        if (!payload || typeof payload !== 'object') return payload;
+        var out = {};
+        var removed = [];
+        for (var k in payload) {
+            if (!Object.prototype.hasOwnProperty.call(payload, k)) continue;
+            var lk = String(k).toLowerCase();
+            var hit = '';
+            for (var i = 0; i < PAYLOAD_DELIVERY_KEYS.length && !hit; i++) {
+                if (lk === PAYLOAD_DELIVERY_KEYS[i]) hit = String(k);
+            }
+            if (hit) { removed.push(hit); continue; }
+            out[k] = payload[k];
+        }
+        if (removed.length) {
+            console.warn('[WorldCalendar] 老档 payload 带着发奖键，已剥掉（日历不做发钱口）：' + removed.join(','));
+        }
+        return out;
+    }
+
     function findEventIndex(id) {
         for (var i = 0; i < state.events.length; i++) {
             if (state.events[i].id === id) return i;
@@ -130,6 +174,13 @@
         if (!isValidCategory(def.category)) return { ok: false, reason: 'invalid-category:' + def.category };
         if (typeof def.dueAbsoluteDay !== 'number' || !isFinite(def.dueAbsoluteDay)) return { ok: false, reason: 'missing-dueAbsoluteDay' };
         if (!def.source || typeof def.source !== 'object') return { ok: false, reason: 'missing-source' };
+
+        // 日历只做索引：payload 里出现「发给玩家什么」的键，直接拒收（不是提醒，是闸门）
+        var deliveryKey = payloadCarriesDelivery(def.payload);
+        if (deliveryKey) {
+            console.warn('[WorldCalendar] 拒收带发奖键的日程条目（' + def.id + ' → ' + deliveryKey + '）：日历不做发钱口');
+            return { ok: false, reason: 'payload-carries-delivery:' + deliveryKey };
+        }
 
         // 同 id 已存在：拒绝（注册者负责唯一性），避免静默覆盖
         if (findEventIndex(def.id) >= 0) return { ok: false, reason: 'duplicate-id' };
@@ -329,11 +380,27 @@
                 region: e.region != null ? String(e.region) : null,
                 severity: isValidSeverity(e.severity) ? e.severity : 'info',
                 oneShot: e.oneShot !== false,
-                payload: e.payload && typeof e.payload === 'object' ? clone(e.payload) : null
+                payload: e.payload && typeof e.payload === 'object' ? stripDeliveryKeys(clone(e.payload)) : null
             };
         }).filter(function (e) { return e && e.id; }) : [];
         state.log = Array.isArray(snapshot.log) ? snapshot.log.slice(-200) : [];
         state.lastAdvancedDay = typeof snapshot.lastAdvancedDay === 'number' ? snapshot.lastAdvancedDay : 0;
+        // ★ 换档也是「账被整个换掉了」：旧档里没有的常驻条目（节气刻度一类）不会自己长出来。
+        //   不喊这一嗓子的话：读档流程 reset → 常驻日历补登记 → 随档回灌又把它抹掉，
+        //   玩家读档后打开日程面板看到的仍是空的一栏（真机实测踩过，Chrome 独立档 · 第1天）。
+        announceSwap('deserialize');
+    }
+
+    // 「整本账被换掉」时喊一嗓子：reset（开新局）与 deserialize（读档）两条路都走这里。
+    // 常驻日历（节气刻度等）听见就自己补一遍登记——补登记是幂等的，重复喊不叠条目。
+    function announceSwap(at) {
+        try {
+            if (global.EventBus && typeof global.EventBus.emit === 'function') {
+                global.EventBus.emit('worldCalendar:reset', { at: at });
+            }
+        } catch (eSwapEv) {
+            console.warn('[静默失败] js/core/world-calendar.js · ' + at + ' 事件没发出去（常驻日历这次不会补登记，下次换账照旧补）', eSwapEv && eSwapEv.message);
+        }
     }
 
     function reset() {
@@ -341,6 +408,11 @@
         // 第一百一十一波：订阅不清——festival/dao-bridge 的到期裁决订阅是模块加载时一次性注册的，
         // 新局 resetAll 把它们清空后无人重建：同一页面会话里开新局，节帖照发、裁决弹窗永远不来，
         // 帖子悬空到次日被判「装死不回」白扣好感。事件账清了，听账的人得还在。
+        // ★ 同一条道理再加一句：**事件账清了，账本上该有的条目也得有人补**。
+        //   节气与四节这类「常驻刻度」是登记型条目（只 register、不裁决、不发奖），
+        //   表一清就整段消失，而开新局那一刻玩家最先看的就是日程面板——补登记这件事得有人喊一嗓子。
+        //   这里发 reset 事件，各常驻日历（js/world/solar-terms.js 等）听见就自己补一遍（幂等）。
+        announceSwap('reset');
     }
 
     // ============ init() ============
@@ -401,6 +473,9 @@
     var api = {
         version: VERSION,
         allowedCategories: ALLOWED_CATEGORIES.slice(),
+        // 日历不是发钱口：这两个口是那道结构闸门的对外声明（测试与登记方都照它核）
+        payloadDeliveryKeys: PAYLOAD_DELIVERY_KEYS.slice(),
+        payloadCarriesDelivery: payloadCarriesDelivery,
         register: register,
         unregister: unregister,
         list: list,

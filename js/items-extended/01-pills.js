@@ -27,9 +27,21 @@ window.extendedBreakthroughPills = [
     { id: 'pill_ningyuan', name: '凝元丹', type: 'consumable', subtype: 'breakthrough', category: 'consumable', quality: 'PIN7', level: 8, price: 500, effect: { breakthrough_bonus: 0.15 }, stackable: true, maxStack: 10, desc: '金丹期突破时成功率+15%', icon: '💊', breakthroughRealm: '金丹' },
     { id: 'pill_jieying', name: '结婴丹', type: 'consumable', subtype: 'breakthrough', category: 'consumable', quality: 'PIN5', level: 12, price: 1500, effect: { breakthrough_bonus: 0.18 }, stackable: true, maxStack: 5, desc: '元婴期突破时成功率+18%', icon: '💊', breakthroughRealm: '元婴' },
     { id: 'pill_huashen', name: '化神丹', type: 'consumable', subtype: 'breakthrough', category: 'consumable', quality: 'PIN5', level: 18, price: 5000, effect: { breakthrough_bonus: 0.20 }, stackable: true, maxStack: 3, desc: '化神期突破时成功率+20%', icon: '💊', breakthroughRealm: '化神' },
+    // 高三境（炼虚/合体/大乘）专属丹。基准率按 breakthrough-ritual.js 的 0.8 - 境界序×0.05 逐境下滑
+    // （炼虚0.55 / 合体0.50 / 大乘0.45），故三张丹的加成也必须逐境不同，且服药后落到的成功率各不相同：
+    // 化神 0.60+0.20=0.80、炼虚 0.55+0.23=0.78、合体 0.50+0.25=0.75、大乘 0.45+0.27=0.72。
+    // 渡劫是突破门最后一境（ritual realmList 末位即拦下，渡劫往上走天劫链），没有可买的突破，故不配丹。
+    { id: 'pill_xukong', name: '虚空丹', type: 'consumable', subtype: 'breakthrough', category: 'consumable', quality: 'PIN3', level: 22, price: 8000, effect: { breakthrough_bonus: 0.23 }, stackable: true, maxStack: 3, desc: '炼虚期突破时成功率+23%（虚空雷池不稳，一丹定神）', icon: '💊', breakthroughRealm: '炼虚' },
+    { id: 'pill_hebi', name: '合体丹', type: 'consumable', subtype: 'breakthrough', category: 'consumable', quality: 'PIN3', level: 26, price: 15000, effect: { breakthrough_bonus: 0.25 }, stackable: true, maxStack: 2, desc: '合体期突破时成功率+25%（身心合一，一丹难再求）', icon: '💊', breakthroughRealm: '合体' },
+    { id: 'pill_dacheng', name: '大乘丹', type: 'consumable', subtype: 'breakthrough', category: 'consumable', quality: 'PIN2', level: 30, price: 28000, effect: { breakthrough_bonus: 0.27 }, stackable: true, maxStack: 2, desc: '大乘期突破时成功率+27%（大道将成，唯此一掷）', icon: '💊', breakthroughRealm: '大乘' },
     { id: 'pill_pojing', name: '破境丹', type: 'consumable', subtype: 'breakthrough', category: 'consumable', quality: 'PIN3', level: 15, price: 3000, effect: { breakthrough_bonus: 0.10 }, stackable: true, maxStack: 5, desc: '任何境界突破时成功率+10%', icon: '💊', breakthroughRealm: '通用' },
     { id: 'pill_wudao', name: '悟道丹', type: 'consumable', subtype: 'breakthrough', category: 'consumable', quality: 'PIN3', level: 20, price: 8000, effect: { breakthrough_bonus: '5~15%随机' }, stackable: true, maxStack: 3, desc: '突破时获得顿悟，额外提升5~15%成功率', icon: '💊', breakthroughRealm: '通用' },
-    { id: 'pill_huxin', name: '护心丹', type: 'consumable', subtype: 'breakthrough', category: 'consumable', quality: 'PIN8', level: 3, price: 100, effect: { protect_heart_demon: true }, stackable: true, maxStack: 20, desc: '突破时防止心魔', icon: '💊', breakthroughRealm: '通用' },
+    // 护心丹：登记废弃。它只带 protect_heart_demon、没有 breakthrough_bonus，
+    // 而 inventory.js 吞突破丹只认 effect.breakthrough_bonus（数值或 '5~15%随机' 串）——
+    // 于是 _bbActual 恒 0、走「暂无法使用」分支退回，丹永远扣不掉也生效不了。
+    // protect_heart_demon 这个键全仓零消费者，不是"漏接线"，是消费口根本不吃它。
+    // 真要「护心」得先在突破仪式里加一条心魔判定，那是新增机制，不在本批「补数据」范围。
+    { id: 'pill_huxin', name: '护心丹', type: 'consumable', subtype: 'breakthrough', category: 'consumable', quality: 'PIN8', level: 3, price: 100, effect: { protect_heart_demon: true }, stackable: true, maxStack: 20, desc: '【已废弃】突破时防止心魔——该效果无任何消费口，吞下只会提示「暂无法使用」', icon: '💊', breakthroughRealm: '通用', implemented: false, deprecated: true, deprecatedReason: 'effect 缺 breakthrough_bonus，inventory.js 吞丹口只认该键；protect_heart_demon 全仓零消费者' },
     // 13-missing-ids.js 迁移来的突破丹
     { id: 'pill_breakthrough', name: '突破丹', type: 'consumable', subtype: 'breakthrough', category: 'consumable', quality: 'PIN7', level: 8, price: 500, effect: { breakthrough_bonus: 0.15 }, stackable: true, maxStack: 20, desc: '辅助境界突破的丹药', icon: '💊', breakthroughRealm: '通用' }
 ];
@@ -69,3 +81,50 @@ window.extendedMedicalItems = [
     { id: 'med_bandage', name: '绷带', type: 'consumable', subtype: 'medical', category: 'consumable', quality: 'PIN9', level: 1, price: 10, effect: { bandage: 40 }, stackable: true, maxStack: 99, desc: '包扎伤口，稳定度+40', icon: '🩹', useContext: ['medical'] },
     { id: 'med_bandage_advanced', name: '灵布绷带', type: 'consumable', subtype: 'medical', category: 'consumable', quality: 'PIN8', level: 3, price: 50, effect: { bandage: 65 }, stackable: true, maxStack: 50, desc: '优质绷带，稳定度+65', icon: '🩹', useContext: ['medical'] }
 ];
+
+// ==================== 废弃登记簿 ====================
+// 禁止设计 #4：名册/注册表类结构不要留占位假值——要么填真实 ID，要么不写该字段。
+// 下面这几件是**实测零外部引用**（扫全 js、按 仙侠.html 挂载顺序逐 id 数引用），
+// 且**设计上就不该给玩家**。它们不是「忘了接线」，接线了也是错的——所以登记废弃、说明缘由，
+// 而不是静默留一张玩家永远拿不到的空表。
+//
+// ★刻意不登记的（实测有真实发放点，登记废弃反而是撒谎）★
+//   spec_spirit_stone 灵石    —— npc-emotions.js:86 赠礼、app.js:8239 奖励
+//   spec_spirit_crystal 灵晶  —— 12-quest-extensions.js:202/:302 任务奖励
+//   spec_enhance_stone 强化石  —— loot-system.js:377 掉落表 + 商店（desc 里的"预留"是陈年文案，货是真的）
+//   qiyu_* 奇遇奇物 10 件     —— extensions/qiyu-encounters.js:104/:302/:304 effects.items[].itemId 真发放
+//     （qiyuOnly 只是"不上货架不上拍卖"，不是"不存在"；撞见奇遇就拿得到）
+window.DEPRECATED_ITEMS = {
+    spec_mid_spirit_stone: {
+        reason: '灵石四档冗余：真货币是 currency.spiritStones 一个数（EconomyTransaction.getBalance/debit）。' +
+            '中品灵石没有任何发放点，造出来即占位假值。',
+        replacement: 'currency.spiritStones',
+        verifiedZeroRefs: true
+    },
+    spec_high_spirit_stone: {
+        reason: '灵石四档冗余，同中品灵石：真货币是 currency.spiritStones 一个数。' +
+            '上品灵石没有任何发放点，造出来即占位假值。',
+        replacement: 'currency.spiritStones',
+        verifiedZeroRefs: true
+    },
+    spec_supreme_spirit_stone: {
+        reason: '灵石四档冗余，同中品灵石：真货币是 currency.spiritStones 一个数。' +
+            '极品灵石没有任何发放点；PIN3 不可达 25 件里唯一一件属 B 类——不接线是对的。',
+        replacement: 'currency.spiritStones',
+        verifiedZeroRefs: true
+    },
+    spec_token: {
+        reason: '身份标记物品，无任何发放/校验点。真身份标识走 quest 账与 NPC 关系账，' +
+            '不靠一件物品；挂着它只会让玩家以为有身份系统。',
+        replacement: '(quest 账 / NPC 关系账)',
+        verifiedZeroRefs: true
+    },
+    pill_huxin: {
+        reason: 'effect 只有 protect_heart_demon，没有 breakthrough_bonus；' +
+            'inventory.js 吞突破丹只认 effect.breakthrough_bonus（数值或 "5~15%随机" 串），' +
+            '故 _bbActual 恒 0 → 走「暂无法使用」分支退回，丹扣不掉也生效不了。' +
+            'protect_heart_demon 全仓零消费者。真做「护心」要在突破仪式里加心魔判定＝新增机制，不在补数据范围。',
+        replacement: '(待实现：突破仪式心魔判定)',
+        verifiedZeroRefs: true
+    }
+};

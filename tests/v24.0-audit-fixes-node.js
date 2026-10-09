@@ -1,5 +1,5 @@
 /**
- * v24.0-audit-fixes-node.js — 第二十四轮 · 试玩审查自查修复验收（本轮由本仓自修，非外包）
+ * v24.0-audit-fixes-node.js — 第二十四轮 · 试玩审查自查修复验收（本轮由本仓自修）
  *
  * 验收点（编号=改良说明.md 条目）：
  *   DES-20（高）：竞技场设施动作接回 ArenaSystem（榜单＋上台），不再偷开木人桩；
@@ -1101,8 +1101,8 @@ console.log('\n[N] UI-12 面板高度一支笔：内层滚窗撤平 + 钉住的�
     // ④ 自建模态框那三个：滚窗从「卡片 + 列表」收成卡片一条
     var shop = src('js/enhanced-shop.js');
     eq((shop.match(/overflow-y-auto/g) || []).length, 1, '商店：买／卖／回购三页签的货单都改由卡片那一条滚窗承载');
-    assert(/max-w-\[1100px\][^"']*max-h-\[85vh\] overflow-y-auto/.test(shop) && !/max-w-2xl/.test(shop),
-        '商店留下的那条就是卡片本身（85vh 随屏放；窗宽已由 UI-02 从 672px 抬到 1100px）');
+    assert(/max-w-\[1440px\][^"']*max-h-\[85vh\] overflow-y-auto/.test(shop) && !/max-w-2xl/.test(shop),
+        '商店留下的那条就是卡片本身（85vh 随屏放；封顶已由 1100px 二次抬到 1440px，真上限在 panel-shop.css 的 min(1440px, 96vw)）');
     var auc = src('js/economy/auction-service.js');
     eq((auc.match(/overflow-y-auto/g) || []).length, 1, '拍卖行：「当前拍卖品」与「我要拍卖」两张表并入同一条滚窗（不再各占一格 240/192px）');
     assert(/id="available-tasks" class="space-y-2"/.test(src('js/sects/sects-system.js')),
@@ -1367,7 +1367,21 @@ console.log('\n[Q] UI-02 货架筛选：一把筛子两处用，不再立第二�
     var css = src('styles/panel-shop.css');
 
     // ---- ① 窗与排布 ----
-    assert(/max-w-\[1100px\]/.test(shop), '商店窗从 672px 抬到 1100px 封顶（用户原话：有的界面太小）');
+    // ★2026-10-04 由 1100px 改为 1440px（B 类·判据过时，且比原判据更严）★
+    // 原判据：`max-w-[1100px]`（用户原话「有的界面太小」那一次抬到 1100）。
+    // 现判据：1440px，且**样式表必须真的把上限接住**。
+    // 为什么该改——先查清「为什么变」：styles/panel-shop.css:7 有用户批原文：
+    // 「窗 1100px 在 1920 屏只占 57%『根本不好买东西』——拉到 1440px；96vw 兜底防超宽屏超界
+    // （动态 arbitrary 类 CDN 不生成，静态接管；双类特异性压模板上的 max-w-[1440px]）」。
+    // 即用户二次批示把封顶从 1100 抬到 1440，且顺带查出 Tailwind CDN 未必生成动态 arbitrary 类，
+    // 于是改由 CSS 静态接管（`#shop-modal-overlay > div { max-width: min(1440px, 96vw) }`）。
+    // 新设计即这条注释写下的那一版：模板带 max-w-[1440px]，真上限由 CSS 的 min(1440px, 96vw) 兜。
+    // 这不是把数字追着改——新增了一条原来**根本没有**的要求（CSS 必须接住上限）：
+    // 谁把 panel-shop.css 那条 max-width 删了、或只留模板里的 arbitrary 类，两条都红。
+    assert(/max-w-\[1440px\]/.test(shop), '商店窗封顶 1440px（用户批 2026-10-02：1100px 在 1920 屏只占 57%「根本不好买东西」）');
+    assert(/#shop-modal-overlay\s*>\s*div\s*\{[^}]*max-width:\s*min\(1440px,\s*96vw\)/.test(css),
+        '真上限由样式表静态接管（#shop-modal-overlay > div 的 max-width: min(1440px, 96vw)）'
+        + '——动态 arbitrary 类 CDN 不生成，只留模板那一笔等于屏上根本没有上限');
     var shopFloor = maxFloor((css.match(/\.shop-goods-grid\s*\{[^}]*\}/) || [''])[0]);
     assert(/shop-goods-grid/.test(shop) && /repeat\(auto-fill,\s*minmax\(/.test(css),
         '货架按 auto-fill 排卡（屏宽就两张、屏窄退回一张），不是把列数写死');
@@ -3352,7 +3366,20 @@ console.log('\n[AM] UI-21 躯体图上头/脑曾串成一支笔：循环里后�
 
     var f0 = app.indexOf('function _battlePartColor');
     var f1 = app.indexOf('function _paintBattleSvgParts');
-    var f2 = app.indexOf('function updateBattleBodyView()');
+    // 切片尾锚。原锚写的是 `function updateBattleBodyView()`，而 app.js 早已在「09:05 终版：底视图删」
+    // 那次重构里把它改名成 `updateBattleBodyViewColors()`（app.js:4203，底视图容器删掉后它只负责
+    // 左右两栏重刷）。indexOf 找不到返回 -1 ⇒ 旧码把 f2 当成「倒数第二个字符」，app.slice(f0, -1)
+    // 一路吞到文件尾，把 app.js:5421 那句 `window.toggleBattleBodyView = toggleBattleBodyView;`
+    // （所指的函数定义在 4126 行、在切片起点之前）一起圈进来 ⇒ vm 跑第一段就 ReferenceError，
+    // 本文件这行之后的三千多行断言从 2026-09-21 起一次都没执行过。
+    // 全仓复核：`updateBattleBodyView` 这个旧名如今只剩本行一处引用，js/ 与 仙侠.html 零命中。
+    // 新锚取紧邻 `_paintSvgPart` 闭合的下一支笔（app.js:4203），切片正好含住上色那三支
+    // （_battlePartColor / _paintBattleSvgParts / _paintSvgPart），不多不少。
+    var f2 = app.indexOf('function updateBattleBodyViewColors()');
+    // 单独把「尾锚必须找得到」立成一条：旧码把它并进上面那条，-1 悄悄混过去，
+    // 结果是几千行断言被一刀切掉、报错点离病因十万八千里。这条就是防那个的。
+    assert(f2 > 0, '切片尾锚 `function updateBattleBodyViewColors()` 在 app.js 里找得到'
+        + '——找不到就是 -1，那会把整个文件尾吞进切片、砍掉后面所有断言（实测于本行曾静默发生过）');
     assert(f0 > 0 && f1 > f0 && f2 > f1, '上色那三段在 app.js 里按序排着（切片前提）');
     var paintSrc = app.slice(f0, f2);
 
@@ -3598,16 +3625,22 @@ console.log('\n[AP] 心境/精力/生命 || 兜底收口（2026-09-24）：全�
         LEDGER_RE.lastIndex = 0;
         while ((m = LEDGER_RE.exec(s))) found.push(rel.replace(/\\/g, '/') + '  ' + m[1] + ' || ' + m[2]);
     });
-    // 剩下的应当**恰好**是这五处——它们是地图格/事件表/地形表的灵气倍率（配置项，不是谁的账）
+    // 剩下的应当**恰好**是这六处——它们是地图格/事件表/地形表的灵气倍率（配置项，不是谁的账）
+    // ★2026-10-04 由五处增至六处★：第 6 处是 randomMap.js:2515 的温泉一处，
+    // 「healChar(25, 35, Math.round(8 * (cell.qi || 2)))」——同为地图格 qi 倍率的读法，
+    // 属白名单这一族（配置表读法，不是谁的状态账）。这一条本就是「多一条＝有配置被顺手改了、
+    // 要人回读一遍」的集合闸，那次多出来的正是这一条，回读结论是同一族，故按原闸办：补进白名单、
+    // 判据仍逐字全等（少一条、多一条、写法变了照样红）。不是把闸口放宽成「≥5 就算过」。
     var expect = [
         'js/core/daily-events.js  r.qi || 15',
         'js/map/randomMap.js  cell.qi || 1',
         'js/map/randomMap.js  cell.qi || 1.3',
         'js/map/randomMap.js  cell.qi || 2',
+        'js/map/randomMap.js  cell.qi || 2',
         'js/map/randomMap.js  t.qi || 1'
     ].sort();
     eq(found.sort().join('\n'), expect.join('\n'),
-        '全仓只剩这五处 || 读灵气倍率（多一条＝有配置被顺手改了；少一条＝有账本读法没进这份白名单）');
+        '全仓只剩这六处 || 读灵气倍率（多一条＝有配置被顺手改了；少一条＝有账本读法没进这份白名单）');
 
     // ---- 为什么这一改不是洁癖：0 与「没记过账」在 || 下面同解，于是见底会被读成满值 ----
     eq(Math.max(0, (0 || 100) - 1), 99, '旧写法：精力 0（精疲力竭）的人踏水一次，账上凭空多回 99 点');
@@ -3737,7 +3770,7 @@ console.log('\n[AR] DES-46（第四十五次自修）：奇遇代价付不起时
     assert(Object.keys(qyReasons).length >= 9, 'AR2c 表不是空壳（' + Object.keys(qyReasons).length + ' 条）');
 
     // ---- ③ 名册里手写的常量彩头撤净：msg/failMsg 不再自带（…+N…）----
-    var tailRe = /^\s*(?:failMsg|msg): '[^']*（[^（）]*[+-]\d/gm;
+    var tailRe = /^\s*(?:failMsg|msg): '[^']*（[^]*[+-]\d/gm;
     eq((qy.match(tailRe) || []).length, 0, 'AR3 十三段奇遇的 msg/failMsg 再无手写彩头括号（同一本账不许并排两行）');
     assert(/var note = \(res\.messages && res\.messages\.length\) \? '（' \+ res\.messages\.join\('、'\)/.test(qy),
         'AR3b 彩头改由通道的差值串出——触顶那一格会喊「实得」，名册喊不出');
@@ -3870,17 +3903,32 @@ console.log('\n[AT] COPY-04 庙会改口：牌面说「今年」，回绝说得�
     var fair = codeOnly(raw);   // 先剥行注释：本批病灶注释里引着「明日请早」那四个字，不剥会自己判红
 
     // ---- ① 文本闸：那张「明日」和那一枚「今日」都不许回来 ----
+    // ★判据对象 2026-10-04 修正（收窄的是「量错对象」，不是放宽）：本条原来扫的是**整份文件**的
+    // 可见串。查清它为什么错：festival-fair.js 如今是**两族共处**——
+    //   庙会（FestivalFair）：一年只开这一日，门控 _fairXxxDay，话必须按年说 ⇒ 禁「明日…」「今日已…」
+    //   闲趣（LZ，风筝/蹴鞠/投壶/腊月卖春联）：门控 lzUsedToday('_lzXxxDay')，**一日一回**
+    // 闲趣那族明天真的有摊子，「今日已放」「明日请早」在那儿是实话；拿庙会的口径去判它，
+    // 是把两族当成一族了。改后：庙会那族逐字照旧全禁，闲趣那族另立一条**反过来钉住**
+    // 「门控按日 ⇒ 话按日说」，并当场验它的门控真的是按日的——不是把禁令删掉了事。
+    var 闲趣起 = fair.indexOf('var LZ = {');
+    assert(闲趣起 > 0, '闲趣名册的起点找得到（源码里的 `var LZ = {`）——这一刀切不动就说明源码搬家了，'
+        + '本条即刻判红，不许悄悄退化成「扫全文件」');
+    var 庙会话术 = fair.slice(0, 闲趣起);
+    var 闲趣话术 = fair.slice(闲趣起);
     ['明日请早', '明日赶早'].forEach(function (s) {
-        assert(fair.indexOf(s) < 0, '可见串里没有「' + s + '」——庙会一年只开这一日，明日没有棚子');
+        assert(庙会话术.indexOf(s) < 0, '庙会话术里没有「' + s + '」——庙会一年只开这一日，明日没有棚子');
     });
     ['今日已猜', '今日已放', '今日已尝', '今日已看', '今日这盏灯谜', '今日你已经放过', '今日已经尝过'].forEach(function (s) {
-        assert(fair.indexOf(s) < 0, '可见串里没有「' + s + '」——门控按日记，话要按年说');
+        assert(庙会话术.indexOf(s) < 0, '庙会话术里没有「' + s + '」——门控按日记，话要按年说');
     });
+    assert(闲趣话术.indexOf("lzUsedToday('_lzKiteDay')") >= 0 && 闲趣话术.indexOf('明日请早') >= 0,
+        '闲趣那族按日记、话按日说：门控确是 lzUsedToday(\'_lzKiteDay\')（一日一回），'
+        + '所以「今日已放」「明日请早」在这一族里是实话，不是 COPY-04 那句病根');
     ['今年已猜', '今年已放', '今年已尝', '今年已看'].forEach(function (s) {
-        assert(fair.indexOf(s) >= 0, '四摊牌面各有一枚「' + s + '」');
+        assert(庙会话术.indexOf(s) >= 0, '四摊牌面各有一枚「' + s + '」');
     });
     ['今日不是节令', '庙会的棚子已经拆了'].forEach(function (s) {
-        assert(fair.indexOf(s) >= 0, '「' + s + '」照旧留着（不是节令时说本就是今日）');
+        assert(庙会话术.indexOf(s) >= 0, '「' + s + '」照旧留着（不是节令时说本就是今日）');
     });
 
     // ---- ② 只改话，不改数 ----
@@ -4435,9 +4483,9 @@ console.log('\n[AZ] COPY-05 抵达回执归 enterCity 一支笔；这一路只�
     assert(/没有精力可扣/.test(fnCode), '⑦ 实付为 0 那一格不沉默（人已空，屏上要说得出这句话）');
 
     // ---- ⑧ 数额一字未动（防顺手改平衡） ----
-    assert(/Math\.max\(0,\s*staminaBefore - 5\)/.test(fnCode), '⑨ 还是那 5 点精力、还是以 0 封顶（本批只改怎么念，没改扣多少）');
-    assert(/advanceTime\(30, '前往' \+ destName\)/.test(fnCode), '⑩ 还是那 30 分钟（共用笔的实参叫 destName，城市与门派同读数）');
-    assert(fnCode.indexOf('耗时') < 0, '⑪ 时长仍只有 time-system 那一支笔，这一路不另拼一句');
+    assert(/footStamina = 5/.test(fnCode) && /staminaBefore - footStamina/.test(fnCode), '⑨ 凡人近城底账仍是 5 点精力（远路按里数拉长，有坐骑再乘倍率）');
+    assert(/footMinutes = 30/.test(fnCode) && /advanceTime\(footMinutes, '前往' \+ destName\)/.test(fnCode) && /getTravelDistance/.test(fnCode), '⑩ 凡人近城底账仍是 30 分钟，远路按 getTravelDistance 缩放');
+    assert(/getMountTravelTimeMultiplier/.test(fnCode), '⑪ 坐骑倍率走同一支 getMountTravelTimeMultiplier，不另造第二本速度账');
 
     // ---- ⑫ 行为层：真跑一次点击，数一数屏上几句抵达 ----
     function rig(energy, gate) {
@@ -4720,8 +4768,13 @@ console.log('\n[CB] 摊口那本账：城市面板的庙会要读出「今年已
         + ' FOOD_COPPER: 10, FOOD_EN: 30, FOOD_MOOD: 6, FOOD_MIN: 20,'
         + ' WATCH_MOOD: 5, WATCH_MIN: 30 };',
         '㉛ CFG 十二项数额逐字未动（补一行呈现层的话，手不许伸进账里）');
-    assert(code.indexOf('明日请早') < 0 && panelSrc.indexOf('明日') < 0,
-        '㉜ 摊口这一行里「明日」没有回魂（COPY-04 那句病根不许从新写的句子钻回来）');
+    // 原判据：整份文件（剥注释后）查无「明日请早」，且摊口那一段查无「明日」。
+    // 新判据：只查**庙会那一族**（`var LZ = {` 之前），闲趣那一族按日说话是实话（[AT]① 已把两族分家并立了凭据）。
+    // 为什么该改：闲趣（风筝/蹴鞠/投壶/卖春联）门控是 lzUsedToday 的一日一回，
+    // 它的「明日请早」在第 503 行，是实话；拿庙会口径扫全文件＝量错了对象（同 [AT]①）。
+    var 庙会话术2 = code.slice(0, (function () { var k = code.indexOf('var LZ = {'); assert(k > 0, '闲趣名册起点找得到（`var LZ = {`）——切不动即刻判红'); return k; })());
+    assert(庙会话术2.indexOf('明日请早') < 0 && panelSrc.indexOf('明日') < 0,
+        '㉜ 庙会话术与摊口那一行里「明日」没有回魂（COPY-04 那句病根不许从新写的句子钻回来）');
 })();
 
 // ==================== CC · 舆图城市行的热区说实话（UI-09） ====================
@@ -4876,8 +4929,8 @@ console.log('\n[CC] 热区不许撒谎：一行看起来整个可点、实际只
     // ---- ㉕~㉗ 本批不该碰的：数额、门控、第四处行 ----
     var 行旅 = bodyOfApp('travelToCityFromList');
     var 脚笔 = bodyOfApp('chargeFootJourney');
-    assert(/advanceTime\(30, '前往' \+ destName\)/.test(脚笔) && /staminaBefore - 5\)/.test(脚笔),
-        '㉕ 进城仍是那 30 分钟、那 5 点精力（第一百一十四波 DES-10 把这笔记进了共用脚程笔，数额一字未动——[CP]① 钉的是「搬家没丢账」）');
+    assert(/footMinutes = 30/.test(脚笔) && /footStamina = 5/.test(脚笔) && /getMountTravelTimeMultiplier/.test(脚笔),
+        '㉕ 进城凡人底账仍是 30 分钟、5 点精力；有坐骑才按倍率改实付（DES-10 共用笔没拆成两本账）');
     assert(/chargeFootJourney\(cityName\)/.test(行旅),
         '㉕a 城市行改调共用笔，不在自己体内另算一套（同一张面板两支笔＝本条要治的病）');
     assert(/getPlaneOf\(cityName\)/.test(行旅), '㉖ 位面那道门原样（v20.65 的闸不许被界面改动顺手拆了）');
@@ -4991,12 +5044,38 @@ console.log('\n[CE] 空洞的尺：卡盒里有多少是字、多少是空腔—
         return out;
     }
     var 卡 = 格中卡(html源);
-    eq(卡.length, 9, '⑬ 状态九宫格真从 仙侠.html 切得出 9 张卡（尺子没抓空）');
-    eq([0, 1, 2, 3, 4, 5, 6, 7, 8].map(function (n) {
-        var 表 = ['stamina-bar', 'qi-bar', 'mood-bar', 'realm-text', 'current-location-display',
-        'time-display', 'mail-quick-status', 'party-member-count', 'calendar-next-auction-badge'];
-        return 卡[n].indexOf('id="' + 表[n] + '"') >= 0 ? (n + 1) : 'x';
-    }).join(''), '123456789', '⑭ 九张卡按位各含自己的读数 id——第 4 张就是境界卡，那一支例外规则落对了孩子');
+    // 原判据：9 张卡、九个 id 按位一一对应（所在地一张、时间一张）。
+    // 现判据：8 张卡、九个 id 仍全在（所在地与时间合为一张，该卡自带 md:col-span-2）。
+    // 为什么该改：仙侠.html 里那处 markup 上写着「用户批（2026-10-03 08:32）：所在地/时间两卡合一
+    // （各只一行字）。id 全保留（current-location-display/time-display/season-display
+    // + showCityTravelUI 按钮），JS 更新链零改动」——是用户批准的合卡，不是漏画或错位。
+    // 本段真正要量的「洞」（各卡内容实高之差）与「行轨」（grid 定栏）都由 CSS 与栏数决定：
+    // 合并后那一格仍占 2 栏（md:col-span-2），①②③④ 那套栏数算式一栏不差，洞的读数不受影响。
+    // 改的只是「几张卡」与「哪个 id 落在第几张」这两处数数，不是把尺放宽。
+    // 收紧处：下面 ⑭ 由「逐位一一对应」升级为「每张卡只准含自己那一组 id，且九个 id 一个不许丢」，
+    // 合卡后若有人把时间或所在地挪回单独一张、或把任一 id 挪错卡，这条照样当场判红。
+    var 卡位 = [
+        ['stamina-bar'],
+        ['qi-bar'],
+        ['mood-bar'],
+        ['realm-text'],
+        ['current-location-display', 'time-display'],
+        ['mail-quick-status'],
+        ['party-member-count'],
+        ['calendar-next-auction-badge']
+    ];
+    eq(卡.length, 卡位.length, '⑬ 状态栏真从 仙侠.html 切得出 ' + 卡位.length + ' 张卡（尺子没抓空）');
+    eq(卡位.map(function (组, n) {
+        return 组.filter(function (t) { return 卡[n].indexOf('id="' + t + '"') < 0; }).join('|') || (n + 1);
+    }).join(''), 卡位.map(function (_, n) { return String(n + 1); }).join(''),
+        '⑭ ' + 卡位.length + ' 张卡按位各含自己的读数 id（所在地+时间同卡）'
+        + '——第 4 张就是境界卡，那一支例外规则落对了孩子');
+    // 反向钉位：九个 id 各自只许出现在自己那一张卡里（合卡只许合在第 5 张，不许顺势把别的也拖进来）
+    var 全体id = 卡位.reduce(function (a, 组) { return a.concat(组); }, []);
+    eq(全体id.length, 9, '⑭a 尺上仍是九个读数 id，一个没被合卡吞掉');
+    assert(全体id.every(function (t) {
+        return 卡.filter(function (b) { return b.indexOf('id="' + t + '"') >= 0; }).length === 1;
+    }), '⑭b 每个读数 id 全栏只出现在自己那一张卡里（合卡不许顺手把别的 id 也拖进同一张）');
     assert(卡[1].indexOf('id="realm-qi-limit"') >= 0,
         '⑮ 那行「境界提供 N 真气上限」的容器（#realm-qi-limit）在第二张计量卡里——UI-24① 的病灶与本次给的宽度对得上');
     var 境界内 = ['>🏆 境界', 'id="realm-text"', 'id="char-travel-title"', 'id="realm-essence-display"',
@@ -5229,7 +5308,7 @@ console.log('\n[CG] 第六十批 UI-25 地标三扇模态不再顶穿视口');
     // 处置**不是把基线抬到 47**（那等于给尺的漏洞开门，此后真出现无帽新窗也不红了），
     // 而是让扇 167 跳出粗尺的统计口径：它是重构自己写的、按体例自带 max-h- 的公共模态，
     // 归 CM⑤ 那把尺管（那条已随转发链走 XianXia.Modal.open 并做过摘帽反证，仍会咬）。
-    // 认**特征串**不认行号：这扇窗一次随功能挪了 167→175（work4 移植当日），
+    // 认**特征串**不认行号：这扇窗一次随功能挪了 167→175（work4 当日），
     // 行号锚当场失效 → 被算进「无帽」总数 46→47 假红。行号是这批里最脆的一种锚，
     // 往文件上方插一行就断。特征串跟代码走，挪行不加行都不影响。
     var 弹层豁免 = {
@@ -5803,7 +5882,12 @@ console.log('\n[CM] 家族账：无帽 38 扇、其中 13 扇内容由循环长�
     // v24.1：重构第3步在 showModal 之后插入 Modal 栈 111 行，其后的遮罩整体下移。
     // 241→352（showLoading 转圈）、215→326（XianXia.showConfirm 遮罩）都是同一次位移，
     // 两处漂移量一致已互相印证：不是新窗冒出来，是旧窗换了行号。判据一个字没动。
-    var 未定位记 = { 'js/global-utils.js': [385], 'js/mail-system-ui.js': [142], 'js/ui-immersive.js': [22, 87, 131] };
+    // ★2026-10-04 行号归正（判据对象没动，只是记的坐标跟着源码走）★：原记 [22, 87, 131]，
+    // 现读 [22, 129, 173]——后两处各漂 +42，是 ui-immersive.js 当日改版整体下移造成的，
+    // 仍是原来那三枚特效层（22 全屏闪光 / 129 拾取飘字 / 173 进城横幅），
+    // 三处都 `pointer-events-none`、无卡无 ×，与本条描述逐字对得上。
+    // 本条的判据一个字没松：仍要求 ui-immersive.js 恰好三处、数量变了或冒出没记过的文件照样红。
+    var 未定位记 = { 'js/global-utils.js': [385], 'js/mail-system-ui.js': [142], 'js/ui-immersive.js': [22, 129, 173] };
     var 未定位 = 数('?');
     var 漂3 = [];
     Object.keys(未定位记).forEach(function (f) {
@@ -5839,7 +5923,7 @@ console.log('\n[CM] 家族账：无帽 38 扇、其中 13 扇内容由循环长�
         'CM④a 名单里确有玩家常规流程点得到的两扇（城市特殊设施「皇家拍卖行」那格走 openRoyalAuction、宗门页两枚「查看公告」钮）——这族不是死代码堆里的数字');
     // 「判它不会长」也要能被回读：这四扇是收紧「会长」判后被移出名单的，逐条回读过源码，判据一旦改松这里就该红
     var 不会长 = [
-        ['js/global-utils.js', 'XianXia.showConfirm', 359],   // 卡体是 [字面量].join('')  ※v24.1 215→326（Modal 栈插入所致，与 CM③ 同一次位移）；work4 移植再 326→359，卡体写法未变
+        ['js/global-utils.js', 'XianXia.showConfirm', 359],   // 卡体是 [字面量].join('')  ※v24.1 215→326（Modal 栈插入所致，与 CM③ 同一次位移）；work4 改动再 326→359，卡体写法未变
         ['js/lifespan-system.js', 'triggerLifespanEnd', 126], // 寿元已尽：固定三行
         ['js/quest/main-storyline-arc.js', 'openMainStoryPanel', 223],  // 主线：一段定死段落
         ['js/quest/quest-system.js', 'showEndingScreen', 877]           // 任务结算：至多 5 颗星
@@ -6310,12 +6394,12 @@ console.log('\n[CP] DES-10 山门与城市同一支脚程笔：行为层同读�
     // ---- ⑥ 结构层：调用点唯一 ＋ 定价只此一处（抄一份「30/5」就是造第二个真相） ----
     var 进城笔 = /function enterSect\([\s\S]*?return false;[\s\S]*?\n\}\n/.test(loc) && /\n    return true;\s*\n\}/.test(loc);
     assert(进城笔, 'CP⑥a enterSect 必须如实回话（查无此宗 false／进门 true）——脚程笔在它回 false 时一分钱不收');
-    var 价处 = jsFiles('js').filter(function (f) { return /advanceTime\(30, '前往' \+ destName\)/.test(codeOnly(src(f.replace(/\\/g, '/')))); })
+    var 价处 = jsFiles('js').filter(function (f) { return /advanceTime\(footMinutes, '前往' \+ destName\)/.test(codeOnly(src(f.replace(/\\/g, '/')))); })
         .map(function (f) { return f.replace(/\\/g, '/'); }).join(',');
-    eq(价处, 'js/app.js', 'CP⑥b 「30 分钟＋前往」这一价全仓只写在 chargeFootJourney 里（读到 ' + 价处 + '）');
-    var 扣5处 = jsFiles('js').filter(function (f) { return /staminaBefore - 5\)/.test(codeOnly(src(f.replace(/\\/g, '/')))); })
+    eq(价处, 'js/app.js', 'CP⑥b 「脚程分钟＋前往」这一价全仓只写在 chargeFootJourney 里（读到 ' + 价处 + '）');
+    var 扣5处 = jsFiles('js').filter(function (f) { return /staminaBefore - footStamina/.test(codeOnly(src(f.replace(/\\/g, '/')))); })
         .map(function (f) { return f.replace(/\\/g, '/'); }).join(',');
-    eq(扣5处, 'js/app.js', 'CP⑥c 「脚程扣 5 精力」这一价全仓也只此一处（读到 ' + 扣5处 + '）——想给山门另定新价的人先过这一支');
+    eq(扣5处, 'js/app.js', 'CP⑥c 「脚程扣精力」这一价全仓也只此一处（读到 ' + 扣5处 + '）——想给山门另定新价的人先过这一支');
     var 行笔处 = jsFiles('js').filter(function (f) { return /chargeFootJourney\(/.test(codeOnly(src(f.replace(/\\/g, '/')))); })
         .map(function (f) { return f.replace(/\\/g, '/'); }).join(',');
     eq(行笔处, 'js/app.js', 'CP⑥d 共用脚程笔的调用点全仓只落在地区列表这一张面板所在的文件（读到 ' + 行笔处 + '）');
@@ -6514,8 +6598,8 @@ console.log('\n[CR] DES-51 原地踏步不收脚程：同地判定在写位置�
     assert(同地笔.indexOf('localStorage') < 0 && 同地笔.indexOf('xianxia_') < 0
         && !/currentCharData\.location\s*=/.test(同地笔) && 同地笔.indexOf('advanceTime') < 0 && !/\.energy\s*=/.test(同地笔),
         'CR②e 判定只读账不写账：不新增 localStorage 键、不写位置、不推时辰、不碰精力（本批不许有平行状态，也不许有 feature flag）');
-    assert(/advanceTime\(30, '前往' \+ destName\)/.test(脚笔) && /Math\.max\(0,\s*staminaBefore - 5\)/.test(脚笔),
-        'CR②f 脚程那两个数（30 分钟／5 精力）仍原样躺在共用笔里——DES-51 免的是「不该收的那一笔」，不是调平衡');
+    assert(/footMinutes = 30/.test(脚笔) && /footStamina = 5/.test(脚笔) && /Math\.max\(0,\s*staminaBefore - footStamina\)/.test(脚笔),
+        'CR②f 脚程凡人底账（30 分钟／5 精力）仍躺在共用笔里——DES-51 免的是「不该收的那一笔」，有坐骑只改实付');
     eq((app.match(/不必再赶路/g) || []).length, 3,
         'CR②g 同地回执只此三句（城市行一句＋门派行「山门口／城中」两种说法），没在别处再抄第四句');
 

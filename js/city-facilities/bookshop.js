@@ -58,7 +58,7 @@
     function settle(spec) {
         try {
             if (window.RewardService && typeof window.RewardService.apply === 'function') {
-                var r = window.RewardService.apply(spec, { source: '书肆', city: city() });
+                var r = window.RewardService.apply(spec, { facilitySpend: true, source: '书肆', city: city() });
                 return { ok: !!(r && r.success !== false), note: r && r.messages ? r.messages.join('、') : '' };
             }
         } catch (e) { console.warn('[静默失败] js/city-facilities/bookshop.js · settle：书钱和长进没落成一笔账', e && e.message); }
@@ -167,6 +167,12 @@
                 '</div>';
         }
         html += '<p class="text-[11px] text-gray-500 mt-2">你的学识 ' + lv + '——眼力越好，越容易从故纸堆里抖出功法残页（底率 ' + Math.round(CFG.FIND_BASE * 100) + '%，学识每 25 点加 10%）。</p>';
+        // v26.0 六路营生批：借案写书（authoring.js 守卫接线——账不在位就不挂这行）
+        try {
+            if (window.Authoring && typeof window.Authoring.open === 'function') {
+                html += '<button onclick="window.Authoring.open()" class="w-full p-3 rounded mb-1 text-left text-sm text-white hover:opacity-90 bg-indigo-950">✍️ 借案写书（把修行/功法/行脚写成册——卖稿、传徒，或写部伪经埋雷）</button>';
+            }
+        } catch (eA) { console.warn('[静默失败] js/city-facilities/bookshop.js · open：借案写书那行没挂上，书肆货架照常', eA && eA.message); }
         if (typeof window.showBuildingEffectDialog === 'function') {
             window.showBuildingEffectDialog('📚 旧书肆 · ' + ct, html);
             return true;

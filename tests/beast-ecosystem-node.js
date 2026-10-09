@@ -30,8 +30,12 @@ var wrapped = '(function(window){' + src + '})(mockWindow);';
 eval(wrapped);
 var B = mockWindow.BeastEcosystem;
 assert(!!B, 'BeastEcosystem 已注册');
-assert(B.BEAST_DISTRIBUTION.length === 19, '19 灵兽 (got ' + B.BEAST_DISTRIBUTION.length + ')');   // v20.95 补三只传说级；第八十五波补位面四兽；第八十六波补火焰虎/影豹（坊市独苗野外入表）
-assert(Object.keys(B.BEAST_BUFFS).length === 6, '6 buff');
+// 这两条此前写死 19 / 6，两条都是**假的**：v27.0 波给 11 只补了差事后 buff 数早已是 17，
+// v27.11 再补 14 只（草木 8 + 龙 6）后是 33。写死的数字会在下一次正常扩充时变成一句谎话——
+// 「全表恰好 6 本账」从来不是本项目的不变式，不变式是「每只兽都有差事，且每一本账都有人读」。
+// 改下限 + 报实数，并把真不变式挪到 tests/v27.11-beast-species-node.js 的 C/D 段逐条量。
+assert(B.BEAST_DISTRIBUTION.length >= 19, '不少于 19 灵兽 (got ' + B.BEAST_DISTRIBUTION.length + '；v27.11 起 33)');
+assert(Object.keys(B.BEAST_BUFFS).length >= Object.keys(B.BEAST_DISTRIBUTION).length, '每只兽都有差事（buff ' + Object.keys(B.BEAST_BUFFS).length + ' ≥ 分布 ' + B.BEAST_DISTRIBUTION.length + '）');
 
 // ---- 1. 灵兽按地区 ----
 section('1) 灵兽按地区');

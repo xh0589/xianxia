@@ -1,4 +1,19 @@
 // ==================== art-effects.js - v20.48 功法掌握通电 ====================
+// 【第一批·认账口径与词表补齐】此前两处把「学会的功法」和「它写的效果」都读丢了：
+//   ① 判定只认 techniqueKnowledge 一条道，而功法栏（equipment.js:374-379）、运功装具
+//      （KnowledgeSystem.canEquip）、融合取底（cultivation.js:_skillIsMastered）都还认
+//      learnedSecrets 与「秘籍 id 反查」。于是同一门功法，秘籍层出力、运功层不出力——
+//      组内「两层取最高」的设计（同组归一）根本没机会生效。
+//      此处改成三处同款认账：知识账 → learnedSecrets 含本门 → 任一映射到本门的秘籍 id 在册。
+//   ② effect 词表与数据实词不符：skillPages 写「长兵伤害/反击/闪避/吸血/毒系伤害/全系伤害」，
+//      解析器只认「枪法伤害/反击+%/闪避+%」，59 门里 28 门解析结果是 {}——学会了、计数里在、
+//      面板写着「已掌握」，战斗加成为 0。词表按数据实词补齐（数值一律照抄，不改任何倍率）。
+// 口径约定（不变，勿混）：
+//   flat = 点数，进 combatBonus()/attrBonus() 的加值制
+//   pct  = 百分点，进 weaponPct() 的乘区；app.js:5240 是 attack × (1 + pct/100)
+//          ⇒ attackPct 150 的意思是「+150%」＝×2.5，不是 ×1.5。
+//   ★ attack 不在 combatBonus() 里是刻意的：那边是加值制，塞 attack 会变成平加点数，
+//     与乘区两把尺打架。通用攻击百分点（解析键 attack）由 weaponPct() 无条件并入乘区。
 // 此前两层功法数据全是死账：
 //   ① items-extended/06-arts.js 秘籍的结构化 effect（qi_regen_boost / all_attr_boost / fire_damage_boost…）
 //      —— 全库零消费点，学到三品功法毫无变化；
@@ -26,17 +41,30 @@
         return null;
     }
 
-    function _knowManual(artId) {
-        // 秘籍物品 → MANUAL_TO_SKILL 映射后的 skill_XX，两处任一掌握即算
-        var map = (window.KnowledgeSystem && window.KnowledgeSystem.MANUAL_TO_SKILL) || {};
-        var mapped = map[artId];
-        if (mapped && _knowState(mapped)) return true;
-        return !!_knowState(artId);
-    }
+    // ★原 _knowManual（秘籍 id → skill_XX 的掌握判定）已删：全文件无人调用它，
+    //   而它与下面的 _artLearned 是同一问题的两个答案——「这门功法算不算学会」在一个文件里
+    //   留两把尺，正是本批病灶的成因。统一走 _artLearned。
 
     function _learnedSecretList() {
         var arr = window.learnedSecrets;
         return (arr && arr.length) ? arr : [];
+    }
+
+    // —— 掌握判定（三处同款认账，勿再退回单一字段）——
+    // 知识账 learned/mastered → learnedSecrets 含本门 id → 任一映射到本门的秘籍 id 在册。
+    // 后两条不是补丁是补齐：功法栏与运功装具一直这么认（equipment.js:374-379 /
+    // KnowledgeSystem.canEquip 的老档反查），只有本模块严于此，才出现「秘籍层出力、
+    // 运功层不出力」的裂缝。
+    function _artLearned(id) {
+        if (!id) return false;
+        if (_knowState(id)) return true;
+        var ls = _learnedSecretList();
+        if (ls.indexOf(id) >= 0) return true;
+        var map = (window.KnowledgeSystem && window.KnowledgeSystem.MANUAL_TO_SKILL) || {};
+        for (var mid in map) {
+            if (Object.prototype.hasOwnProperty.call(map, mid) && map[mid] === id && ls.indexOf(mid) >= 0) return true;
+        }
+        return false;
     }
 
     // —— 来源 A：秘籍物品（结构化 effect 对象） ——
@@ -79,17 +107,26 @@
     };
     var _WEAPON_KEYS = { '剑法': 'sword', '刀法': 'dao', '拳掌': 'fist', '枪法': 'spear', '奇门': 'odd' };
 
+    // 【词表按数据实词】skillPages 的 59 条 effect 串逐条对齐写定，措辞以数据为准：
+    //   长兵（不是「枪法」）· 反击/闪避 有写成点数的（不带 %）· 吸血 · 毒系伤害 · 全系伤害
+    // 数值一律照抄原串，不做任何折算或缩放。
     function _parseSkillEffect(str) {
         var out = {};
         if (!str || typeof str !== 'string') return out;
+        // 百分点句式（带 %）
         function pct(re, key) {
+            var m = str.match(re);
+            if (m) out[key] = Math.max(out[key] || 0, parseInt(m[1], 10) || 0);
+        }
+        // 点数句式（不带 %）：(?![\d%]) 挡住「闪避+45%」被点数规则截胡
+        function flat(re, key) {
             var m = str.match(re);
             if (m) out[key] = Math.max(out[key] || 0, parseInt(m[1], 10) || 0);
         }
         pct(/剑法伤害\+(\d+)%/, 'sword');
         pct(/刀法伤害\+(\d+)%/, 'dao');
         pct(/拳掌伤害\+(\d+)%/, 'fist');
-        pct(/枪法伤害\+(\d+)%/, 'spear');
+        pct(/(?:枪法|长兵)伤害\+(\d+)%/, 'spear');
         pct(/奇门伤害\+(\d+)%/, 'odd');
         pct(/攻击\+(\d+)%/, 'attack');
         pct(/防御\+(\d+)%/, 'defensePct');
@@ -98,6 +135,11 @@
         pct(/真气恢复\+(\d+)%/, 'qiRegen');
         pct(/生命恢复\+(\d+)%/, 'hpRegen');
         pct(/真气上限\+(\d+)%/, 'maxQiPct');
+        pct(/吸血\+(\d+)%/, 'lifesteal');
+        pct(/毒系伤害\+(\d+)%/, 'venom');
+        pct(/全系伤害\+(\d+)%/, 'allElem');
+        flat(/反击\+(\d+)(?![\d%])/, 'counter');
+        flat(/闪避\+(\d+)(?![\d%])/, 'dodge');
         var em = str.match(/([一-龥]{1,2}系)伤害\+(\d+)%/);
         if (em && _ELEM_KEYS[em[1]]) out['elem_' + _ELEM_KEYS[em[1]]] = parseInt(em[2], 10) || 0;
         return out;
@@ -110,7 +152,7 @@
             var page = pages[p] || [];
             for (var i = 0; i < page.length; i++) {
                 var sk = page[i];
-                if (!sk || !sk.effect || !_knowState(sk.id)) continue;
+                if (!sk || !sk.effect || !_artLearned(sk.id)) continue;
                 out.push({ id: sk.id, name: sk.name, parsed: _parseSkillEffect(sk.effect) });
             }
         }
@@ -210,6 +252,19 @@
             take(pg, pg.pct, 'qiRegen', ps.qiRegen);
             take(pg, pg.pct, 'hpRegen', ps.hpRegen);
             take(pg, pg.pct, 'maxQiPct', ps.maxQiPct);
+            // 点数句式：反击+20 / 闪避+45（不带 % 的写法此前一个键都读不出）
+            take(pg, pg.flat, 'counter', ps.counter);
+            take(pg, pg.flat, 'dodge', ps.dodge);
+            // 吸血+15% / 毒系伤害+20% —— 阈值沿用秘籍层的先例（≥10 得能力，有无账不是高低账）
+            if ((ps.lifesteal || 0) >= 10) pg.flat._lifesteal = 1;
+            if ((ps.venom || 0) >= 10) pg.flat._venom = 1;
+            // 全系伤害+45%（混沌开天）：战斗端只按敌型取火/冰/水/金/虚/龙/魔七键
+            // （battle.js:4754-4757），故摊到七键上才算真出力，不是新开一条无人读的通道
+            if (ps.allElem > 0) {
+                ['fire', 'ice', 'water', 'metal', 'void', 'dragon', 'demon'].forEach(function (ak) {
+                    take(pg, pg.elem, ak, ps.allElem);
+                });
+            }
             for (var ek in _ELEM_KEYS) {
                 var v = ps['elem_' + _ELEM_KEYS[ek]];
                 if (v) take(pg, pg.elem, _ELEM_KEYS[ek], v);
@@ -330,13 +385,26 @@
         if (p.dao) parts.push('刀攻+' + p.dao + '%');
         if (p.fist) parts.push('拳掌+' + p.fist + '%');
         if (p.spear) parts.push('枪攻+' + p.spear + '%');
+        if (p.odd) parts.push('奇门+' + p.odd + '%');
         if (p.attack) parts.push('攻击+' + p.attack + '%');
         if (p.qiRegen) parts.push('真气恢复+' + p.qiRegen + '%');
         if (p.hpRegen) parts.push('血气恢复+' + p.hpRegen + '%');
         if (f.maxQi || p.maxQiPct) parts.push('真气上限+' + (f.maxQi || 0) + (p.maxQiPct ? '+' + p.maxQiPct + '%' : ''));
         var ELEM_NAMES = { fire: '火', ice: '冰', water: '水', metal: '金', wood: '木', earth: '土', thunder: '雷', wind: '风', void: '虚', dragon: '龙', demon: '魔' };
+        // 七键同值、且真有「全系伤害」那门功法在场 ⇒ 合成一句报，别糊成七行。
+        // 两条件缺一不可：否则「七门各给本系 +20」也会被误报成全系+20。
+        var BATTLE_ELEM = ['fire', 'ice', 'water', 'metal', 'void', 'dragon', 'demon'];
+        var uniform = 0;
+        if ((p.allElem || 0) > 0 && BATTLE_ELEM.every(function (k) { return e[k] === e[BATTLE_ELEM[0]]; })) {
+            uniform = e[BATTLE_ELEM[0]] || 0;
+        }
+        if (uniform > 0) parts.push('全系伤+' + uniform + '%');
         var elemText = [];
-        for (var ek in e) { if (e[ek] && ELEM_NAMES[ek]) elemText.push(ELEM_NAMES[ek] + '伤+' + e[ek] + '%'); }
+        for (var ek in e) {
+            if (!e[ek] || !ELEM_NAMES[ek]) continue;
+            if (uniform > 0 && BATTLE_ELEM.indexOf(ek) >= 0) continue;
+            elemText.push(ELEM_NAMES[ek] + '伤+' + e[ek] + '%');
+        }
         if (elemText.length) parts.push(elemText.join(' '));
         if (f._lifesteal) parts.push('吸血');
         if (f._venom) parts.push('施毒');

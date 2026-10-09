@@ -472,7 +472,8 @@
         try {
             if (W.WorldJournal && W.WorldJournal.record) W.WorldJournal.record({ type: 'endgame', title: '灵气之尽', text: _journalLine(kind) });
         } catch (e) {}
-        log('📕 灵气之尽——结局「' + _endingName(kind) + '」已入档。账单页合上了，日子还长。（回望：终局面板「回望那一页」）', 'success');
+        log('📕 灵气之尽——结局「' + _endingName(kind) + '」已入档。这是全链的真终局：账写到这一页，后面的日子都在这个世界身上。'
+            + '（账单页尾部有「这一生的判词」——星级与抉择那一页，只在这一刻给，不在中段给）', 'success');
         W.qiShowEndingPage();
     }
     function _journalLine(kind) {
@@ -594,13 +595,24 @@
         try { var o = document.getElementById('qi-ending-overlay'); if (o) o.remove(); } catch (e2) {}
         var color = kind === 'slay' ? 'border-red-600' : (kind === 'ferry' ? 'border-amber-500' : (kind === 'release' ? 'border-emerald-600' : 'border-gray-500'));
         var tcolor = kind === 'slay' ? 'text-red-300' : (kind === 'ferry' ? 'text-amber-200' : (kind === 'release' ? 'text-emerald-300' : 'text-gray-300'));
+        // 【终局并轨·第一批】这一页是全链唯一的真终局（实测 main_058 排第 48/48，且只此四结局真的改世界）。
+        // 旧五结局（GAME_ENDINGS：飞升/入魔/隐退/轮回/混沌之主）此前在 main_035 就自称「游戏结束」弹出来——
+        // 那是主线第 20 环（面板第 33 位），身后还压着 15 章，其中就包括这三章。已把它降级为中段章节点过场。
+        // 现在那一页判词挂在这里的账单页尾部，**玩家点才弹，不自动叠** ⇒ 不再是「一通关连弹三套屏」。
+        // 闸在 quest-system.js showGrandVerdict()：灵气之尽未决不发、且只发第一次。
+        var 判词钮 = '';
+        try {
+            if (typeof W.showGrandVerdict === 'function') {
+                判词钮 = btn('📜 这一生的判词（星级与抉择）', 'window.showGrandVerdict()', 'bg-yellow-800 hover:bg-yellow-700');
+            }
+        } catch (eV) {}
         var wrap = '<div class="fixed inset-0 bg-black/95 flex items-center justify-center p-4" id="qi-ending-overlay" style="z-index:60">'
             + '<div class="bg-gray-900 border-2 ' + color + ' rounded-xl p-6 max-w-xl w-full max-h-[90vh] overflow-y-auto">'
             + '<h1 class="text-2xl font-bold text-center mb-1 ' + tcolor + '">📕 灵气之尽</h1>'
             + '<p class="text-center text-sm text-gray-400 mb-4">结局 ·「' + _endingName(kind) + '」</p>'
             + secs.join('')
             + '<p class="text-xs text-gray-500 mt-4 border-t border-gray-700 pt-3">' + footer.join('<br>') + '</p>'
-            + btns([btn('📕 合上账单——日子还长', 'window.qiCloseEnding()', 'bg-gray-600 hover:bg-gray-500')])
+            + btns([btn('📕 合上账单——日子还长', 'window.qiCloseEnding()', 'bg-gray-600 hover:bg-gray-500')].concat(判词钮 ? [判词钮] : []))
             + '</div></div>';
         if (document.body && document.body.insertAdjacentHTML) document.body.insertAdjacentHTML('beforeend', wrap);
     };
@@ -610,7 +622,7 @@
 
     // 【第一百四十二批·订正章号；并撤回我自己写错的一句判断】
 // ① 原印的是「main_056~021」——021 是**旧正典**占用的号段（qi-finale.js:65 注释：旧正典 main_021~035 存活占用），
-//    本模块注册的是第三幕 **main_056~058**，笔误已订正。（外包《成品文案包》00-README 第 35 行也点了这一处。）
+//    本模块注册的是第三幕 **main_056~058**，笔误已订正。（《成品文案包》00-README 第 35 行也点了这一处。）
 // ② ⚠️ **我原先在这里写「换道根本没实现」——那句是我自己写错的，现撤回。**
 //    当时我是从 `finaleReady()` 下判断的（全文件只有它按 qi_route 分支，便认定没有跨路线切换）。
 //    但**换道根本不在 finaleReady 里**：qiStartFinale(:157) 的顺序是

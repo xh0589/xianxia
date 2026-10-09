@@ -75,10 +75,21 @@
                 '<div class="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">';
             npcs.forEach(function (n) {
                 var icon = (n.appearance && n.appearance.icon) || n.icon || '🧑';
+                // W-2 接线：城中人物卡原先只印姓名/身份/攀谈按钮，情绪一栏全仓没有第二处渲染
+                //   （js/npcs/npc-emotions.js 的 getEmotionBadgeHTML 此前零调用 ⇒ 玩家在城里
+                //   只能靠点开对话才知道这人今天是高兴还是想杀人）。
+                //   挂点选在这里而不是对话面板：对话面板 npc-system.js:3926-3948 早就内联了一份同形状的
+                //   情绪块（injectEmotionToDialog 就是它的重复实现，零调用，见该文件注），
+                //   再接一遍会把那一块印两次。本卡自带独立「攀谈」按钮、外层没有 onclick，
+                //   所以徽章里那三枚安慰/鼓励/陪伴按钮点下去不会连带弹对话。
+                var emo = (typeof window.getEmotionBadgeHTML === 'function')
+                    ? window.getEmotionBadgeHTML(n)
+                    : '';
                 html += '<div class="bg-gray-800/40 p-2 rounded border border-gray-700 text-center">' +
                     '<span class="text-lg">' + icon + '</span>' +
                     '<p class="text-xs text-amber-200 truncate font-bold" title="' + n.name + '">' + n.name + '</p>' +
                     '<p class="text-xs text-gray-500">' + (n.occupation || '闲人') + '</p>' +
+                    emo +
                     '<button onclick="window.showNPCDialog(\'' + n.id + '\')" class="mt-1 text-xs bg-amber-700 hover:bg-amber-600 text-white px-2 py-0.5 rounded w-full">攀谈</button>' +
                     '</div>';
             });

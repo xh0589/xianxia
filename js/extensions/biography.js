@@ -4,6 +4,8 @@
 // 传记在**打开面板的那一刻**从既有账本现场编成（天下见闻 ≤100 条 + 存档白名单字段 + 游历账），
 // 打开一次算一次，关闭即归零，平时一个字节都不动——不存在「太耗性能」的常驻成本。
 // 称号照 travel-journal 的成例：纯派生的名分，不开新的战力口子（不带属性增益）；
+// 梯子共五类：斩敌/榜位/入魔/因果/身家等十六枚看「世上的事实」，
+// 末尾五档（初闻江湖→此生可书）看「成就墙点亮了几枚」，同样只在打开面板时现算。
 // 只有「佩戴中」一个字段落档（StateRegistry 正门，不新开 localStorage 键）。
 
 (function () {
@@ -70,7 +72,17 @@
         { id: 't_fail10', name: '百折不挠', desc: '突破失败十次以上仍在闭关', cond: function (cd) { return (Number(cd._failedBreakthroughs) || 0) >= 10; } },
         { id: 't_top', name: '人间绝巅', desc: '境界登临大乘以上', cond: function (cd, ctx) { return ctx.tier >= 8; } },
         { id: 't_good', name: '善名远播', desc: '因果 50 以上', cond: function (cd) { return (Number(cd.karma) || 0) >= 50; } },
-        { id: 't_evil', name: '业障缠身', desc: '因果 -50 以下', cond: function (cd) { return (Number(cd.karma) || 0) <= -50; } }
+        { id: 't_evil', name: '业障缠身', desc: '因果 -50 以下', cond: function (cd) { return (Number(cd.karma) || 0) <= -50; } },
+        // —— 成就梯子（记下了多少桩，与上头那些「世上的事实」是两本账）——
+        // 排在最后：前面十六枚看的是斩了多少、名气几何、有没有道侣——看的是事迹；
+        // 这五档看的是成就墙点亮了几枚——看的是你有没有把这一路记下来。
+        // 条件只读完成枚数，不读积分（积分只进成就墙，不进钱袋），也不带任何属性增益；
+        // 成就管理器没就位（读档早于成就墙、或模块缺席）时这五档一律不算解锁，也不抛错。
+        { id: 't_ach5', name: '初闻江湖', desc: '刚有几桩可记', cond: function (cd, ctx) { return ctx.achDone >= 5; } },
+        { id: 't_ach15', name: '足迹渐深', desc: '一路走下来了', cond: function (cd, ctx) { return ctx.achDone >= 15; } },
+        { id: 't_ach30', name: '阅历过人', desc: '过半可书', cond: function (cd, ctx) { return ctx.achDone >= 30; } },
+        { id: 't_ach45', name: '一方典故', desc: '差不多写满一本', cond: function (cd, ctx) { return ctx.achDone >= 45; } },
+        { id: 't_ach52', name: '此生可书', desc: '全亮', cond: function (cd, ctx) { return ctx.achDone >= 52; } }
     ];
 
     function unlockedTitles() {
@@ -92,7 +104,14 @@
         } catch (e) { console.warn('[静默失败] js/extensions/biography.js · _ctx：望风榜没排出来，榜上称号这一轮空着', e && e.message); }
         var tier = 0;
         try { if (typeof window.getRealmTier === 'function') tier = window.getRealmTier(cd.realm) || 0; } catch (e2) { console.warn('[静默失败] js/extensions/biography.js · _ctx：境界尺没量出来，绝巅称号这一轮空着', e2 && e2.message); }
-        return { rank: rank, tier: tier, stones: _stones(), dao: _daoNames() };
+        // 成就墙的完成枚数：只读账主的只读口，读不到就当零（这五档称号本轮全不算解锁）
+        var achDone = 0;
+        try {
+            if (window.achievementManager && typeof window.achievementManager.getCompletedAchievements === 'function') {
+                achDone = (window.achievementManager.getCompletedAchievements() || []).length || 0;
+            }
+        } catch (e3) { console.warn('[静默失败] js/extensions/biography.js · _ctx：成就墙没答出点亮了多少枚，阅历几档称号这一轮空着', e3 && e3.message); }
+        return { rank: rank, tier: tier, stones: _stones(), dao: _daoNames(), achDone: achDone };
     }
 
     function equipTitle(id) {

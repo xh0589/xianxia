@@ -1894,7 +1894,20 @@ function resolveSectStory(sectName, stageIdx, choiceIdx) {
     return true;
 }
 
-// 每日钩子：至多一幕
+function _sectStoryBlocked() {
+    try {
+        if (window.currentBattle) return true;
+        if (window._pendingDefeatRevival) return true;
+        var bm = typeof document !== 'undefined' && document.getElementById && document.getElementById('battle-modal');
+        if (bm && bm.classList && !bm.classList.contains('hidden')) return true;
+        if (typeof document !== 'undefined' && document.querySelector) {
+            if (document.querySelector('#xianxia-modal-overlay') || document.querySelector('.personal-event-modal')) return true;
+        }
+    } catch (eBlk) {}
+    return false;
+}
+
+// 每日钩子：至多一幕。战败昏迷会跨日——此时战斗窗还在，不能把入门戏叠上去。
 function checkSectStory() {
     var ds = window.discipleState;
     if (!ds || !ds.isInSect) return false;
@@ -1902,7 +1915,20 @@ function checkSectStory() {
     if (!sectName) return false;
     var stage = getPendingStage(sectName);
     if (stage == null) return false;
+    if (_sectStoryBlocked()) {
+        window._pendingSectStory = { sect: sectName, stage: stage };
+        return false;
+    }
+    window._pendingSectStory = null;
     return playSectStory(sectName, stage);
+}
+
+function flushPendingSectStory() {
+    var p = window._pendingSectStory;
+    if (!p) return false;
+    if (_sectStoryBlocked()) return false;
+    window._pendingSectStory = null;
+    return playSectStory(p.sect, p.stage);
 }
 
 if (window.timeSystem && typeof window.timeSystem.onNewDaySubscribe === 'function') {
@@ -1914,5 +1940,6 @@ window.getSectStoryPendingStage = getPendingStage;
 window.playSectStory = playSectStory;
 window._resolveSectStory = resolveSectStory;
 window.checkSectStory = checkSectStory;
+window.flushPendingSectStory = flushPendingSectStory;
 
 })();

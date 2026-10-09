@@ -143,9 +143,50 @@
                 return { success: true };
             });
             if (!econ || econ.success === false) return econ || { success: false, reason: 'economy', messages: [] };
+            // 真实小世界·货币总闸（world-ledger）：事务成功后正向灵石回出资方——
+            // 有出资方（ctx.funding：'city'=当前城悬赏基金）走出资方；缺省走世界市面池
+            // （民间酬谢的兜底盘子，月度铸币 2% 缓补）。出资方见薄按实有折付：
+            // 短少部分当场收回（刚 credit 足额，钱包必够扣），messages 说人话不静默印钱。
+            // 放事务外=池扣不受回滚牵连（物品入包失败时玩家钱包回滚、市面池分文不动）。
+            var _fundNote = null;
+            if (r.spiritStones > 0 && global.WorldLedger && typeof global.WorldLedger.fundReward === 'function') {
+                try {
+                    var _fw = global.WorldLedger.fundReward(r.spiritStones, ctx.funding);
+                    if (_fw.short > 0) {
+                        var _back = Math.min(_fw.short, Math.abs(num(p.spiritStones)));
+                        p.spiritStones = num(p.spiritStones) - _back; // 差额收回（刚入账，必够）
+                        if (window.inventory && window.inventory.currency) {
+                            window.inventory.currency.spiritStones = (Number(window.inventory.currency.spiritStones) || 0) - _back;
+                        }
+                        _fundNote = '市面钱紧，此次酬谢只凑得 ' + _fw.paid + ' 灵石。';
+                    }
+                } catch (eWL) { /* 账本缺席按旧口径足额（兼容期），不阻塞结算 */ }
+            }
+            // v27.13 设施消费回流（对称口：正向有出资方闸，负向有回流口）——
+            // 设施语境（ctx.facilitySpend，city-facilities 各 settle 封装已注入）的净支出
+            // 六成入该城悬赏基金、四成回世界市面池。计划书条2：澡堂赌坊的钱不再付完即蒸发。
+            // 钱庄存取/宗门捐献/朝堂军资不带此标记，钱各归其账。
+            var _spendBack = (r.copper < 0 ? -r.copper : 0) + (r.spiritStones < 0 ? -r.spiritStones : 0);
+            if (_spendBack > 0 && ctx.facilitySpend && global.WorldLedger && typeof global.WorldLedger.noteFacilitySpend === 'function') {
+                try { global.WorldLedger.noteFacilitySpend(_spendBack, ctx.city); } catch (eFB) { /* 回流失败不阻塞结算 */ }
+            }
+            // v27.13：物品产出登记（主档③改良·总闸）——任务赏/悬赏赏/奇遇/设施奖励凡走本服务的
+            // 物品发放都在这一处盖「reward」章，一处顶十处（quest-system 领赏等 36 个调用点全汇到这扇门）。
+            // 事务成功后才记账：上面 addSnapshot 任一件失败即整体回滚、根本走不到这。
+            // 登记失败绝不拦获得：物品照拿，账少一笔。
+            if (r.items.length && global.ItemProvenance && typeof global.ItemProvenance.note === 'function') {
+                try {
+                    for (var _pi = 0; _pi < r.items.length; _pi++) {
+                        global.ItemProvenance.note('reward', r.items[_pi].itemId, r.items[_pi].count);
+                    }
+                } catch (ePrv) {
+                    console.warn('[静默失败] js/core/reward-service.js · apply：奖励物品产出登记未入簿（物品照常到手）', ePrv && ePrv.message);
+                }
+            }
         }
 
         var messages = [];
+        if (_fundNote) messages.push(_fundNote);
         if (r.exp) {
             var _exp0 = num(p.tempering);
             p.tempering = Math.max(0, _exp0 + r.exp);
@@ -191,6 +232,13 @@
         if (r.notoriety) {
             var _noto0 = num(p.notoriety);
             p.notoriety = _noto0 + r.notoriety;
+            // v27.13 恶名分城：恶名变动登记世界账簿（与名气扩散同构）——作案地当日立知，
+            // 外城随通缉文书/江湖流言延迟到达。此城犯案，彼城起初不知。
+            try {
+                if (global.WorldLedger && typeof global.WorldLedger.noteNotorietyChange === 'function') {
+                    global.WorldLedger.noteNotorietyChange(r.notoriety);
+                }
+            } catch (eWN) {}
             pushGain(messages, '恶名', r.notoriety, _noto0, p.notoriety);
         }
         if (r.karma) {
@@ -213,6 +261,13 @@
             var _fame0 = num(p.fame);
             if (typeof global.addFame === 'function') global.addFame(_fameAmt);
             else p.fame = Math.max(0, Math.min((window.FAME_CAP || 99999), _fame0 + _fameAmt)); // v21.9 名望尺度统一
+            // 真实小世界·名气扩散：名望变动登记世界账簿——从当前城随商旅外传，
+            // 同城当日知/邻城 2 天/边陲 7 天。名气不再瞬时传千里。
+            try {
+                if (global.WorldLedger && typeof global.WorldLedger.noteFameChange === 'function') {
+                    global.WorldLedger.noteFameChange(_fameAmt);
+                }
+            } catch (eWL) {}
             pushGain(messages, '角色名气', _fameAmt, _fame0, p.fame);
         }
         if (r.contribution && global.discipleState) {

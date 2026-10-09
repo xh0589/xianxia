@@ -127,7 +127,65 @@
     // ============== 3. 评分 & 校验 ==============
 
     function getProps(matId) {
-        return MATERIAL_PROPS[matId] || { element: { metal: 0.2, wood: 0.2, water: 0.2, fire: 0.2, earth: 0.2 }, nature: 50, primary: {}, toxic: 10 };
+        var inTable = MATERIAL_PROPS[matId];
+        if (inTable) return inTable;
+        // v27.14：③新增-2「药性不明：丹炉上的诚实」——表外药材不再静默兜底当甘草：
+        //   · 玩家没学过（herbLore 册无此味）→ 返回 { unknown:true }＋「你以为是的样子」（寒平无主效低毒），
+        //     选材/评分照走（人只知道自己知道的），出锅那一刻按真账重算——是主药是毒引，成丹才见真容；
+        //   · 学过（出锅一次/问过药铺）→ herbLore 里有这味 → 直接回真账（明账照用）。
+        //   真账由 matId 稳定哈希生成：世界上这味药永远同一副属性（真实小世界一致律），不掷骰——
+        //   两个存档里同一种野山参是一个性子。
+        var learned = _herbLoreGet(matId);
+        if (learned) return learned;
+        return { element: { metal: 0.2, wood: 0.2, water: 0.2, fire: 0.2, earth: 0.2 }, nature: 50, primary: {}, toxic: 10, unknown: true };
+    }
+
+    // ── v27.14 药性暗账：表外药材的真四维（稳定哈希，随世界不随存档变） ──
+    function _hashMat(matId) {
+        var h = 2166136261;
+        var s = String(matId);
+        for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h * 16777619) >>> 0; }
+        return h >>> 0;
+    }
+    function truePropsOf(matId) {
+        var h = _hashMat(matId);
+        var el = { metal: 0, wood: 0, water: 0, fire: 0, earth: 0 };
+        var keys = ['metal', 'wood', 'water', 'fire', 'earth'];
+        el[keys[h % 5]] = 0.5; el[keys[(h >> 3) % 5]] = 0.3; el[keys[(h >> 6) % 5]] = 0.2;   // 主/次/余三相（撞键时和≤1）
+        var sum = el.metal + el.wood + el.water + el.fire + el.earth;
+        if (sum > 1) { var k2 = 1 / sum; el.metal *= k2; el.wood *= k2; el.water *= k2; el.fire *= k2; el.earth *= k2; }
+        var nat = 20 + (h % 81);                          // 寒热 20~100（哈希定死，世界属性）
+        var effs = ['heal', 'qi', 'detox', 'body', 'breakthrough', 'divine'];
+        var p1 = effs[(h >> 9) % 6], p2 = effs[(h >> 12) % 6];
+        var prim = {};
+        prim[p1] = 30 + ((h >> 15) % 51);                 // 主效一系 30~80
+        if (p2 !== p1) prim[p2] = 20 + ((h >> 18) % 31);  // 次系 20~50
+        var tox = 5 + ((h >> 21) % 66);                   // 毒 5~70——毒引就藏在这
+        return { element: el, nature: nat, primary: prim, toxic: tox, learned: true };
+    }
+
+    // ── v27.14 herbLore 册（学过的表外药）：StateRegistry 加键不升版（同 itemProvenance 先例） ──
+    var _herbLore = { known: {} };   // 运行时手温册（export/import 随档往返）
+    (function () {
+        try {
+            if (window.StateRegistry && typeof window.StateRegistry.register === 'function') {
+                window.StateRegistry.register('herbLore', {
+                    version: 1,
+                    export: function () { return JSON.parse(JSON.stringify(_herbLore)); },
+                    import: function (data) { if (data && data.known) _herbLore.known = data.known; return true; },
+                    save: function () { try { if (typeof window.saveToStorage === 'function') window.saveToStorage('xianxia_herb_lore', JSON.stringify(_herbLore)); } catch (e) {} }
+                });
+            }
+        } catch (e) { /* 册注册不上不拦丹炉——学了记不住，下次再学 */ }
+    })();
+    function _herbLoreGet(matId) { return _herbLore.known[matId] || null; }
+    function _herbLoreLearn(matId) { try { _herbLore.known[matId] = truePropsOf(matId); } catch (e) {} }
+    function _nameOfMat(matId) {   // v27.14：播报/候选行用（表外药多无全名，退到 id 去前缀）
+        try {
+            var it = (window.itemById && window.itemById[matId]) || null;
+            if (it && it.name) return it.name;
+        } catch (e) {}
+        return String(matId).replace(/^mat_/, '').replace(/_/g, ' ');
     }
 
     function sumElement(props) {
@@ -206,6 +264,24 @@
         var cm = validateArr(slotPick.main, slots.main); if (!cm.ok) return cm;
         var ca = validateArr(slotPick.assist, slots.assist); if (!ca.ok) return ca;
         var cb = validateArr(slotPick.balancer, slots.balancer); if (!cb.ok) return cb;
+        // v27.14：药性暗账出锅重算——槽里若有「药性不明」的表外药材，此刻露真容：
+        //   校验/评分用的是你以为的样子（寒平低毒），毒性账按真四维重记——
+        //   是毒引这炉就往瑕疵丹去，是良药评分不追补（惊喜在下一炉：herbLore 已记，明账选用）。
+        //   世界一致律：这味药的真账由 matId 哈希定死——这一炉学会，下一炉明账。
+        var _unknownMats = [];
+        for (var ui = 0; ui < materials.length; ui++) {
+            if (getProps(materials[ui]) && getProps(materials[ui]).unknown) _unknownMats.push(materials[ui]);
+        }
+        var _revealNotes = [];
+        if (_unknownMats.length) {
+            for (var rj = 0; rj < _unknownMats.length; rj++) {
+                var _mid = _unknownMats[rj];
+                var _true = truePropsOf(_mid);
+                totalToxic += (_true.toxic - 10);   // 毒账按真容改记（以为值毒 10；其余四维已按"以为值"进了评分，不追补）
+                _herbLoreLearn(_mid);
+                _revealNotes.push(_nameOfMat(_mid) + (_true.toxic >= 40 ? '（毒引——毒性 ' + _true.toxic + '）' : (_true.toxic <= 15 ? '（近于无毒）' : '（毒性 ' + _true.toxic + '）')));
+            }
+        }
         // 真气
         var cd = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
         if (cd && recipe.qiCost && (cd.qi || 0) < recipe.qiCost) return { ok: false, reason: 'qi-low(' + (cd.qi || 0) + '<' + recipe.qiCost + ')' };
@@ -300,6 +376,13 @@
                 refundBack: _rf ? _rf.back : null, refundAsked: _rf ? _rf.asked : null
             };
         }
+        // v27.13：产出登记——复合炼丹出炉盖「craft」章（记实收粒数，含御品 _imperial 变体；
+        // 章盖在调用点而非 addResultItem 内——悬赏领赏等非炉中货也走那根管）。登记失败不拦获得。
+        try {
+            if (window.ItemProvenance && typeof window.ItemProvenance.note === 'function') {
+                window.ItemProvenance.note('craft', itemId, addGot);
+            }
+        } catch (ePrv) { console.warn('[静默失败] js/crafting/alchemy-compound.js · executeCompoundPilfar：产出登记未入簿（物品照常到手）', ePrv && ePrv.message); }
         // 时间推进
         if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') {
             try { window.timeSystem.advanceTime(recipe.timeCost || 10, 'alchemy-compound'); } catch (e) { /* 没有真实玩家时静默 */ }
@@ -325,7 +408,7 @@
             if (isFlaw) st.flaw++;
             if (quality.id === 'imperial') st.imperial++;
         } catch (e) {}
-        return { ok: true, itemId: itemId, quality: quality, score: finalScore, toxic: avgToxic, count: addGot, asked: _asked };
+        return { ok: true, itemId: itemId, quality: quality, score: finalScore, toxic: avgToxic, count: addGot, asked: _asked, revealNotes: (_revealNotes && _revealNotes.length) ? _revealNotes : null };
     }
 
     // ============== 5. 模块级状态（StateRegistry 兼容） ==============
@@ -367,6 +450,10 @@
         MATERIAL_PROPS: MATERIAL_PROPS,
         COMPOUND_PILFAR_RECIPES: COMPOUND_PILFAR_RECIPES,
         getProps: getProps,
+        // v27.14 药性暗账读口（面板/测试用）：真账生成＋学册（游戏内出锅自动学，这里给明路留口）
+        truePropsOf: truePropsOf,
+        herbLoreLearn: _herbLoreLearn,
+        herbLoreKnown: function () { return Object.keys(_herbLore.known); },
         checkSlotMat: checkSlotMat,
         scoreSlot: scoreSlot,
         executeCompoundPilfar: executeCompoundPilfar,
@@ -384,7 +471,9 @@
                 var id = (s && (s.itemId || s.templateId)) || null;
                 if (!id) continue;
                 if (s.count <= 0) continue;
-                if (!MATERIAL_PROPS[id]) continue;
+                // v27.14：表外药不再整批跳过——「药性不明」也是一味药（未知是玩法不是缺陷）。
+                // 校验/评分按 getProps 走：没学过=以为值（寒平低毒，什么槽都好过但评分平平）；
+                // 学过=真账明用。出锅重算见 executeCompoundPilfar 暗账段。
                 var c = checkSlotMat(id, slot);
                 if (c.ok) result.push({ itemId: id, count: s.count, score: scoreSlot(id, slot) });
             }

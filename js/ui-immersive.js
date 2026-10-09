@@ -49,20 +49,62 @@ function showEffect(effectType, x, y) {
 }
 
 // ============ 伤害数字显示 ============
+// 定位方案：接实体（DOM 元素或战斗实体都收），内部换算屏幕坐标。
+// 为什么不在 battle.js 里把实体映射成 DOM：battle.js 全文件 0 处 document（纯逻辑层，node 测试直接跑），
+// 把「哪块面板代表哪一方」塞进去等于让战斗层认识界面；反过来 ui-immersive 本来就是干定位这行的。
+// 为什么不再用 null 当锚点：null 一进来就被 if (!target) return 吃掉，伤害数字从上线起一次没显示过。
+var DAMAGE_ANCHOR_IDS = { player: 'battle-player-status', enemy: 'battle-enemy-status', party: 'battle-party-status' };
+
+// 实体 → 锚点 DOM。认不出（面板不在屏上、跨战斗的野实体）返回 null，由调用方退到屏幕中心。
+function resolveDamageAnchorEl(entity) {
+    if (!entity || typeof document === 'undefined') return null;
+    if (typeof entity.getBoundingClientRect === 'function') return entity;   // 已经是 DOM 元素
+    var cb = window.currentBattle;
+    if (cb) {
+        if (entity === cb.player) return document.getElementById(DAMAGE_ANCHOR_IDS.player);
+        if (entity === cb.enemy) return document.getElementById(DAMAGE_ANCHOR_IDS.enemy);
+        if (cb.partyMembers && typeof cb.partyMembers.indexOf === 'function') {
+            var pi = cb.partyMembers.indexOf(entity);
+            if (pi >= 0) {
+                var chips = document.querySelectorAll('#party-status-list > div');
+                return chips[pi] || document.getElementById(DAMAGE_ANCHOR_IDS.party);
+            }
+        }
+    }
+    // 没有在场战斗时按实体自报的立场兜底（type 'player'/'enemy' 是 battle.js 一直在用的字段）
+    if (entity.type === 'player') return document.getElementById(DAMAGE_ANCHOR_IDS.player);
+    if (entity.type === 'enemy' || entity.type === 'boss') return document.getElementById(DAMAGE_ANCHOR_IDS.enemy);
+    return null;
+}
+
+// 锚点 → 视口坐标。面板可能在屏上但尺寸为 0（面板未展开），那种 rect 不作数，退到中心。
+function resolveDamagePoint(anchor) {
+    var cx = (typeof window !== 'undefined' && window.innerWidth ? window.innerWidth : 800) / 2;
+    var cy = (typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 600) / 3;
+    if (!anchor || typeof anchor.getBoundingClientRect !== 'function') return { x: cx, y: cy };
+    var rect = anchor.getBoundingClientRect();
+    if (!rect || (!rect.width && !rect.height)) return { x: cx, y: cy };
+    return { x: (rect.left || 0) + (rect.width || 0) / 2, y: (rect.top || 0) };
+}
+
 function showDamageNumber(target, damage, type) {
-    if (!target) return;
-    var rect = target.getBoundingClientRect ? target.getBoundingClientRect() : { left: window.innerWidth/2, top: window.innerHeight/2 };
+    if (typeof document === 'undefined') return;
+    var anchor = resolveDamageAnchorEl(target);
+    var pt = resolveDamagePoint(anchor);
 
     var el = document.createElement('div');
     el.className = 'fixed pointer-events-none z-[100] font-bold text-lg';
-    el.style.left = (rect.left + (rect.width || 0) / 2) + 'px';
-    el.style.top = (rect.top || rect.y) + 'px';
+    el.dataset.dmgType = type || 'normal';       // 测试与调试的抓手（屏幕上认不出是暴击还是普攻时看它）
+    el.dataset.dmgValue = String(damage);
+    el.style.left = pt.x + 'px';
+    el.style.top = pt.y + 'px';
     el.style.transform = 'translateX(-50%)';
 
     if (type === 'crit') {
         el.className += ' text-red-500';
         el.style.fontSize = '28px';
-        el.textContent = '⚡ ' + damage;
+        el.style.fontWeight = '900';
+        el.textContent = '⚡ -' + damage;
         el.style.textShadow = '0 0 10px rgba(255,0,0,0.5)';
     } else if (type === 'heal') {
         el.className += ' text-green-400';
@@ -161,6 +203,8 @@ function showLocationTransition(locationName) {
 if (typeof window !== 'undefined') {
     window.showEffect = showEffect;
     window.showDamageNumber = showDamageNumber;
+    window.resolveDamageAnchorEl = resolveDamageAnchorEl;
+    window.resolveDamagePoint = resolveDamagePoint;
     window.showItemObtainAnimation = showItemObtainAnimation;
     window.showLocationTransition = showLocationTransition;
     window.EFFECT_DEFS = EFFECT_DEFS;

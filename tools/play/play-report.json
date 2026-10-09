@@ -1,0 +1,235 @@
+{
+ "脚本加载": {
+  "应载": 350,
+  "实载": 350,
+  "加载期异常": []
+ },
+ "开机异常": [],
+ "动作异常": [],
+ "动作流水": [
+  [
+   "创角 startGame",
+   "云游散人"
+  ],
+  [
+   "切面板 character",
+   ""
+  ],
+  [
+   "切面板 skills",
+   ""
+  ],
+  [
+   "切面板 equipment",
+   ""
+  ],
+  [
+   "切面板 inventory",
+   ""
+  ],
+  [
+   "切面板 map",
+   ""
+  ],
+  [
+   "切面板 activities",
+   ""
+  ],
+  [
+   "切面板 quests",
+   ""
+  ],
+  [
+   "切面板 beasts",
+   ""
+  ],
+  [
+   "切面板 party",
+   ""
+  ],
+  [
+   "切面板 house",
+   ""
+  ],
+  [
+   "切面板 factions",
+   ""
+  ],
+  [
+   "切面板 calendar",
+   ""
+  ],
+  [
+   "切面板 achievements",
+   ""
+  ],
+  [
+   "切面板 settings",
+   ""
+  ],
+  [
+   "点开 openCodexPanel",
+   ""
+  ],
+  [
+   "点开 openWorldJournalPanel",
+   ""
+  ],
+  [
+   "点开 openCultivationUI",
+   ""
+  ],
+  [
+   "点开 openCraftingUI",
+   ""
+  ],
+  [
+   "点开 openEnhancementUI",
+   ""
+  ],
+  [
+   "点开 openJoinSectUI",
+   ""
+  ],
+  [
+   "点开 openSectTaskUI",
+   ""
+  ],
+  [
+   "点开 openBountyBoard",
+   ""
+  ],
+  [
+   "点开 openDaoCompanionPanel",
+   ""
+  ],
+  [
+   "点开 openDisciplePanel",
+   ""
+  ],
+  [
+   "点开 openFacilityUI",
+   ""
+  ],
+  [
+   "点开 openTokenShelf",
+   ""
+  ],
+  [
+   "点开 refreshWorldEventsPanel",
+   ""
+  ],
+  [
+   "点开 showChoiceHistory",
+   ""
+  ],
+  [
+   "点开 toggleMapOverlay",
+   ""
+  ],
+  [
+   "点开 expandInventory",
+   ""
+  ],
+  [
+   "点开 toggleBatchSellMode",
+   ""
+  ],
+  [
+   "点开 cycleSortOrder",
+   ""
+  ],
+  [
+   "打坐 startCultivation",
+   ""
+  ],
+  [
+   "采药 gatherHerbs",
+   ""
+  ],
+  [
+   "采矿 mineOre",
+   ""
+  ],
+  [
+   "伐木 chopWood",
+   ""
+  ],
+  [
+   "钓鱼 goFishing",
+   ""
+  ],
+  [
+   "城市旅行",
+   "走了10座城"
+  ],
+  [
+   "推进30天",
+   "day=undefined realm=炼气1层 essence=191 | 掉血轨迹:日1:夜裡掉血 85→72，日2:夜裡掉血 72→59，日3:夜裡掉血 59→46，日4:夜裡掉血 46→33，日5:夜裡掉血 33→20，日6:夜裡掉血 20→7，日7:夜裡掉血 7→1"
+  ],
+  [
+   "存读档回环",
+   "真元 191→191✓ | 灵石 310→310✓"
+  ],
+  [
+   "状态体检",
+   "干净"
+  ],
+  [
+   "诊断:时间账",
+   "charData.day=undefined | timeSystem.day=? | 无getGameTime"
+  ],
+  [
+   "诊断:修炼账",
+   "essence=191 level=1 exp=0 | 运功栏=[\"skill_main:null\",\"skill_sub1:null\",\"skill_sub2:null\"]"
+  ],
+  [
+   "诊断:心情账",
+   "mood=2/100 energy=85 health=1 | MoodSystem:2(心灰意冷) 打坐乘数=0.9"
+  ]
+ ],
+ "弹窗": [
+  [
+   "alert",
+   "你还没有加入任何门派，无法查看门派任务！"
+  ]
+ ],
+ "console噪音": {
+  "总数": 0,
+  "样本": []
+ },
+ "存档键": [
+  "xianxia_map_overlay",
+  "xianxia_auto_saves",
+  "xianxia_saves",
+  "xianxia_quest_progress",
+  "xianxia_party_data",
+  "xianxia_beasts",
+  "xianxia_reputation",
+  "xianxia_lifespan",
+  "xianxia_location_data",
+  "xianxia_world_events",
+  "xianxia_city_temp",
+  "xianxia_factions",
+  "xianxia_social_cooldowns",
+  "xianxia_npc_records",
+  "xianxia_inventory",
+  "xianxia_event_flags",
+  "xianxia_proficiency",
+  "xianxia_personal_event_flags",
+  "xianxia_storyline_choices",
+  "xianxia_save"
+ ],
+ "角色快照": {
+  "name": "云游散人",
+  "realm": "炼气",
+  "layer": 1,
+  "exp": 0,
+  "hp": 1,
+  "qi": 9,
+  "mood": 2,
+  "灵石": 310,
+  "铜钱": 1800,
+  "位置": "帝都·长安"
+ }
+}

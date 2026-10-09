@@ -1835,51 +1835,253 @@ if (typeof NPC_PERSONAL_EVENTS !== 'undefined') {
 }
 
 // ============ 每日钩子：玩家在某女主角门派过夜 → 触发吃醋/和好 ============
+// v20.85：本体已挪进 _jealScanRivalry（同一份逻辑另供关系面板重扫用，跨门派补位靠它）。
+// 跨日那一刻只做一次报名；弹不弹得出来由弹窗位排队裁决，不再由本钩子单方面放弃。
 if (typeof window !== 'undefined' && window.timeSystem && window.timeSystem.onNewDaySubscribe) {
     window.timeSystem.onNewDaySubscribe(function() {
         try {
-            if (!window.currentCharData || !window.npcManager) return;
-            var loc = window.currentCharData.location || '';
-            // v20.25 情敌探测走全局版：男主入门文件加载时会把 window.detectRivalRomance 换成八人扫描版
-            // （含四位男主）——本钩子旧版闭着本地函数（只扫四位女主），情敌若是男主，女主永远"看不见"。
-            var _det = (typeof window.detectRivalRomance === 'function') ? window.detectRivalRomance : detectRivalRomance;
-            for (var i = 0; i < HEROINE_ROSTER.length; i++) {
-                var h = HEROINE_ROSTER[i];
-                if (h.sect !== loc) continue;                       // 玩家须在该女主角所在门派
-                var npc = window.npcManager.getNPC ? window.npcManager.getNPC(h.id) : null;
-                if (!npc) continue;
-                var aff = (npc.relationship && npc.relationship.affection) || 0;
-
-                // 1) 吃醋对峙：好感≥45、未对峙过、有情敌
-                if (aff >= 45 && !hasEventTriggered(h.eventId) && _det(h.id)) {
-                    var ev = NPC_PERSONAL_EVENTS[h.eventId];
-                    if (ev && (!canPlayerAccessPersonalEvent || canPlayerAccessPersonalEvent(ev, npc))) {
-                        _delayedRivalryFire(h.eventId, npc);
-                    }
-                    continue; // 当日已对峙则不重复触发和好
-                }
-
-                // 2) 和好：已对峙过、好感养回≥55、未和好过、仍有情敌
-                if (h.reconcileId && aff >= 55 && hasEventTriggered(h.eventId)
-                    && !hasEventTriggered(h.reconcileId) && _det(h.id)) {
-                    var ev2 = NPC_PERSONAL_EVENTS[h.reconcileId];
-                    if (ev2 && (!canPlayerAccessPersonalEvent || canPlayerAccessPersonalEvent(ev2, npc))) {
-                        _delayedRivalryFire(h.reconcileId, npc);
-                    }
-                }
-            }
+            _jealScanRivalry('newday');
         } catch (e) { console.warn('[吃醋线] 每日触发失败:', e); }
     });
 }
 
-// 延迟弹出，模拟「她叫住你」；弹出前再过一次门禁
+// ============ v20.85 弹窗位排队（跨文件共用） ============
+// 病根：下面这个「1200ms 后抢座」的写法，座位被别人占了就直接 return——
+// 当日这桩吃醋作废，明天同一刻再来撞一次同一个座位。全仓 .personal-event-modal 被 61 处引用、
+// 横跨 51 个文件，而吃醋族是唯一带 1200ms 延迟的那一族（最晚报名），于是它排在抢座位的最后一名。
+// 玩家原话「爱情事件实在太多，可以想办法跳过或快速一览，好更好地体验吃醋事件」——
+// 不是玩家不想看吃醋，是吃醋抢不到座位。
+//
+// 改法：座位被占 → 写 pending 队列 → 监听弹窗离场 → 座位一空立刻补弹，当日仍然有效。
+// 补弹由 MutationObserver（DOM 事件）驱动，不靠 setTimeout 轮询；那份 1200ms 延迟是原有的
+// 「她叫住你」的戏剧停顿，保留不动，它只负责首次报名，报名之后一律走队列。
+var JEAL_MODAL_PENDING = [];    // 待补弹的座位申请：{evId, npcId, name, queuedDay}
+var JEAL_MODAL_WATCHER = null;  // 弹窗离场监听（单例）
+var JEAL_TRIGGER_LOG = {};      // 日号 → [{stage,evId,npcId,name,reason}]（J6：让玩家看得见今天为什么没弹）
+var JEAL_WAITING = {};          // npcId → {id,name,sect,evId,aff,reason}（J3：她不在你脚下时登记「她在等」）
+var JEAL_TODAY_FIRED = {};      // 日号 → {evId:true}（当日已叫住过谁，防止面板反复重扫把同一桩弹两遍）
+
+var JEAL_DROP_REASON = {
+    'no-pool': '事件池未就绪',
+    'no-event': '无此事件',
+    'already-done': '已对峙过（一次性）',
+    'no-npc': '找不到该人',
+    'gated': '门禁未过（好感/地点/情敌）',
+    'no-trigger': '触发函数未就绪',
+    'rejected': '触发被拒'
+};
+
+function _jealToday() {
+    try {
+        if (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') return Number(window.timeSystem.getAbsoluteDay()) || 0;
+        if (window.timeSystem && window.timeSystem.gameTime) return Number(window.timeSystem.gameTime.currentDay) || 0;
+    } catch (e) {}
+    return 0;
+}
+
+function _jealModalOpen() {
+    return !!(typeof document !== 'undefined' && document.querySelector && document.querySelector('.personal-event-modal'));
+}
+
+function _jealLog(stage, evId, npcId, name, reason) {
+    var d = String(_jealToday());
+    if (!JEAL_TRIGGER_LOG[d]) JEAL_TRIGGER_LOG[d] = [];
+    var arr = JEAL_TRIGGER_LOG[d];
+    if (arr.length > 200) return;   // 一天 200 条足够排查，别让这本账跟着存档长
+    arr.push({ stage: stage || '', evId: evId || '', npcId: npcId || '', name: name || '', reason: reason || '' });
+}
+
+// 把某人从候补名单上除名（她已经叫住过你了，或者已经永久失去资格）。
+function _jealForget(npcId) { if (npcId && JEAL_WAITING[npcId]) delete JEAL_WAITING[npcId]; }
+
+// 真正叫住她一次。所有出弹的路径都必须过这里，门禁在这里再过一次（弹的那一刻才作数）。
+// 返回 'fired' 或一个 _jealDropReason 键。
+function _jealFireOnce(job) {
+    if (typeof NPC_PERSONAL_EVENTS === 'undefined') return 'no-pool';
+    var ev = NPC_PERSONAL_EVENTS[job.evId];
+    if (!ev) return 'no-event';
+    var today = String(_jealToday());
+    if (JEAL_TODAY_FIRED[today] && JEAL_TODAY_FIRED[today][job.evId]) return 'already-fired';
+    if (typeof hasEventTriggered === 'function' && hasEventTriggered(job.evId)) return 'already-done';
+    var npc = (window.npcManager && window.npcManager.getNPC) ? window.npcManager.getNPC(job.npcId) : null;
+    if (!npc) return 'no-npc';
+    if (typeof canPlayerAccessPersonalEvent === 'function' && !canPlayerAccessPersonalEvent(ev, npc)) return 'gated';
+    if (typeof triggerPersonalEvent !== 'function') return 'no-trigger';
+    if (triggerPersonalEvent(job.evId) === false) return 'rejected';
+    if (!JEAL_TODAY_FIRED[today]) JEAL_TODAY_FIRED[today] = {};
+    JEAL_TODAY_FIRED[today][job.evId] = true;
+    _jealForget(job.npcId);
+    return 'fired';
+}
+
+// 座位空出来时补弹。队列空时本函数只跑第一行——全局 DOM 变动绝大多数走这条早退，不花钱。
+function _jealFlushPending() {
+    if (!JEAL_MODAL_PENDING.length) return;
+    if (_jealModalOpen()) return;
+    var guard = 0;
+    while (JEAL_MODAL_PENDING.length && !_jealModalOpen() && guard++ < 16) {
+        var job = JEAL_MODAL_PENDING.shift();
+        var r = _jealFireOnce(job);
+        if (r === 'fired') _jealLog('flushed', job.evId, job.npcId, job.name, '座位空出，补弹（当日有效）');
+        else _jealLog('dropped', job.evId, job.npcId, job.name, JEAL_DROP_REASON[r] || r);
+    }
+}
+
+// 唯一的重试机制：弹窗这个 DOM 节点被摘掉的那一刻，MutationObserver 就叫醒补弹。
+// 不轮询、不叠加 setTimeout——座位空出来这个事实本身就是事件。
+function _jealWatchModal() {
+    if (JEAL_MODAL_WATCHER || typeof MutationObserver === 'undefined') return;
+    if (typeof document === 'undefined' || !document.body) return;
+    try {
+        JEAL_MODAL_WATCHER = new MutationObserver(function () { _jealFlushPending(); });
+        JEAL_MODAL_WATCHER.observe(document.body, { childList: true, subtree: true });
+    } catch (e) {
+        JEAL_MODAL_WATCHER = null;
+        console.warn('[吃醋线] 座位监听挂不上，补弹降级为「只在下次报名时补」:', e && e.message);
+    }
+}
+
+// 座位被占 → 排队。同一人同一事件不重复排。
+function _jealQueuePending(evId, npcId, name) {
+    _jealWatchModal();   // 脚本可能早于 document.body 解析，这里再试一次挂监听
+    for (var i = 0; i < JEAL_MODAL_PENDING.length; i++) {
+        if (JEAL_MODAL_PENDING[i].evId === evId && JEAL_MODAL_PENDING[i].npcId === npcId) {
+            _jealLog('queued', evId, npcId, name, '座位被占，已在队列（不重复排）');
+            return true;
+        }
+    }
+    JEAL_MODAL_PENDING.push({ evId: evId, npcId: npcId, name: name || '', queuedDay: _jealToday() });
+    _jealLog('queued', evId, npcId, name, '座位被占，已排队等空位');
+    return true;
+}
+
+// 统一的「要一张座位」入口：先抢，抢不到就排队。返回 'fired' / 'queued' / 'dropped'。
+// male-lead-rivalry.js / jealousy-collective.js 的同构函数都改走这一条，口径才真正统一。
+function _jealRequestSeat(evId, npcId, name) {
+    if (typeof NPC_PERSONAL_EVENTS === 'undefined' || !NPC_PERSONAL_EVENTS[evId]) {
+        _jealLog('dropped', evId, npcId, name, JEAL_DROP_REASON['no-event']);
+        return 'dropped';
+    }
+    if (!_jealModalOpen()) {
+        var r = _jealFireOnce({ evId: evId, npcId: npcId, name: name || '' });
+        if (r === 'fired') { _jealLog('fired', evId, npcId, name, '座位空着，直接开演'); return 'fired'; }
+        _jealLog('dropped', evId, npcId, name, JEAL_DROP_REASON[r] || r);
+        return 'dropped';
+    }
+    return _jealQueuePending(evId, npcId, name) ? 'queued' : 'dropped';
+}
+
+// J3：她不在你脚下时，原写法是一句无声的 continue——当日无声无息地没了，玩家既看不见也等不来。
+// 现在登记「她在等你」，并把差哪一条写进当日留痕（关系面板据此亮铃铛）。
+function _jealNoteWaiting(h, npc, aff, loc) {
+    if (typeof hasEventTriggered === 'function' && hasEventTriggered(h.eventId)) { _jealForget(h.id); return; }
+    if (aff < 45) return;
+    var det = (typeof window.detectRivalRomance === 'function') ? window.detectRivalRomance : detectRivalRomance;
+    if (!det(h.id)) return;   // 世上还没有另一位，不构成情敌，没有「等」这回事
+    var w = JEAL_WAITING[h.id];
+    if (!w) {
+        w = { id: h.id, name: h.name, sect: h.sect, evId: h.eventId, reconcileId: h.reconcileId, aff: aff, since: _jealToday() };
+        JEAL_WAITING[h.id] = w;
+    }
+    w.aff = aff;
+    w.reason = '需亲至「' + h.sect + '」（你现下在「' + (loc || '别处') + '」）';
+    _jealLog('waiting', h.eventId, h.id, h.name, w.reason);
+}
+
+// 每日扫描。onNewDaySubscribe 与关系面板重扫共用这一份，why 只进日志不出门。
+// 返回本日报名了几桩（不是弹了几桩——座位归补弹那边管）。
+function _jealScanRivalry(why) {
+    if (!window.currentCharData || !window.npcManager) return 0;
+    var loc = window.currentCharData.location || '';
+    // v20.25 情敌探测走全局版：男主入门文件加载时会把 window.detectRivalRomance 换成八人扫描版
+    // （含四位男主）——本钩子旧版闭着本地函数（只扫四位女主），情敌若是男主，女主永远"看不见"。
+    var _det = (typeof window.detectRivalRomance === 'function') ? window.detectRivalRomance : detectRivalRomance;
+    var requested = 0;
+    for (var i = 0; i < HEROINE_ROSTER.length; i++) {
+        var h = HEROINE_ROSTER[i];
+        var npc = window.npcManager.getNPC ? window.npcManager.getNPC(h.id) : null;
+        if (!npc) continue;
+        var aff = (npc.relationship && npc.relationship.affection) || 0;
+
+        // v20.85 L2 不再是静默 continue：不在她门派 → 登记她在等（见 _jealNoteWaiting）
+        if (h.sect !== loc) { _jealNoteWaiting(h, npc, aff, loc); continue; }
+
+        if (hasEventTriggered(h.eventId)) _jealForget(h.id);
+
+        // 1) 吃醋对峙：好感≥45、未对峙过、有情敌
+        if (aff >= 45 && !hasEventTriggered(h.eventId) && _det(h.id)) {
+            var ev = NPC_PERSONAL_EVENTS[h.eventId];
+            if (ev && (!canPlayerAccessPersonalEvent || canPlayerAccessPersonalEvent(ev, npc))) {
+                _jealLog('requested', h.eventId, h.id, h.name, '跨日报名（' + (why || 'newday') + '）');
+                _delayedRivalryFire(h.eventId, npc);
+                requested++;
+            }
+            continue; // 当日已对峙则不重复触发和好
+        }
+
+        // 2) 和好：已对峙过、好感养回≥55、未和好过、仍有情敌
+        if (h.reconcileId && aff >= 55 && hasEventTriggered(h.eventId)
+            && !hasEventTriggered(h.reconcileId) && _det(h.id)) {
+            var ev2 = NPC_PERSONAL_EVENTS[h.reconcileId];
+            if (ev2 && (!canPlayerAccessPersonalEvent || canPlayerAccessPersonalEvent(ev2, npc))) {
+                _jealLog('requested', h.reconcileId, h.id, h.name, '跨日报名（和好·' + (why || 'newday') + '）');
+                _delayedRivalryFire(h.reconcileId, npc);
+                requested++;
+            }
+        }
+    }
+    return requested;
+}
+
+// J6：今日触发留痕（关系面板「她把谁放在心上」那一栏的数据源）。
+function _jealTodayReport() {
+    var d = String(_jealToday());
+    var log = JEAL_TRIGGER_LOG[d] || [];
+    var waiting = [];
+    for (var k in JEAL_WAITING) if (JEAL_WAITING[k]) waiting.push(JEAL_WAITING[k]);
+    var fired = 0, queued = 0, lost = 0;
+    for (var i = 0; i < log.length; i++) {
+        if (log[i].stage === 'fired' || log[i].stage === 'flushed') fired++;
+        else if (log[i].stage === 'queued') queued++;
+        else if (log[i].stage === 'dropped') lost++;
+    }
+    return {
+        day: d,
+        fired: fired,
+        queued: queued,
+        dropped: lost,
+        waiting: waiting,
+        pending: JEAL_MODAL_PENDING.slice(),
+        log: log
+    };
+}
+
+// 排队器的接线自检口（运行时可读，不改状态）。
+// watching=false 说明弹窗离场监听没挂上——那样座位一空就没人叫醒补弹，等于退回旧的静默放弃。
+function _jealQueueDebug() {
+    return {
+        watching: !!JEAL_MODAL_WATCHER,
+        observing: !!(JEAL_MODAL_WATCHER && document && document.body),
+        observerKind: (typeof MutationObserver === 'undefined') ? 'none' : 'MutationObserver',
+        pendingCount: JEAL_MODAL_PENDING.length,
+        waitingCount: Object.keys(JEAL_WAITING).length,
+        seatTaken: _jealModalOpen(),
+        modalClassUseCount: (typeof document === 'undefined' || !document.querySelectorAll) ? -1
+            : document.querySelectorAll('.personal-event-modal').length
+    };
+}
+
+// 延迟弹出，模拟「她叫住你」。1200ms 是原有的戏剧停顿，保留；座位归谁由 _jealRequestSeat 判。
+// 同一人同一事件同时只许挂一个计时器——关系面板每重扫一次就报名一次，不去重会叠出一串定时器。
+var JEAL_SCHEDULED = {};
 function _delayedRivalryFire(evId, npcInst) {
+    if (JEAL_SCHEDULED[evId]) return;
+    var npcId = (npcInst && (npcInst.id || npcInst.npcId)) || '';
+    var nm = (npcInst && npcInst.name) || '';
+    JEAL_SCHEDULED[evId] = true;
     setTimeout(function() {
-        if (document.querySelector && document.querySelector('.personal-event-modal')) return;
-        var ev = NPC_PERSONAL_EVENTS[evId];
-        if (!ev) return;
-        if (typeof canPlayerAccessPersonalEvent === 'function' && !canPlayerAccessPersonalEvent(ev, npcInst)) return;
-        if (typeof triggerPersonalEvent === 'function') triggerPersonalEvent(evId);
+        delete JEAL_SCHEDULED[evId];
+        _jealRequestSeat(evId, npcId, nm);
     }, 1200);
 }
 if (typeof window !== 'undefined') window._delayedRivalryFire = _delayedRivalryFire;
@@ -1890,5 +2092,17 @@ if (typeof window !== 'undefined') {
     window.detectRivalRomance = detectRivalRomance;
     window.HEROINE_RIVALRY_EVENTS = HEROINE_RIVALRY_EVENTS;
     window.HEROINE_RECONCILE_EVENTS = HEROINE_RECONCILE_EVENTS;
+    // v20.85：座位排队与触发留痕的共用入口。male-lead-rivalry.js / jealousy-collective.js /
+    // relations-panel.js 都在本文件之后加载（仙侠.html:2128 / 2172 / 2195 / 2196），
+    // 三处的同构调用一律改走这里——否则「排队」只对女主吃醋这一族生效，弹窗位照样被旁支抢走。
+    window.__jealRequestSeat = _jealRequestSeat;
+    window.__jealQueuePending = _jealQueuePending;
+    window.__jealFlushPending = _jealFlushPending;
+    window.__jealModalOpen = _jealModalOpen;
+    window.__jealScanRivalry = _jealScanRivalry;
+    window.__jealTodayReport = _jealTodayReport;
+    window.__jealQueueDebug = _jealQueueDebug;
+    window.__jealWaiting = JEAL_WAITING;
+    window.__jealDropReason = JEAL_DROP_REASON;
 }
 console.log('[吃醋线] 女主角吃醋/互动系统加载完成：' + Object.keys(HEROINE_RIVALRY_EVENTS).length + ' 个对峙事件 + ' + Object.keys(HEROINE_RECONCILE_EVENTS).length + ' 个和好事件');

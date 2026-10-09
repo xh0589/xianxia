@@ -770,13 +770,27 @@ if (typeof window !== 'undefined' && window.timeSystem && window.timeSystem.onNe
                 var ev = NPC_PERSONAL_EVENTS[rivalId];
                 if (!ev) continue;
                 if (typeof canPlayerAccessPersonalEvent === 'function' && !canPlayerAccessPersonalEvent(ev, npc)) continue;
-                setTimeout(function(evId, npcInst) {
+                setTimeout(function(evId, npcInst, hero) {
+                    // v20.85：座位被占不再静默放弃——改走吃醋线共用排队器（heroine-rivalry.js 导出的
+                    // __jealRequestSeat），座位一空立刻补弹，当日仍然有效。男主族此前与女主族一样
+                    // 在抢座位这件事上排在最后，且此处还多一个伏笔：h 是 for 循环的 var，回调执行时
+                    // 早已指向名册末位，故把 hero 一并 bind 进来，不再依赖闭包里的 h。
+                    var who = hero || {};
+                    if (typeof window.__jealRequestSeat === 'function') {
+                        window.__jealRequestSeat(
+                            evId,
+                            (npcInst && (npcInst.id || npcInst.npcId)) || who.id || '',
+                            (npcInst && npcInst.name) || who.name || ''
+                        );
+                        return;
+                    }
+                    // 女主线未就绪（heroine-rivalry.js 未加载）时退回旧直弹，保证本族仍能演。
                     if (document.querySelector && document.querySelector('.personal-event-modal')) return;
                     var ev2 = NPC_PERSONAL_EVENTS[evId];
                     if (!ev2) return;
                     if (typeof canPlayerAccessPersonalEvent === 'function' && !canPlayerAccessPersonalEvent(ev2, npcInst)) return;
                     if (typeof triggerPersonalEvent === 'function') triggerPersonalEvent(evId);
-                }.bind(null, rivalId, npc), 1200);
+                }.bind(null, rivalId, npc, h), 1200);
             }
         } catch (e) { console.warn('[男主吃醋] 每日触发失败:', e); }
     });

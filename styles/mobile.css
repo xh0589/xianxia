@@ -1,0 +1,292 @@
+/* ============================================================
+   styles/mobile.css —— 手机适配层（用户批 2026-10-02）
+   ------------------------------------------------------------
+   定位：终层 override。前面各 panel 文件守「无 !important」纪律，
+   本文件是唯一例外——隔离靠文件内 @media（max-width: 767px）单闸
+   （link 的 media 属性实测反噬：桌面整体禁用本文件连「桌面藏汉堡」
+   的第 0 节也失效，已撤）。桌面实际生效的只有第 0 节两条 display:none
+   （汉堡/背板零形态），窄屏修复全部闭环在本文件内。
+
+   实测基底（Playwright·iPhone 390×844）：lg 断点已把三栏塌成单列、
+   无横向溢出——骨架是好的。缺的是触控目标与模态在窄屏的吃相。
+   ============================================================ */
+
+/* ---------- 0. 桌面默认态：汉堡与背板不显示 ----------
+   元素由 app.js 尾 IIFE 常驻注入（无 JS 分支），形态全部由本文件
+   media 双闸控制——桌面（>767px）零形态零占位。 */
+.mobile-nav-toggle,
+.mobile-nav-backdrop {
+    display: none;
+}
+
+/* ---------- 1. 触控目标：主交互钮 ≥40px ----------
+   实测最小按钮 25px（触控标准 44px 的 57%）。全量 button 强抬会破
+   行内小钮布局（chips/切换），只抬主要操作钮族：
+   战斗出手/部位钮、导航项、商店购买/出售。 */
+@media (max-width: 767px) {
+    #battle-actions button,
+    #battle-medical-actions button,
+    #nav-sidebar .nav-item,
+    #shop-modal-overlay .shop-goods-grid button {
+        min-height: 40px;
+        min-width: 44px;
+    }
+}
+
+/* ---------- 1b. 汉堡抽屉导航（用户批 2026-10-02 23:43） ----------
+   旧态：≤768px 时 nav 被 flex column 挤成顶部横条（200px 高、项 wrap 95px），
+   吃 1/4 屏。改：nav 收进左侧抽屉（translateX 藏），右上角 44px 汉堡 ☰
+   点开滑出（body.mobile-nav-open 态）；背板点外/Esc/选完面板均收
+   （开合 JS 在 app.js 尾 IIFE）。z 序：46 汉堡 > 45 抽屉 > 44 背板，
+   全在模态系 z-50 之下——模态场景抽屉不抢戏。 */
+@media (max-width: 767px) {
+    #nav-sidebar {
+        position: fixed;
+        left: 0; top: 0; bottom: 0;
+        width: min(80vw, 300px) !important;
+        z-index: 45;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+    }
+    body.mobile-nav-open #nav-sidebar {
+        transform: translateX(0);
+    }
+    /* 抽屉态导航纵排：ui-tokens.css 窄屏骨架（≤767px）把 nav 改成横滑条
+       （display:flex row），在 fixed 全高抽屉里会把每项 stretch 成 735px 怪条
+       （flex 交叉轴拉伸，实测）。抽屉里导航必须纵排——同特异性+晚加载，
+       但吃过 CDN 次序亏（w-48 教训），这里一律 !important 钉死。 */
+    #nav-sidebar > nav {
+        flex-direction: column !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+    }
+.mobile-nav-backdrop {
+        /* display:block 必需：§0 的 `.mobile-nav-toggle, .mobile-nav-backdrop
+           { display: none }` 是同文件顶层的单类规则，本条在媒体查询里同特异性、
+           又不写 display → 桌面那道 none 一路赢到手机端，实测背板永远
+           display:none、0×0（390/360/768 三档全同），「点外关闭」是死代码，
+           抽屉开着时右侧内容照样可点、点外面毫无反应。这里把 display 补回来。 */
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 44;
+        background: rgba(0, 0, 0, 0.6);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s;
+    }
+    body.mobile-nav-open .mobile-nav-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .mobile-nav-toggle {
+        position: fixed;
+        top: 12px;
+        left: 12px;
+        right: auto;
+        z-index: 60; /* 用户批 09:05：☰ 固定左侧不动、要方便点击——盖过模态 z-50 */
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        background: rgba(31, 41, 55, 0.92);
+        color: #fbbf24;
+        border: 1px solid #4b5563;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+    }
+    .mobile-nav-toggle:active {
+        background: rgba(55, 65, 81, 0.95);
+    }
+}
+
+/* ---------- 2. 模态窄屏全屏化 ----------
+   桌面 672/768/1440px 窗在 390px 屏被 mx-4 挤成 358px 窄条，
+   内容三行一滚。窄屏模态一律吃满全宽（max-w 全废），高度仍走
+   各窗自己的 max-h 帽（80vh/85vh/90vh 规矩不变）。 */
+@media (max-width: 767px) {
+    .fixed.inset-0 > div {
+        max-width: 100vw !important;
+        width: 100%;
+        margin: 0;
+        border-radius: 0;
+    }
+    /* 全屏后贴边太硬：上下留呼吸缝，金边窗圆角降半保留 */
+    .fixed.inset-0 {
+        padding: 8px;
+        background: rgba(0, 0, 0, 0.85);
+    }
+}
+
+/* ---------- 3. 战斗金框：窄屏全屏 ----------
+   桌面「查看人体=拉宽」在窄屏无宽可拉（本来 100%），改吃纵向：战斗窗
+   直接吃满 94dvh，贴 8px 呼吸缝。 */
+@media (max-width: 767px) {
+    #battle-window {
+        max-height: 94dvh;
+    }
+}
+
+/* ---------- 3b. 战斗两栏窄屏让位 ----------
+   用户批（2026-10-03 08:32）的左右人体栏在 390px 没有生存空间（两栏 263×2
+   已超屏宽）。窄屏=底精读账单飞（40vh 帽内 SVG+列表），两栏 CSS 层直接
+   display:none（JS 开合照跑、被此规则盖住），窗宽 battle-modal-wide 也
+   压回全宽——手机战斗窗维持 94dvh 全屏态。 */
+@media (max-width: 767px) {
+    #battle-side-player,
+    #battle-side-enemy {
+        display: none !important;
+    }
+    .battle-modal-wide {
+        max-width: 100% !important;
+    }
+}
+
+/* ---------- 4. 正文可读字号 ----------
+   390px 持机距离（~30cm）下 11px 正文吃力。只抬两档最小字
+   （text-xs 族 11px→13px），其余档位不动——全局抬会破 TA 的
+   「量字量出来的」网格（panel-shop 430px 卡宽是跟字号档走的）。 */
+@media (max-width: 767px) {
+    .text-xs {
+        font-size: 13px;
+        line-height: 1.4;
+    }
+}
+
+/* ---------- 5. 输入与滚动条的手感 ----------
+   iOS 输入聚焦会自动放大（字号<16px 触发）——输入控件统一 16px
+   防跳；窄屏去掉细滚动条宽度挤压（thumb 加粗便于拖）。 */
+@media (max-width: 767px) {
+    input, select, textarea {
+        /* !important 是必需的，不是偷懒：Tailwind 预检（js/vendor/tailwind.js
+           运行时注入，document.styleSheets 序 12）带着
+           `button, input, optgroup, select, textarea { font-size: 100% }`，
+           同为 0-0-1 特异性却排在 mobile.css（序 10）之后 → 原写法整条被它盖住。
+           实测 390px 下 48 个输入框里 47 个落在 14px（100% 解析成 body 的 14px），
+           只有 #char-name（text-lg）侥幸 18px。抬特异性只能压到 0-1-1，
+           而全站还有 `html .text-xs`（0-1-1，ui-tokens）在前面等着，
+           只有 !important 能把「输入控件统一 16px」这条钉成事实。 */
+        font-size: 16px !important;
+    }
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: #4b5563;
+        border-radius: 3px;
+    }
+}
+
+/* ---------- 6. 触控滚动动量 ----------
+   overflow 容器默认 -webkit-overflow-scrolling: touch（iOS 13+ 默认
+   已开），这里只防「点穿」：模态背景滚动穿透由各窗自己
+   overflow-y:auto 兜（已有），不动全局 touch-action——用户允许
+   双指缩放（v20.87 注释），禁 touch-action 会误伤缩放。 */
+
+/* ---------- 7. 两处「写死最小轨道宽」的栅格在窄屏放开 ----------
+   panel-shop.css 与 ui-craft.css 各有一处
+   `repeat(auto-fill, minmax(max(Npx, Nrem), 1fr))`：那个 Npx 是「内容不折行
+   的最窄宽度」，量字量出来的，桌面宽屏成立；到了手机视口，轨道下限比容器
+   还宽，整格被推出可视区又被 overflow:hidden 吃掉（不是横向滚动条，是
+   永久裁掉）。这里只改轨道下限——不碰「宽屏仍按量字宽度排」的规矩。 */
+@media (max-width: 767px) {
+    /* 商店货架（轨道下限 430px）：实测 390px 下货卡行宽 430、货栅 314、
+       窗内 scrollW 454／clientW 362，34 枚「购买」钮整枚落在窗右 381 之外，
+       手机端一件也买不了。改单列 minmax(0,1fr) 后左块 min-w-0 可缩、
+       描述行本来准折行，右块（价＋钮 flex-shrink-0）留在窗内。 */
+    #shop-modal-overlay .shop-goods-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    /* 人体耐久账（轨道下限 380px）：实测行宽 380、容器 315，
+       右侧「完好/轻微/中度/重度」状态字（右 410）被 #game-world 的
+       overflow:hidden 裁掉，#game-world scrollW 409／clientW 373 那 36px
+       不可滚也源于此。 */
+    #body-durability-list {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* ---------- 8. 主内容列让出汉堡的高度 ----------
+   汉堡钮固定在 (12,12) 44×44（z-60，在所有模态之上），主内容列顶 padding
+   只有 12px，首行正好落在它下面：实测人物面板第一个子页签「状态」中心
+   (35,36) 正压在其中，document.elementFromPoint 打到的是汉堡的 <svg>，
+   该页签在手机上点不到。地图/战斗等面板的标题同样被压。这里给主内容列
+   加足 60px 顶距（汉堡底 56 + 4px 缝），一处修全站首行。 */
+@media (max-width: 767px) {
+    /* 选择器必须与 ui-tokens.css:216 那条同钩子同权重：
+       `html #game-world > div[class~="flex-1"][class~="overflow-y-auto"]`
+       （1-3-2）里写着 `padding: 12px`，比 `#game-world > .flex-1`（1-1-0）重，
+       直接写短选择器会被它压掉（实测加完 padding-top 仍是 12px）。 */
+    html #game-world > div[class~="flex-1"][class~="overflow-y-auto"] {
+        padding-top: 60px;
+    }
+}
+
+/* ---------- 9. 手机端「三张计量卡并成一块」（用户批 2026-10-03 08:32 复核后落到本文件）----------
+   桌面用原本的四张独立卡（那是 HEAD 的原样，恢复见 仙侠.html 状态子面板）；
+   「三合一」这件事用户批给了**手机版**：≤767px 上精力/真气/心情三张要**视觉上并成一块**。
+   手段是纯视觉——不动 DOM、不改 id、不改 JS 更新链：
+     ① 三张各跨满整幅、各占一行（窄屏那张栅格只有两列，不跨满就拼不成一块）；
+     ② 相邻两张之间不留缝：margin-top 用 −1rem 把 gap-4 顶掉。
+        写 −1rem 而不是 −16px：gap-4 本身就是 1rem，跟着字号档走
+        （实测 标准/大/特大 ＝ 16/18/20px，写死 16px 会在大/特大档留下 2~4px 的缝）；
+     ③ 中间那道边框去掉、圆角只留上下两端（第一张只留上圆角、第三张只留下圆角）。
+   高度账：负 margin 顶掉的是**卡与卡之间的空隙**，不是卡内留白，
+   所以两行之间仍是 p-3 的 12px ＋ 12px ＝ 24px —— 与「合成一张卡里放三行」的节奏一模一样。
+   幂等：`:nth-child(-n+3)` 只认栅格的前三个子元素，认的是位置不是类名，
+   将来那三张换了类名或换了顺序，这里跟着改位置即可，不会静默失效。 */
+@media (max-width: 767px) {
+    /* ① 三张计量卡跨满整幅，各占一行 */
+    #sub-status > .grid > .bg-gray-700\/30:nth-child(-n+3) {
+        grid-column: 1 / -1;
+    }
+    /* ② 相邻两张不留缝：−1rem 正好等于 gap-4，负 margin 把上一张的底边与本张的顶边对齐 */
+    #sub-status > .grid > .bg-gray-700\/30:nth-child(2),
+    #sub-status > .grid > .bg-gray-700\/30:nth-child(3) {
+        margin-top: -1rem;
+    }
+    /* ③ 中间两道边框去掉、圆角相接（只留上下两端） */
+    #sub-status > .grid > .bg-gray-700\/30:nth-child(1) {
+        border-bottom-width: 0;
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+    #sub-status > .grid > .bg-gray-700\/30:nth-child(2) {
+        border-top-width: 0;
+        border-bottom-width: 0;
+        border-radius: 0;
+    }
+    #sub-status > .grid > .bg-gray-700\/30:nth-child(3) {
+        border-top-width: 0;
+        border-top-left-radius: 0;
+        border-top-right-radius: 0;
+    }
+}
+
+/* ---------- 9b. 所在地/时间那一张合卡在窄屏的排版 ----------
+   这一张是「两卡合一」那批留下的：卡里装的是合并行（.stat-compact-row），不是上面那三张。
+   认「卡里装着合并行」而不是 Tailwind 的 md:col-span-2 类名：
+   万一那对类名改了，这里不会跟着失效（:has() 不认就退回原状，无副作用）。
+   合卡一行要同时放「标签＋细条＋数字」外加旁注（#realm-qi-limit 的
+   「真气上限 200 ＝ 境界 50 ＋ 体质/装备等 150」）。窄屏 #sub-status 那张栅格只有两列，
+   合卡仍只占一列（实测卡宽 166），内文 140px：旁注被 flex 压到 19px 宽、302px 高
+   （一个字一行），「帝都·长安」「前往城市」「第1天/春季」同样竖排。
+   这里两处：合卡跨满两列（349px，内文 323px），行内放不下就折行、
+   细条 order 置末并吃满整行，标签/数字/旁注/按钮留在第一行横排。 */
+@media (max-width: 767px) {
+    #sub-status .bg-gray-700\/30:has(.stat-compact-row) {
+        grid-column: 1 / -1;
+    }
+    .stat-compact-row {
+        flex-wrap: wrap;
+        row-gap: 3px;
+    }
+    /* 基准宽 100% → 假想宽就是整行，放不进第一行，自动折到第二行独占 */
+    .stat-compact-track {
+        order: 9;
+        flex: 1 1 100%;
+    }
+}

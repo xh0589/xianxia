@@ -94,6 +94,32 @@ assert(ArtEffects.weaponPct('sword') === 150, 'A19 剑攻取最高一门 150%（
 assert(ArtEffects.weaponPct('fist') === 0, 'A20 未学拳法时拳类乘算为0（不串味）');
 assert(ArtEffects.summarize(true).learned.length >= 9, 'A21 掌握计数如实增长');
 
+// ============ A' 认账口径与词表（第一批同步）============
+// 改前：掌握判定只认 techniqueKnowledge 一条道，严于功法栏（equipment.js:374-379）与运功装具，
+//       秘籍已消耗的老档只剩 learnedSecrets 时，运功层不出力；词表又只认「枪法/反击+/闪避+%」，
+//       数据实写的「长兵伤害/反击/闪避/吸血/毒系伤害/全系伤害」一条读不出，59 门里 28 门解析成 {}。
+// 下面五条把这批口径钉死，防止又退回单字段认账或窄词表。
+// ↓ 这段要动知识账（验老档认账），进出先存后还，免得污染下面 B 段的既有状态
+var _aSaveTk = JSON.stringify(KnowledgeSystem.techniqueKnowledge);
+var _aSaveLs = (window.learnedSecrets || []).slice();
+KnowledgeSystem.importData({});
+global.learnedSecrets = ['art_hun_yuan'];
+var sLegacy = ArtEffects.summarize(true);
+assert(sLegacy.learned.some(function (l) { return l.id === 'skill_06'; }),
+    'A22 秘籍 id 在册 ⇒ 运功层（skill_06）同样被认（认账口径与功法栏一致，不是单字段）');
+assert(ArtEffects.parseSkillEffect('长兵伤害+55%').spear === 55, 'A23 词表认数据实词「长兵伤害」（旧只认枪法伤害）');
+assert(ArtEffects.parseSkillEffect('反击+20').counter === 20 && ArtEffects.parseSkillEffect('反击+20').counter !== undefined,
+    'A24 词表认点数句式「反击+20」（旧只认带 % 的写法）');
+assert(ArtEffects.parseSkillEffect('闪避+45%').dodge === undefined && ArtEffects.parseSkillEffect('闪避+45%').dodgePct === 45,
+    'A25 点数与百分点不串味：闪避+45% 只进 dodgePct');
+// attack 不在 combatBonus 里是刻意的（那边是加值制），它在乘区 app.js:5240
+assert(!Object.prototype.hasOwnProperty.call(ArtEffects.combatBonus(), 'attack')
+    && fs.readFileSync(path.join(ROOT, 'js/app.js'), 'utf8').indexOf('(1 + _wpMul / 100)') >= 0,
+    'A26 攻击走百分点乘区（150 = +150% = ×2.5），不加值制通道里');
+KnowledgeSystem.importData(JSON.parse(_aSaveTk));
+window.learnedSecrets = _aSaveLs;
+ArtEffects.summarize(true);
+
 // ============ B 战斗接线 ============
 var appSrc = fs.readFileSync(path.join(ROOT, 'js/app.js'), 'utf8');
 var battleSrc = fs.readFileSync(path.join(ROOT, 'js/battle.js'), 'utf8');

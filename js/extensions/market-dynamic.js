@@ -125,11 +125,17 @@
             var city = cities[ci];
             for (var cat in def.mods) applyMod(city, cat, def.mods[cat]);
         }
-        // 记录
-        _state.history.unshift({ day: today, type: 'world-event', id: eventId, name: def.name });
-        if (_state.history.length > 20) _state.history.pop();
-        if (window.EventBus) window.EventBus.emit('market:event:applied', { eventId: eventId, name: def.name, mods: def.mods, cities: cities });
-        return { ok: true, entry: entry };
+// 记录
+          _state.history.unshift({ day: today, type: 'world-event', id: eventId, name: def.name });
+          if (_state.history.length > 20) _state.history.pop();
+          if (window.EventBus) window.EventBus.emit('market:event:applied', { eventId: eventId, name: def.name, mods: def.mods, cities: cities });
+          // v27.25：行情异动的「发生了什么」挂消息总闸——价在本城立变，风声要等商旅带到外城（价比人快，消息比人慢）
+          try {
+              if (window.WorldLedger && typeof window.WorldLedger.noteRumor === 'function' && cities && cities.length) {
+                  window.WorldLedger.noteRumor(def.name + '搅动了行市——受波及的几座城物价应声而变。', 'price', cities[0], '商旅');
+              }
+          } catch (ePriceNews) {}
+          return { ok: true, entry: entry };
     }
 
     function adjustFromTrade(cityId, category, qty, isBuy) {
@@ -214,15 +220,24 @@
             }
         }
         // 自然回归
+        // v27.13：大业连锁（模块⑫）——「肉价稳」落位（档案例「屠夫+猎户兴」的香火线落位，见 grand-legacy.js 连锁表）：
+        // 香火两件大业齐时，食物行情的既有自然回归加速一档（0.1→≤0.2，偏离基线的波动衰减更快=市面吃食平稳）。
+        // 只动回归参数这一枚既有旋钮，不碰供需冲击/世界事件/NPC 需求；读口缺席照旧 0.1（全库默认）。
+        var _foodReg = 0.1;
+        try {
+            var _cbf = (window.GrandLegacy && typeof window.GrandLegacy.chainBoost === 'function') ? window.GrandLegacy.chainBoost('food') : 1;
+            if (_cbf > 1) _foodReg = Math.min(0.2, 0.1 * _cbf);   // 温和：至多两倍回归率，波动只衰减不逆转
+        } catch (eCB) { /* 连锁读口缺席：照旧回归 */ }
         for (var ci = 0; ci < CITIES.length; ci++) {
             var city = CITIES[ci];
             for (var cj = 0; cj < CATEGORIES.length; cj++) {
                 var cat = CATEGORIES[cj];
                 var idx = _state.indices[city][cat];
+                var _reg = (cat === '食物') ? _foodReg : 0.1;
                 // supply 回归 100
-                idx.supply += (100 - idx.supply) * 0.1;
+                idx.supply += (100 - idx.supply) * _reg;
                 // demand 回归 100
-                idx.demand += (100 - idx.demand) * 0.1;
+                idx.demand += (100 - idx.demand) * _reg;
             }
         }
         // 概率触发 NPC 需求（低概率）

@@ -270,23 +270,42 @@
     }
 
     // ============== v21.9：世界大事记面板 ==============
-    function openWorldJournalPanel() {
-        var entries = getRecent(30);
-        var html = '<div class="space-y-2 text-sm">';
-        if (entries.length === 0) {
-            html += '<p class="text-gray-500 text-center">大事记还空着——世界尚未因你而起波澜。</p>';
-        } else {
-            entries.forEach(function (e) {
-                html += '<div class="bg-gray-800/60 rounded-lg p-3 border-l-4 border-yellow-600/60">' +
-                    '<p class="text-xs text-gray-500">第 ' + e.day + ' 天</p>' +
-                    '<p class="font-bold text-yellow-400 text-sm">' + e.title + '</p>' +
-                    (e.text ? '<p class="text-xs text-gray-300 mt-1 leading-relaxed">' + e.text + '</p>' : '') +
-                    '</div>';
-            });
-        }
-        html += '</div>';
-        if (typeof window.showModal === 'function') window.showModal('🗞️ 世界大事记（最近 ' + entries.length + ' 条）', html);
-    }
+function openWorldJournalPanel() {
+          var html = '<div class="space-y-2 text-sm">';
+          // v27.24：史官读口同源——年表是天下公史（四路大事按年翻页），大事记是你亲历账（身边的事）
+          var annalList = [];
+          try { if (window.WorldLedger && typeof window.WorldLedger.annals === 'function') annalList = window.WorldLedger.annals(120); } catch (eAnnal) {}
+          html += '<p class="text-xs text-gray-400 mb-1">📜 世界年表（史官按年录）</p>';
+          if (annalList.length === 0) {
+              html += '<p class="text-gray-500">天下还没有大事入册——史官的笔还空着。</p>';
+          } else {
+              var curYear = null, yearOpen = false;
+              for (var ai = annalList.length - 1; ai >= 0; ai--) { // 新的在前——史书从今年往回翻
+                  var e = annalList[ai];
+                  var y = Number(e.year) || 0;
+                  if (y !== curYear) {
+                      if (yearOpen) html += '</div>';
+                      curYear = y; yearOpen = true;
+                      html += '<div class="bg-gray-800/60 rounded-lg p-2 mb-1"><p class="text-xs font-bold text-amber-300">修仙历 ' + y + ' 年</p>';
+                  }
+                  html += '<p class="text-xs text-gray-300 leading-relaxed">· ' + e.text + '</p>';
+              }
+              if (yearOpen) html += '</div>';
+          }
+          var entries = getRecent(30);
+          if (entries.length > 0) {
+              html += '<p class="text-xs text-gray-400 mt-3 mb-1">🗞️ 你亲历的大事迹（最近 ' + entries.length + ' 条）</p>';
+              entries.forEach(function (e) {
+                  html += '<div class="bg-gray-800/60 rounded-lg p-3 border-l-4 border-yellow-600/60">' +
+                      '<p class="text-xs text-gray-500">第 ' + e.day + ' 天</p>' +
+                      '<p class="font-bold text-yellow-400 text-sm">' + e.title + '</p>' +
+                      (e.text ? '<p class="text-xs text-gray-300 mt-1 leading-relaxed">' + e.text + '</p>' : '') +
+                      '</div>';
+              });
+          }
+          html += '</div>';
+          if (typeof window.showModal === 'function') showModal('🗞️ 世界年表与大事记', html);
+      }
 
     window.CodexTutorial = {
         trigger: trigger,

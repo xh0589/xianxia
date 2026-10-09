@@ -1181,6 +1181,28 @@ function _ensureInventoryChrome() {
             if (oc.indexOf('expandInventory') >= 0) b.setAttribute('data-inv-role', 'expand');
             else if (oc.indexOf('executeBatchSell') >= 0) b.setAttribute('data-inv-role', 'sell');
         }
+        // v27.13：器谱图鉴入口（主档模块③）。逻辑全在 js/items.js 尾部的 window.openItemCollection，
+        // 这里只挂一枚钮——面板缺席时点开走它自己的「器谱未开」空态，绝不炸背包。
+        // 挂在功能钮排最前，借 .inv-btn 成衣；chrome 有 data-inv-chrome 防重入，不会重复插钮。
+        try {
+            if (typeof window.openItemCollection === 'function' && !acts.querySelector('[data-inv-role="codex"]')) {
+                var codexBtn = document.createElement('button');
+                codexBtn.type = 'button';
+                codexBtn.className = 'inv-btn';
+                codexBtn.setAttribute('data-inv-role', 'codex');
+                codexBtn.textContent = '📖 器谱';
+                codexBtn.onclick = function () {
+                    try {
+                        if (typeof window.openItemCollection === 'function') window.openItemCollection();
+                    } catch (eCodexOpen) {
+                        console.warn('[静默失败] js/inventory.js · 器谱入口：面板打开失败', eCodexOpen && eCodexOpen.message);
+                    }
+                };
+                acts.insertBefore(codexBtn, acts.firstChild);
+            }
+        } catch (eCodex) {
+            console.warn('[静默失败] js/inventory.js · _ensureInventoryChrome：器谱入口钮未挂上（读口 window.openItemCollection 仍可用）', eCodex && eCodex.message);
+        }
     }
 
     _syncInventoryFilterChips();
@@ -1447,18 +1469,41 @@ function showItemMenu(uid) {
     
     let actions = '';
     
-    // 标记出售的物品不可使用/装备/学习
+    // ★突破丹：开锁（本行原先是 `showUse = false`，此处是那行的反面）★
+// 为什么开：useItem() 的 F-14 修复（inventory.js:307-328）早就把吞丹链打通了，
+// 注释里写的理由是"只能在突破界面用，但**无此界面**⇒8 种突破丹永无消费路径"。
+// 也就是说藏按钮的理由是"那个界面不存在"，而不是"突破必须走仪式"——
+// 真要绑定仪式，仪式面板该有服用入口，而它从来没有过（那张面板只读列丹名与加成）。
+// 于是代码口径放开了、UI 口径没跟上：丹拿得到、扣不掉、点不动。
+// 语义以 useItem 的吐司为准：「已服用 X，**下次突破**成功率 +Y%」——先服丹、再突破，
+// 入口就该在背包，跟回春丹/小还丹同一个按钮位。
+// ★先算好、放在 isMarked 判断之外★：标记待售时下面那一整块会被跳过，
+//   而 :1545 的说明文案还要用 _btUsable，漏算就会把话说反。
+var _btPill = template.subtype === 'breakthrough';
+var _btBonus = template.effect && template.effect.breakthrough_bonus;
+// useItem 只认数值或字符串（字符串一律按 5~15% 随机 roll），两者皆无 → 吃了也不生效
+var _btUsable = _btPill
+    && (typeof _btBonus === 'number' || typeof _btBonus === 'string')
+    && !(typeof _btBonus === 'number' && _btBonus <= 0);
+
+// 标记出售的物品不可使用/装备/学习
     if (!isMarked) {
         // 根据物品类型显示不同操作
-        // 突破类/医疗类/未实现类不显示"使用"按钮
+        // ★医疗类/未实现类不显示"使用"按钮（它们另有专属界面）★
         var showUse = true;
         if (template.implemented === false) showUse = false;
-        if (template.subtype === 'breakthrough') showUse = false;
         if (template.subtype === 'medical') showUse = false;
         if (template.subtype === 'trap' || template.subtype === 'poison') showUse = false;
-        
+        // 吃不了的突破丹不给"使用"（免得跟下面的锁并排出现两个互相矛盾的按钮），
+        // 但锁是亮着的、原因也写在旁边——不是整格消失
+        if (_btPill && !_btUsable) showUse = false;
+
         if (showUse && (template.type === 'consumable' || template.subtype === 'pill' || template.subtype === 'herb' || template.subtype === 'fruit')) {
             actions += `<button onclick="useItem('${uid}'); this.closest('.fixed').remove();" class="bg-green-600 hover:bg-green-500 px-4 py-2 rounded text-white">使用</button>`;
+        }
+        // ★吃不了的突破丹：亮锁 + 当场说清为什么，不整格消失（禁止设计 #2）★
+        if (_btPill && !_btUsable && template.implemented !== false) {
+            actions += `<button disabled class="bg-gray-600 px-4 py-2 rounded text-gray-400 cursor-not-allowed" title="这件没有 breakthrough_bonus，吞下去不生效">🔒 服用不了</button>`;
         }
         
         if (template.type === 'equipment' || template.type === 'weapon' || template.type === 'armor' || template.type === 'accessory') {
@@ -1525,7 +1570,17 @@ function showItemMenu(uid) {
     if (template.implemented === false) {
         extraInfo = '<div class="col-span-2 text-red-400 text-xs">⚠ 此物品尚未实装，无法使用</div>';
     } else if (template.subtype === 'breakthrough') {
-        extraInfo = '<div class="col-span-2 text-yellow-400 text-xs">⚠ 只能在突破准备界面使用</div>';
+        // ★原文「⚠ 只能在突破准备界面使用」是一句假话——★全库不存在"突破准备界面"★，
+        //   玩家按它去找只会找到一堵墙。改成把真实时序讲清：
+        // ★先服丹、再突破★。突破仪式面板一打开，成功率就写死在 breakthroughState.successRate；
+        //   此刻再吃丹对**本次**无效，那份加成会静静留给下一次突破（一次性，成败皆耗）。
+        //   把这条写在入口旁边，是为了不让"点了能吃但本次不吃"变成落差。
+        extraInfo = '<div class="col-span-2 text-yellow-400 text-xs">⚠ 服用后加成计入<b>下一次</b>突破：'
+            + '突破仪式面板一打开成功率就定死，面板开着时再吃对本次无效。<br>'
+            + (_btUsable
+                ? '所以要吃趁早——进仪式之前吃。'
+                : '<b>这件没有突破加成，吞了也不生效</b>（它的效果键不是 breakthrough_bonus）。')
+            + '</div>';
     } else if (template.subtype === 'medical') {
         extraInfo = '<div class="col-span-2 text-yellow-400 text-xs">⚠ 请在疗伤界面使用</div>';
     } else if (template.useContext && template.useContext.length > 0) {

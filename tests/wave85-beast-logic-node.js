@@ -173,7 +173,9 @@ assert(btSrc.indexOf('sweepInvalidBeastLines(); } catch (eSweep)') >= 0, 'D12 �
 
 // ==================== E · 位面兽正门 ====================
 console.log('\n[E] 位面兽入分布表（拆了过渡链，正门给足）');
-eq(ECO.BEAST_DISTRIBUTION.length, 19, 'E1 分布表 13+4+2=19 兽（第八十六波补火焰虎/影豹）');
+// v27.11 补 14 只（草木 8 + 龙 6）后总数从 19 变 33。这条的本意是「位面四兽那批没被删」，
+// 不是「全表永远 19 行」，所以改成下限 + 逐只点名，免得下一批正常扩充就把它打断。
+assert(ECO.BEAST_DISTRIBUTION.length >= 19, 'E1 分布表不少于 13+4+2=19 兽（实数 ' + ECO.BEAST_DISTRIBUTION.length + '；v27.11 起为 33）');
 function poolNames(region, terrain) {
     return ECO.getBeastPoolForRegion(region, terrain).map(function (d) { return d.name; });
 }

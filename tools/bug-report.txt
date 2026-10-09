@@ -1,0 +1,114 @@
+# bug-scan 2026-10-04T13:50:06  root=D:\Download Game\仙侠世界
+# 挂载 352 / 全量 354 悬空 2 · html id 356 · 内联 fn 429
+# 汇总：DEAD-FILE=2 SUSPEND-CONSUMED=1 CONSUME-GHOST=41 INLINE-UNBOUND=1 DOM-ID-MISSING=7 DUP-EXPORT=58
+
+[高][SUSPEND-CONSUMED] js/npcs/npc-system.js:1331  消费 window.NPC_STORYLINES，其唯一定义在悬空文件 js/npcs/npc-storylines.js（未加载）→ 运行时 undefined，功能静默失联
+[高][INLINE-UNBOUND] js/npcs/npc-system.js:5034  内联 onclick 调 handleStorylineChoice()，但 handleStorylineChoice 未挂 window（点击必抛 fn is not defined）共 1 处
+[中][CONSUME-GHOST] js/global-utils.js:803  消费 window.gameState（1 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/battle.js:3223  消费 window.PHYS（1 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/items-extended/13-missing-ids.js:296  消费 window.extendedFoods（2 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/time-system.js:80  消费 window.gameState（1 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/event-system.js:894  消费 window.allSkills（2 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/party-system.js:366  消费 window.updateNPCStatus（2 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/building-effects.js:444  消费 window.cultivationSystem（2 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/enhanced-shop.js:69  消费 window.gameState（1 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/reputation-system.js:390  消费 window.currentLocation（1 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/beast-taming.js:375  消费 window.currentLocation（1 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/extensions/reincarnation-integration.js:170  消费 window._origStartNewGamePlus（1 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/city-facilities/horse-market.js:110  消费 window.extendedSpecial（2 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/app.js:2545  消费 window.sectsSystem（2 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/app.js:3036  消费 window.achievementData（1 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/crafting/brewing.js:101  消费 window.extendedFoods（2 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/core/audio-synth.js:14  消费 window.webkitAudioContext（1 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/city-facilities/facility-batch2.js:364  消费 window.__scenarioRng（1 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/core/daily-events.js:148  消费 window.weatherSystem（1 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][CONSUME-GHOST] js/core/daily-events.js:904  消费 window.currentLocation（1 处）但全工程无定义——若非动态注入则是幽灵全局
+[中][DOM-ID-MISSING] js/quest/quest-system.js:1548  getElementById('quest-panel') 字面量，但 id 无静态来源（非 html 非模板非动态赋值）
+[中][DOM-ID-MISSING] js/mail-system-ui.js:72  getElementById('mailMirrorContainer') 字面量，但 id 无静态来源（非 html 非模板非动态赋值）
+[中][DOM-ID-MISSING] js/reputation-system.js:1038  getElementById('gd-encounter-modal') 字面量，但 id 无静态来源（非 html 非模板非动态赋值）
+[中][DOM-ID-MISSING] js/weather-effects.js:66  getElementById('weather-display') 字面量，但 id 无静态来源（非 html 非模板非动态赋值）
+[中][DOM-ID-MISSING] js/app.js:931  getElementById('body-eyes') 字面量，但 id 无静态来源（非 html 非模板非动态赋值）
+[中][DOM-ID-MISSING] js/app.js:4212  getElementById('battle-wound-info') 字面量，但 id 无静态来源（非 html 非模板非动态赋值）
+[中][DOM-ID-MISSING] js/app.js:5345  getElementById('enemy-body-svg-wrapper') 字面量，但 id 无静态来源（非 html 非模板非动态赋值）
+[低][CONSUME-GHOST] js/event-system.js:604  消费 window.recordStoryChoice（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/enhancement.js:334  消费 window.openCrafting（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/travel-system.js:421  消费 window.getWeatherTravelTimeMultiplier（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/travel-system.js:553  消费 window.__scenarioRng（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/npcs/npc-system.js:4019  消费 window.showGiftDialog（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/npcs/skill-transmission.js:104  消费 window.__txRng（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/sects/sect-facilities.js:1078  消费 window.updateCharacterUI（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/sects/sect-facilities.js:1499  消费 window.saveSectData（4 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/reputation-system.js:794  消费 window.__scenarioRng（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/mount-events.js:32  消费 window.__scenarioRng（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/grand-legacy.js:76  消费 window.__scenarioRng（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/dynasty-court.js:106  消费 window.__scenarioRng（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/city-facilities/service-stall.js:103  消费 window.__scenarioRng（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/npcs/crime-works.js:91  消费 window.__scenarioRng（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/city-facilities/player-shop.js:229  消费 window.__scenarioRng（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/core/scenario-engine.js:228  消费 window.__scenarioRng（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/city-facilities/facility-batch2.js:544  消费 window.__workRng（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/city-facilities/facility-batch2.js:610  消费 window.__smugRng（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/city-facilities/festival-fair.js:410  消费 window.__scenarioRng（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/city-facilities/city-jobs.js:174  消费 window.__scenarioRng（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/city-facilities/case-system.js:83  消费 window.__scenarioRng（2 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][CONSUME-GHOST] js/debug-panel.js:619  消费 window.clearBodyDurability（4 处）但全工程无定义——若非动态注入则是幽灵全局（守卫式消费：可能是有意留的可选注入点）
+[低][DUP-EXPORT] js/core/world-loop.js:383  window.XianXia 被 4 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/npcs/social-content.js:843  window.showMessage 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/map/high-planes.js:447  window.closeModalSoft 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/app.js:3373  window.currentCharData 被 3 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/city-facilities/eatery.js:96  window.activeBuffs 被 4 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/npcs/npc-life-system.js:583  window._npcRecords 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/mail-system.js:604  window._mailSystemData 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/app.js:997  window.avoidancePriority 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/crafting/brewing.js:84  window.allItems 被 7 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/crafting/compound-ui.js:65  window.itemById 被 12 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/cultivation/enlightenment-tree.js:121  window.insightPoints 被 6 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/app.js:5271  window.currentInteractionEntity 被 3 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/extensions/beast-ecosystem.js:1766  window.isEntityDead 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/npcs/npc-daily-life.js:166  window.renderMap 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/items-extended.js:6  window.extendedPills 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/items-extended.js:18  window.extendedBreakthroughPills 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/items-extended.js:7  window.extendedBuffPills 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/items-extended.js:8  window.extendedPermPills 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/items-extended.js:9  window.extendedSpecialPills 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/items-extended.js:17  window.extendedMedicalItems 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/items-extended.js:10  window.extendedWeapons 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/items-extended.js:11  window.extendedArmor 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/items-extended.js:12  window.extendedMaterials 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/items-extended.js:13  window.extendedTalismans 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/items-extended.js:14  window.extendedArts 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/items-extended.js:15  window.extendedFood 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/items-extended.js:16  window.extendedSpecialItems 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/items-extended/14-ability-manuals.js:26  window.extendedManuals 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/app.js:318  window.learnedSecrets 被 4 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/app.js:7511  window.skillSelectExpanded 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/app.js:7532  window.equipSelectExpanded 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/app.js:19  window.gameLog 被 5 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/sects/master-teach.js:103  window.eventFlags 被 5 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/crafting/fire-qte.js:66  window._alchemyFireBonus 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/crafting/fire-qte.js:65  window._forgingFireBonus 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/app.js:5663  window._heartDemonBattle 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/app.js:5665  window._heartDemonId 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/equipment/bonded-artifact.js:716  window.updateCultivationUI 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/dynasty-court.js:1092  window.enterCity 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/app.js:10639  window.currentBattle 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/npcs/skill-transmission.js:425  window.resetNPCSystem 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/npcs/social-content.js:831  window.executeDeepTalkSubOption 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/npcs/social-content.js:1071  window.getGreeting 被 5 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/npcs/social-content.js:1082  window.getFarewell 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/npcs/social-content.js:910  window.executeAdvancedRequest 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/npcs/storylines-v2/batch1.js:603  window.triggerPersonalEvent 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/npcs/storylines-v2/batch3.js:968  window.getPersonalEventButtons 被 4 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/npcs/npc-inventory.js:350  window.getSecretDisplayHtml 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/app.js:10369  window.giveGiftToNPC 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/app.js:10370  window.confirmGiftToNPC 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/npcs/male-lead-rivalry.js:36  window.detectRivalRomance 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/npcs/city-residents-events2.js:6  window.CITY_RESIDENT_DATA 被 4 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/sects/sect-visit.js:988  window.discipleState 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/cultivation/breakthrough-ritual.js:205  window._bottleneckBonus 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/endgame/ascension-epilogue.js:165  window.onAscension 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/app.js:10423  window._defendSectRaid 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/app.js:8297  window._savedDurabilities 被 2 个文件挂载（加载序后者覆盖前者）
+[低][DUP-EXPORT] js/app.js:8300  window._savedMaxDurabilities 被 2 个文件挂载（加载序后者覆盖前者）
+[信息][DEAD-FILE] js/items-extended/09-loot-sources.js  未进加载序列（2/354 悬空）
+[信息][DEAD-FILE] js/npcs/npc-storylines.js  未进加载序列（2/354 悬空）

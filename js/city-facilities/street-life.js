@@ -48,7 +48,7 @@
     function settle(spec, source) {
         try {
             if (window.RewardService && typeof window.RewardService.apply === 'function') {
-                var r = window.RewardService.apply(spec, { source: source || '市井烟火', city: city() });
+                var r = window.RewardService.apply(spec, { facilitySpend: true, source: source || '市井烟火', city: city() });
                 return { ok: !!(r && r.success !== false), note: r && r.messages ? r.messages.join('、') : '' };
             }
         } catch (e) { console.warn('[静默失败] js/city-facilities/street-life.js · settle：这单奖惩没落账', e && e.message); }
@@ -172,6 +172,20 @@
             (window.CityBookshop ? '<button onclick="CityBookshop.open()" ' + btn.replace('p-3', 'bg-indigo-900 p-3') + '>📚 书肆淘书（旧书摊天天换货 · 学识好能捡漏残页）</button>' : '') +
             (window.BeggarAlms ? '<button onclick="BeggarAlms.open()" ' + btn.replace('p-3', 'bg-amber-900 p-3') + '>🥣 街角施舍（善有善报——乞丐多是丐帮的眼线）</button>' : '') +
             (window.CitizenLife ? '<button onclick="CitizenLife.browse()" ' + btn.replace('p-3', 'bg-teal-900 p-3') + '>👥 街坊搭话（摊贩、书生、棋手、琴师……各干各的营生）</button>' : '') +
+            // v26.0 六路营生批：掌柜 / 赌石 / 借坛酿酒 / 易容后巷 / 地窖押票——各自账在位、城里有那扇门才挂
+            (window.PlayerShop ? '<button onclick="PlayerShop.open()" ' + btn.replace('p-3', 'bg-amber-900 p-3') + '>🏪 我的铺子（' + (window.PlayerShop.shopHere ? (window.PlayerShop.shopHere() ? '柜上盘账' : '盘间铺面当掌柜') : '当掌柜') + ' · 自己定价 · 雇伙计 · 每日开市）</button>' : '') +
+            (window.StoneGamble && window.StoneGamble.stallOk(ct) ? '<button onclick="StoneGamble.open()" ' + btn.replace('p-3', 'bg-stone-700 p-3') + '>🪨 古玩摊赌石（三档原石 · 探石问深浅 · 一刀定生死——十石九空是明账）</button>' : '') +
+            (window.Brewing && window.Brewing.cellarOk(ct) ? '<button onclick="Brewing.open()" ' + btn.replace('p-3', 'bg-amber-950 p-3') + '>🍶 借坛酿酒（酒家窖坛 · 三口坛 · 窖藏越久越醇——新酒到神工四档年份）</button>' : '') +
+            (window.Disguise && window.Disguise.marketOk(ct) ? '<button onclick="Disguise.open()" ' + btn.replace('p-3', 'bg-purple-900 p-3') + '>🎭 黑市后巷易容（换脸改假名' + (window.Disguise.active && window.Disguise.active() ? ' · 眼下正戴着「' + window.Disguise.alias() + '」' : ' · 三档手艺 · 通缉两档各有用处') + '）</button>' : '') +
+            (window.Kidnap && window.Kidnap.holding && window.Kidnap.holding() ? '<button onclick="Kidnap.open()" ' + btn.replace('p-3', 'bg-red-950 p-3') + '>🪢 城外地窖（押着「' + window.Kidnap.holding().name + '」——写赎金信 / 放人 / 撕票）</button>' : '') +
+            // v26.1 五路进城批：卦摊 / 斗蛐蛐 / 私塾——各自账在位、城里有那扇门才挂（城门账挂在进城路上，不占菜单）
+            (window.FortuneStall && window.FortuneStall.stallOk(ct) ? '<button onclick="FortuneStall.open()" ' + btn.replace('p-3', 'bg-violet-900 p-3') + '>🔮 街口支卦摊（自己给人看相 · 学识定准头 · 算准结善缘，砸了被掀摊）</button>' : '') +
+            (window.Cricket && window.Cricket.denOk(ct) ? '<button onclick="Cricket.open()" ' + btn.replace('p-3', 'bg-lime-900 p-3') + '>🦗 巷口斗蛐蛐（出城捉虫 · 喂养斗性 · 三档注开斗——连胜五场喊你「蛐王」）</button>' : '') +
+            (window.PrivateSchool && window.PrivateSchool.schoolOk(ct) ? '<button onclick="PrivateSchool.open()" ' + btn.replace('p-3', 'bg-sky-900 p-3') + '>🏫 启蒙私塾（' + (window.PrivateSchool.schoolOf && window.PrivateSchool.schoolOf(ct.replace(/\s+/g, '')) ? '授课一堂 · 蒙童 ' + (window.PrivateSchool.schoolOf(ct.replace(/\s+/g, '')).students) + ' 人' : '租屋开塾当先生') + ' · 束脩安稳 · 教化抵恶名）</button>' : '') +
+            // v27.3 手艺与街面批：手艺摊引擎（十一门手艺 · 一日一摊 · 客流单价明账）——账在位、城里有街面才挂
+            (window.ServiceStall && window.ServiceStall.stallOk(ct) ? '<button onclick="ServiceStall.open()" ' + btn.replace('p-3', 'bg-emerald-900 p-3') + '>🛠️ 摆手艺摊（十一门手艺 · 一日一摊 · 客流单价都是明账）</button>' : '') +
+            // v27.5 家业与闲趣批：家业名册（立宗族 · 建祠堂 · 收义子 · 乔迁宴 · 捡土狗 · 恩仇簿自动记账）——账在位才挂
+            (window.FamilyHall ? '<button onclick="FamilyHall.open()" ' + btn.replace('p-3', 'bg-amber-950 p-3') + '>🏠 家业名册（立宗族修族谱 · 建祠堂 · 收义子 · 乔迁宴 · 捡土狗——恩仇簿自动记账，一季度一件家事）</button>' : '') +
             '<p class="text-[11px] text-gray-500 mt-1">市井小账——买的是人间烟火气，不是道行。</p>';
         if (typeof window.showBuildingEffectDialog === 'function') {
             window.showBuildingEffectDialog('🏮 市井烟火 · ' + ct, html);

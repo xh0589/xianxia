@@ -2,11 +2,11 @@
  * wave96-closure-node.js — 第九十六波 · 挂账收口批 验收：
  *   把第九十五波报告里「未解决（挂账待拍板）」的五项按最佳方式收口：
  *   A ALC-01/02：炼丹瑕疵丹/御品可达性——真模块全组合枚举，瑕疵线每张够得着、御品线至少两张方子够得着
- *     （第八十二波已按枚举重校阈值，本套把可达性钉死防再漂；外包那轮「不可达」结论基于移植前旧源码）
+ *     （第八十二波已按枚举重校阈值，本套把可达性钉死防再漂；此前那轮「不可达」结论基于改动前旧源码）
  *   B NEW-15：龙脉等地标弹窗不再剧透未解锁奖励——没到手的只亮档位与类别，已领的才是履历
  *   C NEW-40 后续：收件箱分页（每页 50 封）——千八百封不再一次糊出上万个节点
  *   D NEW-11：时间两本账口径锚点（totalMinutes=钟/currentDay=历）+ 全仓无「绝对分钟推日号」误用
- *   E LEG-1：旧测试清单换代完成——endgame 五套已退役，外包点名的 11 套全部在现行 run-all 里且全绿
+ *   E LEG-1：旧测试清单换代完成——endgame 五套已退役，此前点名的 11 套全部在现行 run-all 里且全绿
  *
  * 运行：node tests/wave96-closure-node.js
  */
@@ -100,7 +100,7 @@ recipes.forEach(function (rc) {
     }
     if (combos > 0 && minT < 12) imperialRecipes++;
 });
-assert(totalCombos > 1000, 'A1 枚举规模与外包口径同量级（' + totalCombos + ' 炉）');
+assert(totalCombos > 1000, 'A1 枚举规模与既定口径同量级（' + totalCombos + ' 炉）');
 eq(flawReachable, flawRecipes, 'A2 每张带瑕疵线的丹方，最毒组合都够得着瑕疵丹（ALC-01 闭环）');
 assert(imperialRecipes >= 2, 'A3 御品线（毒性<12 且评分≥85）至少两张方子够得着（' + imperialRecipes + ' 张，ALC-02 闭环）');
 // 御品评分侧也可达：满分火候下 finalScore = 0.6*评分归一 + 0.4*100 —— 低毒高分组合过 85 不是空谈
@@ -181,7 +181,7 @@ console.log('\n[E] 旧测试清单换代（LEG-1 判定）');
 var testsDir = fs.readdirSync(path.join(ROOT, 'tests'));
 eq(testsDir.filter(function (f) { return /endgame/.test(f); }).length, 0, 'E1 endgame 五套旧测试已退役（清单换代完成）');
 assert(src('tests/run-all.sh').indexOf('endgame') < 0, 'E2 run-all 不再引用退役模块的测试');
-// 外包点名的 11 套「测试侧脆弱/断言级失败」全部在现行清单里（且 run-all EXIT=0 即全绿）
+// 此前点名的 11 套「测试侧脆弱/断言级失败」全部在现行清单里（且 run-all EXIT=0 即全绿）
 ['v20.21-world-teeth-node.js', 'v20.81-report-bugfix-node.js', 'tournament-node.js', 'sect-management-node.js',
  'v20.11-achievements-node.js', 'v20.14-disciple-roots-node.js', 'v20.24-dao-bridge-node.js', 'v20.52-player-sect-node.js',
  'v20.58-wild-map-hazard-node.js', 'v20.86-sect-scenarios-node.js', 'v21.2-facility-fixes-node.js'].forEach(function (f) {

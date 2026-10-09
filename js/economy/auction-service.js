@@ -104,6 +104,13 @@
             item.status = 'sold';
             item.settledMinute = nowMinute();
             item.gross = gross; item.tax = tax; item.net = net;
+            // v27.13 拍卖流水入城市账本（④改良）：锤音那一刻成交额（税前总额）入该城市面流水——
+            // 玩家是卖家走 noteAuctionSale 正门（日结商税照抽，大槌成谣）；行情正门照走：
+            // 一城拍出一件货，那行当的价就该松（notePlayerTrade→adjustFromTrade→market:priceChange 广播）。
+            try {
+                if (global.WorldLedger && typeof global.WorldLedger.noteAuctionSale === 'function') global.WorldLedger.noteAuctionSale(gross);
+                if (global.MarketDynamic && typeof global.MarketDynamic.notePlayerTrade === 'function') global.MarketDynamic.notePlayerTrade(item.templateId, item.quantity, false);
+            } catch (eLed) { console.warn('[静默失败] js/economy/auction-service.js · settlePlayerListing：成交没入城市账', eLed && eLed.message); }
             notify('🔨 拍卖成交：' + item.itemName + ' x' + item.quantity + '，到账 ' + net + ' 灵石（税 ' + tax + '）', 'success');
         } else {
             var returned = global.EconomyTransaction && global.EconomyTransaction.addSnapshot(item.itemSnapshot);
@@ -247,7 +254,21 @@
             item.status = 'sold'; item.buyerName = playerName(); item.settledMinute = nowMinute();
             return true;
         });
-        if (ok) notify('🔨 竞得 ' + item.itemName + ' x' + item.quantity + '，支付 ' + cost + ' 灵石', 'success');
+        if (ok) {
+            // v27.13 拍卖流水入城市账本（④改良）：买断也是城里一笔真交易——钱从玩家流向市面，
+            // 走 noteBuy 既有正门（与坊市买卖同一本流水）；行情正门照走（买断该行当价该抬）。
+            try {
+                if (global.WorldLedger && typeof global.WorldLedger.noteBuy === 'function') global.WorldLedger.noteBuy(cost);
+                if (global.MarketDynamic && typeof global.MarketDynamic.notePlayerTrade === 'function') global.MarketDynamic.notePlayerTrade(item.templateId, item.quantity, true);
+            } catch (eLed) { console.warn('[静默失败] js/economy/auction-service.js · buyNpcLot：买断没入城市账', eLed && eLed.message); }
+            // v27.13：产出登记——拍卖行买断成交盖「auction」章（与 noteAuctionSale 同款纪律：登记失败绝不拦成交）。
+            try {
+                if (global.ItemProvenance && typeof global.ItemProvenance.note === 'function') {
+                    global.ItemProvenance.note('auction', item.templateId, Math.max(1, Number(item.quantity) || 1));
+                }
+            } catch (ePrv) { console.warn('[静默失败] js/economy/auction-service.js · buyNpcLot：产出登记未入簿（拍品照常到手）', ePrv && ePrv.message); }
+            notify('🔨 竞得 ' + item.itemName + ' x' + item.quantity + '，支付 ' + cost + ' 灵石', 'success');
+        }
         return !!ok;
     }
 
@@ -362,6 +383,18 @@
         });
         if (ok) {
             var diff = war.base - price;
+            // v27.13 拍卖流水入城市账本（④改良）：竞价落槌是你付的一笔真钱——走 noteBuy 正门入流水，
+            // 行情正门照走（你把货抬走了，价该抬）。对手落槌（won=false）是它与卖家两清，不动玩家流水。
+            try {
+                if (global.WorldLedger && typeof global.WorldLedger.noteBuy === 'function') global.WorldLedger.noteBuy(price);
+                if (global.MarketDynamic && typeof global.MarketDynamic.notePlayerTrade === 'function') global.MarketDynamic.notePlayerTrade(item.templateId, item.quantity, true);
+            } catch (eLed) { console.warn('[静默失败] js/economy/auction-service.js · _settleBidWar：落槌价没入城市账', eLed && eLed.message); }
+            // v27.13：产出登记——竞价拉锯落槌得手同盖「auction」章（一口价买断 buyNpcLot 与此同口径）。登记失败不拦成交。
+            try {
+                if (global.ItemProvenance && typeof global.ItemProvenance.note === 'function') {
+                    global.ItemProvenance.note('auction', item.templateId, Math.max(1, Number(item.quantity) || 1));
+                }
+            } catch (ePrv) { console.warn('[静默失败] js/economy/auction-service.js · _settleBidWar：产出登记未入簿（拍品照常到手）', ePrv && ePrv.message); }
             notify('🔨 落槌！「' + war.rivalName + '」摇头收牌——' + item.itemName + ' x' + item.quantity + ' 以 ' + price + ' 灵石归你（' + (diff > 0 ? ('比挂牌价省 ' + diff) : ('比挂牌价多付 ' + (-diff))) + '，' + war.round + ' 轮）', 'success');
             open();
         }
@@ -454,6 +487,12 @@
         item.status = 'sold'; item.buyerName = war.buyerName; item.settledMinute = nowMinute();
         item.gross = gross; item.tax = tax; item.net = net; item.bidRounds = war.round;
         if (global.GameScheduler) global.GameScheduler.cancel('auction_settle_' + item.id);
+        // v27.13 拍卖流水入城市账本（④改良）：催场落槌同到期成交一口径——成交额入市面流水
+        //（noteAuctionSale 正门，日结商税照抽），行情正门照走（玩家是卖家，价该松）。
+        try {
+            if (global.WorldLedger && typeof global.WorldLedger.noteAuctionSale === 'function') global.WorldLedger.noteAuctionSale(gross);
+            if (global.MarketDynamic && typeof global.MarketDynamic.notePlayerTrade === 'function') global.MarketDynamic.notePlayerTrade(item.templateId, item.quantity, false);
+        } catch (eLed) { console.warn('[静默失败] js/economy/auction-service.js · sellWarStrike：落槌没入城市账', eLed && eLed.message); }
         var diff = gross - war.ask;
         notify('🔨 落槌！「' + war.buyerName + '」以 ' + gross + ' 灵石买下 ' + item.itemName + ' x' + item.quantity + '（' + (diff >= 0 ? '比你的挂牌价高 ' + diff : '比挂牌价低 ' + (-diff)) + '，' + war.round + ' 轮催场，税 ' + tax + '，到账 ' + net + '）', 'success');
         open();
@@ -550,6 +589,18 @@
         });
         if (ok) {
             if (typeof global.addReputationFromTrade === 'function' && city) global.addReputationFromTrade(city, item.price);
+            // v27.13 拍卖流水入城市账本（④改良）：皇家场的大槌更是大交易——钱从玩家流向市面，
+            // 走 noteBuy 正门入流水；行情正门照走（皇家拍品多为丹药法宝，拍走一件价该抬）。
+            try {
+                if (global.WorldLedger && typeof global.WorldLedger.noteBuy === 'function') global.WorldLedger.noteBuy(item.price);
+                if (global.MarketDynamic && typeof global.MarketDynamic.notePlayerTrade === 'function') global.MarketDynamic.notePlayerTrade(item.templateId, 1, true);
+            } catch (eLed) { console.warn('[静默失败] js/economy/auction-service.js · buyRoyalLot：皇家成交没入城市账', eLed && eLed.message); }
+            // v27.13：产出登记——皇家拍卖成交盖「auction」章（与买断/竞价拉锯同口径）。登记失败不拦成交。
+            try {
+                if (global.ItemProvenance && typeof global.ItemProvenance.note === 'function') {
+                    global.ItemProvenance.note('auction', item.templateId, 1);
+                }
+            } catch (ePrv) { console.warn('[静默失败] js/economy/auction-service.js · buyRoyalLot：产出登记未入簿（拍品照常到手）', ePrv && ePrv.message); }
             notify('🏛️ 皇家拍卖成交：' + item.itemName + '，支付 ' + item.price + ' 灵石', 'success');
         }
         return !!ok;

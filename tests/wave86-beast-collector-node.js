@@ -123,15 +123,25 @@ eq(r4 && r4.name, '幽脉蟒', 'B11 魔界沼泽遇幽脉蟒（第八十五波�
 
 // ==================== C · 坊市独苗入表 ====================
 console.log('\n[C] 火焰虎/影豹野外入表（灵兽坊八货架此前就这两只野外绝迹）');
-eq(DIST.length, 19, 'C1 分布表 17+2=19 兽');
+// v27.11 补 14 只（草木 8 + 龙 6）后总数从 19 变 33。这条断言的本意是「这批的两只入表了」，
+// 不是「全表永远 19 行」——写死 19 会被下一批正常扩充打断，所以改成下限 + 逐只点名。
+assert(DIST.length >= 19, 'C1 分布表不少于 17+2=19 兽（实数 ' + DIST.length + '；v27.11 起为 33）');
 assert(poolNames('南疆', 'VOLCANO').indexOf('火焰虎') >= 0, 'C2 南疆火山有火焰虎（模板账：南疆/西漠/炎城）');
 assert(poolNames('西漠', 'DESERT').indexOf('火焰虎') >= 0 && poolNames('西漠', 'DESERT').indexOf('风狼') >= 0, 'C3 西漠荒漠火焰虎与风狼同域');
-var r5 = roll('南疆', 'VOLCANO', 0.99);
-eq(r5 && r5.name, '火焰虎', 'C4 火山池末位真 roll 得出来（火凤/金乌/火焰虎三兽同池）');
+// v27.11：原来这里是 roll(..., 0.99) 硬点「池末位」= 火焰虎。池子一扩（南疆火山后来又住了
+// 熔岩藤与赤螭），末位就换了兽，断言跟着无辜变红。真正要验的是「池里每一只都真 roll 得出来、
+// 且同一个 rng 出同一只」——这两条与池子多大无关，改成整段 rng 扫一遍。
+var volPool = poolNames('南疆', 'VOLCANO');
+var volRolled = {};
+for (var vi = 0; vi < 200; vi++) volRolled[roll('南疆', 'VOLCANO', vi / 200).name] = 1;
+assert(volPool.every(function (n) { return volRolled[n]; }), 'C4 南疆火山池逐只 roll 得出来（池 ' + volPool.length + ' 只：' + volPool.join('/') + '）');
+assert(roll('南疆', 'VOLCANO', 0.99).name === roll('南疆', 'VOLCANO', 0.99).name, 'C4b 同 rng 同结果（分布 roll 可复现，不掷骰）');
 assert(poolNames('南疆', 'FOREST').indexOf('影豹') >= 0, 'C5 南疆林海有影豹（模板账：南疆/万毒谷/迷雾森林）');
 assert(poolNames('蜀地', 'FOREST').indexOf('影豹') >= 0, 'C6 蜀地林海有影豹');
-var r6 = roll('南疆', 'FOREST', 0.99);
-eq(r6 && r6.name, '影豹', 'C7 林海池 roll 得出影豹');
+var forPool = poolNames('南疆', 'FOREST');
+var forRolled = {};
+for (var fi = 0; fi < 200; fi++) forRolled[roll('南疆', 'FOREST', fi / 200).name] = 1;
+assert(forPool.every(function (n) { return forRolled[n]; }), 'C7 南疆林海池逐只 roll 得出来（含影豹；池 ' + forPool.length + ' 只：' + forPool.join('/') + '）');
 eq(ECO.TEMPLATE_TO_ECO.flame_tiger, 'beast_flametiger', 'C8 火焰虎模板映射在册');
 eq(ECO.TEMPLATE_TO_ECO.shadow_panther, 'beast_shadowpanther', 'C9 影豹模板映射在册');
 eq(ECO.BEAST_NAME_TO_ID['火焰虎'], 'beast_flametiger', 'C10 中文名映射在册');
@@ -169,10 +179,18 @@ var evoCover = ['wind_wolf_king', 'flame_tiger_king', 'fire_phoenix_adult'].ever
 });
 eq(evoCover, true, 'D6 三条进化链的形态全在册（来路标注不悬空）');
 // 分布兽名字与模板名一字不差（图鉴反查靠名字，错一个字栖息地就空）
+// ★ 判据一个字没动，只把说明文字里的「19 兽」改成现读（DIST.length）。
+//   上一批那份报告把这一条当成「加兽的锁」，实测不是：它要求的是分布表每一行
+//   在 window.BEAST_TEMPLATES 里查得到同名模板——新兽正是**先有模板再进分布表**，
+//   所以加兽只会让这一条更绿（实测：注入探针兽后 D7 仍绿）。
+//   反倒是这句话里的「19」是个写死的枚举值：分布表早已 42 行，文字还在说 19。
 var nameOk = DIST.every(function (d) {
     return Object.keys(global.BEAST_TEMPLATES).some(function (k) { return global.BEAST_TEMPLATES[k].name === d.name; });
 });
-eq(nameOk, true, 'D7 19 兽分布名与模板名一字不差');
+var nameMiss = DIST.filter(function (d) {
+    return !Object.keys(global.BEAST_TEMPLATES).some(function (k) { return global.BEAST_TEMPLATES[k].name === d.name; });
+}).map(function (d) { return d.name; });
+eq(nameOk, true, 'D7 ' + DIST.length + ' 兽分布名与模板名一字不差（查不到：' + (nameMiss.join(',') || '无') + '）');
 
 // ==================== E · 哨兵 ====================
 console.log('\n[E] 哨兵');

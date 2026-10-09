@@ -4,6 +4,13 @@
    纪律照其余面板文件：选择器一律带 #shop-modal-overlay 前缀，全篇无 !important。 */
 
 /* 货架一行两张卡，屏窄了自己退回一张——430px 是「货名＋一句描述＋价＋购买钮」不断行的最窄宽度 */
+/* 用户批（2026-10-02）：窗 1100px 在 1920 屏只占 57%「根本不好买东西」——
+   拉到 1440px；96vw 兜底防超宽屏超界（动态 arbitrary 类 CDN 不生成，静态接管；
+   双类特异性压模板上的 max-w-[1440px]，守本文件「无 !important」纪律） */
+#shop-modal-overlay > div {
+    max-width: min(1440px, 96vw);
+}
+
 #shop-modal-overlay .shop-goods-grid {
     display: grid;
     /* 430px 是量字量出来的（货名＋描述＋价＋钮不断行），所以它必须跟着字号档走：

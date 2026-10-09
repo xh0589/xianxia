@@ -22,7 +22,17 @@
     var LOOT_RATE = 0.05;             // 打赢劫道的，抄它老窝的进项（按货值）
     var PLUNDER_RATE = 0.3;           // 输了被搬走的货比例
 
-    var _state = { cargo: [] }; // [{templateId, itemName, count, snapshot, originCity, originRegion, pickupDay}]
+    // ============ v27.1 固定商路：漕运 · 茶马道（第4/28件 · 托货于商队，周期结算，非日常操作） ============
+    // 与上面「自己押货挑担」分账：这里是把本钱交给跑熟线的商队，人不动、货不动，N 日后回笼连本带利结清。
+    // 行情的风险归商队，路上的风险归你的本钱——每条线明账写死：周期/利幅/险率/本钱夹板，一条商路一趟一结。
+    var TRADE_ROUTES = {
+        canal:    { key: 'canal',    name: '漕运',   icon: '⛵', days: 5,  yieldMin: 0.10, yieldMax: 0.25, risk: 0.12, capMin: 100, capMax: 1000, desc: '粮船走水道，快当、稳当，利薄些（五日一回）' },
+        teahorse: { key: 'teahorse', name: '茶马道', icon: '🍵', days: 12, yieldMin: 0.30, yieldMax: 0.70, risk: 0.30, capMin: 300, capMax: 3000, desc: '茶叶换马匹，利厚路险（十二日一回，匪患道两段）' }
+    };
+    var VOYAGE_MAX = 2;       // 同时在路上的商队至多两支（银子追不过来）
+    var VOYAGE_LOSS = 0.4;    // 商队被截：镖师死斗护住大半，货仍被抢走四成本钱
+
+    var _state = { cargo: [], voyages: [] }; // cargo: [{templateId,...}]；voyages: [{route, capital, departDay, dueDay}]
 
     function _today() {
         try {
@@ -168,11 +178,29 @@
         try {
             if (window.NpcBond && typeof window.NpcBond.escortLineHtml === 'function') escHtml = window.NpcBond.escortLineHtml() || '';
         } catch (eEsc) { console.warn('[静默失败] js/economy/caravan-trade.js · openCaravanBoard：镖师一栏没画上——行情板少一块', eEsc && eEsc.message); }
+        // v27.1 固定商路（漕运/茶马道）：托货于商队，周期结算——人不动，账到期自己结
+        var voyHtml = '';
+        if (_state.voyages.length) {
+            voyHtml = _state.voyages.map(function (v) {
+                var vrt = TRADE_ROUTES[v.route] || {};
+                return '<div class="bg-gray-800/60 p-2 rounded mb-1 flex justify-between items-center"><span class="text-xs text-gray-300">' + (vrt.icon || '🧭') + ' ' + (vrt.name || v.route) + '一车 · 本钱 ' + v.capital + ' 灵石</span><span class="text-xs text-amber-300">' + Math.max(0, v.dueDay - _today()) + ' 日后回笼</span></div>';
+            }).join('');
+        } else {
+            voyHtml = '<p class="text-xs text-gray-500 mb-1">眼下没有在路上的商队。</p>';
+        }
+        var routeHtml = Object.keys(TRADE_ROUTES).map(function (rk) {
+            var rt = TRADE_ROUTES[rk];
+            return '<div class="bg-gray-700/30 p-2 rounded mb-2">'
+                + '<p class="text-sm text-white font-bold">' + rt.icon + ' ' + rt.name + ' <span class="text-xs text-gray-400 font-normal">' + rt.desc + '</span></p>'
+                + '<p class="text-[11px] text-gray-500 mb-1">明账：' + rt.days + ' 日一回 · 利幅 ' + Math.round(rt.yieldMin * 100) + '%~' + Math.round(rt.yieldMax * 100) + '% · 险 ' + Math.round(rt.risk * 100) + '%（被截丢四成本钱）· 本钱一车 ' + rt.capMin + '~' + rt.capMax + ' 灵石</p>'
+                + '<button onclick="CaravanTrade.sendPrompt(\'' + rk + '\')" class="bg-emerald-700 hover:bg-emerald-600 px-2 py-1 rounded text-xs">发一车' + rt.name + '</button></div>';
+        }).join('');
         var html = '<p class="text-xs text-gray-400 mb-2">押货跑商：货从行囊里真扣走、真上肩；到价高的地界卸回行囊，照当地行市卖给铺子——差价就是脚力的钱。<span class="text-red-300">货在身上过一天，就有一天被截道的风声。</span></p>'
             + '<h4 class="font-bold text-amber-400 text-sm mb-1">📈 六区行市（今日）</h4>' + gridHtml + evTxt
             + '<h4 class="font-bold text-amber-400 text-sm mb-1 mt-3">🐴 肩上货担（' + _state.cargo.length + '/' + CARAVAN_MAX + ' · 货值约 ' + cargoValue() + ' 灵石）</h4>' + cargoHtml
             + escHtml
-            + '<h4 class="font-bold text-amber-400 text-sm mb-1 mt-3">装货</h4>' + bagHtml;
+            + '<h4 class="font-bold text-amber-400 text-sm mb-1 mt-3">装货</h4>' + bagHtml
+            + '<h4 class="font-bold text-amber-400 text-sm mb-1 mt-3">🧭 固定商路（' + _state.voyages.length + '/' + VOYAGE_MAX + ' 支在路上）</h4>' + voyHtml + routeHtml;
         if (typeof window.showModal === 'function') _panelHandle = window.showModal('🐴 押货跑商 · 行情与货担', html);
     }
 
@@ -294,25 +322,116 @@
         } catch (e) { console.warn('[静默失败] js/economy/caravan-trade.js · settleCaravanAmbush：截道的账没落下，货与钱都悬着', e && e.message); }
     }
 
+    // ============ v27.1 固定商路：发货 / 回笼结算 ============
+    function stonesAdd(n) {
+        try {
+            var dm = window.XianXia && window.XianXia.DataManager;
+            if (dm && typeof dm.addSpiritStones === 'function') { dm.addSpiritStones(n); return true; }
+            if (window.currentCharData) { window.currentCharData.spiritStones = (Number(window.currentCharData.spiritStones) || 0) + n; return true; }
+        } catch (e) { console.warn('[静默失败] js/economy/caravan-trade.js · stonesAdd：商路回笼的钱没进袋', e && e.message); }
+        return false;
+    }
+    function stonesTake(n) {
+        try {
+            var dm = window.XianXia && window.XianXia.DataManager;
+            if (dm && typeof dm.deductSpiritStones === 'function') return !!dm.deductSpiritStones(n);
+            if (window.currentCharData && (Number(window.currentCharData.spiritStones) || 0) >= n) { window.currentCharData.spiritStones -= n; return true; }
+        } catch (e) { console.warn('[静默失败] js/economy/caravan-trade.js · stonesTake：发货的本钱没扣成——这趟商队不能白放', e && e.message); }
+        return false;
+    }
+    function logLine(m, t) { try { if (window.gameLog && window.gameLog.add) window.gameLog.add(m, t || 'info'); } catch (e) {} }
+
+    function sendVoyage(routeKey, capital) {
+        var rt = TRADE_ROUTES[routeKey];
+        if (!rt) return false;
+        if (!window.currentCharData) { if (window.showMessage) window.showMessage('请先创建角色进入游戏。', 'info'); return false; }
+        if (_state.voyages.length >= VOYAGE_MAX) {
+            if (window.showMessage) window.showMessage('🧭 已经有 ' + VOYAGE_MAX + ' 支商队在你名下走着——银子追不过人来，等一趟回笼再发。', 'warning');
+            return false;
+        }
+        capital = Math.floor(Number(capital) || 0);
+        if (capital < rt.capMin || capital > rt.capMax) {
+            if (window.showMessage) window.showMessage('🧭 ' + rt.name + '的本钱一车 ' + rt.capMin + '~' + rt.capMax + ' 灵石——太少装不满一船，太多商队不敢接。', 'warning');
+            return false;
+        }
+        if (!stonesTake(capital)) {
+            if (window.showMessage) window.showMessage('🧭 灵石不足——这趟' + rt.name + '发不出去。', 'warning');
+            return false;
+        }
+        if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI();
+        _state.voyages.push({ route: routeKey, capital: capital, departDay: _today(), dueDay: _today() + rt.days });
+        logLine('🧭 你的 ' + capital + ' 灵石本钱装上了' + rt.name + '的船队/马帮——' + rt.days + ' 日后回笼结清（利幅 ' + Math.round(rt.yieldMin * 100) + '%~' + Math.round(rt.yieldMax * 100) + '%，路上有 ' + Math.round(rt.risk * 100) + '% 的凶险，明账）。', 'info');
+        if (window.showMessage) window.showMessage('🧭 ' + rt.icon + ' ' + rt.name + '商队出发了（本钱 ' + capital + ' 灵石，' + rt.days + ' 日后回笼）——人不用跟着，账到期自己结。', 'success');
+        return true;
+    }
+
+    // 翻日账：到期的商队回笼——被截丢四成本钱，平安归来连本带利（利幅明账区间内掷）
+    function settleVoyages() {
+        if (!_state.voyages || !_state.voyages.length) return;
+        var today = _today();
+        for (var i = _state.voyages.length - 1; i >= 0; i--) {
+            var v = _state.voyages[i];
+            var rt = TRADE_ROUTES[v && v.route];
+            if (!rt) { _state.voyages.splice(i, 1); continue; }
+            if (today < v.dueDay) continue;
+            if (Math.random() < rt.risk) {
+                var back = Math.max(1, Math.round(v.capital * (1 - VOYAGE_LOSS)));
+                stonesAdd(back);
+                logLine(rt.icon + ' ' + rt.name + '商队回笼时遇了截——镖师死斗护住大半，仍被抢走 ' + (v.capital - back) + ' 灵石的货。收回本金 ' + back + ' 灵石，这趟白跑。（险率 ' + Math.round(rt.risk * 100) + '%，发货那日就写在明账上）', 'warning');
+                try { if (typeof window.playerPushDeed === 'function') window.playerPushDeed('bad', '你托的' + rt.name + '商队叫人截了——行商圈里传你时运不济'); } catch (eDeed) {}
+            } else {
+                var profit = Math.round(v.capital * (rt.yieldMin + Math.random() * (rt.yieldMax - rt.yieldMin)));
+                stonesAdd(v.capital + profit);
+                logLine(rt.icon + ' ' + rt.name + '商队平安回笼——连本带利 ' + (v.capital + profit) + ' 灵石入袋（本钱 ' + v.capital + '，利 ' + profit + '，这趟赚了 ' + Math.round(profit / v.capital * 100) + '%）。', 'success');
+            }
+            if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI();
+            _state.voyages.splice(i, 1);
+        }
+    }
+
     function _export() { return JSON.parse(JSON.stringify(_state)); }
     function _import(s) {
-        _state = { cargo: (s && Array.isArray(s.cargo)) ? s.cargo.filter(function (c) { return c && c.templateId && c.count > 0; }).slice(0, CARAVAN_MAX) : [] };
+        _state = {
+            cargo: (s && Array.isArray(s.cargo)) ? s.cargo.filter(function (c) { return c && c.templateId && c.count > 0; }).slice(0, CARAVAN_MAX) : [],
+            // v27.1 商路账归一化：不认的路线、坏本钱、坏日期的，一律当没发过车
+            voyages: (s && Array.isArray(s.voyages)) ? s.voyages.filter(function (v) {
+                return v && TRADE_ROUTES[v.route] && Number(v.capital) > 0 && Number(v.dueDay) > 0;
+            }).slice(0, VOYAGE_MAX).map(function (v) {
+                return { route: v.route, capital: Math.max(1, Math.floor(Number(v.capital))), departDay: Math.max(0, Math.floor(Number(v.departDay)) || 0), dueDay: Math.max(1, Math.floor(Number(v.dueDay))) };
+            }) : []
+        };
     }
-    function _reset() { _state = { cargo: [] }; }
+    function _reset() { _state = { cargo: [], voyages: [] }; }
     if (window.StateRegistry && typeof window.StateRegistry.register === 'function') {
         window.StateRegistry.register('caravan', { version: 1, export: _export, import: _import, reset: _reset });
     }
 
     if (window.timeSystem && typeof window.timeSystem.onNewDaySubscribe === 'function') {
-        window.timeSystem.onNewDaySubscribe(function () { maybeCaravanAmbush(); });
+        window.timeSystem.onNewDaySubscribe(function () { maybeCaravanAmbush(); settleVoyages(); });
     }
 
     window.CaravanTrade = {
         CARAVAN_MAX: CARAVAN_MAX,
+        TRADE_ROUTES: TRADE_ROUTES,   // v27.1 固定商路明账（牌面与测试同源）
         cargo: function () { return JSON.parse(JSON.stringify(_state.cargo)); },
+        voyages: function () { return JSON.parse(JSON.stringify(_state.voyages)); },   // v27.1 在路上的商队
         cargoValue: cargoValue,
         load: loadCaravan,
         unload: unloadCaravan,
+        send: sendVoyage,             // v27.1 发一车（程序口）
+        sendPrompt: function (routeKey) {   // v27.1 牌面口：问一声本钱，发车后重开行情板
+            var rt = TRADE_ROUTES[routeKey];
+            if (!rt) return false;
+            var cap = parseInt(prompt(rt.name + '的本钱一车（' + rt.capMin + '-' + rt.capMax + ' 灵石）：', String(rt.capMin)), 10);
+            if (!Number.isFinite(cap)) return false;
+            var sent = sendVoyage(routeKey, cap);
+            if (sent) {
+                try { if (_panelHandle && typeof _panelHandle.close === 'function') _panelHandle.close(); } catch (eC) {}
+                openCaravanBoard();
+            }
+            return sent;
+        },
+        settleVoyages: settleVoyages,
         open: openCaravanBoard,
         reopen: function () {
             try { if (_panelHandle && typeof _panelHandle.close === 'function') _panelHandle.close(); } catch (eC) { console.warn('[静默失败] js/economy/caravan-trade.js · reopen：旧行情板没关掉，屏上叠了两张板', eC && eC.message); }
@@ -321,6 +440,7 @@
         maybeAmbush: maybeCaravanAmbush
     };
     window.openCaravanBoard = openCaravanBoard;
+    window.sendVoyage = sendVoyage;
     window.settleCaravanAmbush = settleCaravanAmbush;
     window.maybeCaravanAmbush = maybeCaravanAmbush;
 })();

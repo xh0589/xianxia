@@ -1,5 +1,24 @@
 // ==================== 物品获取途径补全 v1.0 ====================
-// 在app.js中定义，通过window导出，补充所有缺失物品的获取途径
+// ⚠️【已废弃 · 不挂载】v8.5 起战利品系统移至 js/loot-system.js，本文件不进加载序列
+//    （仙侠.html 无此标签，scripts.manifest.json 无此条目；351/353 = 挂 351、不挂 2）。
+//    权威口径见 STRUCTURE.md §0.2「实际挂载的 js」与 § items-extended 段。
+//
+//    W-1（接线五处 · 第一处）实测结论，动手前逐条查过：
+//    ① 六个导出全仓无「同名另定义」——EXTENDED_LOOT_TABLES 在别处没有被第二份定义，
+//       所以不是「撞名」，是「整本没上线」。
+//    ② 不挂载（且不该挂）：EXTENDED_LOOT_TABLES 与 loot-system.js 的 LOOT_TABLES 五个键
+//       （beast/bandit/dungeon_guard/dungeon_boss/boss_beast）逐档重叠，beast.common 三枚 id 完全相同。
+//       js/loot-system.js 原有一段 `window.getExtendedLoot` 调用，一旦本文件挂上就会在主表之外
+//       再叠一整轮掷骰（每次击杀多 1~2 件 + 灵石）＝ 掉落翻倍。那段死调用已随本批删除。
+//    ③ WEAPON_SHOP_ITEMS / ARMOR_SHOP_ITEMS：商店货单早已改写为 inventory.js 的 SHOP_ITEMS
+//       （按档 basic/uncommon/rare/epic/legendary 存，另一套 id 体例），这两张分档池是死数据，
+//       挂上来仍然零引用，不解决任何「玩家看不到」。
+//    ④ CHEST_LOOT / openChest：**这一族原先是活的**——js/items-extended/11-event-extensions.js
+//       的「沙漠遗迹」「水下洞窟」两处奇遇按 `window.openChest` 判定分支，定义不挂载 ⇒ 两个宝箱奇遇
+//       永远走「暗格纹丝不动」那一支，玩家开箱开不出东西。已按「接线不是重写」把表与开箱手
+//       原样搬进 js/loot-system.js（战利品系统的现行归属、已挂载），本文件不再留第二份。
+//
+// 下面保留的是仍属本文件、但同样不挂载的三张表，仅供史料与离线审计（tests/wave129 读源码用）。
 
 // ============ 武器商店完整物品池 ============
 const WEAPON_SHOP_ITEMS = {
@@ -77,70 +96,6 @@ const EXTENDED_LOOT_TABLES = {
     }
 };
 
-// ============ 事件宝箱掉落 ============
-const CHEST_LOOT = {
-    // 普通宝箱
-    common: {
-        items: ['pill_small_recovery', 'pill_qi_powder', 'pill_energy_powder', 'mat_iron_ore', 'mat_copper_ore',
-                'mat_lingzhi', 'mat_ginseng', 'food_roast_meat'],
-        count: [1, 3],
-        spiritStones: [5, 20]
-    },
-    // 稀有宝箱
-    rare: {
-        items: ['pill_big_recovery', 'pill_qi_gather', 'pill_energy_return', 'mat_refined_iron', 'mat_dark_iron',
-                'mat_thousand_lingzhi', 'mat_snow_lotus', 'wpn_dark_iron_sword', 'arm_chain_mail',
-                'pill_body_foundation', 'tal_fireball', 'art_sword_basic', 'spec_enhance_stone', 'spec_transfer_stone'], // DES-91：原列有 'pill_diamond'，全仓仅此一见、百宝册查无，掷中即发不出货
-        count: [1, 2],
-        spiritStones: [20, 80]
-    },
-    // 传说宝箱
-    epic: {
-        items: ['pill_spring_recovery', 'pill_qi_return', 'pill_energy_gather', 'pill_foundation',
-                'wpn_frost_moon', 'wpn_red_cloud', 'arm_golden_silk_armor', 'arm_dragon_scale_armor',
-                'mat_meteorite', 'mat_purple_gold', 'mat_heaven_heart_flower', 'mat_earth_spirit_root',
-                'tal_teleport', 'tal_shield', 'art_wind_sword', 'art_hun_yuan',
-                'food_immortal_tea', 'food_jade_nectar'],
-        count: [1, 2],
-        spiritStones: [50, 200]
-    }
-};
-
-// ============ 打开宝箱 ============
-// DES-91（第一百二十九批）：旧写法先掷骰再问表——池里混进查无此物的号时照掷，addItem 一件也发不出，
-//   屏上却已有一句「你找到了宝物」（且开完箱什么也不念）。故掷之前先对一遍百宝册，落袋问实收。
-function openChest(chestType) {
-    const table = CHEST_LOOT[chestType];
-    if (!table) return;
-
-    const lib = window.itemById;
-    const pool = lib ? table.items.filter(function (id) { return !!lib[id]; }) : table.items.slice();
-    if (!pool.length) return null; // 整池都是虚标货：这箱开不出东西，如实别演
-
-    const itemId = pool[Math.floor(Math.random() * pool.length)];
-    const count = table.count[0] + Math.floor(Math.random() * (table.count[1] - table.count[0] + 1));
-    const stones = table.spiritStones[0] + Math.floor(Math.random() * (table.spiritStones[1] - table.spiritStones[0] + 1));
-
-    let got = 0;
-    if (window.inventory) {
-        got = Number(window.inventory.addItem(itemId, count)) || 0;
-        window.inventory.currency.spiritStones = (window.inventory.currency.spiritStones || 0) + stones;
-    }
-
-    const itemName = window.itemById?.[itemId]?.name || itemId;
-    if (typeof window.showMessage === 'function') {
-        window.showMessage(got >= count
-            ? '📦 开箱得了 ' + itemName + '×' + got + '，另得灵石 ' + stones + '。'
-            : (got > 0
-                ? '📦 箱里是 ' + itemName + '×' + count + '，行囊只塞得下 ' + got + '/' + count + ' 件，余下的留在箱里；灵石 ' + stones + ' 已收入。'
-                : '📦 箱里的 ' + itemName + '×' + count + ' 一件也没能带走：'
-                  + ((typeof window.addItemFailText === 'function' && window.addItemFailText(itemName)) || '它没有跟你走。') // DES-90（第一百三十九批）：开箱是一次性的，②形·句尾位带句号、另起一句的形状保留
-                  + '（灵石 ' + stones + ' 已收入。）'),
-            got >= count ? 'success' : 'warning');
-    }
-    return { itemId, count, stones, itemName, got: got, poolSize: pool.length };
-}
-
 // ============ 获取扩展战斗掉落 ============
 function getExtendedLoot(enemySubType, enemyLevel) {
     const table = EXTENDED_LOOT_TABLES[enemySubType];
@@ -170,6 +125,4 @@ function getExtendedLoot(enemySubType, enemyLevel) {
 window.WEAPON_SHOP_ITEMS = WEAPON_SHOP_ITEMS;
 window.ARMOR_SHOP_ITEMS = ARMOR_SHOP_ITEMS;
 window.EXTENDED_LOOT_TABLES = EXTENDED_LOOT_TABLES;
-window.CHEST_LOOT = CHEST_LOOT;
-window.openChest = openChest;
 window.getExtendedLoot = getExtendedLoot;

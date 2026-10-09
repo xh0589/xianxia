@@ -16,6 +16,17 @@
  *   - 行动权重/社交倾向委托 P16Driver（personality-driver.js，可选依赖：缺载走基线）
  *   - 社交时携带"别处发生的新闻"转述，听者按五维性格失真 → 传闻变体（variantOf 溯源）
  *
+ * v27.13 扩展（NPC 私账·轻账 A 案）：
+ *   - 过堂文档⑦真缺口「雇主永远出得起钱、掌柜永远进得起货」——给有营生/有身份的 NPC 挂 purse 私房钱账，
+ *     账本体挂在 NPC_LIFE_STORE[npcId].ledger（营生记录名下），随 'npcLifeActions'（version 1→2→3）出档入档；
+ *   - 本文件只放账本体与收支正门（ensure/pay/settle）；日结钩子订在 npc-inventory.js（加载序在
+ *     enhanced-shop.js 之后，掌柜补货闸必须排在其补货之后跑，时序在那边讲）；
+ *   - v27.13 后半刀·闭环事件（破产/发迹）：贫富 mark 标记（见底/殷实）接续取材——mark+markDay 连续满
+ *     若干日，冒一条一次性市井故事进 gameLog（挂 settleAll 日结拍子之后，不另开日结钩子），按身份分池
+ *     （铺面/手艺口吻）。
+ *     只动嘴不动账：不真关铺子、不真夺产、不改任何商店/NPC 系统行为——故事只是故事；
+ *     外加 ledger.evt flag（一生一次，随档走）；全城每月至多 2 条（'npcLifeStories' 键随档），玩家在场的城优先。
+ *
  * 加载顺序：第 6 层，在 npc-life-system.js 之后。
  */
 (function (global) {
@@ -470,6 +481,238 @@
         }
     }
 
+    // ============ v27.13 NPC 私账（轻账）：purse 账本体 ============
+    // v27.13：为什么挂这里——过堂文档⑦真缺口「NPC 有库存（npc-inventory）无收支」——雇主永远出得起钱、
+    //   掌柜永远进得起货。账本体挂 NPC_LIFE_STORE[npcId].ledger，与营生记录（actionHistory）同册，
+    //   随既有 StateRegistry 'npcLifeActions' 出档入档（version 1→2，见文件底部注册处）。
+    // v27.13：范围只收「有营生/有身份」一层——有铺子的掌柜、发任务的雇主、职业像营生的——不给全城路人开账
+    //   （城坊居民 city-residents 不走 npcManager，天然不在册）。
+    // v27.13：收支口径（日结由 npc-inventory.js 的钩子调 settle，见那边时序说明）——
+    //   收入·滴灌——商号进项大（要扛补货账）、手艺/身份进项小，无营生无进项；
+    //   支出——吃饭（每日 2~4）+ 房钱（每月一缴 15~25）；purse 上下夹逼 [0, cap]，不透支不爆账。
+    // v27.13：兜底铁律——账不在册（旧档缺字段/无资格 NPC）→ ensure/pay 返回 null，调用方一切照旧，一行不差。
+    var PURSE_TUNE = {
+        shop:  { start: 500, incomeMin: 90, incomeVar: 60, cap: 2000 }, // 商号：进货流水是大头，进项须大体扛得住
+        trade: { start: 150, incomeMin: 6,  incomeVar: 6,  cap: 400 }   // 手艺/身份：滴灌口径，饿不死也富不快
+    };
+    // v27.13：营生字类——职业命中即算有营生/有身份（掌柜/医/药/匠/师/长老/掌门/宫主/谷主/堂主这一层）；
+    //   村民/隐士/竞争对手这类不命中——他们不发任务就不开账（villager_01/rival_01 由雇主名单兜住）。
+    var LIVELIHOOD_RE = /商|店|掌柜|铺|医|药|匠|铁|教|师|长|僧|道|修|掌|宫|谷|堂|庄|首|法王/;
+    // v27.13：雇主/任务发布者名单——行囊心愿十人（npc-inventory.js WANTS_DATA），他们的谢礼走雇主闸
+    var EMPLOYER_IDS = ['mentor_01', 'merchant_01', 'warrior_01', 'healer_01', 'craftsman_01',
+        'mysterious_01', 'elder_01', 'villager_01', 'rival_01', 'alchemist_01'];
+
+    // v27.13：夹逼——purse 钉在 [0, cap]，cap 坏值回档位默认，档里的坏账不许撑爆闸门
+    function _clampPurse(led) {
+        if (!led) return;
+        var t = PURSE_TUNE[led.tier] || PURSE_TUNE.trade;
+        if (!Number.isFinite(led.cap) || led.cap <= 0) led.cap = t.cap;
+        if (!Number.isFinite(led.purse) || led.purse < 0) led.purse = 0;
+        if (led.purse > led.cap) led.purse = led.cap;
+    }
+
+    // v27.13：该不该给这位 NPC 开账——有铺子→商号档；雇主名单/职业像营生→手艺档；都不沾→null（账不在册）
+    function purseTierOf(npc) {
+        if (!npc || !npc.id) return null;
+        try {
+            if (global.shopManager && typeof global.shopManager.getAllShops === 'function') {
+                var shops = global.shopManager.getAllShops() || [];
+                for (var i = 0; i < shops.length; i++) {
+                    if (shops[i] && shops[i].owner === npc.id) return 'shop';
+                }
+            }
+        } catch (e) { console.warn('[静默失败] js/npcs/npc-life-actor.js · purseTierOf：查铺主失败', e && e.message); }
+        if (EMPLOYER_IDS.indexOf(npc.id) >= 0) return 'trade';
+        if (npc.occupation && LIVELIHOOD_RE.test(npc.occupation)) return 'trade';
+        return null;
+    }
+
+    // v27.13：取账（懒开账）——已开→账本；有资格未开→立开（开局/旧档首触即入册）；无资格→null（账不在册，行为照旧）
+    function ensureLedger(npcOrId) {
+        try {
+            var npc = npcOrId;
+            if (typeof npcOrId === 'string') {
+                npc = (global.npcManager && typeof global.npcManager.getNPC === 'function') ? global.npcManager.getNPC(npcOrId) : null;
+            }
+            if (!npc || !npc.id) return null;
+            // v27.13：死者/失踪/远行者不开账——人不在了就没有收支，闸门对他照旧放行（与 settleAll 的跳过口径一致）
+            if (npc.isDead || npc.isMissing || npc._isGone) return null;
+            var st = NPC_LIFE_STORE[npc.id];
+            if (st && st.ledger) {
+                // v27.13：在册旧账缺 evt（破产/发迹一生一次 flag）→ 就地补零兜底，其余口径一行不差
+                if (!st.ledger.evt || typeof st.ledger.evt !== 'object') st.ledger.evt = { broke: false, rich: false };
+                _clampPurse(st.ledger);
+                return st.ledger;
+            }
+            var tier = purseTierOf(npc);
+            if (!tier) return null;
+            var t = PURSE_TUNE[tier];
+            var day = (global.timeSystem && typeof global.timeSystem.getAbsoluteDay === 'function') ? global.timeSystem.getAbsoluteDay() : 0;
+            st = NPC_LIFE_STORE[npc.id] = st || { lastActionDay: 0, actionHistory: [] };
+            // v27.13：evt = 破产/发迹故事的一生一次 flag（broke/rich），随档走
+            st.ledger = { tier: tier, purse: t.start, cap: t.cap, createdDay: day, lastDay: day, mark: null, markDay: 0, lastThinNoticeDay: 0, evt: { broke: false, rich: false } };
+            return st.ledger;
+        } catch (e) {
+            console.warn('[静默失败] js/npcs/npc-life-actor.js · ensureLedger：开账失败', e && e.message);
+            return null;
+        }
+    }
+
+    // v27.13：雇主闸正门——NPC 掏私账付钱（npc-inventory.js 的谢礼支付调用）。
+    //   返回 null = 账不在册/账房未载 → 调用方按原样全额付，一行不差；
+    //   在册 → { paid, shortfall }：实付=min(应付, purse)，账上扣多少付多少——付不出就是付不出。
+    function npcPay(npcOrId, amount) {
+        var led = ensureLedger(npcOrId);
+        if (!led) return null;
+        var want = Math.max(0, Math.floor(Number(amount) || 0));
+        var paid = Math.min(want, led.purse);
+        led.purse -= paid;
+        _clampPurse(led);
+        return { paid: paid, shortfall: paid < want };
+    }
+
+    // v27.16：NPC 收钱入账（borrow 契约的还钱口用）——与 npcPay 同一把 clamp 尺，
+    // 钱包有进有出，穷态才有翻身的路（守恒：玩家还的钱进的是他真实的钱包）。
+    function npcCredit(npcOrId, amount) {
+        var led = ensureLedger(npcOrId);
+        if (!led) return null;
+        var got = Math.max(0, Math.floor(Number(amount) || 0));
+        led.purse += got;
+        _clampPurse(led);
+        return { credited: got };
+    }
+
+    // v27.13：日结——全城在册 NPC 滴灌进项 + 吃饭/房钱支出 + 贫富标记；标记之后接破产/发迹故事的候选攒取
+    //   （v27.13 后半刀）：故事出不出街由 emitLifeStories 的月度闸/玩家城优先定，账本身照旧只记账不触发。
+    function settleAll(day) {
+        day = Number(day) || ((global.timeSystem && typeof global.timeSystem.getAbsoluteDay === 'function') ? global.timeSystem.getAbsoluteDay() : 0);
+        if (!day) return 0;
+        var all = (global.npcManager && typeof global.npcManager.getAllNPCs === 'function') ? (global.npcManager.getAllNPCs() || []) : [];
+        var settled = 0;
+        // v27.13：破产/发迹候选攒取池（本日结算完统一出街，不在循环里逐个冒）
+        var cands = [];
+        var playerLoc = (global.currentCharData && global.currentCharData.location) || null;
+        for (var i = 0; i < all.length; i++) {
+            var npc = all[i];
+            if (!npc || !npc.id || npc.isDead || npc.isMissing || npc._isGone) continue;
+            var led = ensureLedger(npc);
+            if (!led) continue;
+            var t = PURSE_TUNE[led.tier] || PURSE_TUNE.trade;
+            // v27.13：收入——有营生才有进项
+            led.purse += t.incomeMin + Math.floor(Math.random() * t.incomeVar);
+            // v27.13：支出·吃饭——每日 2~4，账上不够就少花（不透支）
+            led.purse -= Math.min(led.purse, 2 + Math.floor(Math.random() * 3));
+            // v27.13：支出·房钱——每月初一（day%30==0）缴一回 15~25，住店口径的月结
+            if (day % 30 === 0) led.purse -= Math.min(led.purse, 15 + Math.floor(Math.random() * 11));
+            _clampPurse(led);
+            led.lastDay = day;
+            // v27.13：贫富分化标记——markDay 记「何时落入这个状态」（连续期间不刷新），破产/发迹事件按 mark+markDay 取材
+            var mk = (led.purse <= 20) ? '见底' : (led.purse >= led.cap ? '殷实' : null);
+            if (mk !== led.mark) { led.mark = mk; led.markDay = day; }
+            // v27.13：后半刀——见底/殷实连续满若干日（day-markDay 即现成连续记录）→ 破产/发迹候选；
+            //   flag 已烧过的一生只此一次不再候选；此处只攒候选不动账
+            var _streak = day - (Number(led.markDay) || 0);
+            if (led.mark === '见底' && led.evt && !led.evt.broke && _streak >= STORY_TUNE.brokeDays - 1) {
+                cands.push({ npc: npc, led: led, kind: 'broke' });
+            } else if (led.mark === '殷实' && led.evt && !led.evt.rich && _streak >= STORY_TUNE.richDays - 1) {
+                cands.push({ npc: npc, led: led, kind: 'rich' });
+            }
+            settled++;
+        }
+        // v27.13：后半刀——候选出街（月度限频 + 玩家在场的城优先 + gameLog 正门），出口缺席/异常都不碍账
+        emitLifeStories(day, cands, playerLoc);
+        return settled;
+    }
+
+    // ============ v27.13 后半刀：破产/发迹事件（只动嘴不动账） ============
+    // v27.13：拍子——不做新日结钩子，就挂在 settleAll 日结循环之后（npc-inventory.js 的 purseDailyHook 每日一拍）。
+    // v27.13：口径——mark（见底/殷实）+ markDay（落入状态起始日，连续期间不刷新）就是现成的连续记录：
+    //   day - markDay ≥ 阈值-1（即连续第 N 个结算日仍在该状态）→ 故事候选。
+    //   出街只进 gameLog：账上不扣一分、铺子不关、行为不改——故事只是故事，外加 evt flag 落 ledger 随档走。
+    var STORY_METER = { monthKey: 0, count: 0 }; // v27.13：全城月度计数，随 'npcLifeStories' 键出档入档
+    var STORY_TUNE = {
+        brokeDays: 3,   // v27.13：连续见底满 3 日 → 破产故事
+        richDays: 5,    // v27.13：连续殷实满 5 日 → 发迹故事（顶到 cap 本就攒了很久，再压 5 日防县花一现）
+        monthMax: 2     // v27.13：全城每月至多 2 条，防刷屏
+    };
+    // v27.13：文案池——{name} 填 NPC 名；短句、有人味、不带数值。破产/发迹 × 铺面/手艺口吻各一池。
+    var STORY_POOLS = {
+        broke: {
+            shop: [
+                '{name}的铺子门口贴出了转让告示，街坊围着看了半天没人吭声',
+                '{name}把铺面钥匙交给了债主，行李捆得比来时还小',
+                '有人看见{name}在铺子里打了一夜算盘，天亮时幌子摘了'
+            ],
+            trade: [
+                '{name}把家伙什当了，换来的钱只够几日嚼用',
+                '{name}近来连酒钱都赊着，熟客见了都悄悄绕道走',
+                '{name}在当铺门口站了半晌，最后抱着个包袱进去了'
+            ]
+        },
+        rich: {
+            shop: [
+                '{name}近来出手阔绰，听说是铺子里进了笔大买卖',
+                '{name}把隔壁铺面也盘了下来，说要扩字号',
+                '{name}新换了幌子，红绸子老远就瞧得见'
+            ],
+            trade: [
+                '{name}近来出手阔绰，走在街上腰杆都直了几分',
+                '{name}添了新衣新靴，谁也说不清他哪来的钱',
+                '{name}请半条街的人喝了酒，问就是遇上喜事了'
+            ]
+        }
+    };
+    // v27.13：身份口吻——铺主档（shop tier）或职业像买卖人 → 铺面口吻；其余营生 → 手艺人口吻。
+    //   纯文案分池不碰经济（真铺主日结进项大、结算时刻难见底，铺面破产文案主要给「无铺的掌柜」这类在册账说）。
+    var MERCHANT_RE = /商|店|掌柜|铺|庄|栈|行/;
+
+    function storyFlavorOf(npc, led) {
+        if (led && led.tier === 'shop') return 'shop';
+        try {
+            if (npc && npc.occupation && MERCHANT_RE.test(npc.occupation)) return 'shop';
+        } catch (e) { console.warn('[静默失败] js/npcs/npc-life-actor.js · storyFlavorOf：读职业失败', e && e.message); }
+        return 'trade';
+    }
+
+    // v27.13：出街——月度闸内按「玩家在场的城优先」挑候选；gameLog 缺席则本日不出、不烧 flag（改日再试）。
+    //   出一条：gameLog 正门 + ledger.evt flag 落定（一生一次，随档走）+ 月度计数 +1。
+    function emitLifeStories(day, cands, playerLoc) {
+        try {
+            if (!cands || !cands.length) return;
+            if (!global.gameLog || typeof global.gameLog.add !== 'function') return;
+            var mk = Math.floor(day / 30);
+            if (STORY_METER.monthKey !== mk) { STORY_METER.monthKey = mk; STORY_METER.count = 0; }
+            if (STORY_METER.count >= STORY_TUNE.monthMax) return;
+            for (var i = 0; i < cands.length; i++) {
+                cands[i].pri = (playerLoc && cands[i].npc && cands[i].npc.location === playerLoc) ? 1 : 0;
+            }
+            cands.sort(function (a, b) { return b.pri - a.pri; }); // 稳定排序：同城候选保持结算遍历序
+            var quota = STORY_TUNE.monthMax - STORY_METER.count;
+            for (var j = 0; j < cands.length && quota > 0; j++) {
+                var c = cands[j];
+                if (!c || !c.npc || !c.led || !c.led.evt || c.led.evt[c.kind]) continue;
+                var flavor = storyFlavorOf(c.npc, c.led);
+                var pool = (STORY_POOLS[c.kind] && STORY_POOLS[c.kind][flavor]) || null;
+                if (!pool || !pool.length) continue;
+                var text = pickOne(pool).replace('{name}', c.npc.name || c.npc.id || '某人');
+                global.gameLog.add('【市井】' + text, 'story');
+                c.led.evt[c.kind] = true;
+                STORY_METER.count++;
+                quota--;
+            }
+        } catch (e) {
+            console.warn('[静默失败] js/npcs/npc-life-actor.js · emitLifeStories：破产/发迹事件失败', e && e.message);
+        }
+    }
+
+    var ledgerApi = {
+        ensure: ensureLedger,  // 取账/懒开账（null=账不在册）
+        pay: npcPay,           // 雇主闸：NPC 私账付钱
+        credit: npcCredit,     // v27.16：收钱入账（还欠款/卖当物——NPC 的钱包有进有出才是活账）
+        settle: settleAll,     // 日结收支（npc-inventory.js 的新日钩子调用）
+        purse: function (npcOrId) { var led = ensureLedger(npcOrId); return led ? led.purse : null; }
+    };
+
     // ============ 公开 API ============
     var api = {
         version: VERSION,
@@ -479,6 +722,8 @@
         renderRumorPanel: renderRumorPanel,
         showRumorPanel: showRumorPanel,
         pushNote: pushNote,
+        // v27.13：NPC 私账（轻账）正门——账本体/付钱/日结/查余，账不在册一律返回 null（调用方照旧）
+        ledger: ledgerApi,
         // v20.13 灵根驱动修炼（导出供测试与后续系统复用同一把尺）
         npcRootGrowthMul: npcRootGrowthMul,
         cultivateStep: cultivateStep,
@@ -496,13 +741,44 @@
 
     // StateRegistry 持久化
     if (global.StateRegistry && typeof global.StateRegistry.register === 'function') {
+        // v27.13：NPC 私账随本册出档——version 1→2→3（后半刀加 evt 破产/发迹一生一次 flag；
+        //   StateRegistry 的 version 只作档内标注，import 对新旧形都兜底）。
+        //   export 原样返回 NPC_LIFE_STORE（StateRegistry 侧深拷贝），ledger 挂在各 NPC 条目里随行；
+        //   import 对 ledger 做 sanitize：旧档条目无 ledger → 视为账不在册（闸门照旧放行），坏数字一律回 0 再夹逼，
+        //   旧档缺 evt（v2 及更早）→ 按补零兜底（= 从未发过故事，一生一次的额度还在）。
         global.StateRegistry.register('npcLifeActions', {
-            version: VERSION,
+            version: 3,
             export: function () { return NPC_LIFE_STORE; },
             import: function (data) {
                 NPC_LIFE_STORE = {};
                 if (data && typeof data === 'object') {
-                    Object.keys(data).forEach(function (k) { NPC_LIFE_STORE[k] = data[k]; });
+                    Object.keys(data).forEach(function (k) {
+                        var entry = data[k];
+                        if (entry && typeof entry === 'object' && entry.ledger !== undefined) {
+                            if (entry.ledger && typeof entry.ledger === 'object') {
+                                var lg = entry.ledger;
+                                var tier = (lg.tier === 'shop') ? 'shop' : 'trade';
+                                entry.ledger = {
+                                    tier: tier,
+                                    purse: Math.max(0, Number(lg.purse) || 0),
+                                    cap: Number(lg.cap) > 0 ? Number(lg.cap) : (PURSE_TUNE[tier].cap),
+                                    createdDay: Number(lg.createdDay) || 0,
+                                    lastDay: Number(lg.lastDay) || 0,
+                                    mark: (lg.mark === '见底' || lg.mark === '殷实') ? lg.mark : null,
+                                    markDay: Number(lg.markDay) || 0,
+                                    lastThinNoticeDay: Number(lg.lastThinNoticeDay) || 0,
+                                    // v27.13：破产/发迹一生一次 flag——旧档缺 evt 按补零兜底（flag 坏形视为没发过）
+                                    evt: (lg.evt && typeof lg.evt === 'object')
+                                        ? { broke: !!lg.evt.broke, rich: !!lg.evt.rich }
+                                        : { broke: false, rich: false }
+                                };
+                                _clampPurse(entry.ledger);
+                            } else {
+                                delete entry.ledger;   // 空账/坏账 → 账不在册
+                            }
+                        }
+                        NPC_LIFE_STORE[k] = entry;
+                    });
                 }
             },
             reset: function () { NPC_LIFE_STORE = {}; }
@@ -518,6 +794,18 @@
                 }
             },
             reset: function () { RUMOR_LOG.length = 0; }
+        });
+        // v27.13：破产/发迹故事的月度限频计数随档走——旧档无此键 → importAll 不回调，模块默认 {0,0} 自然起步（零迁移）
+        global.StateRegistry.register('npcLifeStories', {
+            version: 1,
+            export: function () { return { monthKey: STORY_METER.monthKey, count: STORY_METER.count }; },
+            import: function (data) {
+                if (data && typeof data === 'object') {
+                    STORY_METER.monthKey = Number(data.monthKey) || 0;
+                    STORY_METER.count = Math.max(0, Number(data.count) || 0);
+                }
+            },
+            reset: function () { STORY_METER.monthKey = 0; STORY_METER.count = 0; }
         });
     }
 

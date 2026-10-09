@@ -1,5 +1,17 @@
 // ==================== 扩展物品 - 材料类（50种） ====================
 // 加载到 window.extendedMaterials
+//
+// ★ 本表**不写 origin 字段**：材料产地不在物品表里，它在运行时从
+//   js/extensions/resource-points.js 的 30 个资源点（INITIAL_POINTS 的 output）
+//   与 js/crafting/forging-compound.js 的 LATE_MATERIAL_TIERS 派生
+//   （读口：ForgingCompound.materialOrigins(matId) / forgeOriginReport(mats)）。
+//   在那两本账里查得到出处的，炼器时判「同出一处 ⇒ 工整」；查不到的写「来路不明 ⇒ 不判」，
+//   **不占位、不填假值**（禁止设计 #4：要么填真实来源，要么不写该字段）。
+//   实测查不到出处的（2026-10-04，逐个对过那两本账）：
+//   mat_copper_ore / mat_tin_ore / mat_beast_skin / mat_beast_bone /
+//   mat_demon_beast_skin / mat_demon_beast_bone / mat_dragon_bone
+//   （另有 mat_beast_soul 只在 forging-compound 的 MATERIAL_GRADE 里占位，本表根本没有这一行）——
+//   这几种不编产地。若日后真在资源点账或后期料档里出了某一种，再由那一本账接管，仍不在本表抄一份。
 
 window.extendedMaterials = [
     // ===== 矿石/金属（14种） =====

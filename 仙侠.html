@@ -21,13 +21,19 @@
     <link rel="stylesheet" href="styles/panel-mail.css">
     <link rel="stylesheet" href="styles/panel-shop.css">
     <link rel="stylesheet" href="styles/ui-craft.css">
+    <!-- 用户批（2026-10-02）：手机适配层——media 双闸（link media + 文件内 @media），
+         桌面渲染树不载入；触控目标/模态全屏化/战斗人体叠提额/最小字号/输入防缩放。 -->
+    <link rel="stylesheet" href="styles/mobile.css">
     <style>
     /* v20.1 移动端适配：触屏友好 + 窄屏弹窗适配 */
     button, .nav-item, [onclick] { -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
     .slider-handle { touch-action: none; } /* v20.87 灵根滑块拖动时不触发页面滚动 */
     @media (max-width: 768px) {
         body { font-size: 14px; }
-        .fixed.inset-0 > div { max-width: 95vw !important; }
+        /* 95vw → 100vw：这条内联块排在 styles/mobile.css 之后（同为 0-1-0 且都
+           带 !important），95vw 一直赢，窄屏模态实测只有视口的 95.1%
+           （390 下 371px，两侧各多留 9.8px）。改成 100vw 后两层一致。 */
+        .fixed.inset-0 > div { max-width: 100vw !important; }
     }
     </style>
 </head>
@@ -203,7 +209,7 @@
     <!-- 宽度封顶在 styles/ui-craft.css 第 0 节（UI-18），此处不再挂 max-w-* -->
     <div id="game-world" class="mx-auto h-[calc(100vh-2rem)] flex bg-gray-800 rounded-xl shadow-2xl border border-gray-700 overflow-hidden">
         <!-- 左侧导航栏 -->
-        <div class="w-48 flex-shrink-0 bg-gray-900 border-r border-gray-700 flex flex-col">
+        <div id="nav-sidebar" class="w-48 flex-shrink-0 bg-gray-900 border-r border-gray-700 flex flex-col">
             <div class="px-4 py-5 border-b border-gray-700 text-center">
                 <h2 class="text-lg font-bold text-yellow-500 tracking-widest" id="display-name">修仙者</h2>
                 <p class="text-xs text-gray-500 mt-1" id="display-gender">--</p>
@@ -289,6 +295,11 @@
                 <div id="sub-status" class="sub-content fade-in">
                     <!-- 状态概览条（v13.2：血量条移至躯体SVG旁，此处不再重复） -->
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                        <!-- 用户批（2026-10-03 08:32 复核）：「三合一是我批准给手机版用的，
+                             电脑版还是用原本的」——桌面恢复旧版三张独立卡，标题行/进度条/文字原样带回。
+                             手机端由 styles/mobile.css 纯视觉并成一块（不动 DOM、不改 id）。
+                             七个 id 一个不动：stamina-bar/stamina-text/qi-bar/qi-text/
+                             mood-bar/mood-text/realm-qi-limit，JS 更新链零改动。 -->
                         <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 text-center">
                             <p class="text-xs text-gray-400 mb-1">⚡ 精力</p>
                             <div class="w-full h-3 bg-gray-600 rounded overflow-hidden mb-1">
@@ -326,17 +337,21 @@
                                 <button onclick="openBountyBoard()" class="text-[10px] bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-2 py-1 rounded">📜悬赏</button>
                             </div>
                         </div>
-                        <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 text-center">
-                            <p class="text-xs text-gray-400 mb-1">📍 所在地</p>
-                            <p class="text-blue-400 font-bold text-sm" id="current-location-display">未选择</p>
-                            <button onclick="showCityTravelUI()" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-1 rounded mt-1">前往城市</button>
+                                                <!-- 用户批（2026-10-03 08:32）：所在地/时间两卡合一（各只一行字）。
+                             id 全保留（current-location-display/time-display/season-display
+                             + showCityTravelUI 按钮），JS 更新链零改动。 -->
+                        <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 md:col-span-2">
+                            <div class="stat-compact-row">
+                                <span class="text-xs text-gray-400 stat-compact-label">📍 所在地</span>
+                                <span class="text-xs text-blue-400 font-bold" id="current-location-display">未选择</span>
+                                <button onclick="showCityTravelUI()" class="text-xs bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded">前往城市</button>
+                            </div>
+                            <div class="stat-compact-row">
+                                <span class="text-xs text-gray-400 stat-compact-label">🕐 时间</span>
+                                <span class="text-xs text-orange-400 font-bold" id="time-display">第1天</span>
+                                <span class="text-xs text-gray-500" id="season-display">春季</span>
+                            </div>
                         </div>
-                        <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 text-center">
-                            <p class="text-xs text-gray-400 mb-1">🕐 时间</p>
-                            <p class="text-orange-400 font-bold text-sm" id="time-display">第1天</p>
-                            <p class="text-xs text-gray-500" id="season-display">春季</p>
-                        </div>
-                        <!-- 飞鸽传书入口（v12.0） -->
                         <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600 text-center relative">
                             <p class="text-xs text-gray-400 mb-1">📜 飞鸽传书</p>
                             <p class="text-amber-400 font-bold text-sm" id="mail-quick-status">无新信</p>
@@ -536,7 +551,7 @@
                                 <div class="flex items-center gap-2">
                                     <span class="text-xs text-gray-500" id="relations-count">共 0 人</span>
                                     <button onclick="openTokenShelf()" class="text-xs bg-pink-900/50 hover:bg-pink-800 border border-pink-700 rounded px-2 py-1 text-pink-200">🎁 信物架</button>
-                                    <select id="relations-filter" onchange="renderRelationsPanel()" class="text-xs bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-300">
+                                    <select id="relations-filter" onchange="setRelationsFilterMode(this.value)" class="text-xs bg-gray-800 border border-gray-600 rounded px-2 py-1 text-gray-300">
                                         <option value="all">全部</option>
                                         <option value="high">好感优先</option>
                                         <option value="low">好感最低</option>
@@ -1509,13 +1524,13 @@
                                 </label>
                                 <p class="text-xs text-gray-600 mt-1">开启后，江湖传闻经不同性格的人转述会添油加醋、各走各的形；关闭则闲话只扩散、不改口。默认开启。</p>
                             </div>
-                            <!-- v22.0 社交面板显示个人事件（默认关闭：事件应在交谈中自然发生，不罗列成清单） -->
+                            <!-- 社交面板显示个人事件（默认开启：入口要看得见，锁着也写清差哪一条；勾掉才是沉浸模式） -->
                             <div class="pl-3 border-l-2 border-gray-700 mt-3">
                                 <label class="flex items-center justify-between text-sm text-gray-300 cursor-pointer">
                                     <span>📜 社交面板显示个人事件</span>
-                                    <input type="checkbox" id="setting-social-event-panel" onchange="toggleSocialEventPanel()" class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-600">
+                                    <input type="checkbox" id="setting-social-event-panel" onchange="toggleSocialEventPanel()" checked class="form-checkbox h-5 w-5 text-yellow-500 rounded focus:ring-yellow-500 bg-gray-700 border-gray-600">
                                 </label>
-                                <p class="text-xs text-gray-600 mt-1">默认关闭：故人该说的事，会在你开口交谈时自然发生，面板不再罗列事件清单与条件。开启后恢复旧版：面板直接列出每桩事件。</p>
+                                <p class="text-xs text-gray-600 mt-1">默认开启：面板逐桩列出事件清单，条件不够的亮 🔒 并写明差哪一条（不整栏隐藏）。勾掉＝沉浸模式：清单不再罗列，该发生的事改在你开口交谈时自然发生。</p>
                             </div>
                         </div>
                     </div>
@@ -1696,260 +1711,243 @@
     </div>
 
     <div id="battle-modal" class="fixed inset-0 flex items-center justify-center bg-black/70 z-50 hidden">
-        <div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-3xl w-full max-h-[90vh] overflow-hidden mx-4 flex flex-col">
+        <div id="battle-window" class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-3xl w-full max-h-[90vh] overflow-hidden mx-4 flex">
             <!-- UI-20：读数一叠会滚，要按的那一叠钉在台面（滚区/钉区之分见 styles/ui-craft.css 第 11 节） -->
-            <div id="battle-readout">
-            <h2 class="text-2xl font-bold text-yellow-500 mb-4">⚔️ 战斗</h2>
-            <div id="battle-status" class="flex justify-between mb-4 gap-4">
-                <div id="battle-player-status" class="text-left flex-1 bg-gray-700/50 p-3 rounded">
-                    <p class="text-white font-bold" id="battle-player-name">玩家</p>
-                    <div class="flex items-center gap-2 mt-1">
-                        <span class="text-sm"><span class="text-green-400">要害:</span> <span id="battle-player-hp">0/0</span></span>
-                        <button onclick="toggleBattleBodyView()" class="text-xs bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-2 py-0.5 rounded">👁️ 查看人体</button>
+            <!-- 用户批（2026-10-03 08:32）：点「查看人体」→人体进窗内左右两侧，窗因两侧而宽。
+                 左=我方（hudl-battle- 克隆）、右=敌方（hudr-battle- 克隆）；底部 battle-body-view 保留为精读账。 -->
+            <div id="battle-side-player" class="battle-side hidden flex-shrink-0 w-[300px]">
+                <div class="battle-side-head">
+                    <span>🧙 我方</span>
+                    <span id="party-body-view-buttons" class="battle-side-party"></span>
+                </div>
+                <div id="battle-side-player-svg" class="battle-side-svg">
+<svg viewBox="0 0 200 420" class="body-svg" id="battle-body-svg" style="width:160px; height:auto;">
+    <defs>
+                                    <filter id="battle-glow" x="-20%" y="-20%" width="140%" height="140%">
+                                        <feGaussianBlur stdDeviation="2" result="blur"></feGaussianBlur>
+                                        <feMerge>
+                                            <feMergeNode in="blur"></feMergeNode>
+                                            <feMergeNode in="blur" opacity="0.5"></feMergeNode>
+                                            <feMergeNode in="SourceGraphic"></feMergeNode>
+                                        </feMerge>
+                                    </filter>
+                                    <radialGradient id="battle-bgGlow" cx="50%" cy="40%" r="50%">
+                                        <stop offset="0%" stop-color="#2d4a3d" stop-opacity="0.3"></stop>
+                                        <stop offset="100%" stop-color="transparent"></stop>
+                                    </radialGradient>
+                                </defs>
+    <!-- ===== 躯体SVG v15：木人桩参考图像素边精确描摹·22分区（生成器 temp_trace_mannequin.py）===== -->
+    <defs><clipPath id="battle-clipHead"><path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z"/></clipPath><clipPath id="battle-clipTorso"><path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z"/></clipPath><clipPath id="battle-clipAbd"><path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z"/></clipPath></defs>
+    <!-- 背景 -->
+    <rect width="200" height="420" fill="#0f1724" rx="12"></rect>
+    <rect width="200" height="420" fill="url(#battle-bgGlow)" rx="12"></rect>
+    <!-- v15 木人桩参考图·像素边精确轮廓·22分区 -->
+    <path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z" fill="#22c55e" stroke="none"/>
+    <path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z" fill="#22c55e" stroke="none"/>
+    <path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z" fill="#22c55e" stroke="none"/>
+    <path d="M79.9,173.6 L120.3,173.6 L109.3,198.7 L105.0,203.8 L101.1,204.9 L96.3,204.4 L92.0,200.4 L79.9,173.9Z M67.8,188.3 L71.7,171.9 L78.8,173.3 L92.6,201.8 L76.0,190.5 L67.8,188.6Z M107.6,201.8 L112.1,194.8 L117.4,179.5 L122.0,173.0 L128.2,171.6 L132.4,188.3 L122.2,191.7 L107.6,202.1Z" fill="#22c55e" stroke="none"/>
+    <path d="M89.2,72.0 L91.2,63.3 L99.1,68.1 L109.0,63.5 L111.2,72.3 L108.7,78.5 L101.9,82.4 L93.2,80.2 L89.2,72.3Z" fill="#22c55e" stroke="none"/>
+    <path d="M57.0,96.6 L59.0,87.5 L63.5,81.0 L70.0,78.8 L77.6,79.9 L74.3,90.6 L67.2,98.8 L57.3,102.5 L57.0,96.8Z M48.0,136.3 L56.5,102.8 L61.6,102.8 L67.8,99.4 L70.6,113.8 L60.7,140.9 L53.1,140.6 L48.0,136.6Z" fill="#22c55e" stroke="none"/>
+    <path d="M122.5,79.9 L130.1,78.8 L137.2,81.3 L141.1,87.2 L143.4,98.5 L143.1,102.2 L140.6,102.5 L132.1,98.0 L125.3,89.5 L122.5,80.2Z M129.6,114.1 L132.4,99.4 L138.6,102.8 L143.7,102.8 L152.1,135.8 L148.5,140.0 L139.7,141.1 L129.6,114.3Z" fill="#22c55e" stroke="none"/>
+    <path d="M43.2,150.5 L47.7,138.0 L54.2,141.7 L60.2,142.3 L57.6,155.0 L48.0,153.6 L43.2,150.7Z M34.8,192.2 L42.9,151.9 L57.3,156.1 L42.9,195.6 L36.7,195.0 L34.8,192.5Z" fill="#22c55e" stroke="none"/>
+    <path d="M140.0,142.6 L148.2,140.9 L152.7,138.0 L156.9,149.9 L152.4,153.6 L142.8,155.0 L140.0,142.8Z M142.8,156.4 L157.5,152.1 L165.4,191.9 L162.6,195.3 L156.9,195.0 L142.8,156.7Z" fill="#22c55e" stroke="none"/>
+    <path d="M29.4,218.5 L34.5,194.2 L42.1,196.5 L44.6,204.9 L44.1,219.3 L41.2,217.6 L39.6,209.7 L35.6,214.0 L34.5,222.4 L37.3,233.1 L35.0,234.6 L33.3,233.4 L29.4,223.3 L29.4,218.7Z" fill="#22c55e" stroke="none"/>
+    <path d="M155.5,204.9 L158.1,196.5 L165.7,194.2 L170.5,213.4 L170.5,224.1 L165.1,234.6 L162.6,232.9 L165.4,223.0 L164.6,214.5 L160.6,209.7 L158.9,217.9 L156.1,219.0 L155.5,205.2Z" fill="#22c55e" stroke="none"/>
+    <path d="M65.8,209.7 L68.6,189.7 L77.1,191.9 L96.6,205.2 L91.5,261.4 L83.6,264.2 L76.2,263.6 L71.4,261.1 L65.8,210.0Z" fill="#22c55e" stroke="none"/>
+    <path d="M103.6,205.5 L122.2,192.5 L129.6,189.7 L132.7,190.2 L134.4,204.6 L134.1,219.9 L128.7,261.1 L120.8,264.2 L108.7,261.4 L103.6,205.8Z" fill="#22c55e" stroke="none"/>
+    <path d="M71.7,263.1 L82.4,265.0 L91.2,262.5 L90.1,283.9 L81.9,287.6 L76.2,286.8 L71.7,283.4 L71.7,263.3Z M69.7,297.5 L71.4,284.5 L78.5,288.2 L83.9,288.2 L89.8,285.3 L90.9,298.9 L87.5,344.6 L87.5,368.6 L81.6,363.2 L78.2,364.1 L74.8,368.3 L75.1,348.8 L69.7,297.8Z" fill="#22c55e" stroke="none"/>
+    <path d="M108.7,263.6 L109.5,262.5 L120.0,265.0 L128.4,262.8 L128.4,283.4 L119.7,287.6 L113.5,286.5 L110.1,283.9 L108.7,263.9Z M109.0,303.7 L110.4,285.3 L116.3,288.2 L122.0,288.2 L128.4,284.5 L130.4,296.9 L129.9,312.7 L125.3,345.2 L125.1,368.0 L122.0,364.1 L118.3,363.2 L112.6,368.6 L112.4,339.0 L109.0,304.0Z" fill="#22c55e" stroke="none"/>
+    <path d="M68.6,396.3 L74.8,370.6 L77.4,365.8 L81.9,364.1 L85.3,366.1 L87.8,371.7 L91.2,397.4 L86.7,404.2 L79.3,405.3 L71.2,401.9 L68.6,396.5Z" fill="#22c55e" stroke="none"/>
+    <path d="M109.0,397.4 L112.6,370.9 L114.9,366.1 L118.0,364.1 L122.2,365.2 L125.1,369.7 L131.5,396.0 L131.3,399.4 L128.7,402.2 L121.1,405.3 L113.2,403.9 L109.5,400.5 L109.0,397.7Z" fill="#22c55e" stroke="none"/>
+    <path class="part" id="battle-upperArmL" d="M57.0,96.6 L59.0,87.5 L63.5,81.0 L70.0,78.8 L77.6,79.9 L74.3,90.6 L67.2,98.8 L57.3,102.5 L57.0,96.8Z M48.0,136.3 L56.5,102.8 L61.6,102.8 L67.8,99.4 L70.6,113.8 L60.7,140.9 L53.1,140.6 L48.0,136.6Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左上臂</title></path>
+    <path class="part" id="battle-upperArmR" d="M122.5,79.9 L130.1,78.8 L137.2,81.3 L141.1,87.2 L143.4,98.5 L143.1,102.2 L140.6,102.5 L132.1,98.0 L125.3,89.5 L122.5,80.2Z M129.6,114.1 L132.4,99.4 L138.6,102.8 L143.7,102.8 L152.1,135.8 L148.5,140.0 L139.7,141.1 L129.6,114.3Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右上臂</title></path>
+    <path class="part" id="battle-forearmL" d="M43.2,150.5 L47.7,138.0 L54.2,141.7 L60.2,142.3 L57.6,155.0 L48.0,153.6 L43.2,150.7Z M34.8,192.2 L42.9,151.9 L57.3,156.1 L42.9,195.6 L36.7,195.0 L34.8,192.5Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左前臂</title></path>
+    <path class="part" id="battle-forearmR" d="M140.0,142.6 L148.2,140.9 L152.7,138.0 L156.9,149.9 L152.4,153.6 L142.8,155.0 L140.0,142.8Z M142.8,156.4 L157.5,152.1 L165.4,191.9 L162.6,195.3 L156.9,195.0 L142.8,156.7Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右前臂</title></path>
+    <path class="part" id="battle-handL" d="M29.4,218.5 L34.5,194.2 L42.1,196.5 L44.6,204.9 L44.1,219.3 L41.2,217.6 L39.6,209.7 L35.6,214.0 L34.5,222.4 L37.3,233.1 L35.0,234.6 L33.3,233.4 L29.4,223.3 L29.4,218.7Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左手</title></path>
+    <path class="part" id="battle-handR" d="M155.5,204.9 L158.1,196.5 L165.7,194.2 L170.5,213.4 L170.5,224.1 L165.1,234.6 L162.6,232.9 L165.4,223.0 L164.6,214.5 L160.6,209.7 L158.9,217.9 L156.1,219.0 L155.5,205.2Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右手</title></path>
+    <path class="part" id="battle-thighL" d="M65.8,209.7 L68.6,189.7 L77.1,191.9 L96.6,205.2 L91.5,261.4 L83.6,264.2 L76.2,263.6 L71.4,261.1 L65.8,210.0Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左大腿</title></path>
+    <path class="part" id="battle-thighR" d="M103.6,205.5 L122.2,192.5 L129.6,189.7 L132.7,190.2 L134.4,204.6 L134.1,219.9 L128.7,261.1 L120.8,264.2 L108.7,261.4 L103.6,205.8Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右大腿</title></path>
+    <path class="part" id="battle-calfL" d="M71.7,263.1 L82.4,265.0 L91.2,262.5 L90.1,283.9 L81.9,287.6 L76.2,286.8 L71.7,283.4 L71.7,263.3Z M69.7,297.5 L71.4,284.5 L78.5,288.2 L83.9,288.2 L89.8,285.3 L90.9,298.9 L87.5,344.6 L87.5,368.6 L81.6,363.2 L78.2,364.1 L74.8,368.3 L75.1,348.8 L69.7,297.8Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左小腿</title></path>
+    <path class="part" id="battle-calfR" d="M108.7,263.6 L109.5,262.5 L120.0,265.0 L128.4,262.8 L128.4,283.4 L119.7,287.6 L113.5,286.5 L110.1,283.9 L108.7,263.9Z M109.0,303.7 L110.4,285.3 L116.3,288.2 L122.0,288.2 L128.4,284.5 L130.4,296.9 L129.9,312.7 L125.3,345.2 L125.1,368.0 L122.0,364.1 L118.3,363.2 L112.6,368.6 L112.4,339.0 L109.0,304.0Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右小腿</title></path>
+    <path class="part" id="battle-footL" d="M68.6,396.3 L74.8,370.6 L77.4,365.8 L81.9,364.1 L85.3,366.1 L87.8,371.7 L91.2,397.4 L86.7,404.2 L79.3,405.3 L71.2,401.9 L68.6,396.5Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左脚</title></path>
+    <path class="part" id="battle-footR" d="M109.0,397.4 L112.6,370.9 L114.9,366.1 L118.0,364.1 L122.2,365.2 L125.1,369.7 L131.5,396.0 L131.3,399.4 L128.7,402.2 L121.1,405.3 L113.2,403.9 L109.5,400.5 L109.0,397.7Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右脚</title></path>
+    <path class="part" id="battle-neck" d="M89.2,72.0 L91.2,63.3 L99.1,68.1 L109.0,63.5 L111.2,72.3 L108.7,78.5 L101.9,82.4 L93.2,80.2 L89.2,72.3Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>颈（要害）</title></path>
+    <path class="part" id="battle-pelvis" d="M79.9,173.6 L120.3,173.6 L109.3,198.7 L105.0,203.8 L101.1,204.9 L96.3,204.4 L92.0,200.4 L79.9,173.9Z M67.8,188.3 L71.7,171.9 L78.8,173.3 L92.6,201.8 L76.0,190.5 L67.8,188.6Z M107.6,201.8 L112.1,194.8 L117.4,179.5 L122.0,173.0 L128.2,171.6 L132.4,188.3 L122.2,191.7 L107.6,202.1Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>盆骨</title></path>
+    <path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z" fill="#22c55e" stroke="none"/>
+    <path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z" fill="#22c55e" stroke="none"/>
+    <path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z" fill="#22c55e" stroke="none"/>
+    <path class="part" id="battle-brain" d="M40,15.0 L160,15.0 L160,38.355000000000004 L40,38.355000000000004 Z" fill="#22c55e" clip-path="url(#battle-clipHead)" stroke="none"><title>脑（要害）</title></path>
+    <path class="part" id="battle-head" d="M40,38.355000000000004 L160,38.355000000000004 L160,54.444 L40,54.444 Z" fill="#22c55e" clip-path="url(#battle-clipHead)" stroke="none"><title>头</title></path>
+    <path class="part" id="battle-eyes-left" d="M90.3,43.5 Q92.8,40.9 96.9,43.5 Q92.8,45.2 90.3,43.5 Z" fill="#22c55e" stroke="#353535" stroke-width="0.5" clip-path="url(#battle-clipHead)"><title>眼</title></path>
+    <path class="part" id="battle-eyes-right" d="M103.5,43.5 Q106.0,40.9 110.1,43.5 Q106.0,45.2 103.5,43.5 Z" fill="#22c55e" stroke="#353535" stroke-width="0.5" clip-path="url(#battle-clipHead)"><title>眼</title></path>
+    <path class="part" id="battle-jaw" d="M40,54.444 L160,54.444 L160,68.9 L40,68.9 Z" fill="#22c55e" clip-path="url(#battle-clipHead)" stroke="none"><title>下颌</title></path>
+    <path class="part" id="battle-chest" d="M40,80.2 L160,80.2 L160,148.2 L40,148.2 Z" fill="#22c55e" clip-path="url(#battle-clipTorso)" stroke="none"><title>胸（要害联动）</title></path>
+    <path class="part" id="battle-abdomen" d="M40,146.8 L160,146.8 L160,164.488 L40,164.488 Z" fill="#22c55e" clip-path="url(#battle-clipAbd)" stroke="none"><title>腹</title></path>
+    <path class="part" id="battle-waist" d="M40,164.488 L160,164.488 L160,175.6 L40,175.6 Z" fill="#22c55e" clip-path="url(#battle-clipAbd)" stroke="none"><title>腰</title></path>
+    <ellipse class="part" id="battle-dantian" cx="100" cy="158.86" rx="8" ry="10" fill="#22c55e" stroke="#4a5a75" stroke-width="1.4" clip-path="url(#battle-clipAbd)"><title>丹田</title></ellipse>
+    <path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
+    <path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
+    <path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
+    <path d="M79.9,173.6 L120.3,173.6 L109.3,198.7 L105.0,203.8 L101.1,204.9 L96.3,204.4 L92.0,200.4 L79.9,173.9Z M67.8,188.3 L71.7,171.9 L78.8,173.3 L92.6,201.8 L76.0,190.5 L67.8,188.6Z M107.6,201.8 L112.1,194.8 L117.4,179.5 L122.0,173.0 L128.2,171.6 L132.4,188.3 L122.2,191.7 L107.6,202.1Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
+    </svg>
+                    <div id="party-body-svg-list" class="hidden"></div>
+                </div>
+                <div id="battle-side-player-sum" class="battle-side-sum"></div>
+                <div id="battle-side-player-list" class="battle-side-list"></div>
+            </div>
+            <div id="battle-center" class="flex-1 flex flex-col min-w-0">
+                <div id="battle-readout">
+                <h2 class="text-2xl font-bold text-yellow-500 mb-4">⚔️ 战斗</h2>
+                <div id="battle-status" class="flex justify-between mb-4 gap-4">
+                    <div id="battle-player-status" class="text-left flex-1 bg-gray-700/50 p-3 rounded">
+                        <p class="text-white font-bold" id="battle-player-name">玩家</p>
+                        <div class="flex items-center gap-2 mt-1">
+                            <span class="text-sm"><span class="text-green-400">要害:</span> <span id="battle-player-hp">0/0</span></span>
+                            <button onclick="toggleBattleBodyView()" class="text-xs bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-2 py-0.5 rounded">👁️ 查看人体</button>
+                        </div>
+                    </div>
+                    <div id="battle-enemy-status" class="text-right flex-1 bg-gray-700/50 p-3 rounded">
+                        <p class="text-white font-bold" id="battle-enemy-name">敌人</p>
+                        <div class="flex items-center gap-2 mt-1 justify-end">
+                            <span class="text-sm"><span class="text-red-400">要害:</span> <span id="battle-enemy-hp">0/0</span></span>
+                        </div>
                     </div>
                 </div>
-                <div id="battle-enemy-status" class="text-right flex-1 bg-gray-700/50 p-3 rounded">
-                    <p class="text-white font-bold" id="battle-enemy-name">敌人</p>
-                    <div class="flex items-center gap-2 mt-1 justify-end">
-                        <span class="text-sm"><span class="text-red-400">要害:</span> <span id="battle-enemy-hp">0/0</span></span>
-                        <button onclick="toggleEnemyBodyView()" class="text-xs bg-red-600 hover:bg-red-500 text-white px-2 py-0.5 rounded">👁️ 查看敌人</button>
+                <!-- ===== 机体扩展v8.0：生理状态条 ===== -->
+                <div id="battle-physiology" class="grid grid-cols-2 gap-2 mb-2 text-xs">
+                    <!-- 玩家生理状态 -->
+                    <div class="bg-gray-700/30 p-2 rounded">
+                        <div class="text-gray-400 mb-1">🧍 <span id="battle-phys-player-type">人形</span></div>
+                        <div id="battle-phys-player-health" class="flex items-center gap-1 mb-0.5">
+                            <span class="w-8 text-gray-500">血量</span>
+                            <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
+                            <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
+                        </div>
+                        <div id="battle-phys-player-circulation" class="flex items-center gap-1 mb-0.5">
+                            <span class="w-8 text-gray-500">循环</span>
+                            <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
+                            <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
+                        </div>
+                        <div id="battle-phys-player-pain" class="flex items-center gap-1 mb-0.5">
+                            <span class="w-8 text-gray-500">疼痛</span>
+                            <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:0%"></div></div>
+                            <span class="phys-bar-text w-12 text-right text-gray-300">0/100</span>
+                        </div>
+                        <div id="battle-phys-player-consciousness" class="flex items-center gap-1">
+                            <span class="w-8 text-gray-500">意识</span>
+                            <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
+                            <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
+                        </div>
+                    </div>
+                    <!-- 敌人生理状态 -->
+                    <div class="bg-gray-700/30 p-2 rounded">
+                        <div class="text-gray-400 mb-1">👹 <span id="battle-phys-enemy-type">人形</span></div>
+                        <div id="battle-phys-enemy-health" class="flex items-center gap-1 mb-0.5">
+                            <span class="w-8 text-gray-500">血量</span>
+                            <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
+                            <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
+                        </div>
+                        <div id="battle-phys-enemy-circulation" class="flex items-center gap-1 mb-0.5">
+                            <span class="w-8 text-gray-500">循环</span>
+                            <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
+                            <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
+                        </div>
+                        <div id="battle-phys-enemy-pain" class="flex items-center gap-1 mb-0.5">
+                            <span class="w-8 text-gray-500">疼痛</span>
+                            <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:0%"></div></div>
+                            <span class="phys-bar-text w-12 text-right text-gray-300">0/100</span>
+                        </div>
+                        <div id="battle-phys-enemy-consciousness" class="flex items-center gap-1">
+                            <span class="w-8 text-gray-500">意识</span>
+                            <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
+                            <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <!-- ===== 机体扩展v8.0：生理状态条 ===== -->
-            <div id="battle-physiology" class="grid grid-cols-2 gap-2 mb-2 text-xs">
-                <!-- 玩家生理状态 -->
-                <div class="bg-gray-700/30 p-2 rounded">
-                    <div class="text-gray-400 mb-1">🧍 <span id="battle-phys-player-type">人形</span></div>
-                    <div id="battle-phys-player-health" class="flex items-center gap-1 mb-0.5">
-                        <span class="w-8 text-gray-500">血量</span>
-                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
-                        <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
-                    </div>
-                    <div id="battle-phys-player-circulation" class="flex items-center gap-1 mb-0.5">
-                        <span class="w-8 text-gray-500">循环</span>
-                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
-                        <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
-                    </div>
-                    <div id="battle-phys-player-pain" class="flex items-center gap-1 mb-0.5">
-                        <span class="w-8 text-gray-500">疼痛</span>
-                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:0%"></div></div>
-                        <span class="phys-bar-text w-12 text-right text-gray-300">0/100</span>
-                    </div>
-                    <div id="battle-phys-player-consciousness" class="flex items-center gap-1">
-                        <span class="w-8 text-gray-500">意识</span>
-                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
-                        <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
+                <!-- ===== 第一百四十二批 · DES-85 尾：护甲耐久状态区 =====
+                     这段容器**一直缺失**：js/app.js 的 _updateArmorUI()（:3565）完整实现了
+                     「头/身/手/腿/脚 ＋ 耐久百分比 ＋ 三色分档」的渲染，但它
+                     `document.getElementById('battle-armor-status')` 拿到的永远是 null，
+                     于是每次调用都在 `if (!container) return;` 处退出——
+                     **护甲耐久写了 22 行渲染代码，玩家一次都没见过。**
+                     数据侧是齐的（inventory.js 的 getArmorStatus，耐久上限 200），
+                     所以这是「本来就有、只是容器掉了」，不是新增功能。挂在伤情区旁边。 -->
+                <div id="battle-armor-status" class="mb-2 text-xs"></div>
+                <!-- 队友状态栏（有队员时显示） -->
+                <div id="battle-party-status" class="hidden mb-2">
+                    <div class="text-xs text-gray-400 mb-1">👥 队伍成员</div>
+                    <div id="party-status-list" class="space-y-1">
+                        <!-- 动态生成 -->
                     </div>
                 </div>
-                <!-- 敌人生理状态 -->
-                <div class="bg-gray-700/30 p-2 rounded">
-                    <div class="text-gray-400 mb-1">👹 <span id="battle-phys-enemy-type">人形</span></div>
-                    <div id="battle-phys-enemy-health" class="flex items-center gap-1 mb-0.5">
-                        <span class="w-8 text-gray-500">血量</span>
-                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
-                        <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
+                <!-- 第九十二波 · 行动条面板：全员一条时间轴，攒满 100 出手（由 JS 动态填充） -->
+                <div id="battle-timeline-bars" class="mb-2">
+                </div>
+                <div id="battle-log" class="bg-gray-700/50 p-3 rounded h-[22vh] min-h-[128px] overflow-y-auto text-sm text-gray-300 mb-2">
+                    <!-- 战斗日志 -->
+                </div>
+                </div><!-- /#battle-readout -->
+                <div id="battle-foot">
+                <!-- 第九十四波 · 见招拆招：对面摆出姿态时的应对面板（UI-20：这一叠是要按的，钉在台面，不许留在滚区里） -->
+                <div id="battle-prompt-panel">
+                </div>
+                <!-- UI-10 · 待决回执条：敌人摆出姿态时说明「这一手先答完才轮到这里」（显隐见 styles/ui-craft.css 第 10 节） -->
+                <div id="battle-actions-hold-tip" class="text-xs text-yellow-500 mb-1">
+                    ⏸ 先答这一手，其余待命——上面应对条里挑一条；「🩻 查看伤势」不费回合，随时可看。
+                </div>
+                <div id="battle-actions" class="flex flex-wrap gap-1 mb-2">
+                    <!-- 部位选择按钮由JS动态生成 -->
+                </div>
+                <!-- ===== 机体扩展v8.0：医疗行动按钮 ===== -->
+    <div id="battle-medical-actions" class="mb-2">
+    <div class="text-xs text-gray-400 mb-1">🩺 医疗行动（消耗1回合）：</div>
+                    <div class="flex flex-wrap gap-1 mb-2">
+                        <button onclick="battleMedicalAction('bandage')" class="text-xs bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded" title="稳定度+40">🩹 包扎</button>
+                        <button onclick="battleMedicalAction('hemostatic')" class="text-xs bg-purple-700 hover:bg-purple-600 text-white px-2 py-1 rounded" title="外出血减半，内出血停止">💊 止血药</button>
+                        <button onclick="battleMedicalAction('pressure')" class="text-xs bg-orange-700 hover:bg-orange-600 text-white px-2 py-1 rounded" title="临时止血50%">✋ 按压止血</button>
+                        <button onclick="battleMedicalAction('willpower')" class="text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-2 py-1 rounded" title="疼痛-20">🧘 意志压制</button>
                     </div>
-                    <div id="battle-phys-enemy-circulation" class="flex items-center gap-1 mb-0.5">
-                        <span class="w-8 text-gray-500">循环</span>
-                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
-                        <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
-                    </div>
-                    <div id="battle-phys-enemy-pain" class="flex items-center gap-1 mb-0.5">
-                        <span class="w-8 text-gray-500">疼痛</span>
-                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:0%"></div></div>
-                        <span class="phys-bar-text w-12 text-right text-gray-300">0/100</span>
-                    </div>
-                    <div id="battle-phys-enemy-consciousness" class="flex items-center gap-1">
-                        <span class="w-8 text-gray-500">意识</span>
-                        <div class="flex-1 h-2 bg-gray-600 rounded overflow-hidden"><div class="phys-bar-fill h-full bg-green-500 rounded" style="width:100%"></div></div>
-                        <span class="phys-bar-text w-12 text-right text-gray-300">100/100</span>
+                    <!-- v4.2：使用背包中的医疗物品 -->
+                        <div class="text-xs text-gray-400 mb-1">🎒 使用物品（消耗背包物品）：</div>
+                        <div class="text-xs text-gray-500 mb-1">　护身符与增益符不占回合；爆裂符、定身符等进攻类符只在你自己的回合用得出来，用了那一回合就过去。</div>
+                    <div id="battle-medical-items" class="flex flex-wrap gap-1">
+                        <!-- 由JS动态生成 -->
                     </div>
                 </div>
-            </div>
-            <!-- ===== 第一百四十二批 · DES-85 尾：护甲耐久状态区 =====
-                 这段容器**一直缺失**：js/app.js 的 _updateArmorUI()（:3565）完整实现了
-                 「头/身/手/腿/脚 ＋ 耐久百分比 ＋ 三色分档」的渲染，但它
-                 `document.getElementById('battle-armor-status')` 拿到的永远是 null，
-                 于是每次调用都在 `if (!container) return;` 处退出——
-                 **护甲耐久写了 22 行渲染代码，玩家一次都没见过。**
-                 数据侧是齐的（inventory.js 的 getArmorStatus，耐久上限 200），
-                 所以这是「本来就有、只是容器掉了」，不是新增功能。挂在伤情区旁边。 -->
-            <div id="battle-armor-status" class="mb-2 text-xs"></div>
-            <!-- 队友状态栏（有队员时显示） -->
-            <div id="battle-party-status" class="hidden mb-2">
-                <div class="text-xs text-gray-400 mb-1">👥 队伍成员</div>
-                <div id="party-status-list" class="space-y-1">
-                    <!-- 动态生成 -->
+                <!-- v4.2：查看伤势按钮 -->
+                <div class="flex gap-1 mb-2">
+                    <button onclick="toggleWoundInspection()" class="text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded">🩻 查看伤势</button>
                 </div>
-            </div>
-            <!-- 第九十二波 · 行动条面板：全员一条时间轴，攒满 100 出手（由 JS 动态填充） -->
-            <div id="battle-timeline-bars" class="mb-2">
-            </div>
-            <div id="battle-log" class="bg-gray-700/50 p-3 rounded h-[22vh] min-h-[128px] overflow-y-auto text-sm text-gray-300 mb-2">
-                <!-- 战斗日志 -->
-            </div>
-            </div><!-- /#battle-readout -->
-            <div id="battle-foot">
-            <!-- 第九十四波 · 见招拆招：对面摆出姿态时的应对面板（UI-20：这一叠是要按的，钉在台面，不许留在滚区里） -->
-            <div id="battle-prompt-panel">
-            </div>
-            <!-- UI-10 · 待决回执条：敌人摆出姿态时说明「这一手先答完才轮到这里」（显隐见 styles/ui-craft.css 第 10 节） -->
-            <div id="battle-actions-hold-tip" class="text-xs text-yellow-500 mb-1">
-                ⏸ 先答这一手，其余待命——上面应对条里挑一条；「🩻 查看伤势」不费回合，随时可看。
-            </div>
-            <div id="battle-actions" class="flex flex-wrap gap-1 mb-2">
-                <!-- 部位选择按钮由JS动态生成 -->
-            </div>
-            <!-- ===== 机体扩展v8.0：医疗行动按钮 ===== -->
-<div id="battle-medical-actions" class="mb-2">
-<div class="text-xs text-gray-400 mb-1">🩺 医疗行动（消耗1回合）：</div>
-                <div class="flex flex-wrap gap-1 mb-2">
-                    <button onclick="battleMedicalAction('bandage')" class="text-xs bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded" title="稳定度+40">🩹 包扎</button>
-                    <button onclick="battleMedicalAction('hemostatic')" class="text-xs bg-purple-700 hover:bg-purple-600 text-white px-2 py-1 rounded" title="外出血减半，内出血停止">💊 止血药</button>
-                    <button onclick="battleMedicalAction('pressure')" class="text-xs bg-orange-700 hover:bg-orange-600 text-white px-2 py-1 rounded" title="临时止血50%">✋ 按压止血</button>
-                    <button onclick="battleMedicalAction('willpower')" class="text-xs bg-indigo-700 hover:bg-indigo-600 text-white px-2 py-1 rounded" title="疼痛-20">🧘 意志压制</button>
+                <!-- v4.2：伤口详情面板 -->
+                <div id="battle-wound-panel" class="hidden mb-2 bg-gray-800/50 rounded p-2 text-xs border border-gray-600">
+                    <div class="text-gray-400 font-bold mb-1">🩻 伤势详情</div>
+                    <div id="battle-wound-content">
+                        <!-- 由JS动态生成 -->
+                    </div>
                 </div>
-                <!-- v4.2：使用背包中的医疗物品 -->
-                    <div class="text-xs text-gray-400 mb-1">🎒 使用物品（消耗背包物品）：</div>
-                    <div class="text-xs text-gray-500 mb-1">　护身符与增益符不占回合；爆裂符、定身符等进攻类符只在你自己的回合用得出来，用了那一回合就过去。</div>
-                <div id="battle-medical-items" class="flex flex-wrap gap-1">
-                    <!-- 由JS动态生成 -->
+                <div id="battle-result" class="hidden mt-4 text-center">
+                    <p class="text-xl font-bold" id="battle-result-text"></p>
+                    <!-- v25.1·试-01：战斗结束后的动态按钮（收服灵兽/兽潮下一波/天劫下一雷/Boss下一阶段）挂这里——
+                         旧代码把它们注进 battle-actions，而 updateBattleUI 在 isFinished 时把整个 battle-actions 隐藏，四条内容线全断头 -->
+                    <div id="battle-result-extra" class="mt-2 flex flex-wrap justify-center gap-2"></div>
+                    <button onclick="closeBattle()" class="mt-2 bg-yellow-600 hover:bg-yellow-500 px-6 py-2 rounded text-gray-900 font-bold">继续</button>
                 </div>
-            </div>
-            <!-- v4.2：查看伤势按钮 -->
-            <div class="flex gap-1 mb-2">
-                <button onclick="toggleWoundInspection()" class="text-xs bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded">🩻 查看伤势</button>
-            </div>
-            <!-- v4.2：伤口详情面板 -->
-            <div id="battle-wound-panel" class="hidden mb-2 bg-gray-800/50 rounded p-2 text-xs border border-gray-600">
-                <div class="text-gray-400 font-bold mb-1">🩻 伤势详情</div>
-                <div id="battle-wound-content">
-                    <!-- 由JS动态生成 -->
-                </div>
-            </div>
-            <div id="battle-result" class="hidden mt-4 text-center">
-                <p class="text-xl font-bold" id="battle-result-text"></p>
-                <!-- v25.1·试-01：战斗结束后的动态按钮（收服灵兽/兽潮下一波/天劫下一雷/Boss下一阶段）挂这里——
-                     旧代码把它们注进 battle-actions，而 updateBattleUI 在 isFinished 时把整个 battle-actions 隐藏，四条内容线全断头 -->
-                <div id="battle-result-extra" class="mt-2 flex flex-wrap justify-center gap-2"></div>
-                <button onclick="closeBattle()" class="mt-2 bg-yellow-600 hover:bg-yellow-500 px-6 py-2 rounded text-gray-900 font-bold">继续</button>
-            </div>
-            </div><!-- /#battle-foot -->
+                </div><!-- /#battle-foot -->
 
-            <!-- ===== 人体查看覆盖层（默认隐藏） ===== -->
-            <div id="battle-body-view" class="hidden mt-4 border-t border-gray-600 pt-4">
-                <div class="flex justify-between items-center mb-2">
-                    <h4 class="text-yellow-500 font-bold" id="body-view-title">🧍 玩家躯体状态</h4>
-                    <div class="flex gap-2">
-                        <button onclick="switchBodyView('player')" id="btn-view-player" class="text-xs bg-yellow-600 text-gray-900 px-2 py-0.5 rounded">玩家</button>
-                        <button onclick="switchBodyView('enemy')" id="btn-view-enemy" class="text-xs bg-gray-600 text-gray-300 px-2 py-0.5 rounded">敌人</button>
-                        <div id="party-body-view-buttons" class="inline-flex gap-1"></div>
-                        <button onclick="toggleBattleBodyView()" class="text-gray-400 hover:text-white text-sm">✕ 关闭</button>
-                    </div>
-                </div>
-                <div class="flex flex-col md:flex-row gap-4">
-                    <!-- 左侧：SVG人体图（玩家或敌人） -->
-                    <div class="flex-shrink-0 flex justify-center">
-                        <div id="player-body-svg-wrapper">
-                            <svg viewBox="0 0 200 420" class="body-svg" id="battle-body-svg" style="width:160px; height:auto;">
-<defs>
-                                <filter id="battle-glow" x="-20%" y="-20%" width="140%" height="140%">
-                                    <feGaussianBlur stdDeviation="2" result="blur"></feGaussianBlur>
-                                    <feMerge>
-                                        <feMergeNode in="blur"></feMergeNode>
-                                        <feMergeNode in="blur" opacity="0.5"></feMergeNode>
-                                        <feMergeNode in="SourceGraphic"></feMergeNode>
-                                    </feMerge>
-                                </filter>
-                                <radialGradient id="battle-bgGlow" cx="50%" cy="40%" r="50%">
-                                    <stop offset="0%" stop-color="#2d4a3d" stop-opacity="0.3"></stop>
-                                    <stop offset="100%" stop-color="transparent"></stop>
-                                </radialGradient>
-                            </defs>
-<!-- ===== 躯体SVG v15：木人桩参考图像素边精确描摹·22分区（生成器 temp_trace_mannequin.py）===== -->
-<defs><clipPath id="battle-clipHead"><path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z"/></clipPath><clipPath id="battle-clipTorso"><path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z"/></clipPath><clipPath id="battle-clipAbd"><path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z"/></clipPath></defs>
-<!-- 背景 -->
-<rect width="200" height="420" fill="#0f1724" rx="12"></rect>
-<rect width="200" height="420" fill="url(#battle-bgGlow)" rx="12"></rect>
-<!-- v15 木人桩参考图·像素边精确轮廓·22分区 -->
-<path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z" fill="#22c55e" stroke="none"/>
-<path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z" fill="#22c55e" stroke="none"/>
-<path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z" fill="#22c55e" stroke="none"/>
-<path d="M79.9,173.6 L120.3,173.6 L109.3,198.7 L105.0,203.8 L101.1,204.9 L96.3,204.4 L92.0,200.4 L79.9,173.9Z M67.8,188.3 L71.7,171.9 L78.8,173.3 L92.6,201.8 L76.0,190.5 L67.8,188.6Z M107.6,201.8 L112.1,194.8 L117.4,179.5 L122.0,173.0 L128.2,171.6 L132.4,188.3 L122.2,191.7 L107.6,202.1Z" fill="#22c55e" stroke="none"/>
-<path d="M89.2,72.0 L91.2,63.3 L99.1,68.1 L109.0,63.5 L111.2,72.3 L108.7,78.5 L101.9,82.4 L93.2,80.2 L89.2,72.3Z" fill="#22c55e" stroke="none"/>
-<path d="M57.0,96.6 L59.0,87.5 L63.5,81.0 L70.0,78.8 L77.6,79.9 L74.3,90.6 L67.2,98.8 L57.3,102.5 L57.0,96.8Z M48.0,136.3 L56.5,102.8 L61.6,102.8 L67.8,99.4 L70.6,113.8 L60.7,140.9 L53.1,140.6 L48.0,136.6Z" fill="#22c55e" stroke="none"/>
-<path d="M122.5,79.9 L130.1,78.8 L137.2,81.3 L141.1,87.2 L143.4,98.5 L143.1,102.2 L140.6,102.5 L132.1,98.0 L125.3,89.5 L122.5,80.2Z M129.6,114.1 L132.4,99.4 L138.6,102.8 L143.7,102.8 L152.1,135.8 L148.5,140.0 L139.7,141.1 L129.6,114.3Z" fill="#22c55e" stroke="none"/>
-<path d="M43.2,150.5 L47.7,138.0 L54.2,141.7 L60.2,142.3 L57.6,155.0 L48.0,153.6 L43.2,150.7Z M34.8,192.2 L42.9,151.9 L57.3,156.1 L42.9,195.6 L36.7,195.0 L34.8,192.5Z" fill="#22c55e" stroke="none"/>
-<path d="M140.0,142.6 L148.2,140.9 L152.7,138.0 L156.9,149.9 L152.4,153.6 L142.8,155.0 L140.0,142.8Z M142.8,156.4 L157.5,152.1 L165.4,191.9 L162.6,195.3 L156.9,195.0 L142.8,156.7Z" fill="#22c55e" stroke="none"/>
-<path d="M29.4,218.5 L34.5,194.2 L42.1,196.5 L44.6,204.9 L44.1,219.3 L41.2,217.6 L39.6,209.7 L35.6,214.0 L34.5,222.4 L37.3,233.1 L35.0,234.6 L33.3,233.4 L29.4,223.3 L29.4,218.7Z" fill="#22c55e" stroke="none"/>
-<path d="M155.5,204.9 L158.1,196.5 L165.7,194.2 L170.5,213.4 L170.5,224.1 L165.1,234.6 L162.6,232.9 L165.4,223.0 L164.6,214.5 L160.6,209.7 L158.9,217.9 L156.1,219.0 L155.5,205.2Z" fill="#22c55e" stroke="none"/>
-<path d="M65.8,209.7 L68.6,189.7 L77.1,191.9 L96.6,205.2 L91.5,261.4 L83.6,264.2 L76.2,263.6 L71.4,261.1 L65.8,210.0Z" fill="#22c55e" stroke="none"/>
-<path d="M103.6,205.5 L122.2,192.5 L129.6,189.7 L132.7,190.2 L134.4,204.6 L134.1,219.9 L128.7,261.1 L120.8,264.2 L108.7,261.4 L103.6,205.8Z" fill="#22c55e" stroke="none"/>
-<path d="M71.7,263.1 L82.4,265.0 L91.2,262.5 L90.1,283.9 L81.9,287.6 L76.2,286.8 L71.7,283.4 L71.7,263.3Z M69.7,297.5 L71.4,284.5 L78.5,288.2 L83.9,288.2 L89.8,285.3 L90.9,298.9 L87.5,344.6 L87.5,368.6 L81.6,363.2 L78.2,364.1 L74.8,368.3 L75.1,348.8 L69.7,297.8Z" fill="#22c55e" stroke="none"/>
-<path d="M108.7,263.6 L109.5,262.5 L120.0,265.0 L128.4,262.8 L128.4,283.4 L119.7,287.6 L113.5,286.5 L110.1,283.9 L108.7,263.9Z M109.0,303.7 L110.4,285.3 L116.3,288.2 L122.0,288.2 L128.4,284.5 L130.4,296.9 L129.9,312.7 L125.3,345.2 L125.1,368.0 L122.0,364.1 L118.3,363.2 L112.6,368.6 L112.4,339.0 L109.0,304.0Z" fill="#22c55e" stroke="none"/>
-<path d="M68.6,396.3 L74.8,370.6 L77.4,365.8 L81.9,364.1 L85.3,366.1 L87.8,371.7 L91.2,397.4 L86.7,404.2 L79.3,405.3 L71.2,401.9 L68.6,396.5Z" fill="#22c55e" stroke="none"/>
-<path d="M109.0,397.4 L112.6,370.9 L114.9,366.1 L118.0,364.1 L122.2,365.2 L125.1,369.7 L131.5,396.0 L131.3,399.4 L128.7,402.2 L121.1,405.3 L113.2,403.9 L109.5,400.5 L109.0,397.7Z" fill="#22c55e" stroke="none"/>
-<path class="part" id="battle-upperArmL" d="M57.0,96.6 L59.0,87.5 L63.5,81.0 L70.0,78.8 L77.6,79.9 L74.3,90.6 L67.2,98.8 L57.3,102.5 L57.0,96.8Z M48.0,136.3 L56.5,102.8 L61.6,102.8 L67.8,99.4 L70.6,113.8 L60.7,140.9 L53.1,140.6 L48.0,136.6Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左上臂</title></path>
-<path class="part" id="battle-upperArmR" d="M122.5,79.9 L130.1,78.8 L137.2,81.3 L141.1,87.2 L143.4,98.5 L143.1,102.2 L140.6,102.5 L132.1,98.0 L125.3,89.5 L122.5,80.2Z M129.6,114.1 L132.4,99.4 L138.6,102.8 L143.7,102.8 L152.1,135.8 L148.5,140.0 L139.7,141.1 L129.6,114.3Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右上臂</title></path>
-<path class="part" id="battle-forearmL" d="M43.2,150.5 L47.7,138.0 L54.2,141.7 L60.2,142.3 L57.6,155.0 L48.0,153.6 L43.2,150.7Z M34.8,192.2 L42.9,151.9 L57.3,156.1 L42.9,195.6 L36.7,195.0 L34.8,192.5Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左前臂</title></path>
-<path class="part" id="battle-forearmR" d="M140.0,142.6 L148.2,140.9 L152.7,138.0 L156.9,149.9 L152.4,153.6 L142.8,155.0 L140.0,142.8Z M142.8,156.4 L157.5,152.1 L165.4,191.9 L162.6,195.3 L156.9,195.0 L142.8,156.7Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右前臂</title></path>
-<path class="part" id="battle-handL" d="M29.4,218.5 L34.5,194.2 L42.1,196.5 L44.6,204.9 L44.1,219.3 L41.2,217.6 L39.6,209.7 L35.6,214.0 L34.5,222.4 L37.3,233.1 L35.0,234.6 L33.3,233.4 L29.4,223.3 L29.4,218.7Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左手</title></path>
-<path class="part" id="battle-handR" d="M155.5,204.9 L158.1,196.5 L165.7,194.2 L170.5,213.4 L170.5,224.1 L165.1,234.6 L162.6,232.9 L165.4,223.0 L164.6,214.5 L160.6,209.7 L158.9,217.9 L156.1,219.0 L155.5,205.2Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右手</title></path>
-<path class="part" id="battle-thighL" d="M65.8,209.7 L68.6,189.7 L77.1,191.9 L96.6,205.2 L91.5,261.4 L83.6,264.2 L76.2,263.6 L71.4,261.1 L65.8,210.0Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左大腿</title></path>
-<path class="part" id="battle-thighR" d="M103.6,205.5 L122.2,192.5 L129.6,189.7 L132.7,190.2 L134.4,204.6 L134.1,219.9 L128.7,261.1 L120.8,264.2 L108.7,261.4 L103.6,205.8Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右大腿</title></path>
-<path class="part" id="battle-calfL" d="M71.7,263.1 L82.4,265.0 L91.2,262.5 L90.1,283.9 L81.9,287.6 L76.2,286.8 L71.7,283.4 L71.7,263.3Z M69.7,297.5 L71.4,284.5 L78.5,288.2 L83.9,288.2 L89.8,285.3 L90.9,298.9 L87.5,344.6 L87.5,368.6 L81.6,363.2 L78.2,364.1 L74.8,368.3 L75.1,348.8 L69.7,297.8Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左小腿</title></path>
-<path class="part" id="battle-calfR" d="M108.7,263.6 L109.5,262.5 L120.0,265.0 L128.4,262.8 L128.4,283.4 L119.7,287.6 L113.5,286.5 L110.1,283.9 L108.7,263.9Z M109.0,303.7 L110.4,285.3 L116.3,288.2 L122.0,288.2 L128.4,284.5 L130.4,296.9 L129.9,312.7 L125.3,345.2 L125.1,368.0 L122.0,364.1 L118.3,363.2 L112.6,368.6 L112.4,339.0 L109.0,304.0Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右小腿</title></path>
-<path class="part" id="battle-footL" d="M68.6,396.3 L74.8,370.6 L77.4,365.8 L81.9,364.1 L85.3,366.1 L87.8,371.7 L91.2,397.4 L86.7,404.2 L79.3,405.3 L71.2,401.9 L68.6,396.5Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>左脚</title></path>
-<path class="part" id="battle-footR" d="M109.0,397.4 L112.6,370.9 L114.9,366.1 L118.0,364.1 L122.2,365.2 L125.1,369.7 L131.5,396.0 L131.3,399.4 L128.7,402.2 L121.1,405.3 L113.2,403.9 L109.5,400.5 L109.0,397.7Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>右脚</title></path>
-<path class="part" id="battle-neck" d="M89.2,72.0 L91.2,63.3 L99.1,68.1 L109.0,63.5 L111.2,72.3 L108.7,78.5 L101.9,82.4 L93.2,80.2 L89.2,72.3Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>颈（要害）</title></path>
-<path class="part" id="battle-pelvis" d="M79.9,173.6 L120.3,173.6 L109.3,198.7 L105.0,203.8 L101.1,204.9 L96.3,204.4 L92.0,200.4 L79.9,173.9Z M67.8,188.3 L71.7,171.9 L78.8,173.3 L92.6,201.8 L76.0,190.5 L67.8,188.6Z M107.6,201.8 L112.1,194.8 L117.4,179.5 L122.0,173.0 L128.2,171.6 L132.4,188.3 L122.2,191.7 L107.6,202.1Z" fill="#22c55e" stroke="#31415a" stroke-width="1.1"><title>盆骨</title></path>
-<path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z" fill="#22c55e" stroke="none"/>
-<path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z" fill="#22c55e" stroke="none"/>
-<path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z" fill="#22c55e" stroke="none"/>
-<path class="part" id="battle-brain" d="M40,15.0 L160,15.0 L160,38.355000000000004 L40,38.355000000000004 Z" fill="#22c55e" clip-path="url(#battle-clipHead)" stroke="none"><title>脑（要害）</title></path>
-<path class="part" id="battle-head" d="M40,38.355000000000004 L160,38.355000000000004 L160,54.444 L40,54.444 Z" fill="#22c55e" clip-path="url(#battle-clipHead)" stroke="none"><title>头</title></path>
-<path class="part" id="battle-eyes-left" d="M90.3,43.5 Q92.8,40.9 96.9,43.5 Q92.8,45.2 90.3,43.5 Z" fill="#22c55e" stroke="#353535" stroke-width="0.5" clip-path="url(#battle-clipHead)"><title>眼</title></path>
-<path class="part" id="battle-eyes-right" d="M103.5,43.5 Q106.0,40.9 110.1,43.5 Q106.0,45.2 103.5,43.5 Z" fill="#22c55e" stroke="#353535" stroke-width="0.5" clip-path="url(#battle-clipHead)"><title>眼</title></path>
-<path class="part" id="battle-jaw" d="M40,54.444 L160,54.444 L160,68.9 L40,68.9 Z" fill="#22c55e" clip-path="url(#battle-clipHead)" stroke="none"><title>下颌</title></path>
-<path class="part" id="battle-chest" d="M40,80.2 L160,80.2 L160,148.2 L40,148.2 Z" fill="#22c55e" clip-path="url(#battle-clipTorso)" stroke="none"><title>胸（要害联动）</title></path>
-<path class="part" id="battle-abdomen" d="M40,146.8 L160,146.8 L160,164.488 L40,164.488 Z" fill="#22c55e" clip-path="url(#battle-clipAbd)" stroke="none"><title>腹</title></path>
-<path class="part" id="battle-waist" d="M40,164.488 L160,164.488 L160,175.6 L40,175.6 Z" fill="#22c55e" clip-path="url(#battle-clipAbd)" stroke="none"><title>腰</title></path>
-<ellipse class="part" id="battle-dantian" cx="100" cy="158.86" rx="8" ry="10" fill="#22c55e" stroke="#4a5a75" stroke-width="1.4" clip-path="url(#battle-clipAbd)"><title>丹田</title></ellipse>
-<path d="M82.7,29.1 L88.1,19.2 L98.2,15.0 L104.5,15.3 L111.8,18.4 L115.7,22.3 L118.0,28.5 L117.2,42.7 L114.1,55.4 L108.1,63.3 L101.9,67.2 L94.0,64.7 L86.7,55.9 L83.3,41.5 L82.7,29.4Z M77.9,43.2 L79.6,39.8 L81.9,39.8 L84.1,48.6 L83.3,50.6 L81.0,49.7 L77.9,43.5Z M116.3,49.1 L118.8,39.8 L121.1,39.8 L122.5,42.9 L120.3,48.9 L117.7,50.6 L116.3,49.4Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
-<path d="M68.3,98.5 L74.8,91.2 L78.5,80.2 L93.5,81.0 L98.8,83.3 L106.7,81.0 L121.7,80.2 L125.6,91.5 L131.8,98.2 L125.3,129.9 L123.9,145.4 L114.6,146.5 L76.5,145.9 L75.4,132.4 L68.3,98.8Z M74.5,78.2 L88.7,72.6 L92.0,79.6 L74.5,78.5Z M108.1,79.9 L111.8,72.6 L125.6,78.2 L108.1,80.2Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
-<path d="M72.3,169.1 L76.8,146.8 L123.4,146.8 L127.9,168.8 L127.6,171.1 L122.8,172.5 L104.7,173.9 L77.6,172.5 L72.9,171.1 L72.3,169.4Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
-<path d="M79.9,173.6 L120.3,173.6 L109.3,198.7 L105.0,203.8 L101.1,204.9 L96.3,204.4 L92.0,200.4 L79.9,173.9Z M67.8,188.3 L71.7,171.9 L78.8,173.3 L92.6,201.8 L76.0,190.5 L67.8,188.6Z M107.6,201.8 L112.1,194.8 L117.4,179.5 L122.0,173.0 L128.2,171.6 L132.4,188.3 L122.2,191.7 L107.6,202.1Z" fill="none" stroke="#3b4b64" stroke-width="1.3"/>
-</svg>
-                        </div>
-                        <div id="enemy-body-svg-wrapper" class="hidden"></div>
-                        <div id="party-body-svg-container" class="hidden">
-                            <div id="party-body-svg-list" class="flex flex-wrap gap-2 justify-center">
-                                <!-- 动态生成 -->
-                            </div>
-                        </div>
-                    </div>
-                    <!-- 右侧：部位耐久列表 -->
-                    <div class="flex-1">
-                        <div class="grid grid-cols-2 gap-1 text-xs" id="battle-body-durability-list">
-                            <!-- 动态生成 -->
-                        </div>
-                        <!-- 机体扩展v8.0：伤口信息 -->
-                        <div class="mt-2 border-t border-gray-600 pt-2">
-                            <p class="text-xs text-gray-400 mb-1">🩸 伤口状态：</p>
-                            <div id="battle-wound-info" class="space-y-0.5">
-                                <div class="text-xs text-gray-500">无伤口</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+
+            </div>
+            <div id="battle-side-enemy" class="battle-side hidden flex-shrink-0 w-[300px]">
+                <div class="battle-side-head">⚔ 敌方</div>
+                <div id="battle-side-enemy-svg" class="battle-side-svg"></div>
+                <div id="battle-side-enemy-sum" class="battle-side-sum"></div>
+                <div id="battle-side-enemy-list" class="battle-side-list"></div>
             </div>
         </div>
     </div>
 
     <!-- 实体交互面板 -->
     <div id="entity-interaction" class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 hidden">
-        <div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-lg w-full max-h-[80vh] overflow-y-auto mx-4">
+        <div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-3xl w-full max-h-[80vh] overflow-y-auto mx-4">
             <div class="flex justify-between items-start mb-4">
                 <h3 class="text-xl font-bold text-yellow-500" id="interaction-title">实体</h3>
                 <button onclick="closeInteraction()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
@@ -2004,6 +2002,8 @@
     <script defer src="js/battle.js"></script>
     <script defer src="js/combat-stats.js"></script>
     <script defer src="js/battle-injuries.js"></script>
+    <script defer src="js/battle/beast-part-family.js"></script><!-- v27.13 敌人非人形部位族：BS-015 兽图/十五格伤势册/四笔已裁生死口径（battle.js 之后加载，运行时经 window 互查） -->
+    <script defer src="js/battle/construct-undead-family.js"></script><!-- v27.19 敌人非人形部位族·续：构装六格（钝克壳×1.3/斩×0.7·利克节×1.3）+亡灵六骨格（钝×1.2/火×1.3）——生死口径照旧不碰，弱点系数+功能减档+停机窗走伤册 -->
 
     <!-- 第3.5层：战利品系统（在battle.js之后，依赖battle的敌人生成逻辑） -->
     <script defer src="js/loot-system.js"></script>
@@ -2046,6 +2046,8 @@
     <script defer src="js/status-effects.js"></script>
     <script defer src="js/poison-system.js"></script>
     <script defer src="js/time-system.js"></script>
+    <script defer src="js/core/world-ledger.js"></script><!-- 世界账簿：市场流水/悬赏基金/掌柜额度/药藏/名气扩散/店铺时辰/钱票（真实小世界专案） -->
+    <script defer src="js/core/population-ledger.js"></script><!-- v26.5 人口户账（轻账A案）：每城一个人口数、月结丰歉添减、市井烟火消息走 gameLog——须在 state-registry/time-system 之后，与 world-ledger 同族同载 -->
     <!-- v23.0 平衡急救：景点/动作共用闸门（冷却/代价/波动），全景点改造依赖它 -->
     <script defer src="js/core/action-gates.js"></script>
     <!-- v23.1 饱食度：吃饭从此存在（吃撑拒食/饿肚子掉心情/辟谷丹真辟谷） -->
@@ -2095,6 +2097,7 @@
     <script defer src="js/npcs/special-npcs.js"></script>
     <script defer src="js/npcs/item-tags.js"></script>
     <script defer src="js/npcs/npc-system.js"></script>
+    <script defer src="js/npcs/confession-rites.js"></script><!-- v26.2 定情之仪场景层：倾诉心意接缝（EMOTION_TYPES.confess 门槛/BOND_DAO_FINAL_CHAPTER 名册皆取自 npc-system.js，故必须在其后） -->
     <script defer src="js/npcs/skill-transmission.js"></script><!-- v20.88 功法传承担系：请教/传授 + 50门功法持有网 -->
     <script defer src="js/npcs/npc-borrow-service.js"></script>
     <!-- P2：NPC故事线系统（v12.6：旧 npc-storylines.js 已废弃移除，重写为 storylines-v2） -->
@@ -2263,6 +2266,10 @@
     <script defer src="js/extensions/resource-points.js"></script>
     <script defer src="js/extensions/market-dynamic.js"></script>
     <script defer src="js/extensions/beast-ecosystem.js"></script>
+    <script defer src="js/mount-events.js"></script><!-- v27.0 坐骑批：骑乘低频事件——路上兽惊（抵达骰）/名马被贼盯上（翻日骰+五日冷却，三选弹窗） -->
+    <script defer src="js/family-system.js"></script><!-- v27.5 家业批：家业名册——立宗族修族谱/建祠堂（逢节自动祭祖）/收义子（与亲生一本账，托孤福儿免彩礼）/乔迁宴（一处洞府一回）/捡土狗（与灵兽严格分账）/恩仇簿（善举·通缉·断案三本账只读）+一季度一件家事 -->
+    <script defer src="js/grand-legacy.js"></script><!-- v27.6 大业收官：大业名册——仕途线（科举乡试会试殿试三场/捐官当城主月初俸银/称帝建国改国贡）·香火线（设坛传教/受封土地公香火翻倍）·艺业线（自创功法进融合注册表/著经立说/办比武大会三轮真仗）——全一生一回，封神后零日常维护 -->
+    <script defer src="js/dynasty-court.js"></script><!-- v27.7 朝政篇：称帝之后的大剧情——国库明账（月初自动过账，税入+属城岁入-宫室戍饷）·立储（亲子/弟子吃现成账）·征伐邻城（真仗，属城≤3）·三大工程（宫城/城墙/粮仓各一回）·朝堂风波四件（请立储/藩王叛乱/灾年/史官直笔，自动上奏一生各裁一回）·编年史自动记年·终局双路（举国飞升须香火/禅位须储/两无天下鼎沸）·v27.8 长安线（现皇帝的反应：讨逆诏奉表/扣使两断，讨逆军真仗打赢长安不敢东顾）+号召归附（声望明账收城，他派护持的城召不动只能打）+舆图口径（帝都不可犯，仙门不入世争） -->
     <script defer src="js/extensions/reincarnation.js"></script>
     <script defer src="js/extensions/reincarnation-integration.js"></script>
     <script defer src="js/extensions/narrative-consequence.js"></script>
@@ -2273,11 +2280,13 @@
     <!-- v25.6 玩家心愿批（第一百四十八批）：望风榜/生平传记/洞府会客/洞府守卫战/押货跑商 -->
     <script defer src="js/extensions/jianghu-rank.js"></script>
     <script defer src="js/extensions/biography.js"></script>
+    <script defer src="js/extensions/authoring.js"></script>
     <script defer src="js/extensions/cave-reception.js"></script>
     <script defer src="js/extensions/cave-siege.js"></script>
     <script defer src="js/economy/caravan-trade.js"></script>
     <!-- v25.7 市井烟火批（第一百四十九批）：市井总门/街头闲逛/澡堂/下馆子/赌坊/书肆/施舍（丐帮眼线） -->
     <script defer src="js/city-facilities/street-life.js"></script>
+    <script defer src="js/city-facilities/service-stall.js"></script><!-- v27.3 手艺摊引擎：十一门手艺一日一摊（客流单价明账）+ 书院讲学/拆穿假神仙两件一次性街面大事 -->
     <script defer src="js/city-facilities/bathhouse.js"></script>
     <script defer src="js/city-facilities/eatery.js"></script>
     <script defer src="js/city-facilities/gamble-den.js"></script>
@@ -2285,7 +2294,19 @@
     <script defer src="js/city-facilities/beggar-alms.js"></script>
     <!-- v25.8 黑道与人情批（第一百五十批）：威胁·抢劫·通缉追捕·钱庄柜娘·职业黑面 / 街面人物志·打劫街坊 / 还物·邀约·打听·请客·雇镖·占卜·托付秘密·拜师 -->
     <script defer src="js/npcs/npc-crime.js"></script>
+    <script defer src="js/npcs/crime-works.js"></script><!-- v27.4 黑道营生名册：扒窃/盗墓/伪造盐引路引/私铸假灵石/夹带私货/落草/卖情报（getGossipInfo 复活）/安暗桩——热度走通缉账正门 -->
+    <script defer src="js/npcs/disguise-system.js"></script>
+    <script defer src="js/npcs/kidnap-system.js"></script>
     <script defer src="js/city-facilities/citizen-life.js"></script>
+    <script defer src="js/city-facilities/stone-gamble.js"></script>
+    <script defer src="js/city-facilities/player-shop.js"></script>
+    <script defer src="js/city-facilities/guild-climb.js"></script><!-- v27.1 商会夺权线：入会→执事→话事人→另立自己的商会（贡献走代售台、月会日过档、会首月初分红） -->
+    <script defer src="js/city-facilities/city-gate.js"></script>
+    <script defer src="js/city-facilities/fortune-stall.js"></script>
+    <script defer src="js/city-facilities/tea-storyteller.js"></script>
+    <script defer src="js/city-facilities/cricket-fight.js"></script>
+    <script defer src="js/city-facilities/private-school.js"></script>
+    <script defer src="js/city-facilities/horse-market.js"></script><!-- v27.0 坐骑批：马市——凡马/青骡/骏马（铜钱）、相口齿砍价取名、谜之兽蛋三日破壳 -->
     <script defer src="js/npcs/npc-bond.js"></script>
     <script defer src="js/extensions/player-sect.js"></script>
     <script defer src="js/extensions/player-sect-ui.js"></script>
@@ -2304,6 +2325,7 @@
     <!-- P0-5 死亡仙侠化：神魂/残魂系统（依赖运行时对象，须在 app.js 之前） -->
     <script defer src="js/core/soul-state.js"></script>
     <script defer src="js/app.js"></script>
+    <script defer src="js/app-city-bureaus.js"></script><!-- v27.13 W-1 拆分：四衙公共设施族自 app.js 迁出（案底见 app.js 原位）——app.js 顶层不调族内函数，故置于其后 -->
     <script defer src="js/cultivation/breakthrough-ritual.js"></script>
     <script defer src="js/cultivation/heavenly-tribulation.js"></script>
     <script defer src="js/lifespan-system.js"></script>
@@ -2312,6 +2334,7 @@
     <script defer src="js/equipment/bonded-artifact.js"></script>
     <script defer src="js/equipment/equipment-sets.js"></script><!-- 第七十七波 套装有名有魂：问天/合道/开天三套毕业装——凑齐一身才算个样子 -->
     <script defer src="js/crafting/pill-poison.js"></script>
+    <script defer src="js/crafting/brewing.js"></script>
     <script defer src="js/map/high-planes.js"></script>
     <script defer src="js/cultivation/qi-deviation.js"></script>
     <script defer src="js/cultivation/enlightenment-tree.js"></script>
@@ -2382,6 +2405,7 @@
 <script defer src="js/city-facilities/street-stall.js"></script><!-- 第七十波 街边摆摊：行囊里的货卖给出行的过客——比铺子回购公道，耗时辰看天吃饭 -->
 <script defer src="js/city-facilities/city-lodging.js"></script><!-- 第七十一波 赁屋落脚：客栈是过路的地方，不是过日子的地方——按月缴租，心有所寄 -->
 <script defer src="js/city-facilities/city-jobs.js"></script><!-- 第七十二波 城里营生：铺子伙计/蒙馆代课/医馆帮手/更夫巡夜——按日领钱，做久了涨工钱 -->
+<script defer src="js/city-facilities/case-system.js"></script><!-- v27.4 断案引擎：验看问人指认三步/冷案上浮/海捕牌缉逃/讼师代讼/递状告人/堂上传票——捕快工牌开案卷权限 -->
 <script defer src="js/city-facilities/city-faces.js"></script><!-- 第七十四波 市井花名册：摆摊的过客/当差的东家/赁屋的牙人/贩货的管事，按城定死有名有姓 -->
     <script defer src="js/sects/sect-scenarios.js"></script><!-- v20.86 门派设施沉浸层：使用改走进戏，结算回原设施管道 -->
 

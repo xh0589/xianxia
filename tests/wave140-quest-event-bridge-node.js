@@ -27,7 +27,7 @@ function eq(a, b, m) { ok(a === b, m + '（实际=' + JSON.stringify(a) + ' 期�
 // ⚠️ load() 必须能吃绝对路径：[E] 段传进来的是 path.join(ROOT,'js') 拼出来的绝对路径，
 //    而这个 load() 原来无脑 path.join(ROOT, f) ⇒ 又拼一遍成
 //    "...\仙侠世界\D:\...\js\x.js" ⇒ ENOENT。**这是我今天第四次栽在同一个坑**
-//    （前面 census-story.cjs、economy 各一次，答复外包那次一次）。写在这里，别再犯第五次。
+//    （前面 census-story.cjs、economy 各一次，答复那次一次）。写在这里，别再犯第五次。
 const load = rel => {
     const p = path.isAbsolute(rel) ? rel : path.join(ROOT, rel);
     return fs.readFileSync(p, 'utf8');

@@ -1,4 +1,4 @@
-﻿// ==================== battle.js (v13.0 - 战斗技能系统版) ====================
+// ==================== battle.js (v13.0 - 战斗技能系统版) ====================
 // 基于部位耐久的战斗系统 + 生理系统（5种生物模板/伤口/意识/出血）
 // v13.0：将 v12.8/v12.9 的"亚型=固定机制包"重构为敌人战斗技能系统——
 //   人形敌人 = 身份模板（前缀/武器倾向/AI姿态/招牌技）+ 从共享池随机抽取的额外技能，
@@ -33,6 +33,15 @@ const BODY_PARTS = [
 
 // 部位索引映射（用于快速访问）
 const PART_IDS = BODY_PARTS.map(p => p.id);
+
+// v27.20 案①（TA 裁 A：人形对齐兽形四笔）：人形**敌方**四要害归零的气绝窗表——
+// 窗轮与兽形四笔一把尺（beast-part-family：碎首4/脑髓2/胸廓12/割喉3），到点才真死（_killByVital）。
+const HUMANOID_VITAL_WINDOWS = {
+    head:  { rounds: 4,  name: '碎首',     text: ' 的头骨被彻底击碎——天灵盖塌了下去' },
+    brain: { rounds: 2,  name: '脑髓震损', text: ' 的脑髓震损——眼神已经散了' },
+    chest: { rounds: 12, name: '胸廓塌陷', text: ' 的胸廓塌陷下去——呼吸只剩一丝' },
+    neck:  { rounds: 3,  name: '割喉',     text: ' 的喉管断了——血沫顺着话音往外冒' }
+};
 
 // ---------- 武器类型 → 战斗技能映射（批次B） ----------
 const WEAPON_SKILL_MAP = {
@@ -561,6 +570,11 @@ class Entity {
         this._armorDR = Math.min(0.25, Math.max(0, Number(data.armorDR) || 0)); // v21.9 重甲减伤（敌人侧伤害结算）
         this._pounceUsed = data._pounceUsed === true;       // 猛扑是否已用（仅持 pounce 技者有意义）
         this._elementType = data._elementType || null;      // 冰/火元素展示标（效果判定改查 chill/burn 技）
+        // 天生技来源标：随实体进场，界面/战斗日志按它说话（禁改设计第 2 条：机制触发失败要给原因）。
+        // 没有它，一只只吃了生理兜底的无名野兽和一只带招牌技的名种灵兽在账上长得一模一样——
+        // 「这只兽的招式是哪儿来的」就永远答不出来。
+        this._beastTemplateId = data._beastTemplateId || null;   // 灵兽账里的模板 id（无名野兽为 null）
+        this._beastInnateFrom = data._beastInnateFrom || null;   // 'template'（模板天生技+生理兜底）/ 'physiology'（只吃生理兜底）
         this._evilFaction = data._evilFaction === true;     // v20.48：邪道标（山贼/邪修/魔修等），功法「魔伤」按此出力
         this._personality = data._personality || data.personality16 || null;   // 第九十四波：具名对手的五维性格档随实体进场（见招拆招按性格反应）
         // ===== v13.0 运行时状态（原 v12.9 八个机制布尔透传已删除：_bloodDrain/_reflectPct/_soundShock/
@@ -733,6 +747,21 @@ class Entity {
             if (this._memberMods.atkFlat) attack += this._memberMods.atkFlat;
             if (this._memberMods.atkMul && this._memberMods.atkMul !== 1) attack = Math.floor(attack * this._memberMods.atkMul);
         }
+        // v27.13：兽形部位族·功能伤减档——断肢/腰筋/臀股等危急在身的兽形出手方，劲力按格降档
+        //（腰0.9/臀0.85/前肢0.85·0.8/后肢0.8·0.75，多项叠乘封底0.4；模块缺席/非兽形＝乘1不变）
+        try {
+            if (window.BeastPartFamily && window.BeastPartFamily.isBeastForm(this)) {
+                var _bfAtkMul = window.BeastPartFamily.attackMul(this);
+                if (_bfAtkMul !== 1) attack = Math.max(1, Math.floor(attack * _bfAtkMul));
+            }
+        } catch (eBFAtk) { console.warn('[静默失败] js/battle.js · getAttack：兽形功能伤减档失败——' + eBFAtk.message); }
+        // v27.19：构装/亡灵族·功能伤减档——关节锁死×0.8/悬臂坠地×0.85（构装）、臂骨碎×0.8（亡灵）
+        try {
+            if (window.ConstructUndeadFamily && (window.ConstructUndeadFamily.isConstructForm(this) || window.ConstructUndeadFamily.isUndeadForm(this))) {
+                var _cufAtkMul = window.ConstructUndeadFamily.attackMul(this);
+                if (_cufAtkMul !== 1) attack = Math.max(1, Math.floor(attack * _cufAtkMul));
+            }
+        } catch (eCUFAtk) { console.warn('[静默失败] js/battle.js · getAttack：构装/亡灵功能伤减档失败——' + eCUFAtk.message); }
         return attack;
     }
 
@@ -902,7 +931,33 @@ class Entity {
         // v9.8：默认 blunt；sharp 映射为 slash
         if (!damageType) damageType = this.damageType || 'blunt';
         if (damageType === 'sharp') damageType = 'slash';
-    
+
+        // v27.13：兽形部位族路由——兽形格 id（咽喉/脊背/…）换算到底层人形耐久槽，人形 id 反查兽形格。
+        // 模块缺席/非兽形＝原样放行（人形照旧，绝不拦战斗）；_bfPart 是这一击记入兽册的格子。
+        var _bfPart = null;
+        try {
+            if (window.BeastPartFamily && window.BeastPartFamily.isBeastForm(this)) {
+                var _bfRoute = window.BeastPartFamily.routeIncomingPart(this, partId);
+                if (_bfRoute && _bfRoute.part) partId = _bfRoute.part;
+                _bfPart = _bfRoute ? _bfRoute.beastPart : null;
+            }
+        } catch (eBFRoute) { console.warn('[静默失败] js/battle.js · takeDamage：兽形路由降级人形——' + eBFRoute.message); }
+        // v27.19：构装/亡灵族路由+弱点系数——「钝器砸壳、利刃切关节」（卷刃播报的另一半账）：
+        // 构装·躯壳钝×1.3/斩×0.7、关节斩×1.3；亡灵·骨格钝×1.2/火×1.3。生死口径照旧（判死池人形格归零即死），
+        // 本族只乘伤害与记伤册——停机窗（枢座 6 轮）走 tickRound。
+        var _cufPart = null;
+        try {
+            if (window.ConstructUndeadFamily && (window.ConstructUndeadFamily.isConstructForm(this) || window.ConstructUndeadFamily.isUndeadForm(this))) {
+                var _cufRoute = window.ConstructUndeadFamily.routeIncomingPart(this, partId);
+                if (_cufRoute && _cufRoute.part) partId = _cufRoute.part;
+                _cufPart = _cufRoute ? _cufRoute.familyPart : null;
+                var _wkMul = window.ConstructUndeadFamily.weaknessMul(this, _cufPart, damageType);
+                if (_wkMul && _wkMul !== 1) {
+                    damage = Math.max(1, Math.round(damage * _wkMul));
+                }
+            }
+        } catch (eCUFRoute) { console.warn('[静默失败] js/battle.js · takeDamage：构装/亡灵路由降级人形——' + eCUFRoute.message); }
+
         if (!this.durabilities.hasOwnProperty(partId)) {
             // 第六十七批：这条分支过去静默吞伤害（出一分力、账上零进账、屏上无事发生）。
             // 部位册现已在建账处补全，走到这里说明这一格压根不在这具身子上（旧档／表外格）——
@@ -924,15 +979,49 @@ class Entity {
         const before = this.durabilities[partId];
         this.durabilities[partId] = Math.max(0, before - damage);
         const actual = before - this.durabilities[partId];
-    
+
+        // v27.13：远/近同 data-id 一伤俱伤——四肢格主槽已扣，镜像槽只扣耐久（不二次生成伤口）
+        try {
+            if (_bfPart && actual >= 1) window.BeastPartFamily.mirrorTwin(this, _bfPart, partId, actual);
+        } catch (eBFTwin) { console.warn('[静默失败] js/battle.js · takeDamage：镜像槽扣账失败——' + eBFTwin.message); }
+
         // v4.0 修订：头/颈/胸耐久归零 = 肉体尽毁（全是空气），直接死亡
         // 用户确认：归零语义是部位被彻底摧毁，不是"可救治的危急"
         // 2026-09-24 裁决「统一致命判据」：这一条对**所有**生理类型生效，亡灵／构装／元素一律不再豁免。
         //   改前它整块排除了那三身，而 :887 的 22 格耐久照对它们写、面板照给它们打要害——实机因此出现
         //   「把火元素『山贼』的脑打到 0，它照打不误」（脑 0 而屏上还挂着 🩸），界面开的是空头票。
+        // v27.13：兽形例外改道——四笔已裁，兽形要害池归零不即死，强制该格致命危急开窗（碎首4/脑髓2/
+        //   胸廓塌陷12/割喉3），窗口到点气绝（tickRound）；人形与其它生理类型照旧即死，原语义一字未动。
         if ((partId === 'brain' || partId === 'head' || partId === 'chest' || partId === 'neck') && this.durabilities[partId] <= 0) {
-            this._killByVital(partId);
+            var _bfVitalDone = false;
+            try {
+                if (window.BeastPartFamily && window.BeastPartFamily.isBeastForm(this)) {
+                    window.BeastPartFamily.forceVitalZero(this, partId, _bfPart);
+                    _bfVitalDone = true;
+                }
+            } catch (eBFVital) { console.warn('[静默失败] js/battle.js · takeDamage：兽形要害开窗失败，回落即死——' + eBFVital.message); }
+            // v27.20 案①（TA 裁 A：对齐兽形四笔）：人形**敌方**四要害归零也不即死——开气绝窗
+            //（头·碎首 4 / 脑·脑髓震损 2 / 胸·胸廓塌陷 12 / 颈·割喉 3，窗表与兽形四笔同款一把尺），
+            // 窗口倒计时走 _endEnemyMainAction 回合边界，到点才真死（_killByVital）。
+            // 只动敌侧：玩家自己的 critical 急救窗另有整套机制（battle-injuries），不搅。
+            if (!_bfVitalDone && this.type === 'enemy' && !this._vitalWin) {
+                var _vw20 = HUMANOID_VITAL_WINDOWS[partId];
+                if (_vw20) {
+                    this._vitalWin = { part: partId, rounds: _vw20.rounds, name: _vw20.name, total: _vw20.rounds };
+                    try { if (window.gameLog && window.gameLog.add) window.gameLog.add('💀 ' + (this.name || '敌人') + _vw20.text + '（气绝窗口 ' + _vw20.rounds + ' 轮）', 'danger'); } catch (eVw20) {}
+                }
+            } else if (!_bfVitalDone) {
+                this._killByVital(partId);
+            }
         }
+        // v27.13：这一击记入兽形伤势册（按格 woundTable 掷档、只升不降；格已摧毁则顶到危急）
+        try {
+            if (_bfPart && actual >= 1) window.BeastPartFamily.recordHit(this, _bfPart, actual, damageType);
+        } catch (eBFHit) { console.warn('[静默失败] js/battle.js · takeDamage：兽形掷档入账失败——' + eBFHit.message); }
+        // v27.19：这一击记入构装/亡灵伤册（同款：按格掷档、只升不降；枢座/颅骨危急开停机窗，tickRound 消费）
+        try {
+            if (_cufPart && actual >= 1 && window.ConstructUndeadFamily) window.ConstructUndeadFamily.recordHit(this, _cufPart, actual, damageType);
+        } catch (eCUFHit) { console.warn('[静默失败] js/battle.js · takeDamage：构装/亡灵掷档入账失败——' + eCUFHit.message); }
         const total = Object.values(this.durabilities).reduce((a,b) => a + b, 0);
         if (total <= 0) { this.isAlive = false; this.deathCause = 'exhausted'; }
     
@@ -980,7 +1069,15 @@ class Entity {
         const partMod = mods[partId] || { bleed: 1.0, pain: 1.0, breath: 0.0 };
     
         // 计算严重度（基于伤害值和部位敏感性）
-        const severity = Math.min(100, damage * (partMod.bleed || 1.0));
+        // v27.11 量程对齐：严重度是 0~100 的**比例**，分母必须是**本部位自己的耐久上限**。
+        // 此前分母隐含写死 1.0（= damage 就是百分比），于是任何 ≥84 点的一击都把严重度顶到 100、
+        // 深度顶到 4（贯穿）、面积顶到 4 —— 高阶妖兽每一刀都是「重度贯穿伤」，
+        // 接着 battle.js:1063 的关键伤判定（battle-injuries.js:35 getCriticalChance，
+        // 其分母本来就是 entity.maxDurabilities[partId]）几乎次次触发 ⇒ 玩家被打一次昏迷二十几回合，
+        // 打得动也还不了手。量程放大后这一格不跟上来，就是「玩家打不死」的第四根断桩。
+        // maxDur = 100 时本式与改前逐字相同（damage × 1.0），炼气/筑基的手感一点没碰。
+        const _sevMaxDur = (this.maxDurabilities && this.maxDurabilities[partId]) || 100;
+        const severity = Math.min(100, damage * (partMod.bleed || 1.0) * 100 / _sevMaxDur);
     
         switch (physType) {
             case 'undead': {
@@ -1112,7 +1209,19 @@ class Entity {
             const fatalParts = ['brain', 'head', 'chest', 'neck'];
             for (const pid of fatalParts) {
                 if (this.durabilities[pid] !== undefined && this.durabilities[pid] <= 0) {
-                    this._killByVital(pid);   // UI-15：哪一格判的死，就地记名
+                    // v27.13：兽形复核同 takeDamage 口径——要害池归零不即死，强制该格致命危急开窗；
+                    // v27.20 案①：人形敌方复核也同 takeDamage 口径——气绝窗开着就不即死（窗到点才真死）；
+                    // 玩家与其它类型照旧 _killByVital（统一致命判据原语义不动）。
+                    var _bfCheckDone = false;
+                    try {
+                        if (window.BeastPartFamily && window.BeastPartFamily.isBeastForm(this)) {
+                            window.BeastPartFamily.forceVitalZero(this, pid, null);
+                            _bfCheckDone = true;
+                        }
+                    } catch (eBFCheck) { console.warn('[静默失败] js/battle.js · checkDeath：兽形要害开窗失败，回落即死——' + eBFCheck.message); }
+                    // v27.20 案①：人形敌方气绝窗开着就不即死（takeDamage 已开窗/窗在倒计时）；
+                    // 无窗（玩家/兽形缺席回落/窗口已被消费完）才照旧 _killByVital——两道口一把尺。
+                    if (!_bfCheckDone && !(this.type === 'enemy' && this._vitalWin)) this._killByVital(pid);   // UI-15：哪一格判的死，就地记名
                     return;
                 }
             }
@@ -1749,6 +1858,19 @@ const ENEMY_AFFIXES = {
     tianjiang:{ name: '天将', minLevel: 42, attrMul: { allAttr: 1.5 }, extraDraws: 3 },
     zhenshi:  { name: '镇世', minLevel: 56, attrMul: { allAttr: 1.6 }, extraDraws: 4 }
 };
+// ===== v26.4 头目级档位：与词缀层同一处装配、同一张表形（门槛/概率/倍率/额外抽数），不另开并行命名链 =====
+// 分账的理由：词缀给的是「狂徒/护法/堂主」这类**雅号**——谁都能挂，挂了不改变他在族里的位置；
+// 头目给的是**位次**——「这个族群里他是谁」。每族只认自己那一个位次称呼，且它要顶掉族称本身
+// （山贼头目不是「山贼·山贼头目」）。这也是主线 combat_002 / random_006 两张「点名的敌人」唯一能拼出的形状。
+const ENEMY_HEAD_TIERS = [
+    // 兽类王级：兽群里那一个。任务目标写的是「妖兽王」——野生妖兽名（赤炎狼/幽冥虎）不含「妖兽」二字，
+    // 没有这一档，combat_002 的「妖兽王」永远是空目标（与 quest-system 的「妖兽」特判同族的坑，不再踩）。
+    { key: 'beast_king',   title: '妖兽王',   sub: 'beast',  minLevel: 4, chance: 0.07, attrMul: { allAttr: 1.30 }, extraDraws: 1 },
+    // bandit 亚型的头目档：山贼/马匪本是一伙，位次只有一个称呼——江湖只认「头目」。
+    // 掷到 0.15：bandit 本身只占人形池的一小块（低阶约 1/7，高阶被夜叉/魔将等摊薄到 1/12），
+    // 概率给小了 random_006 那张「击败山贼头目」就等于重新锁死。
+    { key: 'bandit_chief', title: '山贼头目', sub: 'bandit', minLevel: 4, chance: 0.15, attrMul: { allAttr: 1.28 }, extraDraws: 1 }
+];
 const NAMED_NEMESES = [
     { key: 'heihei',  name: '黑风寨主·独眼蛟', minLv: 8,  sig: 'sword_burst', abilities: ['venom', 'lifesteal'], attrAllMul: 1.7, fameReward: 15, respawnDays: 7, manualId: 'art_gb_tongbei' },
     { key: 'xueyi',   name: '血衣堂主·厉秋霜', minLv: 9,  sig: 'venom',       abilities: ['drain_qi'],           attrAllMul: 1.75, fameReward: 18, respawnDays: 7, manualId: 'art_xsm_xuesha' },
@@ -1771,6 +1893,97 @@ window.buildNemesisEnemy = function (key, playerLevel) {
     e._nemesis = { key: n.key, fameReward: n.fameReward, manualId: n.manualId };
     return e;
 };
+    // ==================== 白泽「能说人话」：一次开口，一次答复，一次了结 ====================
+    //
+    // 落点为什么不选「战斗中对话」：battle.js 里对话位本来就有（_pendingPrompt + resolvePrompt，
+    // feign/smoke/surrender/taunt 四类已在用），新写一个 kind 不需要新系统。
+    // 但另有一条**成文规则**不能推翻：`_speaksAsHuman()`（下方）判「会开口说人话的，只有人形」，
+    // `playerTaunt` 对兽回「野兽听不懂人话」，`_tryEnemySurrender` 判「兽不会跪」。
+    // ⇒ 所以白泽是那条规则**唯一一条有名有姓的例外**：只在开场开一次口，答完就了结，
+    //   战斗中段的喊话/求饶它一概不参与（那两处仍走 _speaksAsHuman）。
+    //   无例外的规则是武断；点名的例外才是世道——它的名字就叫「能说人话」。
+    //
+    // 代价为什么是「放它走」：葛洪《抱朴子》「有白泽者，穷神奸，记万物之情」——
+    // **它本身就是那本账**。活着的时候肯让你问，身死之后只剩两件器物材料
+    // （知微角→龙晶「辨器物真伪」、通物之舌→龙骨「契约与镇物的底料」）。
+    // 它说得出万物之情这件事不可复制，角和骨只是它说过话的物证。
+    // ⇒ 价码只能是「我这一张嘴只开一次，且开完你得放我走」。
+    //   放它走 → 情报到手，代价真扣（_fled ⇒ noSpoils，app.js 按此跳过经验/部位件/收服）；
+    //   杀了它 → 材料到手，情报永久关闭，且它记恨（复用既有 _foeRage 账，不新增任何倍率）。
+    //   **二选一，不可兼得。** 这就是「那玩家就该犹豫要不要杀」。
+    //
+    // ★ 白泽现身的两条正门（都不经过掷名池，所以「极少出没」是真的）：
+    //   ① 点名 attackWildBeast('beast_baize')；② 生态分布 populateBeasts → buildWildBeastData。
+
+    var BAIZE_NAME = '白泽';
+    var BAIZE_TEMPLATE_ID = 'baize';      // window.BEAST_TEMPLATES 的模板 id
+    var BAIZE_ECO_ID = 'beast_baize';    // 生态分布表的 id
+    // 认白泽按 id，不从展示名反推（与 _speaksAsHuman 同一条纪律）；
+    // 名字只在实体身上一个 id 都没有时兜底（无 id 的老数据）。
+    function isBaizeEntity(e) {
+        if (!e) return false;
+        var tid = e._beastTemplateId || null;
+        if (tid) return (tid === BAIZE_TEMPLATE_ID || tid === BAIZE_ECO_ID);
+        var eco = e._ecoBeastId || null;
+        if (eco) return (eco === BAIZE_ECO_ID || eco === BAIZE_TEMPLATE_ID);
+        return String(e.name || '') === BAIZE_NAME;
+    }
+    // 白泽说的三条：弱点/来路/身上值钱的料——全部现读生态账（beastIntel / partRows / mechSpec），
+    // 一句不是编的。账不在册就少印一条，不拿假行占版面（与 partRows 自己的纪律一致）。
+    function baizeIntelOf(enemy) {
+        var eco = null;
+        try { eco = window.BeastEcosystem || null; } catch (eEco) {}
+        if (!eco) return null;
+        var id = (enemy && (enemy._ecoBeastId || enemy._beastTemplateId)) || BAIZE_ECO_ID;
+        var intel = null;
+        try { if (typeof eco.beastIntel === 'function') intel = eco.beastIntel(id); } catch (eI) {}
+        var rows = [];
+        try { if (typeof eco.partRows === 'function') rows = eco.partRows(id) || []; } catch (eR) {}
+        if (!rows.length) {
+            // 炼器账不在册时 partRows 回空（它自己就是这么处理的）：退回部位件原样，别因此少说一件
+            try {
+                if (typeof eco.partsOf === 'function') (eco.partsOf(id) || []).forEach(function (r) {
+                    rows.push({ part: r.part, why: r.why, matId: r.matId, name: '', grade: null, points: null, pools: [] });
+                });
+            } catch (eP) {}
+        }
+        // weaknessOf 把「要它的知微角就得打死它」也塞在弱点里（那一条是部位账，不是弱点），
+        // 下面单独印部位，这一段剔掉，免得同一句话说两遍。
+        var weak = String((intel && intel.weakness) || '');
+        var segs = weak ? weak.split('；') : [];
+        var weakOnly = segs.filter(function (s) { return s && s.indexOf('要它的') !== 0; });
+        return {
+            origin: String((intel && intel.origin) || ''),
+            weakness: weakOnly.join('；'),
+            parts: rows,
+            matName: function (r) {
+                var n = String(r.name || '');
+                if (n && n.indexOf('mat_') !== 0) return n;      // 拿到的就是真名（如「龙晶」）
+                try {                                     // 炼器账不在册时现读物品账；仍读不到就不硬编一个名
+                    var lib = window.itemById || {};
+                    var it = lib[r.matId];
+                    if (it && it.name) return it.name;
+                } catch (eM) {}
+                return '';
+            }
+        };
+    }
+    // 炉料那一行印什么：品阶 + 炉料点 + 归哪两池。缺哪项就不印哪项，不拿 0 冒充。
+    var BAIZE_GRADE_WORD = { 1: '一阶', 2: '二阶', 3: '三阶', 4: '四阶', 5: '五阶', 6: '六阶', 7: '七阶', 8: '八阶' };
+    function baizePartLine(r, intel) {
+        var s = r.part || '';
+        var mn = intel.matName(r);
+        if (mn) s += ' → ' + mn;
+        var tail = [];
+        if (r.grade != null && r.grade !== '') tail.push(BAIZE_GRADE_WORD[Number(r.grade)] || (r.grade + ' 阶'));
+        if (r.points != null && r.points !== '') tail.push('炉料 ' + r.points + ' 点');
+        if (Array.isArray(r.pools) && r.pools.length) tail.push('归 ' + r.pools.join('/') + ' 两池');
+        if (tail.length) s += '（' + tail.join('·') + '）';
+        if (r.why) s += '：' + r.why;
+        return s;
+    }
+
+
 function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
     // ===== v13.0 人形战斗技能抽取：同一种类两个敌人实战表现可以不同 =====
     // 起始=招牌技（sub.sig）；共享池按等级门槛加权去重抽取；蛊师招牌额外自带 venom。
@@ -1825,6 +2038,186 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
         return owned;
     }
 
+    // ===== 非人形（beast/undead/construct/elemental）天生技：模板账 ∪ 生理类型兜底 =====
+    //
+    // 病灶（实测确认，见 .scratch/beast-ability-wire-progress/10-实施记录.md）：
+    // 这一段此前是四句硬编码，其中 beast 那支写作 `combatAbilities = ['pounce']`。
+    // 灵兽账（js/beast-taming.js · window.BEAST_TEMPLATES）里 48 只兽**每一只都写了 innate**
+    // （44 只非空、4 只空数组，无一只缺字段），野生遭遇里能掷出 32 种 innate 组合——
+    // 可那 48 只兽从「出城猎妖/矿穴惊兽/赶路遇险/地标/兽群/兽潮/秘境」这些正门进场时，
+    // 天生技一律被这一句盖成 ['pounce']，模板账那一整本在战斗里等于没写。
+    //
+    // 为什么是**合并**而不是「改这一行 / 删这一行」：
+    //   · 删掉 pounce 会打崩另一头——tests/regression-node.js:185 逐条断言
+    //     「generateRandomEnemy 出来的兽必须带 pounce」，且战斗里猛扑（battle.js:5047）
+    //     是野兽唯一的开局重手；无名野兽没有模板，它的猛扑只能来自生理类型兜底。
+    //   · 只留模板不兜底也不对——无名野兽（`赤狼兽` 这类掷出来的名字）在灵兽账里查无此兽，
+    //     查不到就该吃兜底，而不是空手。
+    //   · undead→venom / construct→hardened / elemental→chill|burn 这三条**一字不改**：
+    //     它们是生理构造上的必然（尸毒、构装体硬、元素体冰火），不是「某个身份模板的招牌技」，
+    //     与灵兽账那张表无关（表里只有兽）。
+    // 合并口只有一个，两头都从这里过：模板那份排前面（招牌技先印），兜底那份接在后面。
+
+    // 生理类型兜底：这一档生理构造上「一定具备」的东西。回空数组＝该档没有构造级必然。
+    function physiologyFallbackAbilities(phys, elemType) {
+        if (phys === 'beast') return ['pounce'];                                    // 四足兽的扑击
+        if (phys === 'undead') return ['venom'];                                    // 尸毒（显示名按生理类型取「尸毒」）
+        if (phys === 'construct') return ['hardened'];                              // 构装体硬
+        if (phys === 'elemental') return [elemType === 'ice' ? 'chill' : 'burn'];   // 按既有冰/火元素判定
+        return [];
+    }
+
+    // 去重合并（保持先后次序；第一份在前）
+    function mergeAbilityList(first, second) {
+        var out = [];
+        var add = function (list) {
+            if (!Array.isArray(list)) return;
+            for (var i = 0; i < list.length; i++) {
+                var id = list[i];
+                if (typeof id !== 'string' || !id) continue;
+                if (out.indexOf(id) < 0) out.push(id);
+            }
+        };
+        add(first); add(second);
+        return out;
+    }
+
+    // 灵兽账回查：按模板 id 或按展示名精确匹配。查不到就如实回 null（不猜、不拿相似名顶）。
+    // 第三路：生态分布表的 id（beast_xxx，与灵兽账的模板 id 不是同一套命名，如 beast_lingfox ↔ spirit_fox），
+    // 经分布条目换出展示名再回灵兽账——野外遭遇与兽潮报的就是这一套 id。
+    function lookupBeastTemplate(key) {
+        if (!key) return null;
+        var lib = window.BEAST_TEMPLATES || null;
+        if (!lib) return null;
+        function byTplName(nm) {
+            var k = Object.keys(lib);
+            for (var i = 0; i < k.length; i++) {
+                if (lib[k[i]] && lib[k[i]].name === nm) {
+                    return { id: k[i], name: lib[k[i]].name, innate: lib[k[i]].innate, level: lib[k[i]].level };
+                }
+            }
+            return null;
+        }
+        if (lib[key] && Array.isArray(lib[key].innate)) return { id: key, name: lib[key].name, innate: lib[key].innate, level: lib[key].level };
+        var direct = byTplName(key);
+        if (direct) return direct;
+        try {
+            var eco = window.BeastEcosystem;
+            var dist = eco && Array.isArray(eco.BEAST_DISTRIBUTION) ? eco.BEAST_DISTRIBUTION : null;
+            if (dist) {
+                for (var di = 0; di < dist.length; di++) {
+                    if (dist[di] && dist[di].id === key) return byTplName(dist[di].name);
+                }
+            }
+        } catch (eEco) {}
+        return null;
+    }
+
+    // 名种替身：无名野兽的名字是掷出来的（generateBeastName / 前缀+后缀表），
+    // 灵兽账里查无此兽，于是天生技只剩生理兜底那一条。
+    // 候选池是**生态分布表**（window.BeastEcosystem.BEAST_DISTRIBUTION）而不是整本灵兽账：
+    // 分布表才是「野外真出没」那一份，进化形态（风狼王/炎虎王/成年火凤）与坐骑（凡马/骡/骏马）
+    // 本就不在其中——按 D4 的判据，野外遇不到它们是设计。生态表不在册时退回整本灵兽账（单测只喂 battle.js 的场合）。
+    // 按等级带回一只真兽，把它的**名字与天生技一起**带进场——两者必须同时换：
+    // 只换技不换名就成了「野狼使着曼陀罗的蛊」，那叫编，不叫接通。
+    // 不换的场合（各有各的理由，如实列在这里）：
+    //   · 头目级/名册档自带名号（妖兽王·…）——名号比物种具体，不能被盖；
+    //   · elite/boss 档——档位修饰与物种名是两套并行的身份，混起来读不懂；
+    //   · 调用方点名了模板（spawnOpts.beastTemplate/beastId/beastName）——那以点名为准；
+    //   · 等级带内查不到兽——保持改前的掷名行为，一个字不变。
+    function pickLevelBandBeastTemplate(lvl) {
+        var lib = window.BEAST_TEMPLATES || null;
+        if (!lib) return null;
+var lo = lvl - 1, hi = lvl + 5;
+        var band = [];
+        // 「极少出没」那一档不进普通等级带的掷名池。★判据是兽**自己那份来历账**里有没有这句话★
+        // （window.BeastEcosystem.mechSpec(id).origin），不是这里写死的兽名，也不是 type 档
+        // ——写死的名单下一次改表就成了一句谎话，而按 type 砍会顺手改掉十几只别的兽（见下）。
+        //
+        // ★ 为什么非剔不可（实测，不是洁癖）：这一支**完全不看地貌**，只按等级带回一只真兽顶名。
+        //   实测 lv62 的带 [61,67] 全表只有两只（吞海蜃、白泽）⇒ 任何地方的一只无名 lv62 妖兽，
+        //   **有近五成概率被套上「白泽」这个名字和白泽的天生技**（illusion+soundwave）。北冥冰原也撞得出。
+        //   这比 2195 行附近自己写下的「名字错了，这一仗在玩家眼里就是另一只兽」更重一层：
+        //   那一条是取错名，这里是**凭空造名**——一只灰毛妖兽顶着白泽，使的还是白泽的幻形与声波，
+        //   而收服桥按展示名精确匹配、后期炼器料按 beastName 取档，都会照着这个假名当真账走。
+        //
+        // ★ 为什么按「极少出没」这句判，而不是按 type==='mythical'：
+        //   实测全表 type='mythical' 的有 **13 只**（雷鹰/龙龟/火凤/成年火凤/青鳞蛟/赤螭/吞海蜃/蛟龙/
+        //   云龙/应龙/九尾狐/烛龙/白泽）。按 type 砍会把那 12 只一并从普通掷名池里剔掉——
+        //   那是**本批没被要求的改动**（白泽之外每一只的遭遇率都是别人的账），不能顺手做。
+        //   而现读兽自己的来历账，全表 60 只里**只有白泽一条写着「极少出没」**（实测）。
+        //   ⇒ 判据与题意逐字对齐，且只动一只。
+        function neverSighted(id) {
+            try {
+                var eco = window.BeastEcosystem;
+                var spec = (eco && typeof eco.mechSpec === 'function') ? eco.mechSpec(id) : null;
+                return !!(spec && typeof spec.origin === 'string' && spec.origin.indexOf('极少出没') >= 0);
+            } catch (eRare) { return false; }
+        }
+        function consider(tpl) {
+            if (!tpl || !Array.isArray(tpl.innate)) return;
+            var tl = Number(tpl.level) || 0;
+            if (tl >= lo && tl <= hi) band.push({ id: tpl.id, name: tpl.name, innate: tpl.innate, level: tl, type: tpl.type || null });
+        }
+        function consider(tpl) {
+            if (!tpl || !Array.isArray(tpl.innate)) return;
+            var tl = Number(tpl.level) || 0;
+            if (tl >= lo && tl <= hi) band.push({ id: tpl.id, name: tpl.name, innate: tpl.innate, level: tl, type: tpl.type || null });
+        }
+        var dist = null;
+        try {
+            var eco = window.BeastEcosystem;
+            dist = (eco && Array.isArray(eco.BEAST_DISTRIBUTION)) ? eco.BEAST_DISTRIBUTION : null;
+        } catch (eEco) { dist = null; }
+        if (dist) {
+            for (var di = 0; di < dist.length; di++) {
+                if (!dist[di]) continue;
+                var t = lookupBeastTemplate(dist[di].id);
+                if (t) consider({ id: t.id, name: t.name, innate: t.innate, level: (Number(dist[di].level) || t.level || 0), type: (lib[t.id] && lib[t.id].type) || null });
+            }
+        } else {
+            var keys = Object.keys(lib);
+            for (var ki = 0; ki < keys.length; ki++) {
+                consider({ id: keys[ki], name: lib[keys[ki]].name, innate: lib[keys[ki]].innate, level: lib[keys[ki]].level, type: lib[keys[ki]].type });
+            }
+        }
+        if (!band.length) return null;
+        band = band.filter(function (b) { return !neverSighted(b.id); });
+        if (!band.length) return null;   // 这一档整条带都是「极少出没」的兽：掷不掷得出都不该在普通野地里遇见
+        return band[Math.floor(Math.random() * band.length)];
+    }
+
+    // v26.4 两支「位次」掷骰。头目级与词缀分账：词缀是雅号（狂徒/护法/堂主，谁都能挂），
+    // 位次是「这个族群里他是谁」——每族只认自己那一个称呼，所以不能塞进 ENEMY_AFFIXES。
+    function rollHeadTier(sub) {
+        if (!sub || (spawnOpts && spawnOpts.noRankTier)) return null;
+        for (var hi = 0; hi < ENEMY_HEAD_TIERS.length; hi++) {
+            var h = ENEMY_HEAD_TIERS[hi];
+            if (h.sub !== sub || level < h.minLevel) continue;
+            if (Math.random() < h.chance) return h;
+        }
+        return null;
+    }
+    // 势力名册档（魔教护法/长老/始祖）：门槛是**境界**不是等级——筑基期的道上不该撞见魔教长老。
+    // 名册与门槛由 js/factions/factions.js 的 FACTION_RANKS 一处说了算（全仓只那一本）。
+    // 境界尺 window.realmAtLeast（global-utils 的 REALM_ORDER）没装时此处自己再挡一道：
+    // 那把尺对「认不出的门槛名」是放行的，缺了它等于把长老的门槛整个拆掉。
+    function rollFactionRank(sub) {
+        var roster = (typeof window !== 'undefined' && window.FACTION_RANKS) ? window.FACTION_RANKS : null;
+        if (!roster || !sub || (spawnOpts && spawnOpts.noRankTier)) return null;
+        var cd = (typeof window !== 'undefined') ? window.currentCharData : null;
+        var realm = cd ? cd.realm : null;
+        if (!realm) return null;
+        var meter = (typeof window !== 'undefined' && typeof window.realmAtLeast === 'function') ? window.realmAtLeast : null;
+        for (var fi = 0; fi < roster.length; fi++) {
+            var r = roster[fi];
+            if (r.sub !== sub) continue;
+            if (r.minRealm && (!meter || !meter(realm, r.minRealm))) continue;
+            if (Math.random() < r.chance) return r;
+        }
+        return null;
+    }
+
     // v12.8 保存原始类型（elite/boss 修饰需在别名折叠前记录）
     const rawType = type;
     // v7.1 类型别名
@@ -1847,6 +2240,8 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
     let allAttrMul = null;       // 叛门弟子六维×1.05
     let swordSkillMul = null;    // 剑修剑法技能×1.4
     let pickedSubRow = null;     // 命中的人形亚型表行（供末尾机制打标读取）
+    let headTierDef = null;      // v26.4 头目级档位（族群里的位次：妖兽王/山贼头目）
+    let factionRankDef = null;   // v26.4 势力名册档位（魔教护法/长老/始祖，门槛见 factions.js）
 
     if (type === 'beast') {
         // 野兽
@@ -1859,6 +2254,9 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
         }
         physiologyType = 'beast';
         subtype = 'beast';
+        // v26.4 兽类王级：头目级档位（兽族的那一个王）。nameGenerator 走不通的兜底分支也同样吃这一档。
+        headTierDef = rollHeadTier('beast');
+        if (headTierDef) name = headTierDef.title + '·' + name;
     } else {
         // 人类敌人或特殊怪物
         if (window.nameGenerator && typeof window.nameGenerator.generateName === 'function') {
@@ -1905,7 +2303,19 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
                 { key: 'demon_general', prefixes: ['魔将', '妖帅'],      behavior: 'balanced',    damage: 'slash',  weight: 0.5,  minLevel: 18, evil: true, allAttrMul: 1.08, sig: 'sword_burst' },
                 { key: 'incense_official', prefixes: ['执香吏', '采风使'], behavior: 'defensive', damage: 'pierce', weight: 0.45, minLevel: 25, sig: 'drain_qi' },
                 { key: 'reaper',   prefixes: ['收稼人', '执镰使者'],     behavior: 'aggressive',  damage: 'slash',  weight: 0.4,  minLevel: 35, evil: true, allAttrMul: 1.1, sig: 'lifesteal' },
-                { key: 'ancient_god', prefixes: ['古神残躯', '荒古遗族'], behavior: 'defensive', damage: 'blunt',  weight: 0.35, minLevel: 45, conMul: 1.2, sig: 'reflect' },
+{ key: 'ancient_god', prefixes: ['古神残躯', '荒古遗族'], behavior: 'defensive', damage: 'blunt', weight: 0.35, minLevel: 45, conMul: 1.2, sig: 'reflect' },
+                // ===== v26.4 两个主线点名的族称：此前全工程拼不出「宗门弟子」「魔教弟子」这两串 =====
+                // 宗门弟子：语义上就该挂在 sword/renegade 这一片（同门相争），但**另立一行**——
+                // renegade 是叛出师门者，还得多一道「玩家在门里」才进池；宗门弟子是仍认山门、
+                // 只是与旁派争地盘的同门。两拨人门槛不同、立场相反，塞进 renegade 的 prefixes
+                // 会把两拨人并成一张脸（这正是「妖兽/妖兽王」当年同族割裂的病根，别再犯）。
+                // 权重 1.4：main_023 要 10 个，权重太低就等于把这条线重新锁死。
+                { key: 'sect_disciple', prefixes: ['宗门弟子'], behavior: 'balanced',    damage: 'slash', weight: 1.4, minLevel: 14, evil: true, allAttrMul: 1.05, sig: 'sword_burst' },
+                // 魔教弟子：挂 cultist 这一片——魔教本就是邪修里成了建制的那一支。
+                // 同样另立一行：混进 cultist.prefixes 会稀释 random_018「驱逐邪修」那类目标的分母，
+                // 而且护法/长老/始祖三档要从弟子里往上长（factions.js FACTION_RANKS 按 sub 认这一行）。
+                // 权重 2.6：main_025 要 30 个弟子——这是全章最长的一条账，权重给小了它就永远走不到头。
+                { key: 'demon_disciple', prefixes: ['魔教弟子'], behavior: 'aggressive', damage: 'slash', weight: 2.6, minLevel: 15, evil: true, sig: 'venom' },
             ];
             let totalWeight = 0;
             HUMANOID_SUBTYPES.forEach(function (s) { totalWeight += _humanoidSubWeight(s, level); });
@@ -1920,7 +2330,12 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
             }
             if (!pickedSub) pickedSub = HUMANOID_SUBTYPES[0]; // 极端兜底（基础六行恒有权重，理论不可达）
             const subPrefix = pickedSub.prefixes[Math.floor(Math.random() * pickedSub.prefixes.length)];
-            name = subPrefix + '·' + name;
+            // v26.4 位次名**顶掉**族称：山贼头目不是「山贼·山贼头目」，魔教长老也不是「魔教弟子·魔教长老」。
+            // 名册档优先于头目档——魔教这一族的头目就是位次本身，两档同时中时位次更具体。
+            factionRankDef = rollFactionRank(pickedSub.key);
+            headTierDef = rollHeadTier(pickedSub.key);
+            const rankPrefix = (factionRankDef && factionRankDef.title) || (headTierDef && headTierDef.title) || subPrefix;
+            name = rankPrefix + '·' + name;
             subtype = pickedSub.key;
             // v12.9 叛门弟子：aggressive/balanced 各半
             behaviorOverride = pickedSub.behavior;
@@ -1976,18 +2391,45 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
         }
     }
 
-    // ===== v13.0 战斗技能组装：人形走共享池抽取；种系天生技不进人形池 =====
+    // ===== 战斗技能组装：人形走共享池抽取；非人形走「模板天生技 ∪ 生理类型兜底」=====
     let combatAbilities = [];
+    // 天生技的两头：① 灵兽账里那只兽自己写的 innate（权威，排在前面）；
+    //               ② 生理类型兜底（这一档构造上一定具备的东西，见 physiologyFallbackAbilities 上方那段账）。
+    // 两头都接同一个合并口，模板账不在册时只剩兜底——与改前逐字节一致。
+    let beastTemplateDef = null;
+    if (physiologyType === 'beast') {
+        // 调用方点名了兽就照单全收（点名的优先级高于掷名：点名的东西不许被覆盖）
+        var _pinned = spawnOpts && (spawnOpts.beastTemplate || spawnOpts.beastId || spawnOpts.beastName);
+        if (_pinned) {
+            beastTemplateDef = lookupBeastTemplate(_pinned);
+            // ★ 点名的兽，**名字也照单全收**（这一行此前漏了，是 beastId 那一跳的半个尾巴）。
+            //   实测（真机 Chrome，日志留证）：改前 `attackWildBeast('beast_fuzhu')` 打出来的敌人是
+            //   「👁️ **毒熊** 气息驳杂，似怀绝技：寒冰真气、遁术、猛扑」——顶着夫诸的招牌技，
+            //   名字却还是掷出来的那只无名妖兽。上面那句注释写的就是「点名的东西不许被覆盖」，
+            //   而这一支只换了天生技与 _beastTemplateId，把 name 漏在了 2190 行那个 else 分支里。
+            //   为什么这一行非要不可（不是洁癖）：
+            //     ① 日志、战报、濒死台词全都按 `this.enemy.name` 取（:5397 那批话术池），
+            //        名字错了，这一仗在玩家眼里就是另一只兽；
+            //     ② 收服桥 `getBeastTemplateIdFromEnemy` 是按**展示名精确匹配**的
+            //        （wave85-beast-logic-node.js C1~C6 逐条钉住），名字不换就收不回这只兽；
+            //     ③ 后期炼器料的取档认 `beastName`（forging-compound.js lateMaterialTier 那一段），
+            //        名字错 → 认错档 → 图鉴承诺的料与实际给的对不上（正是本批要修的那件事）。
+            if (beastTemplateDef) name = beastTemplateDef.name;
+        } else if (!headTierDef && rawType !== 'elite' && rawType !== 'boss') {
+            // 没点名：按等级带回一只真兽，把名字与天生技一起换（理由见 pickLevelBandBeastTemplate 上方）
+            beastTemplateDef = pickLevelBandBeastTemplate(level);
+            if (beastTemplateDef) name = beastTemplateDef.name;
+        }
+    }
+    var innateAbilities = [];
+    if (spawnOpts && Array.isArray(spawnOpts.innateAbilities)) innateAbilities = spawnOpts.innateAbilities;
+    else if (beastTemplateDef && Array.isArray(beastTemplateDef.innate)) innateAbilities = beastTemplateDef.innate;
     if (physiologyType === 'humanoid') {
-        combatAbilities = rollHumanoidAbilities(pickedSubRow, level, affixDef ? affixDef.extraDraws : 0);
-    } else if (physiologyType === 'beast') {
-        combatAbilities = ['pounce'];
-    } else if (physiologyType === 'undead') {
-        combatAbilities = ['venom']; // 尸毒复用 venom，显示名按生理类型取「尸毒」
-    } else if (physiologyType === 'construct') {
-        combatAbilities = ['hardened'];
-    } else if (physiologyType === 'elemental') {
-        combatAbilities = [elementType === 'ice' ? 'chill' : 'burn']; // 按既有冰/火元素判定
+        // v26.4 位次档也吃额外抽数（护法/长老/始祖的招式比同门多）
+        var rankDraws = (headTierDef ? (headTierDef.extraDraws || 0) : 0) + (factionRankDef ? (factionRankDef.extraDraws || 0) : 0);
+        combatAbilities = rollHumanoidAbilities(pickedSubRow, level, (affixDef ? affixDef.extraDraws : 0) + rankDraws);
+    } else {
+        combatAbilities = mergeAbilityList(innateAbilities, physiologyFallbackAbilities(physiologyType, elementType));
     }
     // v12.8 魔头自带1层硬化：同步补硬化天生技，保证「充能仅与 hardened 技共存」
     if (rawType === 'boss' && combatAbilities.indexOf('hardened') < 0) combatAbilities.push('hardened');
@@ -2040,6 +2482,18 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
         }
         name = affixDef.name + '·' + name;
         affixApplied = affixKey;
+    }
+    // v26.4 位次档属性倍率（位次越高越硬，与词缀层同一处结算；妖兽王只有野兽那套天生技，故只走倍率）
+    var rankDef = factionRankDef || headTierDef;
+    if (rankDef) {
+        for (var rkK in (rankDef.attrMul || {})) {
+            var rkV = rankDef.attrMul[rkK];
+            if (rkK === 'allAttr') {
+                for (var rkA in attrs) attrs[rkA] = Math.max(1, Math.floor(attrs[rkA] * rkV));
+            } else if (attrs[rkK] != null) {
+                attrs[rkK] = Math.max(1, Math.floor(attrs[rkK] * rkV));
+            }
+        }
     }
     name = titlePrefix + name;
 
@@ -2127,7 +2581,9 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
                 physiologyType: physiologyType,
                 faction: faction,
                 combatAbilities: combatAbilities, // v13.1 绝技透传：持有可学绝技的敌人按概率携带对应秘籍
-                _leyElite: (spawnOpts && spawnOpts.leyTier) || 0 // v20.95 灵脉灵蕴透传：魔头才有毕业装
+                _leyElite: (spawnOpts && spawnOpts.leyTier) || 0, // v20.95 灵脉灵蕴透传：魔头才有毕业装
+                // v27.13 解剖熟练度：把兽种模板 id 递进生成账——同种解剖多了，生成那一骰成色更足（账在 loot-system）
+                beastTemplateId: (beastTemplateDef && beastTemplateDef.id) || null
             });
         } catch (e) {
             console.warn('generateEnemyInventory error', e);
@@ -2161,14 +2617,190 @@ function generateRandomEnemy(level = 1, type = 'enemy', spawnOpts) {
     // ===== 运行时状态打标（v13.0：仅运行时计数/标记透传；原八个机制布尔打标已删除，开关由 combatAbilities 承载）=====
     if (hardenedCharges > 0) enemyData._hardenedCharges = hardenedCharges; // 仅 construct(天生硬化)/boss 赋充能
     if (physiologyType === 'beast') enemyData._pounceUsed = false;         // 仅野兽（天生持 pounce）打「未扑」标
+    // 天生技来源留痕：这只兽的招牌技是灵兽账那份 innate，还是只吃了生理类型兜底。
+    // 界面/日志按它说话（禁改设计第 2 条：机制触发失败要给原因，不许沉默地少一招）。
+    if (beastTemplateDef) {
+        enemyData._beastTemplateId = beastTemplateDef.id;
+        enemyData._beastInnateFrom = 'template';   // 模板天生技 + 生理类型兜底（合并）
+    } else if (physiologyType !== 'humanoid') {
+        enemyData._beastInnateFrom = 'physiology'; // 查不到模板（无名野兽/非人形掷出的档）：只吃生理类型兜底
+    }
     if (elementType && (combatAbilities.indexOf('chill') >= 0 || combatAbilities.indexOf('burn') >= 0)) {
         enemyData._elementType = elementType; // 元素属性标仅随 chill/burn 技存在
     }
     if (pickedSubRow && pickedSubRow.renegade) enemyData._renegadeTauntPending = true;
     if (evilFaction) enemyData._evilFaction = true; // v20.48：邪道标透传（功法「魔伤」按此出力）
+    // v26.4 位次标：头目/名册自带名号。通道默认名（山贼/地宫守卫…）与地皮闲名（樵夫/海寇…）
+    // 不得盖掉它——盖掉就等于那一骰白掷了，而且任务认的就是这个名号。
+    if (rankDef) enemyData._rankName = rankDef.title;
     return enemyData;
 }
 
+// ==================== v26.5 炼器 proc 接战斗：器上的术，仗上真发生 ====================
+// 上一批把 FORGE_PROCS 七条登记在册，battle.js 对它零引用——炼出「涅槃」「群攻」「反震」，战斗里一点不发生。
+// 本节把七条接到**三个既有收口**上（Battle.prototype._forgeProcs 的注释里写明为什么是这三个），
+// 主伤害公式 `_calculateDamage` 一个字不动：proc 是增量，没触发时结算逐字与改造前一致。
+//
+// ⚠️ 加载顺序：仙侠.html 里 battle.js(:1995) 在 crafting/forging-compound.js(:2067) **之前**，
+//    所以本节不在模块加载期碰 window.ForgingCompound——接线改成惰性（第一次读手上的术时补登记），
+//    否则 battle.js 先跑会把 registerForgeProc 记成永久未接（wired 永远 false）。
+
+// 七条术的固定出场次序（读表用，不掷骰）
+const FORGE_PROC_ORDER = ['reflect', 'stun', 'rebirth', 'curse', 'aoe', 'wild', 'roar'];
+// 每个阶段谁先谁后。分阶段是因为次序本身有讲究：涅槃必须排在最后——
+// 打死人的那一刀同样算数，诅咒与群攻要在它之前把这一击的账结清。
+const FORGE_PROC_PHASE_ORDER = {
+    aftermath: ['reflect', 'curse', 'aoe', 'stun', 'rebirth'],   // 受击/命中之后
+    act: ['stun'],                                               // 出手之前
+    round: ['wild', 'roar']                                      // 回合边界
+};
+// 三档数值（凡品 1 点 / 灵品 2 点 / 仙品 3 点）：一律 base + step×(档−1)，查表，不掷骰。
+// ★ 全部是**设计值**，未做实测平衡；依据写在 basis 里，改数值前先看依据。
+const FORGE_PROC_TUNING = {
+    reflect: {
+        base: 15, step: 5, tierName: ['凡品', '灵品', '仙品'],
+        basis: 'v13.0 铁体功反震 REFLECT_PCT=20 当 2 点档的标尺——凡品比绝技弱一档、仙品强一档，' +
+               '不与既有反震重复造尺。回震额 = floor(实际伤害 × 百分比)，钝伤、走敌人胸口。',
+        brief: '被打时把实际伤害的一部分回敬给打你的人'
+    },
+    stun: {
+        base: 3, step: 0, every: 3, tierName: ['凡品', '灵品', '仙品'],
+        basis: '「一息不解」＝吃掉一次出手，不做命中率判定（确定性）。节奏 3 下 1 记是**三的整数倍**——' +
+               '玩家数得出来；闪避/格挡不算「着」，攒不满就不触发。',
+        brief: '每挨三下实打实的着，下一位出手的敌人这一动落空'
+    },
+    rebirth: {
+        base: 30, step: 0, tierName: ['凡品', '灵品', '仙品'],
+        basis: '气血量程随境界放大（实测渡劫境 maxBloodVolume=30000），所以「三成」按**本场量程**折算，不写死点数。' +
+               '一场一次，触发即销。排在 aftermath 最末——致死那一刀同样先把账结清，复活符（既有机制）才轮得上。',
+        brief: '致死那一刀之前留命一次，气血回到三成，一场只一次'
+    },
+    curse: {
+        base: 3, step: 0, maxStacks: 3, hitPerStack: 8, tierName: ['凡品', '灵品', '仙品'],
+        basis: '落在**命中**这一段而不是伤害段：削伤害必须改 _calculateDamage，本批不改主公式。' +
+               '每层 −8 命中（8~24），上限 3 层，受击方身上逐层叠加，换人（新实体）即从零起算。',
+        brief: '你打中的对手身上逐层咒上，每层命中 −8（最多 3 层）'
+    },
+    aoe: {
+        base: 20, step: 10, tierName: ['凡品', '灵品', '仙品'],
+        basis: '溅射额 = floor(本次实际伤害 × 百分比)，只打已在场的其余敌人，直击胸口走 takeDamage（不经 _executeAttack，' +
+               '天然不连锁、不再触发第二层溅射）。场上只有一个敌人时**不触发**——这就是它明面上的规避面。',
+        brief: '你打中一个，溅射打在场上的其余敌人（单挑不触发）'
+    },
+    wild: {
+        base: 2, step: 0, healPctPerBand: 0.03, hitPerBand: 6, painRelief: 4, tierName: ['凡品', '灵品', '仙品'],
+        basis: '阶位按**气血比例**查表：≤40% 第 1 阶、≤20% 第 2 阶（确定性，无骰；比例口径复用 _bloodLedgerPct）。' +
+               '⚠️ 量程随境界放大（实测渡劫境 maxBloodVolume=30000），所以回血按本场量程的 3% 折算，不写死点数。' +
+               '每回合结算回血 healPctPerBand×阶、疼痛 −painRelief，并把 hitPerBand×阶 的命中加成挂到出手方身上。' +
+               '回血是每回合定额，敌人的爆发伤害压得过它——不是不死身。',
+        brief: '气血越低越凶：≤四成回血+命中，≤两成翻一阶'
+    },
+    roar: {
+        base: 40, step: 20, thresholds: [0.70, 0.45, 0.25], tierName: ['凡品', '灵品', '仙品'],
+        basis: '三道战局节点：主敌全身耐久跌破 70% / 45% / 25% 各响一声，每声扣敌方全体行动条。' +
+               '阈值单调下降，故每声每场只响一次；一回合只结算一声（一次重击跨过两道线也只响一声）。' +
+               '敌方速率 ≥ 扣减量时下一回合就补回来了——快攻流几乎免疫。',
+        brief: '主敌耐久跌破七成/四成五/两成五各响一声，敌方全体行动条倒退'
+    }
+};
+
+// 炼器模块的接线口（加载顺序在 battle.js 之后，故一律惰性取）
+function _forgeProcApi() {
+    try {
+        var w = (typeof window !== 'undefined') ? window : null;
+        var fc = w ? w.ForgingCompound : null;
+        return (fc && typeof fc.getForgeProc === 'function' && typeof fc.registerForgeProc === 'function') ? fc : null;
+    } catch (eApi) {
+        return null;   // 炼器模块整个不在（无头测试/旧档）：手上就没有「术」这回事
+    }
+}
+var _forgeProcWiredFor = null;   // 已向炼器模块登记过的那份模块（换档重载后要重登记）
+// 把七条的实现登记进炼器模块——**这是接线的唯一入口**。
+//   登记了 wired 才翻 true；registerForgeProc(id, null) 能摘掉，摘掉后这条术在战斗里彻底不发生
+//   （readPlayerForgeProcs 认 handler，没有 handler 的术连面板都不念）。
+function _ensureForgeProcWired() {
+    var fc = _forgeProcApi();
+    if (!fc) return null;
+    if (_forgeProcWiredFor === fc) return fc;
+    var MAP = {
+        reflect: '_procReflect', stun: '_procStun', rebirth: '_procRebirth', curse: '_procCurse',
+        aoe: '_procAoe', wild: '_procWild', roar: '_procRoar'
+    };
+    for (var i = 0; i < FORGE_PROC_ORDER.length; i++) {
+        var pid = FORGE_PROC_ORDER[i];
+        fc.registerForgeProc(pid, _makeForgeProcHandler(pid, MAP[pid]));
+    }
+    _forgeProcWiredFor = fc;
+    return fc;
+}
+// 每条术一个独立实现（handler 只做「找到 Battle 上的那个函数并调它」这一件事）
+function _makeForgeProcHandler(procId, fnName) {
+    return function (ctx) {
+        try {
+            var w = (typeof window !== 'undefined') ? window : null;
+            var b = (ctx && ctx.battle) ? ctx.battle : (w ? w.currentBattle : null);
+            if (!b || typeof b[fnName] !== 'function') return null;
+            return b[fnName](ctx);
+        } catch (eProc) {
+            console.warn('[炼器术] ' + procId + ' 触发失败（该术本次不发生，其余术照走）：', eProc && eProc.message);
+            return null;
+        }
+    };
+}
+// 词缀条目（读 proc 的档位用；锻造模块不在就当没有档位）
+function _forgeAffixByKey(key) {
+    var fc = _forgeProcApi();
+    return (fc && fc.AFFIX_BY_KEY && fc.AFFIX_BY_KEY[key]) ? fc.AFFIX_BY_KEY[key] : null;
+}
+// 一件器上某条术是几点的（1/2/3）。读不到档位一律按 1 点（最弱档）——宁可弱，不可凭空强。
+function forgeProcTier(item, procId) {
+    try {
+        var plan = item && item._forgePlan;
+        if (!plan || !Array.isArray(plan.affixes)) return 1;
+        for (var i = 0; i < plan.affixes.length; i++) {
+            var row = plan.affixes[i];
+            var e = row ? _forgeAffixByKey(row.key) : null;
+            if (e && e.proc === procId) {
+                var p = Math.floor(Number(row.points) || 0);
+                return p >= 3 ? 3 : (p === 2 ? 2 : 1);
+            }
+        }
+    } catch (eTier) {
+        return 1;   // 器模子结构被动过：按最弱档算，不猜
+    }
+    return 1;
+}
+// ★ 手上装着的术，全工程**唯一读口**（战斗播报、战斗结算、测试都走这里）
+function readPlayerForgeProcs() {
+    var out = [];
+    try {
+        var w = (typeof window !== 'undefined') ? window : null;
+        if (!w || !w.currentEquipment || !w.itemById) return out;
+        var fc = _ensureForgeProcWired();
+        if (!fc) return out;
+        var seen = {};
+        for (var si = 0; si < FORGE_PROC_ORDER.length; si++) {
+            var pid = FORGE_PROC_ORDER[si];
+            var rec = fc.getForgeProc(pid);
+            if (!rec || typeof rec.handler !== 'function') continue;   // 没接上的术 = 没有这条术
+            for (var slot in w.currentEquipment) {
+                if (!Object.prototype.hasOwnProperty.call(w.currentEquipment, slot)) continue;
+                var eq = w.currentEquipment[slot];
+                if (!eq || seen[pid]) continue;
+                var tpl = w.itemById[eq.templateId || eq.id];
+                if (!tpl || !Array.isArray(tpl.procTags) || tpl.procTags.indexOf(pid) < 0) continue;
+                seen[pid] = 1;
+                out.push({
+                    id: pid, name: rec.name, tier: forgeProcTier(tpl, pid),
+                    slot: slot, itemName: tpl.name || '', handler: rec.handler
+                });
+            }
+        }
+    } catch (eRead) {
+        return out;   // 装备账读不到（读档中途/面板未起）：按「手上没带术」算，战斗照旧跑
+    }
+    return out;
+}
 // ---------- 战斗类 ----------
 class Battle {
     constructor(playerEntity, enemyEntity, enemyAllies) {
@@ -2187,6 +2819,13 @@ class Battle {
         this._physTicked = false;
         // v20.64 被打倒的敌方（主敌倒下后枪口转向同伴，倒下的记在这里，战后一并标尸）
         this._fallenEnemies = [];
+        // ===== v26.5 炼器七术：每场一份的账（手上装了什么由 readPlayerForgeProcs 惰性读一次）=====
+        this._forgeProcsList = null;   // [{id,name,tier,slot,itemName,handler}]；战斗中装备不会变，读一次就够
+        this._procRebirthLeft = 1;     // 涅槃：一场一次，触发即销
+        this._procHitsTaken = 0;       // 麻痹：实打实的着数（三的整数倍蓄势）
+        this._procStunReady = 0;       // 麻痹：已蓄势，等下一个敌方出手（不会白白蓄着浪费）
+        this._procWildBand = 0;        // 狂血：当前阶（0 无 / 1 / 2）
+        this._procRoarUsed = 0;        // 龙吟：已响过几声
         // 出战灵兽作为盟友
         // 第九十波·骑乘参战：骑着开战，坐骑驮你入阵——它就在你身下，没有旁观的道理。
         // 场上兽位只有一个：坐骑优先（出战兽若是另一只，此战在场外盘旋，不进场）。
@@ -2338,6 +2977,29 @@ class Battle {
             }
         } catch (eAnnounce) {}
 
+        // ===== v26.5 开战播报·己方：手上这几件器带着哪几道术，先念一遍 =====
+        // 这是 proc 唯一的预告面：玩家据此决定战法（要不要硬拼、要不要拖回合把龙吟三声等出来）。
+        // 没登记 handler 的术不进这份名单——「没接上的术」等于没有这条术，不占播报位。
+        try {
+            this._forgeProcsList = readPlayerForgeProcs();
+            if (this._forgeProcsList.length > 0) {
+                var _ownNames = [], _ownBrief = [];
+                for (var _oi = 0; _oi < this._forgeProcsList.length; _oi++) {
+                    var _op = this._forgeProcsList[_oi];
+                    var _ot = FORGE_PROC_TUNING[_op.id];
+                    if (!_ot) continue;
+                    _ownNames.push(_op.name + '·' + _ot.tierName[_op.tier - 1]);
+                    _ownBrief.push(_op.name + '：' + _ot.brief);
+                }
+                if (_ownNames.length) {
+                    this.log.push({ msg: '🔩 你手上的器带着这些术——' + _ownNames.join('、')
+                        + '。（' + _ownBrief.join('；') + '）' });
+                }
+            }
+        } catch (eOwn) {
+            console.warn('[炼器术] 开战播报失败（术照走，只是没预告）：', eOwn && eOwn.message);
+        }
+
         // ===== 第九十二波 · 行动条时间轴 =====
         // 每个角色一条行动条，按时间累计（速率=身法脚力），攒满 100 就能出手；
         // 不同动作扣不同的条：轻活便宜回条快，重活昂贵还得再等。
@@ -2374,6 +3036,15 @@ class Battle {
         this._surrenderAsked = false;    // 敌人跪地求饶（一场一回）
         this._playerSurrenderTried = false;  // 弃械求饶一场一回（喊过一回他就防着你了）
         this._foeTauntPromptDone = false;    // 敌人的骂阵应对（一场一回，时间轴停住等你咽不咽这口气）
+        // 白泽「能说人话」那一笔的四道账（全是一次性，不跨场——跨场要存档键，这一批不碰存档）：
+        //   _baizeAsked  价码摆出去没有（一场只摆一次，免得刷一屏重复台词）
+        //   _baizeDone   它真开口答了没有（「这一张嘴只开一次」）
+        //   _baizeSealed 你不应、转头要杀——它封口了，且封口的理由写在日志里（禁改设计第 2 条）
+        //   _baizeSpared 你应了、放它走了（问路的账结清）
+        this._baizeAsked = false;
+        this._baizeDone = false;
+        this._baizeSealed = false;
+        this._baizeSpared = false;
         this._demonicShown = false;      // 魔道功法露相（一场只报一次）
         this._foeRighteousWrath = false; // 正道人认出了你的魔道功法——百口难辨，这仗不留手
         // 魔道相貌查真账：天生魔技（采补/吸血）、魔染值、功法名目——三样占一样就是练过魔功的
@@ -2409,6 +3080,9 @@ class Battle {
                 this._foeRighteousWrath = true;
                 _open99 = '⚡ ' + _e99.name + ' 一眼看出你身上缠绕的黑气——「魔头！今日替天行道！」他根本不给你开口的机会！';
                 _e99.aiBehavior = 'aggressive';
+            } else if (_isBeast99 && isBaizeEntity(_e99)) {
+                // 白泽：唯一一条「兽也开口说人话」的例外。它不吼——它说话（详见上方 baizeOfferDeal 段）
+                _open99 = null;   // 它的话由 _baizeOfferDeal 自己开口写（连着价码一起摆），这一句不重复
             } else if (_isBeast99) {
                 _open99 = '🐾 ' + _e99.name + ' 压低身子，喉咙里滚出闷雷似的吼声，肌肉绷得像拉满的弓——它盯上你了。';
             } else if (_speaks99 && _st99 === 'bandit') {
@@ -2424,6 +3098,69 @@ class Battle {
             }
             if (_open99) this.log.push({ msg: _open99 });
         } catch (eOpen99) {}
+        // ===== v27.15：②新增-2 兽群护崽——母兽的账 =====
+        // 群居兽（兽类主敌+场上同名种≥2）掷 25%：这一窝里有崽没露面（灌木后的窸窣声），
+        // 护崽的兽不打算逃（遁走一票否决）、狂怒（本场攻击×1.15）。白泽除外——瑞兽有灵智，不护崽也不记仇。
+        // 战后结算记仇（窝账 180 日）：再遇同种，它认得你。
+        try {
+            var _isBeastG15 = _e99 && (String(_e99.physiologyType || (_e99.physiology && _e99.physiology.type) || '') === 'beast');
+            if (_isBeastG15 && !isBaizeEntity(_e99)) {
+                var _same99 = 1 + (this.enemyAllies || []).filter(function (a) {
+                    return a && a.isAlive !== false && String(a.name || '') === String(_e99.name || '');
+                }).length;
+                var _grudgeIn = false;
+                try {
+                    _grudgeIn = !!(window.WildEcology && typeof window.WildEcology.isGrudged === 'function' && window.WildEcology.isGrudged(_e99.name));
+                } catch (eGg15) {}
+                if (_same99 >= 2 && (_grudgeIn || Math.random() < 0.25)) {
+                    _e99._guardCub = true;
+                    _e99._guardGrudge = _grudgeIn;
+                    // 狂怒：本场攻击×1.15（包装法——同 4694 连环手先例，战后无需还原因 per-battle 实体）
+                    var _origAtkG15 = _e99.getAttack;
+                    if (typeof _origAtkG15 === 'function') {
+                        _e99.getAttack = function () { return Math.round(_origAtkG15.call(this) * 1.15); };
+                    }
+                    _e99.aiBehavior = 'aggressive';
+                    this.log.push({ msg: _grudgeIn
+                        ? '🐺 ' + _e99.name + ' 一见你就炸了毛——半年前你动过它的崽，这一窝记着呢。它不吼别兽那种虚张声势，直接朝你扑来（它认得你，怒而先动手）！'
+                        : '🐾 灌木后传来崽的窸窣声——' + _e99.name + ' 横身挡在窝前，喉间的闷吼变了调：这一只，打定了不逃的主意（护崽狂怒，攻击上浮）！' });
+                }
+            }
+        } catch (eGuard15) { console.warn('[静默失败] js/battle.js · 护崽判定没挂上（这一场按普通兽群打）', eGuard15 && eGuard15.message); }
+        // ===== v27.17：②新增-1 断肢的江湖——残格乘区（温和：臂0.92/腰0.95/颈-5，随康复日渐回 1） =====
+        // 残是幸存者的纪念：废过一格的身子，下一场如实打折——但打折系数按 (今日-受伤日)/康复期 现算渐回：
+        // 躺够三十日自然复原（免费，零定时器——读时算账）；医馆接骨即刻复位（10 灵石），上药康复期减半（再+10，可选消费）。
+        try {
+            var _li17 = (window.currentCharData && window.currentCharData.lingeringInjury) || null;
+            if (_li17) {
+                var _now17 = (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') ? window.timeSystem.getAbsoluteDay() : 0;
+                var _rest17 = Math.max(0, (Number(_li17.rehabDays) || 30) - Math.max(0, _now17 - (Number(_li17.day) || 0)));
+                if (_rest17 <= 0) {
+                    window.currentCharData.lingeringInjury = null;   // 康复期满——账自清，不用人管
+                } else {
+                    var _frac17 = _rest17 / (Number(_li17.rehabDays) || 30);           // 剩余比例：新伤=1 → 痊愈=0
+                    var _pid17 = String(_li17.partId || '');
+                    var _atkM17 = 1, _spdM17 = 1, _hit17 = 0;
+                    if (_pid17 === 'left_arm' || _pid17 === 'right_arm') _atkM17 = 1 - 0.08 * _frac17;   // 臂：0.92 渐回 1
+                    else if (_pid17 === 'waist' || _pid17 === 'spine' || _pid17 === 'lower_back') _spdM17 = 1 - 0.05 * _frac17;  // 腰脊：0.95 渐回
+                    else if (_pid17 === 'neck') _hit17 = -Math.round(5 * _frac17);                       // 颈：-5 渐回
+                    else _atkM17 = 1 - 0.05 * _frac17;                                                   // 其余废格：0.95 渐回
+                    var _pAtk17 = this.player.getAttack, _pSpd17 = this.player.getSpeed;
+                    if (typeof _pAtk17 === 'function' && _atkM17 < 1) {
+                        this.player.getAttack = function () { return Math.round(_pAtk17.call(this) * _atkM17); };
+                    }
+                    if (typeof _pSpd17 === 'function' && _spdM17 < 1) {
+                        this.player.getSpeed = function () { return Math.max(1, Math.round(_pSpd17.call(this) * _spdM17)); };
+                    }
+                    if (_hit17 !== 0) { this.player._lingerHitMod = (this.player._lingerHitMod || 0) + _hit17; }
+                    this._lingerNote17 = '🩼 你的「' + (_li17.label || _pid17) + '」还剩 ' + Math.ceil(_rest17) + ' 日才能使足劲（残格乘区如实打折——医馆接骨 10 灵石即刻复位）。';
+                    this.log.push({ msg: this._lingerNote17 });
+                }
+            }
+        } catch (eLing17) { console.warn('[静默失败] js/battle.js · 残格乘区没挂上（这场按无伤打）', eLing17 && eLing17.message); }
+        // 白泽的价码紧跟着开场摆出来（同一段，不是战斗中段）：时间轴由 _advanceTimeline 的待决守卫按住，
+        // 玩家不点「攻心话」也看得见它开口、看得见它要什么。
+        try { this._baizeOfferDeal(); } catch (eBzOpen) { console.warn('[静默失败] js/battle.js · 白泽开场那一段没摆出来（这一场它不会开口）', eBzOpen && eBzOpen.message); }
         this._tlTick = 0;
         this._actors = [];
         try {
@@ -2492,6 +3229,10 @@ class Battle {
     /** 时间轴驱动：推进到下一个可动者——NPC 自动出手，轮到玩家就停下等指令 */
     _advanceTimeline() {
         if (this.isFinished) return;
+        // 第九十四波那条「时间轴停在姿态上」此前只认**敌人行动里**摆出来的对话位：
+        // 循环体里只在 _resolveActor 之后查一次 _pendingPrompt。开场那一段（白泽开价）
+        // 在时间轴建起来之前就把对话位摆出去了——不加这道守卫，它会在你还没读完价码时先动手。
+        if (this._pendingPrompt) { if (this.onUpdate) this.onUpdate(); return; }
         this.isPlayerTurn = false;
         var guard = 0;
         while (guard++ < 400 && !this.isFinished) {
@@ -2536,6 +3277,18 @@ class Battle {
         }
     }
     _resolveActor(actor) {
+        // v27.13：兽形部位族——贯脊瘫痪：脊背致命危急在身，兽主瘫倒难起，本手跳过；
+        // 回合边界照走（与符箓跳过同一先例：log + _endEnemyMainAction + return）。
+        try {
+            if (actor.kind === 'enemyMain' && window.BeastPartFamily
+                && window.BeastPartFamily.isBeastForm(this.enemy)
+                && window.BeastPartFamily.isParalyzed(this.enemy)) {
+                this.log.push({ msg: '🩸 ' + this.enemy.name + ' 脊梁洞穿、瘫倒在地——周身失用，任凭处置！（贯脊）' });
+                actor.bar -= 100;
+                this._endEnemyMainAction();
+                return;
+            }
+        } catch (eBFPar) { console.warn('[静默失败] js/battle.js · _resolveActor：贯脊瘫痪守卫失败——' + eBFPar.message); }
         if (actor.kind === 'enemyMain') this._enemyMainAct();
         else if (actor.kind === 'enemyAlly') this._enemyAllyAct(actor.e);
         else if (actor.kind === 'beast') this._beastAct();
@@ -2561,8 +3314,347 @@ class Battle {
         try {
             if (window.TalismanSystem && typeof window.TalismanSystem.tickEnemyBlind === 'function') window.TalismanSystem.tickEnemyBlind();
         } catch (eBlindTick) {}
+        // ===== v26.5 炼器七术·回合边界：狂血（血量越低越强）与龙吟（战局节点威压）=====
+        // 这两个是「回合级/节点级」的账，不该混在一次命中里算——挂在既有的回合边界上，
+        // 敌主动一次作完翻篇，正好和毒/冷却/生理那一批同一本账。
+        var _fpRound = this._forgeProcs('round', {});
+        if (_fpRound && _fpRound.text) this.log.push({ msg: _fpRound.text });
         this._processRoundPhysiology();
+        // v27.13：兽形部位族·回合边界——敌方侧所有兽形实体的致命危急窗口倒计时（贯脊10/割喉3/破肚6/
+        // 碎首4/脑髓2/胸廓塌陷12），到点气绝判死（deathCause 记 beastCritical:<格>）；兽册待播报随手清空。
+        // 敌方侧实体统一取自 _actors（主敌+兽群同伙都在内）；模块缺席＝空转。
+        try {
+            var _bfActors = this._actors || [];
+            for (var _bfi = 0; _bfi < _bfActors.length; _bfi++) {
+                var _bfa = _bfActors[_bfi];
+                var _bfe = _bfa && _bfa.e;
+                if (!_bfe || !_bfe.isAlive || _bfa.side === 'player') continue;
+                if (!window.BeastPartFamily || !window.BeastPartFamily.isBeastForm(_bfe)) continue;
+                var _bfTick = window.BeastPartFamily.tickRound(_bfe);
+                if (_bfTick) this.log.push({ msg: _bfTick });
+                var _bfNotes = window.BeastPartFamily.drainNotes(_bfe);
+                if (_bfNotes) this.log.push({ msg: _bfNotes });
+            }
+        } catch (eBFTick) { console.warn('[静默失败] js/battle.js · _endEnemyMainAction：兽形窗口倒计时失败——' + eBFTick.message); }
+        // v27.19：构装/亡灵族·回合边界——停机窗（枢座崩坏 6 轮）与魂散窗（颅裂 2/肋笼塌陷 4）倒计时；
+        // 到点返回 true——本侧按「结构尽毁」了结（deathCause 由兽形同段口径记，构装记 constructHalt:<格>、亡灵记 undeadCrumble:<格>）
+        try {
+            var _cufActors = this._actors || [];
+            for (var _cufi = 0; _cufi < _cufActors.length; _cufi++) {
+                var _cufa = _cufActors[_cufi];
+                var _cufe = _cufa && _cufa.e;
+                if (!_cufe || !_cufe.isAlive || _cufa.side === 'player') continue;
+                if (!window.ConstructUndeadFamily) continue;
+                if (!window.ConstructUndeadFamily.isConstructForm(_cufe) && !window.ConstructUndeadFamily.isUndeadForm(_cufe)) continue;
+                var _cufDied = window.ConstructUndeadFamily.tickRound(_cufe);
+                if (_cufDied) {
+                    var _kind = window.ConstructUndeadFamily.isConstructForm(_cufe) ? 'constructHalt' : 'undeadCrumble';
+                    _cufe.isAlive = false;
+                    _cufe.deathCause = _kind + ':core';
+                    this.log.push({ msg: '💀 ' + (_cufe.name || '它') + (_kind === 'constructHalt' ? ' 的枢座耗尽最后一缕灵光——躯壳当啷一声，停了。' : ' 的魂火散尽——骨架子哗啦一声，散成了一堆白骨。') });
+                }
+                var _cufNotes = window.ConstructUndeadFamily.drainNotes(_cufe);
+                if (_cufNotes && _cufNotes.length) this.log.push({ msg: _cufNotes });
+            }
+        } catch (eCUFTick) { console.warn('[静默失败] js/battle.js · _endEnemyMainAction：构装/亡灵窗口倒计时失败——' + eCUFTick.message); }
+        // v27.20 案①：人形敌方气绝窗倒计时（头4/脑2/胸12/颈3，对齐兽形四笔）——到点真死（_killByVital 记死因）
+        try {
+            var _vwE20 = this.enemy;
+            if (_vwE20 && _vwE20.isAlive && _vwE20._vitalWin) {
+                _vwE20._vitalWin.rounds--;
+                if (_vwE20._vitalWin.rounds <= 0) {
+                    var _vwPart20 = _vwE20._vitalWin.part;
+                    _vwE20._vitalWin = null;
+                    this.log.push({ msg: '💀 ' + (_vwE20.name || '敌人') + ' 撑完了最后一轮——' + (HUMANOID_VITAL_WINDOWS[_vwPart20] ? HUMANOID_VITAL_WINDOWS[_vwPart20].name : '气绝') + '，气绝身亡。' });
+                    _vwE20._killByVital(_vwPart20);
+                } else {
+                    this.log.push({ msg: '⏳ ' + (_vwE20.name || '敌人') + ' 还在' + (_vwE20._vitalWin.name || '气绝窗') + '里撑着——还剩 ' + _vwE20._vitalWin.rounds + ' 轮。' });
+                }
+            }
+            (this.enemyAllies || []).forEach(function (_a20) {
+                if (_a20 && _a20.isAlive && _a20._vitalWin) {
+                    _a20._vitalWin.rounds--;
+                    if (_a20._vitalWin.rounds <= 0) {
+                        var _p20 = _a20._vitalWin.part;
+                        _a20._vitalWin = null;
+                        _a20._killByVital(_p20);
+                    }
+                }
+            });
+        } catch (eVwTick20) { console.warn('[静默失败] js/battle.js · _endEnemyMainAction：人形气绝窗倒计时失败——' + eVwTick20.message); }
         this._checkEnd();
+    }
+
+    // ============================================================================================
+    // v26.5 · 炼器七术：唯一入口 _forgeProcs + 七个独立实现
+    //
+    // 为什么是**三个**入口而不是散在七处：
+    //   ① 受击之后那笔（aftermath 段）挂 _applyOnHitAftermath 末尾 —— 那是全工程唯一「真实扣血之后」的收口
+    //      （格挡 / 化解 / 正常三条扣血路径都经过它，反震·吸血·采补三个既有机制也都在这儿）。
+    //      挂这儿 = 一次覆盖全部真实命中，不漏格挡也不重复结算。
+    //   ② 出手门（act 段）挂 _executeAttack 开头 —— 麻痹「一息不解」要吃掉的是**一次出手**，
+    //      全工程唯一能拦住出手的位置就是出手函数第一行（挡在命中/闪避判定之前，命中都不必算）。
+    //   ③ 回合边界（round 段）挂 _endEnemyMainAction —— 狂血与龙吟是回合级/战局节点级的账，
+    //      敌主动一次作完正是既有的回合边界，和毒/冷却/生理同一本账翻篇。
+    //
+    // 三处都不碰 _calculateDamage：主伤害公式逐字不动，proc 是纯增量，没触发时结算与改造前一致。
+    // 触发一律条件判定（阈值/计数/层数），全路径零 Math.random。
+    // ============================================================================================
+    _forgeProcs(phase, ctx) {
+        var out = { text: '', skip: false, msg: '' };
+        try {
+            var list = this._forgeProcsList || (this._forgeProcsList = readPlayerForgeProcs());
+            if (!list || !list.length) return out;
+            var order = FORGE_PROC_PHASE_ORDER[phase] || FORGE_PROC_ORDER;
+            var base = ctx || {};
+            var list2 = list.slice().sort(function (a, b) {
+                var ia = order.indexOf(a.id), ib = order.indexOf(b.id);
+                return (ia < 0 ? 90 : ia) - (ib < 0 ? 90 : ib);
+            });
+            for (var i = 0; i < list2.length; i++) {
+                if (typeof list2[i].handler !== 'function') continue;   // 摘掉的术不发生
+                var r = list2[i].handler({
+                    proc: list2[i].id, phase: phase, battle: this, tier: list2[i].tier,
+                    player: this.player, enemy: this.enemy,
+                    attacker: base.attacker, defender: base.defender, actual: base.actual
+                });
+                if (!r) continue;
+                if (typeof r === 'string') { out.text += r; }
+                else {
+                    if (r.text) out.text += r.text;
+                    if (r.skip) { out.skip = true; out.msg = r.msg || ''; break; }
+                }
+            }
+        } catch (eFP) {
+            console.warn('[炼器术] 触发结算出错（本次这一层不发生，其余术照走）：', eFP && eFP.message);
+        }
+        return out;
+    }
+    // 本场手上有没有这条术（没有就不发生——不猜、不按默认值白给）
+    _forgeProcRec(id) {
+        var list = this._forgeProcsList || (this._forgeProcsList = readPlayerForgeProcs());
+        for (var i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+        return null;
+    }
+    // 三档查表：base + step×(档−1)。档不在 1~3 一律当 1。
+    _forgeProcVal(id, tier) {
+        var t = FORGE_PROC_TUNING[id];
+        if (!t) return 0;
+        var k = Math.max(1, Math.min(3, Math.floor(Number(tier) || 1)));
+        return Math.max(0, t.base + t.step * (k - 1));
+    }
+    // proc 造成的伤害飘个字（面板上看得见这一笔）。飘字通道读不到就靠战斗日志那句话里的数字。
+    _procShowNumber(target, amount, kind) {
+        try {
+            if (typeof window.showDamageNumber === 'function') window.showDamageNumber(target, amount, kind || 'normal');
+        } catch (eNum) {
+            // 飘字通道不存在（无头/旧档）：战斗日志里那句已写明数值，账不丢
+        }
+    }
+    // 气血量程。
+    // ⚠️ 实测坑：玩家的 physiology 上 **maxBloodVolume 常常是 undefined**（实测 buildPlayerBattleEntity 出来的
+    //    身子就是），而 getPhysiologySummary() 有回退链（phys → 配置表 → 100）。
+    //    所以读量程必须走同一条回退链，否则「三成」「四成线」在真机上永远判不出来——
+    //    上一版就是照抄 summary 的判据却没抄它的回退，狂血与涅槃在真机上静默不发生。
+    _procBloodCap(entity) {
+        var phys = entity && entity.physiology;
+        if (!phys) return 0;
+        var cap = Number(phys.maxBloodVolume);
+        if (!(cap > 0) && typeof entity.getPhysiologySummary === 'function') {
+            try { cap = Number(entity.getPhysiologySummary().maxBloodVolume); } catch (eCap) { cap = 0; }
+        }
+        if (!(cap > 0)) {
+            // v27.13：删 `|| window.PHYS` 幽灵回退——全库只挂 PhysiologyConfig，PHYS 从未定义，
+            // 第三级回退永远走不到（命名残留）。断根防止以后误以为存在第二张配置表。
+            var cfg = (typeof window !== 'undefined') ? window.PhysiologyConfig : null;
+            cap = Number(cfg && (cfg.MAX_BLOOD_VOLUME || cfg.MAX_HEALTH)) || 0;
+        }
+        return cap > 0 ? cap : 0;
+    }
+
+    // ---- ① 反震：受击回震 ----
+    _procReflect(ctx) {
+        if (ctx.phase !== 'aftermath') return '';
+        var d = ctx.defender, a = ctx.attacker;
+        if (!d || d !== this.player || a === this.player || !(ctx.actual >= 1)) return '';
+        if (!this._forgeProcRec('reflect')) return '';
+        var pct = this._forgeProcVal('reflect', ctx.tier);
+        var dmg = Math.floor(ctx.actual * pct / 100);
+        if (dmg < 1 || !a || a.isAlive === false || typeof a.takeDamage !== 'function') return '';
+        var real = a.takeDamage('chest', dmg, 'blunt');
+        if (!(real >= 1)) return '';
+        this._procShowNumber(a, real, '反震');
+        return ' 🪞 反震！你顺势回敬一刀——' + a.name + ' 受 ' + real + ' 点钝伤（回震 ' + pct + '%）。';
+    }
+
+    // ---- ② 麻痹：定住一次出手 ----
+    // 出手门（act 段）：蓄势在身且此人是敌方 → 这一动直接落空。确定性，不掷命中率。
+    // 蓄势（aftermath 段）：玩家实打硬挨一下记一次，攒够三下蓄一记。
+    _procStun(ctx) {
+        var t = FORGE_PROC_TUNING.stun;
+        if (ctx.phase === 'act') {
+            if (!this._procStunReady || !this._isEnemySide(ctx.attacker)) return '';
+            this._procStunReady = 0;
+            return {
+                skip: true,
+                msg: '⚡ 雷殛！' + ctx.attacker.name + ' 手足麻痹，这一动没能出手——雷殛手足，一息不解（每挨 ' + t.every + ' 下蓄一记）'
+            };
+        }
+        if (ctx.phase !== 'aftermath') return '';
+        var d = ctx.defender;
+        if (!d || d !== this.player || !(ctx.actual >= 1)) return '';
+        if (!this._forgeProcRec('stun')) return '';
+        this._procHitsTaken = (this._procHitsTaken || 0) + 1;
+        if (this._procHitsTaken % t.every !== 0) return '';
+        this._procStunReady = 1;
+        return ' ⚡ 雷殛蓄势（第 ' + this._procHitsTaken + ' 次实打实的着）——下一位出手的敌人这一动落空。';
+    }
+
+    // ---- ③ 涅槃：致死判定前留命 ----
+    // 位置说明：aftermath 在 takeDamage 之后、_checkEnd 之前，比既有「复活符」早一步——
+    // 器上的涅槃先响，符才轮得上（真要两条一起带，先看涅槃的账）。
+    _procRebirth(ctx) {
+        if (ctx.phase !== 'aftermath') return '';
+        var d = ctx.defender;
+        if (!d || d !== this.player || d.isAlive !== false) return '';
+        if (!(this._procRebirthLeft > 0)) return '';
+        if (!this._forgeProcRec('rebirth')) return '';
+        this._procRebirthLeft = 0;
+        var pct = this._forgeProcVal('rebirth', ctx.tier);
+        // ⚠️ 气血量程随境界放大（实测：渡劫境玩家 maxBloodVolume=30000，不是 100）——
+        //    所以「三成」必须按**本场量程**折算，绝不能写死 30 点，否则高境界玩家被这一刀削到见底。
+        var cap = this._procBloodCap(d);
+        var blood = cap > 0 ? Math.max(1, Math.round(cap * pct / 100)) : pct;
+        d.isAlive = true;
+        d.deathCause = null;
+        var maxes = d.maxDurabilities || {};
+        for (var k in d.durabilities) {
+            if (!Object.prototype.hasOwnProperty.call(d.durabilities, k)) continue;
+            d.durabilities[k] = Math.max(1, Math.round((Number(maxes[k]) || 0) * pct / 100));
+        }
+        var phys = d.physiology;
+        if (phys) {
+            phys.bloodVolume = blood;
+            if (phys.health !== undefined) phys.health = blood;
+            phys.painLoad = Math.max(0, (phys.painLoad || 0) - 30);
+        }
+        if (d.maxStamina != null) d.stamina = Math.max(0, Math.round(d.maxStamina * 0.5));
+        try {
+            if (typeof d.clearCriticalState === 'function') d.clearCriticalState();
+        } catch (eCC) {
+            // 危急态清理走不通：气血与耐久已经亲手拉回来了，危急计时让它自己走完
+        }
+        this.log.push({ msg: '🔥 涅槃！凤羽浴火——致命一刀之下重塑残躯，气血回到 ' + blood + '（' + pct + '%）。' });
+        return ' 🔥 涅槃！致命一刀没杀死你——器上凤羽浴火，气血回到 ' + blood + '（' + pct + '%，一场只一次）。';
+    }
+
+    // ---- ④ 诅咒：命中被咒 ----
+    _procCurse(ctx) {
+        if (ctx.phase !== 'aftermath') return '';
+        var d = ctx.defender;
+        if (ctx.attacker !== this.player || !d || !this._isEnemySide(d) || !(ctx.actual >= 1)) return '';
+        if (!this._forgeProcRec('curse')) return '';
+        var t = FORGE_PROC_TUNING.curse;
+        var before = Math.max(0, Math.floor(Number(d._procCurseStacks) || 0));
+        if (before >= t.maxStacks) return '';
+        d._procCurseStacks = before + 1;
+        return ' 🩸 诅咒！血食者被咒——' + d.name + ' 命中 −' + (d._procCurseStacks * t.hitPerStack)
+            + '（第 ' + d._procCurseStacks + '/' + t.maxStacks + ' 层）。';
+    }
+
+    // ---- ⑤ 群攻（陨星）：溅射 ----
+    // 只打**已经在场**的其余敌人，走 takeDamage 直调：不经 _executeAttack ⇒ 不连锁、不二次溅射、不吃对手的反震。
+    _procAoe(ctx) {
+        if (ctx.phase !== 'aftermath') return '';
+        if (ctx.attacker !== this.player || !ctx.defender || !this._isEnemySide(ctx.defender) || !(ctx.actual >= 1)) return '';
+        if (!this._forgeProcRec('aoe')) return '';
+        var others = [];
+        if (this.enemy && this.enemy !== ctx.defender && this.enemy.isAlive) others.push(this.enemy);
+        var allies = this.enemyAllies || [];
+        for (var i = 0; i < allies.length; i++) {
+            if (allies[i] && allies[i] !== ctx.defender && allies[i].isAlive) others.push(allies[i]);
+        }
+        if (!others.length) return '';   // 单挑：场上没有第二个可溅的人，明面上不触发
+        var pct = this._forgeProcVal('aoe', ctx.tier);
+        var each = Math.max(1, Math.floor(ctx.actual * pct / 100));
+        var hit = [];
+        for (var j = 0; j < others.length; j++) {
+            var t2 = others[j];
+            if (!t2 || typeof t2.takeDamage !== 'function') continue;
+            var real = t2.takeDamage('chest', each, 'blunt');
+            if (real >= 1) { hit.push(t2.name + ' ' + real + ' 点'); this._procShowNumber(t2, real, '溅射'); }
+        }
+        if (!hit.length) return '';
+        return ' 💫 星陨落处——溅射（本次伤害 ' + pct + '%）：' + hit.join('、') + '。';
+    }
+
+    // ---- ⑥ 狂血：血量越低越强（回合结算）----
+    // ⚠️ 阶位按**气血比例**判，不按绝对点数：量程随境界放大（实测渡劫境 maxBloodVolume=30000），
+    //    写死 40/20 的绝对门槛在高境界玩家身上永远够不着（上一版的坑）。
+    //    比例口径复用既有的 _bloodLedgerPct（全工程唯一「血还剩几成」算法，不另造一套）。
+    _procWild(ctx) {
+        if (ctx.phase !== 'round') return '';
+        var p = this.player;
+        if (!p || !p.isAlive || !p.physiology) { if (p) p._procWildHitBonus = 0; this._procWildBand = 0; return ''; }
+        var t = FORGE_PROC_TUNING.wild;
+        var cap = this._procBloodCap(p);
+        if (!(cap > 0)) { p._procWildHitBonus = 0; this._procWildBand = 0; return ''; }
+        var pctLeft = this._bloodLedgerPct(p);
+        if (pctLeft == null) {   // 量程没写在 physiology 上：按同一条回退链量出来的 cap 自行折算
+            var raw = Number(p.physiology.bloodVolume);
+            pctLeft = Math.max(0, Math.min(100, (isFinite(raw) ? raw : cap) / cap * 100));
+        }
+        var band = (pctLeft <= 20) ? 2 : (pctLeft <= 40) ? 1 : 0;
+        var prev = this._procWildBand || 0;
+        if (band === 0) {
+            p._procWildHitBonus = 0;
+            this._procWildBand = 0;
+            return prev > 0 ? '🐾 狂血退去——气血回到四成之上，兽性压了下去。' : '';
+        }
+        if (!this._forgeProcRec('wild')) { p._procWildHitBonus = 0; this._procWildBand = 0; return ''; }
+        this._procWildBand = band;
+        var heal = Math.max(1, Math.round(cap * t.healPctPerBand * band));
+        var hitBonus = t.hitPerBand * band;
+        p._procWildHitBonus = hitBonus;   // 出手时由 _executeAttack 的命中段读走
+        p.physiology.bloodVolume = Math.min(cap, Number(p.physiology.bloodVolume) + heal);
+        if (p.physiology.health !== undefined) p.physiology.health = p.physiology.bloodVolume;
+        p.physiology.painLoad = Math.max(0, (p.physiology.painLoad || 0) - t.painRelief);
+        return ' 🐾 狂血上涌（第 ' + band + ' 阶）：回气血 ' + heal + '、疼痛 −' + t.painRelief
+            + '、出手命中 +' + hitBonus + '——血越少，咬得越狠。';
+    }
+
+    // ---- ⑦ 龙吟：威压（战局节点）----
+    _procRoar(ctx) {
+        if (ctx.phase !== 'round') return '';
+        if (!this._forgeProcRec('roar')) return '';
+        var e = this.enemy;
+        if (!e || !e.isAlive || !e.durabilities || !e.maxDurabilities) return '';
+        var cur = 0, max = 0;
+        for (var k in e.durabilities) {
+            if (!Object.prototype.hasOwnProperty.call(e.durabilities, k)) continue;
+            cur += Number(e.durabilities[k]) || 0;
+            max += Number(e.maxDurabilities[k]) || 0;
+        }
+        if (max <= 0) return '';
+        var t = FORGE_PROC_TUNING.roar;
+        var ratio = cur / max;
+        var used = this._procRoarUsed || 0;
+        var idx = -1;
+        for (var i = used; i < t.thresholds.length; i++) { if (ratio < t.thresholds[i]) { idx = i; break; } }
+        if (idx < 0) return '';
+        this._procRoarUsed = idx + 1;   // 一回只结算一声：一次重击跨过两道线也只响一声
+        var delay = this._forgeProcVal('roar', ctx.tier);
+        var names = [];
+        var actors = this._actors || [];
+        for (var ai = 0; ai < actors.length; ai++) {
+            var act = actors[ai];
+            if (!act || act.side !== 'enemy' || !act.e || !act.e.isAlive) continue;
+            act.bar = Math.max(-99, act.bar - delay);
+            names.push(act.e.name);
+        }
+        if (!names.length) return '';
+        return ' 🐉 龙吟第 ' + (idx + 1) + ' 声（耐久跌破 ' + Math.round(t.thresholds[idx] * 100) + '%）——'
+            + names.join('、') + ' 气机一滞（行动条 −' + delay + '）。';
     }
 
     // 玩家攻击指定部位
@@ -2589,7 +3681,33 @@ class Battle {
                 if (damageType === 'sharp') damageType = 'slash';
             }
         } catch (e) {}
+        // ===== v27.15：②新增-3 兵刃的代价（卷刃）——构装体的壳是吃刃的 =====
+        // 对构装敌用斩/刺兵刃硬砍：本场累计，第 3 击刃口卷（播报），第 4 凭起斩/刺伤×0.85（壳越砍越钝）；
+        // 战前已卷（_edgeDulled，兵器铺可磨）当场就是钝刃。招式不吃壳损——真气御刃，损的是气不是钢。
+        // 正解是打法切换：钝器砸壳、利刃切关节（换武器换伤型，构装壳的克星是 blunt）。
+        try {
+            var _ept15 = String(this.enemy.physiologyType || (this.enemy.physiology && this.enemy.physiology.type) || '');
+            var _isConstruct15 = (_ept15 === 'construct');
+            var _isEdge15 = (damageType === 'slash' || damageType === 'pierce');
+            var _mh15 = (window.currentEquipment && window.currentEquipment.mainHand) || null;
+            if (_mh15 && _mh15._edgeDulled && _isEdge15) {
+                this._dullWeaponNow = true;   // 卷着的刃：这场每击都钝（伤害×0.85，_executeAttack 前后不拦只记账）
+            }
+            if (_isConstruct15 && _isEdge15 && _mh15) {
+                this._edgeHitsOnConstruct = (this._edgeHitsOnConstruct || 0) + 1;
+                if (this._edgeHitsOnConstruct === 3) {
+                    this.log.push({ msg: '⚠️ 「铛」的一声火星——' + (_mh15.name || '你的兵刃') + ' 的刃口在' + (this.enemy.name || '这东西') + '的硬壳上卷了！（斩刺伤从此打折——钝器砸壳、利刃切关节，才是对的打法）' });
+                }
+            }
+        } catch (eEdge15) {}
         const result = this._executeAttack(this.player, this.enemy, partId, damageType);
+        // v27.15 卷刃伤害折：钝刃/壳损满 3 后的斩刺伤 ×0.85（真气招式不经此路，账不混）
+        try {
+            if ((this._dullWeaponNow || (this._edgeHitsOnConstruct >= 3)) && _isEdge15 && result && result.damage != null) {
+                result.damage = Math.round(result.damage * 0.85);
+                if (result.total != null) result.total = Math.round(result.total * 0.85);
+            }
+        } catch (eDull15) {}
         this.log.push(result);
         this._demonicOnHit(result);   // 第九十九波：魔道天生技应手露相
         // 1.2 普攻回气：招式耗真气，普攻回气，逼玩家穿插普攻做资源博弈
@@ -2648,6 +3766,79 @@ class Battle {
         this.spendActionCost(this.player, 100);
         if (this._checkEnd()) return true;
         this._advanceTimeline();
+        return true;
+    }
+
+    // ===== 白泽：一次开口，一次答复，一次了结 =====
+    // 开场那一段（不是战斗中段）：它不吼，它说话，并把价码摆出来。
+    // 玩家不需要点任何按钮就能看见「这只兽会说话」——这是它能不能被看见的第一道关。
+    _baizeOfferDeal() {
+        if (!isBaizeEntity(this.enemy) || !this.enemy.isAlive) return false;
+        if (this._baizeAsked) return false;      // 已经开过口了，不重复摆价
+        this._baizeAsked = true;
+        this.log.push({ msg: '📜 ' + this.enemy.name + ' 没有扑上来。它在林子边缘站定，回头看了你一眼——然后它开口说了人话：「我知道你要问什么。答不答，看你肯不肯放我走。」' });
+        this._pendingPrompt = {
+            kind: 'baize',
+            // noEnemyTurn：这一问不是它摆出来的姿态，是它开的价——你不该因为站着听一句话就白得它一手。
+            noEnemyTurn: true,
+            text: this.enemy.name + ' 肯说，但它不是白说的。它开的价是：放它走，它才开口。你怎么应？',
+            options: [
+                { k: 'spare', label: '🙏 应它——放它走（它才开口。代价真扣：这一场 0 经验、0 部位件、0 收服）' },
+                { k: 'slay', label: '⚔️ 不应——先取了它的角与骨（话它不会再开口；它会记恨你）' },
+                { k: 'silent', label: '🔇 不搭话（各打各的——什么也不会发生）' }
+            ]
+        };
+        return true;
+    }
+    /** 它真开口了：弱点 / 来路 / 身上值钱的料——三条全部现读生态账（见 baizeIntelOf） */
+    _baizeSpeak() {
+        var intel = baizeIntelOf(this.enemy);
+        var name = this.enemy.name;
+        this.log.push({ msg: '📖 ' + name + ' 开口了。它说得不快，一句一句，像在念自己记了千百年的账。' });
+        if (intel && intel.weakness) this.log.push({ msg: '🎯 弱点——「' + intel.weakness + '」' });
+        if (intel && intel.origin) this.log.push({ msg: '📍 来路——' + intel.origin });
+        if (intel && intel.parts && intel.parts.length) {
+            this.log.push({ msg: '⚱️ 它身上值钱的只有这些：' });
+            for (var i = 0; i < intel.parts.length; i++) {
+                this.log.push({ msg: '　· ' + baizePartLine(intel.parts[i], intel) });
+            }
+            this.log.push({ msg: '⚠️ 这几件，只有打死它才掉得出来。它活着的时候，一件也不给你——这是它开价的规矩，不是它小气。' });
+        } else {
+            this.log.push({ msg: '⚠️ 它身上挂着的料，这一本账此刻不在册（部位件账没读出来）——它不拿没有的东西许你。' });
+        }
+    }
+    /** 玩家主动来问（「💬 攻心话」那一下）。白泽封了口就把为什么封口写出来——锁不隐藏，写明锁因。 */
+    _baizeAsk(kind) {
+        if (!isBaizeEntity(this.enemy) || !this.enemy.isAlive) return false;
+        if (this._baizeSpared || this.enemy._fled) {
+            this.log.push({ msg: '📜 它已经走了。你放它走的那一刻，这句话就已经问不成了——白泽极少出没，下一只不欠你这一句。' });
+            return false;
+        }
+        if (this._baizeSealed) {
+            this.log.push({ msg: '📜 它把口封上了——话是许了「放它走」才肯说的，你方才选了动手。这只兽记事的本事，记的不是仇，是你没肯付的那句价。' });
+            return false;
+        }
+        if (this._baizeDone) {
+            this.log.push({ msg: '📜 「问过了。」它把头转开——「我这一张嘴只开一次。已经开过了。」' });
+            return false;
+        }
+        this._baizeDone = true;
+        this.log.push({ msg: '📣 你不喊话，开口问它——' + this.enemy.name + ' 低下身子看你，像在等你先出价。' });
+        if (!this._baizeOfferDeal()) {
+            // 走到这里说明它已经摆过价了（开场摆过）：把同一个对话位重新摆一次，
+            // 玩家关掉面板也能从攻心话这一路再进来——不必只能靠开场那一次撞见。
+            this._baizeAsked = true;
+            this._pendingPrompt = {
+                kind: 'baize', noEnemyTurn: true,
+                text: this.enemy.name + ' 还在等你的价。它开的价是：放它走，它才开口。你怎么应？',
+                options: [
+                    { k: 'spare', label: '🙏 应它——放它走（它才开口。代价真扣：这一场 0 经验、0 部位件、0 收服）' },
+                    { k: 'slay', label: '⚔️ 不应——先取了它的角与骨（话它不会再开口；它会记恨你）' },
+                    { k: 'silent', label: '🔇 不搭话（各打各的——什么也不会发生）' }
+                ]
+            };
+        }
+        if (kind === 'heart') this.spendActionCost(this.player, 60);   // 「攻心话」那一记照扣动作条，与别的话术同价
         return true;
     }
 
@@ -2778,7 +3969,26 @@ class Battle {
         this._pendingPrompt = null;
         var enemy = this.enemy;
         var enemyActor = this._findActor(enemy);
-        if (prompt.kind === 'smoke') {
+        if (prompt.kind === 'baize') {
+            // 白泽开的价：放它走，它才开口。二选一，不可兼得——
+            //   应它 → 情报到手（_baizeSpeak 把三条真账念出来），代价是这一场一无所得
+            //   不应 → 情报永久关闭（封口，理由写进日志），它记恨（复用既有 _foeRage 账）
+            if (opt.k === 'spare') {
+                this._baizeSpared = true;
+                this._noteDeed('mercy');
+                this._baizeSpeak();
+                enemy._fled = true;
+                this.log.push({ msg: '🙏 你收了刀：「走吧。」' + enemy.name + ' 向你低了低头，转身没入瘴泽——它不是被打跑的，是自己走的。' });
+                this.log.push({ msg: '📉 你放它走了：这一场你的历练、真元、名气、它身上的料，一样都落不下手（敌人遁走，不入档、不标尸）。白泽极少出没——你问到了这一句，赔上了它的角与骨。' });
+            } else if (opt.k === 'slay') {
+                this._baizeSealed = true;
+                this._foeRage = 1;      // 既有账：下一击更狠（×1.2）也露破绽（命中 -15，一次性）——不新增任何倍率
+                this.log.push({ msg: '⚔️ 你把刀横过来——' + enemy.name + ' 的话停在半句上，喉头一动，把那点灵犀咽了回去。' });
+                this.log.push({ msg: '🕯️ 话不会有了。它记着你没肯付的那句价：下一击更狠（×1.2），也露更大的破绽（命中 -15）。' });
+            } else {
+                this.log.push({ msg: '🔇 你没接它的话。它也没再说——它等着看你先动刀。' });
+            }
+        } else if (prompt.kind === 'smoke') {
             if (opt.k === 'avert') {
                 this.log.push({ msg: '🏃 你扭头纵身跃开，石灰贴着耳边飞过——只迷进眼里几粒。（你这一跃耗去行动条 60 点）' });
                 if (enemyActor) enemyActor.bar = Math.max(0, enemyActor.bar - 60);
@@ -2861,6 +4071,14 @@ class Battle {
                 }
             }
         }
+        // 白泽开价那一问不是它摆出来的姿态：站着听一句话不该白得它一手，所以不走这条「敌人这一动的条」。
+        // （其余四类 feign/smoke/surrender/taunt 都在敌人行动里摆出来，条照扣，一字未改。）
+        if (prompt.noEnemyTurn === true) {
+            if (this.enemy && this.enemy._fled) { if (this._checkEnd()) return true; }
+            if (!this.isFinished) this._advanceTimeline();
+            if (this.onUpdate) this.onUpdate();
+            return true;
+        }
         if (enemyActor) enemyActor.bar -= 100;   // 敌人这一动到你选完才扣（思索不占账）
         this._endEnemyMainAction();
         if (!this.isFinished) this._advanceTimeline();
@@ -2895,6 +4113,11 @@ class Battle {
         if (!this.enemy || !this.enemy.isAlive) return false;
         var enemy = this.enemy;
         var isBeast = (enemy.species === 'beast' || enemy.physiologyType === 'beast');
+        // 白泽：唯一一条「兽也开口说人话」的例外，且只有「攻心话」这一路能问到它
+        // （骂阵是挑衅、壮胆是喊给自己听——那两路对它只有「听不懂人话」这一句，不硬拗）。
+        if (isBeast && kind === 'heart' && isBaizeEntity(enemy)) {
+            return this._baizeAsk(kind);
+        }
         if (isBeast) {
             this.log.push({ msg: '📣 你冲着它喊话——野兽听不懂人话，只当你要抢它的食，龇牙瞪了过来。' });
             return false;
@@ -3503,7 +4726,9 @@ class Battle {
         // 第一百波·对面也连环：心气散了的人更早想着跑（气血线 30→40，念头 45%→60%）
         var _escThr100 = (this._foeDisheartened > 0) ? 40 : 30;
         var _escP100 = (this._foeDisheartened > 0) ? 0.6 : 0.45;
-        if (enemy.hasAbility('escape') && bloodVol > 0 && bloodVol < _escThr100 && Math.random() < _escP100) {
+        // v27.15：护崽的兽不逃（②新增-2）——窝里有崽，逃了崽就没了；重伤也站着打
+        if (enemy._guardCub) { /* 遁走一票否决，走下面正常敌手回合 */ }
+        else if (enemy.hasAbility('escape') && bloodVol > 0 && bloodVol < _escThr100 && Math.random() < _escP100) {
             var escapeRaw = 0.35 + ((enemy.getSpeed ? enemy.getSpeed() : 10) - (this.player.getSpeed ? this.player.getSpeed() : 10)) * 0.01;
             var escapeRate = Math.max(0.25, Math.min(0.7, escapeRaw));
             if (Math.random() < escapeRate) {
@@ -4053,12 +5278,19 @@ class Battle {
                     extra += ' ☠️ 淬在刃上的毒渗进伤口！（剩 ' + attacker._venomBlade + ' 次毒）';
                 }
             }
-            // 吸血功：命中造成实际伤害后按30%回复气血（上限100），本场首次记日志
+            // 吸血功：命中造成实际伤害后按30%回复气血（本场量程封顶），本场首次记日志
+            // ⚠️ 病灶：上限曾写死 Math.min(100, …)。气血量程随境界放大（js/app.js:4880 playerBattleBodyScale
+            //    走 scaleEnemyEntityToLevel，实测渡劫4=700、金仙9=928），于是「吸血」在量程 >100 的境界
+            //    不是回血而是**削血**：浏览器实测只学一门 art_blood_dao（血饮刀法）的金仙9层角色，
+            //    第一记命中把 bloodVolume 从 928 写成 100（净掉 828 点、89% 的血池），此后全程钉在 100。
+            //    玩家体验：练了吸血功反而比不练更脆，一刀从满血掉到一成血。
+            //    正确写法就在同文件 :4107（敌人回气丹）与 _procBloodCap（:2930）：读本场量程，不写死点数。
+            var _lsCap = this._procBloodCap(attacker) || 100;
             if (attacker.hasAbility('lifesteal') && attacker.physiology
                 && (attacker.physiology.bloodVolume || 0) > 0) {
                 var gain = Math.round(actual * 0.3);
                 if (gain > 0) {
-                    var newBlood = Math.min(100, (attacker.physiology.bloodVolume || 0) + gain);
+                    var newBlood = Math.min(_lsCap, (attacker.physiology.bloodVolume || 0) + gain);
                     var realGain = Math.round(newBlood - attacker.physiology.bloodVolume);
                     attacker.physiology.bloodVolume = newBlood;
                     if (attacker.physiology.health !== undefined) attacker.physiology.health = newBlood;
@@ -4089,7 +5321,9 @@ class Battle {
                 cdEss.qi = Math.max(0, qiBefore - qiCost);
                 if (qiDrained > 0 && attacker.physiology
                     && (attacker.physiology.bloodVolume || 0) > 0) {
-                    attacker.physiology.bloodVolume = Math.min(100,
+                    // 同上：上限读本场量程，不写死 100（妖兽血肉同样随等级放大，实测幽脉蟒 lv85 = 1500）
+                    var _dqCap = this._procBloodCap(attacker) || 100;
+                    attacker.physiology.bloodVolume = Math.min(_dqCap,
                         (attacker.physiology.bloodVolume || 0) + Math.floor(qiDrained * 0.5));
                     if (attacker.physiology.health !== undefined) attacker.physiology.health = attacker.physiology.bloodVolume;
                 }
@@ -4125,6 +5359,19 @@ class Battle {
                     extra += ' 🕸️ 采补功！' + (attacker === this.player ? '你' : attacker.name) + '摄取' + defender.name + '精气' + (qiGain > 0 ? ('，真气+' + qiGain) : '');
                 }
             }
+            // v27.13：兽形部位族——受击掷档的播报随本条命中消息带回（重伤/危急才出声，轻伤只记账）。
+            // 三条真实扣血路径都收口到本函数，挂一处即全覆盖；模块缺席＝不出声。
+            try {
+                if (defender && window.BeastPartFamily && window.BeastPartFamily.isBeastForm(defender)) {
+                    var _bfNote = window.BeastPartFamily.drainNotes(defender);
+                    if (_bfNote) extra += ' ' + _bfNote;
+                }
+            } catch (eBFNote) { console.warn('[静默失败] js/battle.js · _applyOnHitAftermath：兽形播报失败——' + eBFNote.message); }
+            // ===== v26.5 炼器七术 · 受击/命中之后的这一笔（'aftermath' 阶段唯一入口）=====
+            // 排在这里而不是散进上面的四支：格挡/化解/正常三条扣血路径都收口到本函数，
+            // 挂一处即全覆盖，且不会在同一次命中里重复结算。反震走 takeDamage 直调（天然不连锁）。
+            var _fpAfter = this._forgeProcs('aftermath', { attacker: attacker, defender: defender, actual: actual });
+            if (_fpAfter && _fpAfter.text) extra += _fpAfter.text;
         } catch (amErr) {}
         return extra;
     }
@@ -4249,12 +5496,26 @@ class Battle {
 
     // C: v9.8 判定 — 命中→闪避→格挡→化解→破甲伤害/暴击→反击
     _executeAttack(attacker, defender, partId, damageType, actionBonus) {
+        // v27.13：兽形部位族——打兽形敌时兽形格 id（咽喉/脊背/前肢上段/…）先换算到底层人形槽，
+        // 后续命中/闪避/格挡/伤害全线照走；人形格 id 原样放行（takeDamage 侧再反查兽册记账）。
+        // 模块缺席/非兽形＝原样放行，绝不拦出手。
+        try {
+            if (window.BeastPartFamily && window.BeastPartFamily.isBeastForm(defender)) {
+                var _bfExec = window.BeastPartFamily.routeIncomingPart(defender, partId);
+                if (_bfExec && _bfExec.part) partId = _bfExec.part;
+            }
+        } catch (eBFExec) { console.warn('[静默失败] js/battle.js · _executeAttack：兽形格路由失败——' + eBFExec.message); }
         if (!defender.durabilities.hasOwnProperty(partId)) {
             return { msg: `${attacker.name} 攻击了无效的部位！` };
         }
         if (attacker.physiology && attacker.physiology.isUnconscious) {
             return { msg: `${attacker.name} 已昏迷，无法行动！`, missed: true };
         }
+        // ===== v26.5 炼器七术 · 出手门（'act' 阶段唯一入口）=====
+        // 被雷殛定住的一动直接落空：不做命中率、不掷骰——它是「定住」，不是「打偏」。
+        // 挡在命中/闪避/格挡全部判定之前：这一动根本没出手，账一条都不该记。
+        var _fpAct = this._forgeProcs('act', { attacker: attacker, defender: defender });
+        if (_fpAct && _fpAct.skip) return { msg: _fpAct.msg, missed: true, procSkip: true };
         const atkPain = typeof getPainCombatPenalties === 'function'
             ? getPainCombatPenalties(attacker)
             : { hitPenalty: 0, dodgePenalty: 0, actionFailRate: 0, effectivePain: 0 };
@@ -4297,6 +5558,10 @@ class Battle {
             ? aStats.hit
             : (85 + (attackerDex - 10) * 0.3 + attackerSkill * 0.1);
         if (atkPain.hitPenalty) hitRate += atkPain.hitPenalty;
+        // v27.17：残格乘区的命中折（颈废 -5 渐回）——残是幸存者的纪念，出手如实偏一点
+        if (attacker === this.player && this.player._lingerHitMod) {
+            hitRate += this.player._lingerHitMod;
+        }
         const preciseParts = ['eyes', 'handL', 'handR', 'jaw', 'brain'];
         if (preciseParts.includes(partId)) {
             // 神识减免精确部位惩罚
@@ -4338,6 +5603,18 @@ class Battle {
             if (this._foeStumble > 0) { this._foeStumble = 0; hitRate -= 10; }
         }
         if (attacker === this.player && this._playerRage > 0) hitRate -= 10;
+        // ===== v26.5 炼器七术 · 诅咒与狂血都落在**命中**这一段（不碰 _calculateDamage）=====
+        //   诅咒挂在防守方身上：他被咒，出手更容易落空（层数在 aftermath 里叠；没有层数这行就是死的）
+        //   狂血挂在出手方身上：血越少越准（阶位在 round 里定好，这里只读算好的数）
+        if (defender._procCurseStacks > 0) hitRate -= defender._procCurseStacks * FORGE_PROC_TUNING.curse.hitPerStack;
+        if (attacker._procWildHitBonus > 0) hitRate += attacker._procWildHitBonus;
+        // v27.13：兽形部位族·功能伤——眼瞳震碎在身的兽形出手方命中减档（受击判定放宽）；模块缺席＝不加不减
+        try {
+            if (window.BeastPartFamily && window.BeastPartFamily.isBeastForm(attacker)) {
+                var _bfHit = window.BeastPartFamily.attackerPenalty(attacker);
+                if (_bfHit && _bfHit.hitDelta) hitRate += _bfHit.hitDelta;
+            }
+        } catch (eBFHitR) { console.warn('[静默失败] js/battle.js · _executeAttack：兽形命中减档失败——' + eBFHitR.message); }
         hitRate = Math.max(5, Math.min(95, hitRate));
 
         if (Math.random() * 100 > hitRate) {
@@ -4409,6 +5686,9 @@ class Battle {
             const afterBlock = this._applyOnHitAftermath(attacker, defender, actual);
             let msg = `${defender.name} 格挡了攻击！受到 ${actual} 点伤害${afterBlock}`;
             if (!defender.isAlive) msg += ` ${defender.name} 被击败！`;
+            // 伤害飘字：格挡这一下照样掉了血，屏上也得有数字（旧版只在普攻分支放飘字，
+            // 格挡/化解两处静默返回，玩家看见的伤害比实际少一大截）
+            this._showDamageNumber(defender, actual, 'normal');
             // 格挡不触发反击
             return { msg, blocked: true, damage: actual, part: partId, damageType: damageType };
         }
@@ -4429,6 +5709,7 @@ class Battle {
             var c2 = this._tryCounter(defender, attacker, partId);
             if (c2) msg += ' ' + c2.msg;
             if (!defender.isAlive) msg += ` ${defender.name} 被击败！`;
+            this._showDamageNumber(defender, actual, 'normal');
             return { msg, parried: true, damage: actual, part: partId, damageType: damageType, counter: !!c2 };
         }
 
@@ -4511,14 +5792,14 @@ class Battle {
         if (!defender.isAlive) {
             msg += ` ${defender.name} 被击败！`;
         }
+        this._showDamageNumber(defender, actual, isCrit ? 'crit' : 'normal');
         try {
-            if (typeof window.showDamageNumber === 'function') {
-                window.showDamageNumber(null, actual, isCrit ? 'crit' : 'normal');
-            }
             if (typeof window.showEffect === 'function') {
                 window.showEffect(isCrit ? 'battle_crit' : 'battle_hit');
             }
-        } catch (e) {}
+        } catch (eFx) {
+            console.warn('[静默失败] js/battle.js:4601 · 命中特效没放出来——这一击的动静只在战报里，屏上没画', eFx && eFx && eFx.message);
+        }
         // 第九十波·落马账：骑乘中挨了重击（暴击、或一击打穿胸口耐久四成），骑手可能被震下马背——
         // 三成落马。落马不是惩罚弹窗，是世界后果：机动加成当场撤销、坐骑继续留在阵上替你打，
         // 但本场战斗打得正急，再难翻身骑上去。
@@ -4536,6 +5817,20 @@ class Battle {
             }
         }
         return { msg, part: partId, damage: actual, crit: isCrit, damageType: damageType };
+    }
+
+    // ===== 伤害飘字：唯一出口 =====
+    // 此前 battle.js 只在这一处试 window.showDamageNumber，而传进去的 target 是 null，
+    // ui-immersive.js 的 showDamageNumber 开头就是 if (!target) return;——伤害数字一次都没显示过。
+    // 现在传战斗实体，定位由 ui-immersive 的 resolveDamageAnchorEl 换算（战斗层不碰 document）。
+    _showDamageNumber(defender, amount, type) {
+        try {
+            if (typeof window !== 'undefined' && typeof window.showDamageNumber === 'function') {
+                window.showDamageNumber(defender, amount, type || 'normal');
+            }
+        } catch (eDn) {
+            console.warn('[静默失败] js/battle.js:4628 · 伤害飘字没放出来——这一击的伤害只在战报里，屏上只有文字没有数字', eDn && eDn && eDn.message);
+        }
     }
 
     // ===== v20.64 队员挨打记账 =====
@@ -4609,6 +5904,38 @@ class Battle {
         if (!this.enemy.isAlive) {
             this.isFinished = true;
             this.winner = 'player';
+            // ===== v26.5 后期材料产出表：高阶妖兽身上的那一笔（零骰，累积计数达阈值就给）=====
+            // 为什么落在这一支：这是全工程唯一「妖兽被打死并结算」的地方（主敌倒下、同伙补位都汇到这里），
+            // 击杀等级（enemy.level）在这里读得到——而等级是高阶材料分档的判据。
+            try {
+                if (window.ForgingCompound && typeof window.ForgingCompound.settleLateMaterial === 'function') {
+                    var _lm = window.ForgingCompound.settleLateMaterial('beast', {
+                        level: Number(this.enemy.level) || 0,
+                        isBeast: (this.enemy.type === 'beast' || this.enemy.species === 'beast'
+                            || this.enemy.physiologyType === 'beast'),
+                        name: this.enemy.name,
+                        // ★★ beastId 那一跳的第三段 ★★
+                        // 此前这一处只传 {level, isBeast, name} —— 没有 id 字段，所以取档口
+                        //   （forging-compound.js lateMaterialTier）只能按等级带认账，一只 85 级的
+                        //   云角鹿会报出「幽脉蟒」的字样并给龙鳞龙晶（实测见
+                        //   .scratch/beast-unlock-progress/p13-idgrain.js 第 ⑥ 节）。
+                        // 而游戏在别处（beast-ecosystem.js forgeDropHint/forgeDropReport，图鉴与尸体面板
+                        //   共用那张嘴）对云角鹿明说的是「天外玄铁」——**表承诺与实际给料本来就不一致**。
+                        // 现在把这一只到底是谁透过去：实体上带着模板 id（:567 存、:2390 写），
+                        //   取档口据此认到它自己那一档（:5363 之后那行注释的账就是这条）。
+                        beastId: this.enemy._beastTemplateId || null
+                    });
+                    if (_lm && _lm.given && _lm.given.length) {
+                        // given 是对象数组 {id,name,count}（forging-compound.js:394），直接 join 会印出 [object Object]。
+                        // 口径与另两个消费口一致：app.js:8681 深脉、forging-compound.js:416 秘境。
+                        this.log.push({ msg: '🦴 高阶妖兽身上刮下真料：'
+                            + _lm.given.map(function (g) { return g.name + ' ×' + g.count; }).join('、')
+                            + '（' + _lm.beastName + '，累计第 ' + _lm.kills + ' 次）' });
+                    }
+                }
+            } catch (eLateMat) {
+                console.warn('[炼器术] 后期材料结算失败（这一笔没进账，别当成没掉）：', eLateMat && eLateMat.message);
+            }
             if (this.player && typeof this.player._consumeFormationBuff === 'function') this.player._consumeFormationBuff();
             // ===== 第九十九波·死前之言：武人的最后一口气，不该是一串空账 =====
             try {
@@ -4701,6 +6028,19 @@ window.generateRandomEnemy = generateRandomEnemy;
 window.Battle = Battle;
 // v13.0 敌人战斗技能注册表（只读引用，机制判定唯一来源）
 window.COMBAT_ABILITIES = COMBAT_ABILITIES;
+// v26.4 头目级档位表（诊断/验收读它；战斗判定仍走 generateRandomEnemy 内部那一支）
+window.ENEMY_HEAD_TIERS = ENEMY_HEAD_TIERS;
+// v26.5 炼器七术：数值表 / 出场次序 / 读口（战斗播报、验收测试与 app.js 都走这三个导出）
+window.FORGE_PROC_ORDER = FORGE_PROC_ORDER;
+window.FORGE_PROC_PHASE_ORDER = FORGE_PROC_PHASE_ORDER;
+window.FORGE_PROC_TUNING = FORGE_PROC_TUNING;
+window.readPlayerForgeProcs = readPlayerForgeProcs;
+// 白泽「能说人话」只读口（验收尺与排障读它；判定仍走 Battle 内部那一支）
+window.BAIZE_NAME = BAIZE_NAME;
+window.BAIZE_TEMPLATE_ID = BAIZE_TEMPLATE_ID;
+window.BAIZE_ECO_ID = BAIZE_ECO_ID;
+window.isBaizeEntity = isBaizeEntity;
+window.baizeIntelOf = baizeIntelOf;
 // 生理系统导出
 window.initPhysiology = initPhysiology;
 window.initBodyParts = initBodyParts;

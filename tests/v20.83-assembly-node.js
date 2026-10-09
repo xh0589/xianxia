@@ -74,11 +74,13 @@ const w = {
     _jealWriteback: () => ({ relation: 'neutral', strength: 10, text: '' })
 };
 const PE = {};
+const fired = [];
 const sandbox = {
     window: w, console: { log() {}, warn() {}, error() {} },
     document: { querySelector: () => null },
     setTimeout: (fn, ms) => { timeouts.push({ fn, ms }); return timeouts.length; },
     localStorage: { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); } },
+    triggerPersonalEvent: (id) => { fired.push(id); return true; },
     NPC_PERSONAL_EVENTS: PE
 };
 vm.createContext(sandbox);
@@ -159,6 +161,9 @@ ok(ev && ev.scenes.every(s => !s.text || s.text.indexOf('undefined') < 0), '① 
     ok(rT.affection === 5 && rL.affection === 1 && rT.msg.length > 10 && rL.msg.length > 10, '① 余波三选项各有好感账与收尾文');
 }
 // 每日钩子：余波优先
+// 订正：本段原先断言「每日钩子一跑完，账本 entry.after 就已是 true」——那正是本批要修的病。
+// 旧写法先把账销了再发（_asmFire 里 `命中即 return`），弹窗位被别人占着时这一回合照面就永久作废，
+// 而账上已经销了，再没人来补。销账必须落在「真的开演出去那一刻」。
 {
     // 清空账本重种一笔 5 天前的照面（今日 15）
     store['xianxia_asm_ledger'] = JSON.stringify([{ h: 'sect_leader_百花谷', g: 'sect_leader_药王谷', day: 10, choice: 'both', after: false }]);
@@ -166,15 +171,36 @@ ok(ev && ev.scenes.every(s => !s.text || s.text.indexOf('undefined') < 0), '① 
     dayNow = 15;
     Object.keys(PE).forEach(k => delete PE[k]);
     timeouts.length = 0;
+    fired.length = 0;
     vm.runInContext('Math.random = function(){ return 0.05; };', sandbox);
     newDayCbs[0]();
     const afterIds = Object.keys(PE).filter(k => k.indexOf('asm_after') === 0);
     ok(afterIds.length === 1, '① 每日钩子：余波窗口内优先装配余波桩');
     ok(timeouts.length === 1 && timeouts[0].ms === 1200, '① 发射走 1200ms 延迟（与手写桩同拍）');
-    ok(w._asmLedgerGet().every(e => e.after === true), '① 余波演过即销账（不重演）');
+    ok(w._asmLedgerGet().every(e => e.after === false), '① 还没开演就不销账（销账只认真弹出去那一刻）');
     // 弹前门禁二次校验：触发一次 timeout 回调，事件应注册且可触发（canPlayerAccess 缺桩环境 → 静默跳过）
     timeouts[0].fn();
-    ok(true, '① 发射回调执行不抛错');
+    ok(fired.length === 1 && fired[0].indexOf('asm_after') === 0, '① 发射回调真的开演了这一桩');
+    ok(w._asmLedgerGet().every(e => e.after === true), '① 余波演过即销账（不重演）');
+}
+// 弹窗位被别人占着：这一回合必须欠着，不许销账、不许丢
+{
+    store['xianxia_asm_ledger'] = JSON.stringify([{ h: 'sect_leader_百花谷', g: 'sect_leader_药王谷', day: 10, choice: 'both', after: false }]);
+    w._asmLedgerReload();
+    dayNow = 16;
+    Object.keys(PE).forEach(k => delete PE[k]);
+    timeouts.length = 0;
+    fired.length = 0;
+    sandbox.document.querySelector = sel => (sel === '.personal-event-modal' ? { cls: 'personal-event-modal' } : null);
+    newDayCbs[0]();
+    ok(Object.keys(PE).filter(k => k.indexOf('asm_after') === 0).length === 0, '① 座位被占：这一回合不装配（白写的声口不注册）');
+    ok(w._asmLedgerGet().every(e => e.after === false), '① 座位被占：账不销——这一回合还欠着');
+    ok(w.__jealAsmSeat && w.__jealAsmSeat().deferredCount >= 1, '① 座位被占：留痕可查（不是无声消失）');
+    sandbox.document.querySelector = () => null;
+    dayNow = 17;
+    timeouts.length = 0;
+    newDayCbs[0]();
+    ok(Object.keys(PE).filter(k => k.indexOf('asm_after') === 0).length === 1, '① 座位空出来后的第二天：这一回合补演（账本窗口 3~10 日）');
 }
 // 每日钩子：无余波 → 新开对局
 {

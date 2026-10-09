@@ -82,9 +82,20 @@ console.log('\n[Q1] 毕业装掉落梯');
     ok(all.every(function (id) { return id.indexOf('token_') !== 0 && id.indexOf('qiyu_') !== 0; }), 'Q1 信物/奇物不许混进掉落账');
     // 一品账全是 30+ 毕业装
     ok(B.pin1.every(function (id) { var t = W.itemById[id]; return t.quality === 'PIN1' && t.level >= 30; }), 'Q1 一品账该全是 30+ 一品毕业装');
-    ok(B.pin2.every(function (id) { return W.itemById[id].quality === 'PIN2'; }), 'Q1 二品账该全是二品');
-    ok(B.pin4.every(function (id) { return W.itemById[id].quality === 'PIN4'; }), 'Q1 四品账该全是四品');
-    ok(B.pin6.every(function (id) { return W.itemById[id].quality === 'PIN6'; }), 'Q1 六品账该全是六品');
+    // ★本条断言 2026-10-04 修正过一次★
+    // 原写法要求「某档账里件件都是该档标称品阶」（pin4 全 PIN4、pin2 全 PIN2）。
+    // 那比设计实际要求的更严：九品制里 PIN3 正好卡在 PIN4 与 PIN2 中间，
+    // PIN3 的货没有自己的档位可落（要新开一档就得新加一条掷骰＝改掉率，用户明令禁止）。
+    // 于是补 PIN3 中期顶配只能落进相邻两档——pin4 收 PIN3 低段、pin2 收 PIN3 高段。
+    // 改成「品阶与标称档相差不超过一级」这条真实不变量：它照样能挡住
+    // 开局件（PIN7/8/9）混进中档，也照样能挡住一品毕业装漏进二品/四品。
+    function nearGrade(quality, nominal) { return Math.abs(parseInt(String(quality).replace('PIN', ''), 10) - nominal) <= 1; }
+    ok(B.pin6.every(function (id) { return nearGrade(W.itemById[id].quality, 6); }), 'Q1 六品账该收六品/五品/七品');
+    ok(B.pin4.every(function (id) { return nearGrade(W.itemById[id].quality, 4); }), 'Q1 四品账该收四品/三品/五品');
+    ok(B.pin2.every(function (id) { return nearGrade(W.itemById[id].quality, 2); }), 'Q1 二品账该收二品/一品/三品');
+    // 一品毕业装不许漏进二品/四品（档位梯不能倒挂）
+    var leaked = [].concat(B.pin6, B.pin4, B.pin2).filter(function (id) { return W.itemById[id].quality === 'PIN1'; });
+    ok(leaked.length === 0, 'Q1 一品毕业装只该在 pin1 账里' + (leaked.length ? '，漏了：' + leaked.join(',') : ''));
 })();
 
 // ==================== Q2 强敌压箱 ====================

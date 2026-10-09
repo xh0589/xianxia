@@ -97,7 +97,9 @@ assert(aff3.every(function (a) { return a.minForgeSkill <= 5; }), '低技能只�
 // ---- 3. 器胚 ----
 section('3) 器胚');
 assert(F.EMBRYOS.sword.subtype === 'sword' && F.EMBRYOS.sword.baseDamage === 'slash', '剑胚属性');
-assert(F.EMBRYOS.armor.slot === 'armor' && F.EMBRYOS.armor.baseDamage === null, '甲胚无伤害');
+// 甲胚的槽位必须是 equipment.js equipmentSlots 里真实存在的 id（旧账写 'armor'，十二槽没有这一格，
+// 面板无处安放、equipItemFromInventory 取不到 targetSlot）。'body'＝身体槽。
+assert(F.EMBRYOS.armor.slot === 'body' && F.EMBRYOS.armor.baseDamage === null, '甲胚落在真实槽位 body（甲胚无伤害）');
 assert(F.EMBRYOS.flying.baseDamage === 'pierce', '飞剑胚穿刺');
 assert(F.EMBRYOS.heavy.baseAttrs.attack === 10, '重兵胚攻 10');
 assert(Object.keys(F.EMBRYOS).length === 5, '5 类器胚');
@@ -204,14 +206,15 @@ if (dup.affixes) {
 // ---- 10. 品质段（第二十六波：锻器有品相） ----
 section('10) 品质段（第二十六波）');
 function withRandom(v, fn) { var o = Math.random; Math.random = function () { return v; }; try { return fn(); } finally { Math.random = o; } }
-// 炉火＝技能±20（0.5 的随机源不偏不倚：火=技能）；工法＝词缀+铭纹
+// 第六十波：炉火不再掷骰（老规矩是 sk + 随机(-20..+20)），炉火 = min(100, 手艺+20)。
+// withRandom 在下列几节里留着是为了「证明传随机源也改不动结果」——数值已是定值。
 var qLow = withRandom(0.5, function () { return F.rollQuality(20, 1, false); });
-assert(qLow.quality.id === 'poor' && qLow.score === 21, '低手艺单词缀 → 劣质（工评21）');
+assert(qLow.quality.id === 'normal' && qLow.score === 33, '低手艺单词缀 → 普通（炉火=20+20=40，工评33）');
 var qHigh = withRandom(0.5, function () { return F.rollQuality(100, 3, true); });
 assert(qHigh.quality.id === 'imperial' && qHigh.score === 100, '宗师满词缀带铭纹 → 极品（工评100）');
-// 炼器台抬段（第二十四波记的欠账，这波还）
+// 炼器台抬段（第二十四波记的欠账，这波还）：手艺 5 单词缀只能到劣质，装了炼器台抬成普通
 mockWindow.CaveFacilities = { getBuff: function (c, k) { return k === 'qualityBoost' ? 1 : 0; } };
-var qBoost = withRandom(0.5, function () { return F.rollQuality(20, 1, false); });
+var qBoost = withRandom(0.5, function () { return F.rollQuality(5, 1, false); });
 assert(qBoost.quality.id === 'normal', '装了炼器台，劣质抬成普通（「品质+1段」兑现）');
 delete mockWindow.CaveFacilities;
 // 全流程：返回值带品相；极品成双；名字带品相字头；事件带品相
@@ -245,9 +248,9 @@ mockWindow._forgingFireBonus = 85;
 var qFire2 = F.rollQuality(100, 3, true);
 assert(qFire2.score === 91 && qFire2.quality.id === 'imperial', '宗师配好火——满词缀带铭纹，工评91出极品');
 assert(mockWindow._forgingFireBonus === null, '极品炉也把火消费掉');
-// 没试火走随机老路（与第 10 节同数）
+// 没试火就走手艺定档的炉火（第六十波起随机那 ±20 已经作废，与第 10 节同数）
 var qFire3 = withRandom(0.5, function () { return F.rollQuality(20, 1, false); });
-assert(qFire3.score === 21 && qFire3.quality.id === 'poor', '没试火照旧手艺±随机（旧账同数）');
+assert(qFire3.score === 33 && qFire3.quality.id === 'normal', '没试火照旧手艺定档（旧账同数）');
 // 接线：同一座火苗，各炉各账
 var qteSrc = fs.readFileSync(_ROOT + '/js/crafting/fire-qte.js', 'utf8');
 assert(qteSrc.includes('openForgeFireQTE') && qteSrc.includes('_forgingFireBonus'), '锻火试炼挂在同一座火苗上（得分各炉各账）');

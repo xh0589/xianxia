@@ -190,7 +190,7 @@ eq([itemById['spirit_stone'].name, itemById['spec_spirit_stone'].name].join(), '
 // ==================== F 炼丹房那页「两本账」被钉成死分支（DES-62） ====================
 // js/app.js:2062 openAlchemyRoom 用本地写死的三张方子排卡片，js/app.js:2101 craftPill 却按下标读
 // window.pilferRecipes（js/crafting.js:23）——屏上念「疗伤丹／灵芝 x2／20 真气」，点下去炼的是「小还丹」、
-// 扣的是它自己的料。本批回读后判定它在交付树上不可达（两条入口都先认 window.openCraftingUI），
+// 扣的是它自己的料。本批回读后判定它在对照树上不可达（两条入口都先认 window.openCraftingUI），
 // 于是**不改 js/**，只把「不可达」这个前提钉成闸：一旦有人绕过兜底直接叫它，F1/F2 当场红。
 var ALC = sliceFn(APP, 'openAlchemyRoom') || '';
 assert(ALC.length > 0 && !!sliceFn(APP, 'craftPill'), 'F0 两支都切得到（源在 js/app.js）');

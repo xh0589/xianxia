@@ -30,23 +30,243 @@ function initAllSectInternal() {
 if (typeof window !== 'undefined') initAllSectInternal();
 
 // ============ v18.8 宗门资源日结 ============
+// v27.13：快照升级为「宗门月账」收入端的总口径——产业+弟子孝敬+香火供奉三源齐入，
+// net=三源之和−维护（用度）。此前库房只有产业 gross 一路进项，孝敬与香火没有回灌通道，
+// resources 只出不进（发俸/议案/治理各处花销远超产业），迟早见底成"永远缺钱的门派"。
+// 日结 processAllSectDailyEconomy 按 net 回灌 resources，三源与维护同账同拍。
+// v27.13 续批（过堂⑥新增·宗门产业经营）：产业源不再是死的静态基值——药园/矿洞/坊市摊位等产业格
+// 指派弟子打理后，产出按人数加成（tend）并进 gross 同账入公库；口径见 SECT_TEND_TUNE，指派名册见 setSectResourceTend。
+// v27.13 续批收口（本轮）：①坊市摊位补位——灵石流产业此前只有 5 派各一条 trade 类，injectMarketStalls 给其余
+// 各派补一格「坊市摊位」恒产；②打理佣金——打理增量抽两成半发「私账已在册」的弟子，余下随产业源入公库；
+// ③月账三源→四源——账本加 sources（产业/坊市/孝敬/香火）小计，月报在宗门管理面板与月例消息条上念数。
+// v27.13：产业打理调参——per=每人产出加成比例（+15% 基值）；perCap=单格指派上限（3 人，≈+45%）；
+// mulCap=单格加成硬顶（占基值 50%，人数公式再多也夹在这）；poolDiv=可指派总人数=弟子数/poolDiv
+// （打理是兼职，不许把人全派去种田——也和 upkeep 按全弟子数计的口粮账不冲突）。
+// v27.13 续批（过堂⑥·宗门产业经营）：commission=佣金分成——打理增量抽两成半作零头，发给「私账已在册」的
+// 具名弟子；账不在册（普通弟子本就不在 purse 体系）那一分原地留公库，绝不凭空造弟子账。floor 取整，零头化。
+var SECT_TEND_TUNE = { per: 0.15, perCap: 3, mulCap: 0.5, poolDiv: 3, commission: 0.25 };
+
+// ============ v27.13 续批（过堂⑥·宗门产业经营）：坊市摊位补位 ============
+// 盘点（sects-deep-data 全 36 派）：药园类（type herb）6 处、矿洞类（type mine）1 处、
+// 字面意义的「坊市摊位」0 处——灵石流产业只有 5 派各一条 trade 类（商路/镖营/索债/抽成/路引，output 7~9）。
+// 恒产不该是这 5 派的专利：这里给其余 31 派在山门前补一格「坊市摊位」（type market——resource-actions
+// 无此类型 → 不接玩家动作钮，摊位收租是门派的账不是玩家的差事）。
+// 定档理由（盘点既有量级再定）：既有 trade 类 7~9 是门派亲自下场的营生；摊位只是把长街租出去抽成，
+// 压一档取 base+influence/25（夹 1~5，实落 3~5：巨擘 5／大派 4／中等 4／小 3／极小 3）——
+// 对基产最低的几派（5~8/日）占比虽大，绝对量仍是零头，且打理加成另受 perCap/mulCap/总池三重夹逼。
+// 已有 trade 类的门派不补——恒产不叠罗汉，防同派灵石流双份。
+// 注入是运行时加键：SECT_DEEP_DATA 是静态数据不进存档，读档/新档均生效、无需迁移；幂等可重入（hasStall 判重）。
+var SECT_STALL_TUNE = { base: 2, inflDiv: 25, cap: 5 };
+(function injectMarketStalls() {
+    try {
+        var deeps = window.SECT_DEEP_DATA;
+        if (!deeps) return; // 深度数据缺席（异常加载序）：一行不炸，产业格维持原样
+        for (var name in deeps) {
+            var deep = deeps[name];
+            if (!deep || !Array.isArray(deep.specialResources)) continue; // 无产业列的门派：连建筑卡都没有，跳过
+            var hasTrade = false, hasStall = false;
+            for (var i = 0; i < deep.specialResources.length; i++) {
+                var r = deep.specialResources[i];
+                if (!r) continue;
+                if (r.type === 'trade') hasTrade = true;
+                if (r._stall) hasStall = true;
+            }
+            if (hasStall || hasTrade) continue;
+            var it = SECT_INTERNAL[name]; // 本文件先前已 initAllSectInternal，influence 现成
+            var infl = (it && Number(it.influence)) || 50;
+            var output = Math.max(1, Math.min(SECT_STALL_TUNE.cap, SECT_STALL_TUNE.base + Math.floor(infl / SECT_STALL_TUNE.inflDiv)));
+            deep.specialResources.push({
+                id: 'stall_fangshi_' + name,
+                name: '坊市摊位',
+                type: 'market',
+                icon: '🏪',
+                output: output,
+                _stall: true, // 月账拆「坊市」一源用的暗记（getSectEconomySnapshot 按它分流）
+                desc: '山门前长街租给行商的摊位，日日有点抽成进账，派个弟子照看流水更顺。'
+            });
+        }
+    } catch (e) {
+        console.warn('[静默失败] js/sects/sect-internal.js · injectMarketStalls：坊市摊位补位没成，产业格维持原样', e && e.message);
+    }
+})();
+
+// ============ v27.13 续批（过堂⑥·宗门产业经营）：打理佣金（规划/发放两段） ============
+// 规划器（只读）——各格打理增量按 SECT_TEND_TUNE.commission 抽零头，轮着发给名册上「私账已在册」的具名弟子
+// （NPCLife purse；只认 NPC_LIFE_STORE 里的旧账，绝不调 ensure 开新账——不凭空造弟子账）。
+// 账不在册/私账顶满 → 那一份留公库（体现在快照 gross 里，不另立支出线）。快照会被面板反复调，
+// 必须纯读无副作用；真正入私账只在日结那一拍（paySectTendCommission），规划与发放同拍先后脚，不漂账。
+function planSectTendCommission(sectName, special, assign) {
+    var plan = { landed: 0, landedIndustry: 0, landedMarket: 0, items: [] };
+    try {
+        var NPCLife = window.NPCLife;
+        var store = (NPCLife && typeof NPCLife._store === 'function') ? NPCLife._store() : null;
+        if (!store || typeof window.getSectNPCs !== 'function') return plan; // 私账体系/名册缺席：无账可记，全额留公库
+        var roster = (window.getSectNPCs(sectName) || []).filter(function(n) {
+            return n && n.id && String(n.id).indexOf('sect_disciple_') === 0 && !n.isDead && !n.isMissing && !n._isGone;
+        });
+        if (!roster.length) return plan;
+        var payers = [];
+        roster.forEach(function(n) {
+            var st = store[n.id];
+            var led = st && st.ledger; // 只认在册旧账
+            if (led && (Number(led.cap) || 0) > (Number(led.purse) || 0)) payers.push({ id: n.id, led: led });
+        });
+        if (!payers.length) return plan;
+        var items = {}; // 按人归并：plan.items 每人一条
+        var cursor = 0; // 轮转取人：格与格、枚与枚接着往后发，不总是头几个
+        special.forEach(function(r) {
+            if (!r) return;
+            var _o = Math.max(0, Number(r.output) || 0);
+            if (_o <= 0) return; // 产出为 0 的格无从抽佣（与 tend 同一口径：白派人的格不进账）
+            var _n = Math.max(0, Math.min(SECT_TEND_TUNE.perCap, Math.floor(Number(assign[r.id]) || 0)));
+            if (_n <= 0) return;
+            var cellTend = Math.min(Math.round(_o * SECT_TEND_TUNE.mulCap), Math.round(_o * SECT_TEND_TUNE.per * _n));
+            var budget = Math.floor(cellTend * SECT_TEND_TUNE.commission);
+            while (budget > 0 && payers.length) { // 一枚一枚发：每轮要么发出一枚、要么清掉一个顶满的口袋，必有终局
+                var idx = cursor % payers.length;
+                cursor++;
+                var p = payers[idx];
+                var headroom = Math.max(0, (Number(p.led.cap) || 0) - (Number(p.led.purse) || 0));
+                if (headroom <= 0) { payers.splice(idx, 1); continue; }
+                items[p.id] = (Number(items[p.id]) || 0) + 1;
+                plan.landed += 1;
+                if (r._stall) plan.landedMarket += 1; else plan.landedIndustry += 1;
+                budget -= 1;
+            }
+        });
+        for (var pid in items) plan.items.push({ id: pid, amt: items[pid] });
+    } catch (e) {
+        console.warn('[静默失败] js/sects/sect-internal.js · planSectTendCommission：佣金规划没成，本期零头全留公库', e && e.message);
+        return { landed: 0, landedIndustry: 0, landedMarket: 0, items: [] };
+    }
+    return plan;
+}
+
+// v27.13 续批：佣金真发——日结那一拍照规划落账（只写已有账本；规划时已按 cap 夹好，这里照单付）。
+// 发放与快照同拍（日结内先后脚）：gross 里扣掉的零头 = 这里真进私账的零头，公库与私账两边对得上。
+function paySectTendCommission(plan) {
+    if (!plan || !Array.isArray(plan.items) || !plan.items.length) return 0;
+    var paid = 0;
+    try {
+        var NPCLife = window.NPCLife;
+        var store = (NPCLife && typeof NPCLife._store === 'function') ? NPCLife._store() : null;
+        if (!store) return 0;
+        plan.items.forEach(function(it) {
+            var led = store[it.id] && store[it.id].ledger;
+            if (!led) return; // 规划到发放之间账被销（极小概率）：宁可少发不虚记
+            led.purse = Math.min((Number(led.purse) || 0) + (Number(it.amt) || 0), Math.max(Number(led.cap) || 0, Number(led.purse) || 0));
+            paid += Number(it.amt) || 0;
+        });
+    } catch (e) {
+        console.warn('[静默失败] js/sects/sect-internal.js · paySectTendCommission：佣金发放没成，弟子私账维持原样', e && e.message);
+        return 0;
+    }
+    return paid;
+}
+
 function getSectEconomySnapshot(sectName) {
     var internal = SECT_INTERNAL[sectName];
     if (!internal) return null;
     var deep = window.SECT_DEEP_DATA && window.SECT_DEEP_DATA[sectName];
     var special = deep && Array.isArray(deep.specialResources) ? deep.specialResources : [];
-    var gross = special.reduce(function(sum, r) { return sum + Math.max(0, Number(r.output) || 0); }, 0);
+    // v27.13 续批（过堂⑥·宗门产业经营）：产业格分两路——药园/矿洞/丹房等照旧算「产业」，坊市摊位
+    // （injectMarketStalls 注入的 _stall 格）单独算「坊市」，月报四源（产业/坊市/孝敬/香火）由此拆名。
+    // 两路同一套指派/打理账（同一把尺），钱仍走 resources 单一真源，月报上只是分名字念。
+    var _assign = (internal.assign && typeof internal.assign === 'object') ? internal.assign : {};
+    var baseIndustry = 0, baseMarket = 0, tendIndustry = 0, tendMarket = 0;
+    special.forEach(function(r) {
+        if (!r) return;
+        var _o = Math.max(0, Number(r.output) || 0);
+        var _n = Math.max(0, Math.min(SECT_TEND_TUNE.perCap, Math.floor(Number(_assign[r.id]) || 0)));
+        var _t = (_o > 0 && _n > 0) ? Math.min(Math.round(_o * SECT_TEND_TUNE.mulCap), Math.round(_o * SECT_TEND_TUNE.per * _n)) : 0;
+        if (r._stall) { baseMarket += _o; tendMarket += _t; }
+        else { baseIndustry += _o; tendIndustry += _t; }
+    });
+    var tend = tendIndustry + tendMarket;
+    // v27.13 续批：佣金零头——打理增量抽两成半，发给名册上「私账已在册」的具名弟子；账不在册 → 留公库。
+    var _plan = planSectTendCommission(sectName, special, _assign);
+    var commission = _plan.landed;
+    var industry = baseIndustry + tendIndustry - _plan.landedIndustry;
+    var market = baseMarket + tendMarket - _plan.landedMarket;
+    var gross = industry + market;
     // 没有专属资源配置的门派仍有香火、杂役与基础产业，但产能明显更低。
-    if (gross <= 0) gross = Math.max(5, Math.floor((Number(internal.influence) || 50) / 10));
+    // （坊市摊位注入后，凡有 deep 数据的派 gross 恒 >0；这兜底只剩「连 deep 数据都没有」的派会走到。）
+    if (gross <= 0) {
+        gross = Math.max(5, Math.floor((Number(internal.influence) || 50) / 10));
+        industry = gross; market = 0;
+    }
     var upkeep = Math.max(1, Math.ceil((Number(internal.disciples) || 1) / 4));
+    // v27.13 孝敬：弟子在外各有营生（市井做工、护镖、炼丹卖药——营生账在世界侧），按门规抽一分孝敬回山。
+    // 弟子私账本模块读不到，取保守常数 0.2 枚/人/日、随士气 0.5~1.5 倍浮动——士气高的门派弟子挣得多也肯交，士气崩了孝敬先断。
+    // 夹逼：0.2/人 永远压在口粮 0.25/人（upkeep=弟子/4）之下——收徒是养人不是印钱，人数与士气天然封顶。
+    var _disc = Math.max(0, Number(internal.disciples) || 0);
+    var _m = Number(internal.morale); if (!(_m >= 0)) _m = 50; // 士气 0 是真崩了要认（不能用 ||50 把 0 吞了）
+    var _morale = Math.min(100, _m);
+    var filial = _disc > 0 ? Math.round(_disc * 0.2 * (0.5 + _morale / 100)) : 0;
+    // v27.13 孝敬对齐：断粮的门派弟子交得心不甘——孝敬减半（与俸禄减半同源，读 SectGov 真账）
+    try {
+        if (filial > 0 && window.SectGov && typeof window.SectGov.famine === 'function' && window.SectGov.famine(sectName)) filial = Math.ceil(filial / 2);
+    } catch (eFam) { console.warn('[静默失败] js/sects/sect-internal.js · getSectEconomySnapshot：断粮查问没接住，孝敬按全额计', eFam && eFam.message); }
+    // v27.13 香火：命门档案（sect-profiles）里写着靠香火/道场/法事吃饭的门派，山下庙宇随喜是常项进项；
+    // 其余门派不产香火——他们的营生名目已折在产业 gross 的兜底里，不重复发钱。
+    // 数值走影响力/25、夹在 2~8：香客多少随名声走，封顶防巨擘派靠香火无限吸血。
+    // （属城护持的月供奉是另一路，sect-cities taxMonthly 已直接入库，此处不重复计。）
+    var incense = 0;
+    try {
+        var _prof = (typeof window.getSectProfile === 'function') ? window.getSectProfile(sectName) : null;
+        var _liv = (_prof && Array.isArray(_prof.livelihood)) ? _prof.livelihood.join('|') : '';
+        if (/香火|道场|法事/.test(_liv)) {
+            incense = Math.max(2, Math.min(8, Math.round((Number(internal.influence) || 40) / 25)));
+        }
+    } catch (ePro) { console.warn('[静默失败] js/sects/sect-internal.js · getSectEconomySnapshot：命门档案没读到，香火按无计', ePro && ePro.message); }
     return {
         stock: Math.max(0, Math.floor(Number(internal.resources) || 0)),
         gross: gross,
+        industry: industry,      // v27.13 续批：月账收入一源·产业（打理增量已扣佣金零头）
+        market: market,          // v27.13 续批：月账收入二源·坊市（摊位基产＋打理增量−佣金零头）
+        tend: tend - commission, // 打理增量入公库的那份（面板脚注「已并进产业」的诚实口径）；零头另见 commission
+        commission: commission,  // 已拨弟子私账的佣金零头（无私账可记时为 0——那一分照旧在 gross 里）
+        filial: filial,      // v27.13：月账收入三源（弟子孝敬）
+        incense: incense,    // v27.13：月账收入四源（香火供奉）
         upkeep: upkeep,
-        net: gross - upkeep,
+        net: gross + filial + incense - upkeep,
+        _commissionPlan: _plan, // v27.13 续批：日结发放用——快照只规划不动账，面板反复刷新不会重复发钱
         disciples: Number(internal.disciples) || 0,
         morale: Number(internal.morale) || 0
     };
+}
+
+// v27.13：月账账本口径——{month, income, out} 三字账；跨月自动把旧账封存进 lastMonthBook（月末结余=income−out）。
+// 账本挂在 SECT_INTERNAL 各派对象上随既有 StateRegistry 整体存取；旧档没有这些字段时读端一律 Number(x)||0、
+// 首笔落账时按新账开，不必迁移。
+// v27.13 续批（过堂⑥·宗门产业经营）：账本加 sources 键（四源小计：产业/坊市/孝敬/香火）——加键不升版，
+// 旧档缺 sources 就地补零、从补上的那天起照四源记（不回填历史）；封存的 lastMonthBook 带不上 sources 就记 null，
+// 月报读端按「只有合计」念。收入总管仍只有 income 一根（industry+market=gross），四源只是拆名不拆账。
+function ensureMonthBook(it, day) {
+    // 月号用 ceil 对齐全世界的月末口径（sect-cities 月税等都认 day%30==0）：1~30 日为第 1 月，30 日当晚封账。
+    var mi = Math.ceil((Number(day) || 0) / 30);
+    var book = it.monthBook;
+    if (!book || Number(book.month) !== mi) {
+        if (book && typeof book.month === 'number') {
+            var _s = (book.sources && typeof book.sources === 'object') ? book.sources : null;
+            it.lastMonthBook = {
+                month: Number(book.month) || 0,
+                income: Number(book.income) || 0,
+                out: Number(book.out) || 0,
+                balance: (Number(book.income) || 0) - (Number(book.out) || 0),
+                sources: _s ? {
+                    industry: Number(_s.industry) || 0,
+                    market: Number(_s.market) || 0,
+                    filial: Number(_s.filial) || 0,
+                    incense: Number(_s.incense) || 0
+                } : null // 旧账缺 sources：封存时不伪造四源，月报按「只有合计」念
+            };
+        }
+        book = it.monthBook = { month: mi, income: 0, out: 0, sources: { industry: 0, market: 0, filial: 0, incense: 0 } };
+    }
+    // 旧档缺 sources（加键不升版）→ 就地补零，从此照四源记
+    if (!book.sources || typeof book.sources !== 'object') book.sources = { industry: 0, market: 0, filial: 0, incense: 0 };
+    return book;
 }
 
 function processAllSectDailyEconomy(day) {
@@ -62,6 +282,20 @@ function processAllSectDailyEconomy(day) {
         if (snap.net < 0) internal.morale = Math.max(0, (Number(internal.morale) || 50) - 2);
         else if (internal.resources >= 500 && snap.net >= 10) internal.morale = Math.min(100, (Number(internal.morale) || 50) + 1);
         internal.lastEconomyDay = day;
+        // v27.13：月账落笔——收入三源（产业+孝敬+香火）与维护（用度）同在日结这一拍入账，日清月结；
+        // 外部支出（月例/赏格）经 noteSectExpense 在各自扣库处补记，月末结余=income−out。
+        var _book = ensureMonthBook(internal, day);
+        _book.income = (Number(_book.income) || 0) + snap.gross + snap.filial + snap.incense;
+        _book.out = (Number(_book.out) || 0) + snap.upkeep;
+        // v27.13 续批（过堂⑥·宗门产业经营）：月账四源小计——产业/坊市/孝敬/香火各自累计，月报（宗门管理面板）按这里念数；
+        // 收入总管仍只有 income 一根（industry+market=gross），四源只是拆名不拆账。
+        var _src = _book.sources;
+        _src.industry = (Number(_src.industry) || 0) + (Number(snap.industry) || 0);
+        _src.market = (Number(_src.market) || 0) + (Number(snap.market) || 0);
+        _src.filial = (Number(_src.filial) || 0) + (Number(snap.filial) || 0);
+        _src.incense = (Number(_src.incense) || 0) + (Number(snap.incense) || 0);
+        // v27.13 续批：打理佣金此刻真落弟子私账（快照只规划不动账；账不在册的份额已在 gross 里留在公库）
+        try { paySectTendCommission(snap._commissionPlan); } catch (ePay) { console.warn('[静默失败] js/sects/sect-internal.js · processAllSectDailyEconomy：佣金发放没接住，弟子私账少一笔零头', ePay && ePay.message); }
         // v19.2 收尾：清理过期 policyBuffs
         if (Array.isArray(internal.policyBuffs)) {
             internal.policyBuffs = internal.policyBuffs.filter(function (b) {
@@ -69,7 +303,7 @@ function processAllSectDailyEconomy(day) {
                 return (day - b.appliedAtDay) < b.durationDays;
             });
         }
-        results[sectName] = { gross: snap.gross, upkeep: snap.upkeep, net: snap.net, stock: internal.resources };
+        results[sectName] = { gross: snap.gross, industry: snap.industry, market: snap.market, commission: snap.commission, filial: snap.filial, incense: snap.incense, upkeep: snap.upkeep, net: snap.net, stock: internal.resources };
     });
     // v19.0 P0-3 批次 C2：年度宗门目标日结推进 + 跨年检测
     if (window.SectYearGoal && typeof window.SectYearGoal.tickDay === 'function') {
@@ -100,6 +334,86 @@ function processAllSectDailyEconomy(day) {
         try { window.NpcLineage.tickDay(day); } catch (e) { /* 不阻塞 */ }
     }
     return results;
+}
+
+// v27.13：外部支出入月账的唯一口——发俸（sects-system collectSectResources）、赏格（sect-governance 大比加码）
+// 在各自扣库处补记一笔，月账的支出侧（月例+维护+赏格）才与收入侧对得上。
+// 只入账不动库：扣库仍由各处自己的 SectGov.deductStore 做（resources 单一真源不动），这里纯记账。
+function noteSectExpense(sectName, stones) {
+    try {
+        var it = SECT_INTERNAL[sectName];
+        if (!it) return false;
+        stones = Math.max(0, Math.floor(Number(stones) || 0));
+        if (!stones) return false;
+        var day = (window.timeSystem && window.timeSystem.gameTime && window.timeSystem.gameTime.currentDay) || 1;
+        var book = ensureMonthBook(it, day); // 与日结同一套月切口径，跨月先封旧账
+        book.out = (Number(book.out) || 0) + stones;
+        return true;
+    } catch (e) { console.warn('[静默失败] js/sects/sect-internal.js · noteSectExpense：月账支出入册没接住，本月支出侧会少记', e && e.message); return false; }
+}
+
+// ============ v27.13 续批（过堂⑥新增·宗门产业经营）：弟子指派名册（模型侧） ============
+// 产业格（SECT_DEEP_DATA.specialResources：药园/矿洞/坊市摊位等）可指派弟子打理：
+//   名册记 internal.assign[resourceId]（人数），随 SECT_INTERNAL 既有 StateRegistry 整体出档入档，
+//   旧档缺字段按「无指派」办（getSectEconomySnapshot 端已兜底），不必迁移。
+//   产出加成只算一份账：并入产业 gross 随月账入公库（见 getSectEconomySnapshot），这里只管名册不动钱。
+//   约束不是配额是世界：单格至多 perCap 人（扎堆无用）、全派至多 floor(弟子/poolDiv) 人（修行是本行）。
+function setSectResourceTend(sectName, resourceId, delta) {
+    try {
+        var it = SECT_INTERNAL[sectName];
+        var deep = window.SECT_DEEP_DATA && window.SECT_DEEP_DATA[sectName];
+        var res = null;
+        var valid = {};
+        if (deep && Array.isArray(deep.specialResources)) {
+            deep.specialResources.forEach(function(r) { if (r && r.id) valid[r.id] = true; });
+            for (var i = 0; i < deep.specialResources.length; i++) {
+                if (deep.specialResources[i] && deep.specialResources[i].id === resourceId) { res = deep.specialResources[i]; break; }
+            }
+        }
+        if (!it || !res) return { ok: false, reason: '查不到这处产业，指派无从谈起。' };
+        var assign = it.assign = (it.assign && typeof it.assign === 'object') ? it.assign : {};
+        var pool = Math.max(0, Math.floor((Number(it.disciples) || 0) / SECT_TEND_TUNE.poolDiv));
+        var used = 0;
+        for (var k in assign) if (valid[k]) used += Math.max(0, Math.min(SECT_TEND_TUNE.perCap, Math.floor(Number(assign[k]) || 0)));
+        var cur = Math.max(0, Math.min(SECT_TEND_TUNE.perCap, Math.floor(Number(assign[resourceId]) || 0)));
+        var next = cur + (Number(delta) >= 0 ? 1 : -1);
+        if (next === cur) return { ok: false, reason: '名册没有变动。' };
+        if (next < 0) return { ok: false, reason: '【' + (res.name || resourceId) + '】本就没有弟子在打理。' };
+        if (next > SECT_TEND_TUNE.perCap) return { ok: false, reason: '【' + (res.name || resourceId) + '】至多派' + SECT_TEND_TUNE.perCap + '名弟子，人再多也是扎堆。' };
+        if (next > cur && used >= pool) return { ok: false, reason: '抽不出更多弟子了——门中可派去打理产业的至多' + pool + '人，其余要留着修行与值戒。' };
+        assign[resourceId] = next;
+        return { ok: true, count: next, name: res.name || resourceId };
+    } catch (e) {
+        console.warn('[静默失败] js/sects/sect-internal.js · setSectResourceTend：指派名册没记上', e && e.message);
+        return { ok: false, reason: null };
+    }
+}
+
+// v27.13 续批：给 UI 一次取全——各产业格当前指派数与对应日产加成（bonusOf[id] 与月账产业源同一把尺算出）。
+// v27.13 续批收口：bonusOf 是每格打理增量的「未抽佣」全值（建筑卡上念的是活儿干出来的量）；
+// 月账侧扣掉的两成半佣金零头另见快照 commission 字段，两处口径差即佣金，账能对上。
+// 营生/产业数据缺席全兜底：无档案/无产业格 → 空名册、pool 0，UI 按只读零值显示，一行不炸。
+function getSectTendInfo(sectName) {
+    try {
+        var it = SECT_INTERNAL[sectName];
+        if (!it) return null;
+        var deep = window.SECT_DEEP_DATA && window.SECT_DEEP_DATA[sectName];
+        var special = deep && Array.isArray(deep.specialResources) ? deep.specialResources : [];
+        var assign = (it.assign && typeof it.assign === 'object') ? it.assign : {};
+        var pool = Math.max(0, Math.floor((Number(it.disciples) || 0) / SECT_TEND_TUNE.poolDiv));
+        var used = 0;
+        var bonusOf = {};
+        special.forEach(function(r) {
+            var _o = Math.max(0, Number(r.output) || 0);
+            var _n = Math.max(0, Math.min(SECT_TEND_TUNE.perCap, Math.floor(Number(assign[r.id]) || 0)));
+            used += _n;
+            bonusOf[r.id] = (_o > 0 && _n > 0) ? Math.min(Math.round(_o * SECT_TEND_TUNE.mulCap), Math.round(_o * SECT_TEND_TUNE.per * _n)) : 0;
+        });
+        return { assign: assign, pool: pool, used: used, bonusOf: bonusOf };
+    } catch (e) {
+        console.warn('[静默失败] js/sects/sect-internal.js · getSectTendInfo：产业指派信息没读到', e && e.message);
+        return null;
+    }
 }
 
 // 宗门内部状态此前只活在内存里，事件造成的资源/士气变化读档即丢。
@@ -633,6 +947,10 @@ if (typeof window !== 'undefined') {
     window.SECT_INTERNAL = SECT_INTERNAL;
     window.getSectEconomySnapshot = getSectEconomySnapshot;
     window.processAllSectDailyEconomy = processAllSectDailyEconomy;
+    window.noteSectExpense = noteSectExpense; // v27.13：外部支出入宗门月账（发俸/赏格在各自扣库处调用）
+    window.setSectResourceTend = setSectResourceTend; // v27.13 续批：产业格弟子指派（名册侧）
+    window.getSectTendInfo = getSectTendInfo;         // v27.13 续批：产业格指派名册+日产加成（UI 一次取全）
+    window.SECT_TEND_TUNE = SECT_TEND_TUNE;
     window.generateSectDisciples = generateSectDisciples;
     window.holdSectMeeting = holdSectMeeting;
     window.getSectSummary = getSectSummary;

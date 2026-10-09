@@ -33,6 +33,17 @@ function ok(cond, label) {
 var W = { console: { log: function () {}, warn: function () {} }, Math: Math, JSON: JSON, Object: Object, Array: Array, String: String, Number: Number, isFinite: isFinite };
 W.window = W;
 vm.createContext(W);
+// 装**真尺**：realmScaledEnemyLevel 的档位已改为借 window.REALM_ORDER（不再自抄十档回落表）——
+// 沙箱原先没装尺，测的是「尺缺席」那条降级支路（生产页面上不存在）。尺从真文件原文切出执行。
+(function () {
+    var guSrc = loadScript('js/global-utils.js').replace(/\r\n/g, '\n');
+    var orderM = guSrc.match(/var REALM_ORDER = \[[^\]]*\];/);
+    var idxM = guSrc.match(/window\.realmIndex = function \(realm\) \{[\s\S]*?\n {4}\};/);
+    ok(!!orderM && !!idxM, 'A0b 真尺能从 js/global-utils.js 原文里切出来（否则下面测的不是生产路径）');
+    if (orderM && idxM) {
+        vm.runInContext('(function(){' + orderM[0] + 'window.REALM_ORDER = REALM_ORDER;' + idxM[0] + '})()', W, { filename: 'realm-ruler' });
+    }
+})();
 vm.runInContext(loadScript('js/combat-stats.js'), W, { filename: 'combat-stats' });
 
 // ============ A 境界刻度曲线 ============

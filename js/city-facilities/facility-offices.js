@@ -92,6 +92,8 @@
                         try {
                             if (window.NpcCrime && typeof window.NpcCrime.wantedLine === 'function') line += window.NpcCrime.wantedLine();
                         } catch (eW) { console.warn('[静默失败] js/city-facilities/facility-offices.js · court：悬赏牌没念出来——牌面照旧', eW && eW.message); }
+                        // v27.13 张榜半日流程：案发不再瞬挂上榜——报官簿管报官/查案中/堵人，到点才张榜
+                        line += '\n\n廊下新钉了一块「报官簿」：报官陈情、查案进度、循线索堵人——案出到张榜，隔着半日核验。';
                         return line;
                     },
                     choices: [
@@ -101,6 +103,8 @@
                             win: { exp: 8, rep: 2, copper: 200, msg: '你领签押随班头缉查至深夜，赃物起获、苦主登门道谢，官府另给200铜跑腿钱。历练+8，本城声望+2。', msgType: 'success' },
                             lose: { exp: 4, msg: '你查到后半夜，线索断在一处空宅里。班头拍拍你："断线也是线，记档，明天接着查。"历练+4。' }
                         } } },
+                        // v27.4 断案批：案卷房（破案/缉逃/词讼——case-system.js 正门）
+                        { text: '📁 进案卷房（破命案冷案 · 揭海捕牌缉逃 · 偏厅词讼）', next: null, effects: { cases: { op: 'open' }, time: 5 } },
                         { text: '🪧 缴清头上的悬赏（销案）', next: null, effects: { crime: { op: 'payBounty' } } },
                         { text: '🤝 帮调解户婚纠纷（吃口才）', require: { energy: 15 }, effects: { cost: { energy: 15 }, time: 40, roll: {
                             prob: skillProb('口才', 0.4),

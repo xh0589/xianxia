@@ -69,7 +69,7 @@
     function settle(spec, source) {
         try {
             if (window.RewardService && typeof window.RewardService.apply === 'function') {
-                var r = window.RewardService.apply(spec, { source: source || '街面人物志', city: city() });
+                var r = window.RewardService.apply(spec, { facilitySpend: true, source: source || '街面人物志', city: city() });
                 return { ok: !!(r && r.success !== false), note: r && r.messages ? r.messages.join('、') : '' };
             }
         } catch (e) { console.warn('[静默失败] js/city-facilities/citizen-life.js · settle：这笔街面小账没落成', e && e.message); }
@@ -81,13 +81,21 @@
     function deed(mood, s) {
         try { if (typeof window.playerPushDeed === 'function') window.playerPushDeed(mood, s); } catch (e) { console.warn('[静默失败] js/city-facilities/citizen-life.js · deed：风声没递进传闻池', e && e.message); }
     }
-    function addHeat(n, why) {
-        try { if (window.NpcCrime && typeof window.NpcCrime.addHeat === 'function') window.NpcCrime.addHeat(n, why); } catch (e) { console.warn('[静默失败] js/city-facilities/citizen-life.js · addHeat：罪行没记进通缉账', e && e.message); }
+    function addHeat(n, why, opts) {
+        try { if (window.NpcCrime && typeof window.NpcCrime.addHeat === 'function') window.NpcCrime.addHeat(n, why, opts); } catch (e) { console.warn('[静默失败] js/city-facilities/citizen-life.js · addHeat：罪行没记进通缉账', e && e.message); }
     }
     function repDown(n) {
         var ct = city();
         if (!ct || typeof window.reduceReputation !== 'function') return false;
         try { window.reduceReputation(ct, n); return true; } catch (e) { console.warn('[静默失败] js/city-facilities/citizen-life.js · repDown：城望没扣成', e && e.message); return false; }
+    }
+    // v27.13 恶名分城：notoriety 直写后同步记进世界账簿（作案地立知，外城随流言延迟到站）
+    function _noteNoto(delta) {
+        try {
+            if (delta && window.WorldLedger && typeof window.WorldLedger.noteNotorietyChange === 'function') {
+                window.WorldLedger.noteNotorietyChange(delta);
+            }
+        } catch (e) { console.warn('[静默失败] js/city-facilities/citizen-life.js · _noteNoto：恶名没记进分城账', e && e.message); }
     }
     function refresh() {
         try { if (window.updateCharacterStatus) window.updateCharacterStatus(); } catch (e) { console.warn('[静默失败] js/city-facilities/citizen-life.js · refresh：面板没刷新', e && e.message); }
@@ -213,7 +221,7 @@
                     '🔪 你去掏 ' + z.name + ' 的钱袋——练家子反应何等快，一记擒拿直奔你腕子，当街动了手！');
             }
         } catch (eB) { console.warn('[静默失败] js/city-facilities/citizen-life.js · robFight：这一仗没拉起来', eB && eB.message); }
-        if (!started) { say('🔪 ' + z.name + ' 一眼看破你的意图，沉肩一靠把你顶出三步：「练家子的钱袋，你也敢碰？」——没打成，但街坊都看见你的脸了。', 'warning'); addHeat(1, '抢劫武者未遂'); }
+        if (!started) { say('🔪 ' + z.name + ' 一眼看破你的意图，沉肩一靠把你顶出三步：「练家子的钱袋，你也敢碰？」——没打成，但街坊都看见你的脸了。', 'warning'); addHeat(1, '抢劫武者未遂', { faceSeen: true }); }
         return started;
     }
 
@@ -325,7 +333,8 @@
         // 失手：一半呼救引巡兵，一半让人跑了
         if (Math.random() < TUNE.ROB_SNITCH_P) {
             c.notoriety = Math.min(100, (Number(c.notoriety) || 0) + TUNE.ROB_SNITCH_NOTO);
-            addHeat(TUNE.ROB_SNITCH_NOTO, '当街行抢被拿');
+            _noteNoto(TUNE.ROB_SNITCH_NOTO);   // v27.13 恶名分城：直写后同步记进世界账簿
+            addHeat(TUNE.ROB_SNITCH_NOTO, '当街行抢被拿', { faceSeen: true });   // v26.0：被巡兵按在墙上当街过了目——脸进册子
             repDown(TUNE.ROB_SNITCH_REP);
             var fineTxt;
             if (copperNow() >= TUNE.ROB_SNITCH_FINE) {
@@ -333,6 +342,7 @@
                 fineTxt = rf.ok ? '罚金 ' + TUNE.ROB_SNITCH_FINE + ' 铜钱' : '罚金没缴成';
             } else {
                 c.notoriety = Math.min(100, (Number(c.notoriety) || 0) + TUNE.ROB_SNITCH_FINE_SHORT);
+                _noteNoto(TUNE.ROB_SNITCH_FINE_SHORT);   // v27.13 恶名分城
                 fineTxt = '拿不出罚金，挨了顿板子（恶名再+' + TUNE.ROB_SNITCH_FINE_SHORT + '）';
             }
             log('🚨 ' + z.name + ' 扯着嗓子呼救，巡街的兵丁把你按在了墙上。（恶名+' + TUNE.ROB_SNITCH_NOTO + '，' + ct + '声望-' + TUNE.ROB_SNITCH_REP + '，' + fineTxt + '）', 'danger');

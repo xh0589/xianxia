@@ -67,6 +67,26 @@ var FACTIONS = {
     }
 };
 
+// ============ 势力名册·实战档（v26.4） ============
+// leaders/members 是面板上念的名字（app.js 势力面板只渲染它们，全工程此前零处把它们接进战斗）；
+// 这一册是它们在野外的另一面：**位次名 + 解锁境界**。弟子那一档的族称在 battle.js 的
+// 「魔教弟子」亚型（族称与位次分两处，位次从这里往上长）。
+//
+// 只登记魔教：主线/npc 线点名的位次全在这一家；另四家补进去只是给野生池添两张没人点的脸。
+// 门槛只认全仓那把境界尺 window.realmAtLeast（global-utils 的 REALM_ORDER）——
+// 魔教的位次是跟境界走的，不是跟玩家等级走的：筑基期的道上只该撞见跑腿的弟子。
+var FACTION_RANKS = [
+    // 护法：金丹起。factions.js 的 leaders 里左/右护法是教主的左右手，位次在长老之下、弟子之上；
+    // 放在金丹是给 main_025（元婴章的护法×3）留一境提前量，也够不着筑基。
+    { key: 'demon_hufa',   faction: 'demon_cult', sub: 'demon_disciple', title: '魔教护法', minRealm: '金丹', chance: 0.14, attrMul: { allAttr: 1.30 }, extraDraws: 2 },
+    // 长老：元婴起。main_025 与 main_033 共用这一档（长老×5），元婴是它最早能兑现的章；
+    // 低于元婴一律不掷——「筑基期撞上魔教长老」这条钉死在这里。
+    { key: 'demon_elder',  faction: 'demon_cult', sub: 'demon_disciple', title: '魔教长老', minRealm: '元婴', chance: 0.13, attrMul: { allAttr: 1.40 }, extraDraws: 2 },
+    // 始祖：化神起。教主之下最高一档，也是神秘老者那条线的末步目标（npc_mysterious_03）；
+    // 掷得最稀（0.07），且化神门槛让那条线在第六章之后才有兑现的可能。
+    { key: 'demon_ancestor', faction: 'demon_cult', sub: 'demon_disciple', title: '魔教始祖', minRealm: '化神', chance: 0.07, attrMul: { allAttr: 1.50 }, extraDraws: 3 }
+];
+
 // ============ 势力声望等级 ============
 var FACTION_REPUTATION_LEVELS = [
     { name: '死敌', min: -10000, color: 'text-red-600', effects: '遇袭概率+50%', attitude: '敌对' },
@@ -295,6 +315,7 @@ function saveFactionData() {
 
 // ============ 导出 ============
 window.FACTIONS = FACTIONS;
+window.FACTION_RANKS = FACTION_RANKS;   // v26.4 名册实战档：battle.js 的名册档掷骰读这一本
 window.FACTION_REPUTATION_LEVELS = FACTION_REPUTATION_LEVELS;
 window.factionState = factionState;
 window.initFactionSystem = initFactionSystem;

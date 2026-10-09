@@ -209,6 +209,17 @@ buildingEffectsRegistry['inn'] = {
         var _sleepTxt = _sleepMul === 1 ? '状态完全恢复' : (_sleepMul === 0.8 ? '睡得浅了些，恢复了八成' : '夜半被更夫吵醒，只恢复了六成');
         // 第八十二波·INN-01：牌面改口「打尖歇脚（一个时辰）」——旧牌面号称整夜，与实推进的120分钟矛盾
         showMessage(restFlavor ? restFlavor + '（' + _sleepTxt + '）' : '在客栈歇了一个时辰，' + _sleepTxt + '！', _sleepMul === 1 ? 'success' : 'info');
+        // v27.13：客栈夜话（传闻账的消费面）——客店南来北往，rumorPend 到站的传闻在这里说给人听；
+        // 只说三日内到站的新鲜事（老黄历没人翻），传闻账缺席或太旧就闭嘴，绝不编话。
+        // 传闻账正门在 world-ledger（世界大事/大案要闻自动成谣），此处只读不写。
+        try {
+            if (window.WorldLedger && typeof window.WorldLedger.latestRumor === 'function') {
+                var _rum = window.WorldLedger.latestRumor();
+                if (_rum && _rum.age <= 3) {
+                    showMessage('🌙 歇下时听邻桌闲客讲起：「' + _rum.text + '」（' + _rum.age + ' 天前的消息）', 'info');
+                }
+            }
+        } catch (eRum) { console.warn('[静默失败] js/building-effects.js · inn.rest：客栈夜话没说出口', eRum && eRum.message); }
         if (window.updateStatusPanel) window.updateStatusPanel();
         return true;
     },
@@ -261,47 +272,41 @@ buildingEffectsRegistry['inn'] = {
 
 // ============ 演武场效果 ============
 buildingEffectsRegistry['training'] = {
-    // 开始训练
+    // 打木桩：耗精力换历练，并真打一场（不再 30% 掷骰）
     train: function() {
         if (!window.currentCharData) return false;
-        
         if ((currentCharData.energy || 0) < 20) {
             showMessage('精力不足！', 'error');
             return false;
         }
-        
         currentCharData.energy -= 20;
-        
         const baseExp = 10;
         const strengthBonus = Math.floor((currentCharData.mainAttributes?.力量 || 10) / 10);
         const expGain = baseExp + strengthBonus;
-        
         currentCharData.tempering = (currentCharData.tempering || 0) + expGain;
-        
-        // 可能触发战斗训练
-        if (Math.random() < 0.3) {
-            if (window.startBattle) {
-                // 第八十二波·FIX-05：先收训练弹窗再开战——旧版弹窗（fixed inset-0 z-50）残留盖住战斗区，
-                // 拦截战斗按钮的普通点击，玩家只能先手动关窗才能还手
-                try { closeBuildingDialog(); } catch (eModal) {}
-                window.startBattle('training_dummy');
-            }
-        }
-        
-        if (window.timeSystem) {
-            window.timeSystem.advanceTime(60);
-        }
-        
-        showMessage(`在演武场训练获得 ${expGain} 点经验`, 'success');
+        if (window.timeSystem) window.timeSystem.advanceTime(60, '演武场打桩');
+        showMessage('对着木人桩走了一趟架子（历练 +' + expGain + '）。', 'success');
         if (window.updateStatusPanel) window.updateStatusPanel();
-        
-        // F-24：切磋推进 daily_003（type:'sparring'）。此前误把 'sparring' 当 questId 传
-        // updateQuestObjective，findQuestById 返回 null，daily_003 永不可完成
-        if (window.advanceQuestObjectivesFromEvent) {
-            window.advanceQuestObjectivesFromEvent('sparring', { amount: 1 });
+        if (window.startBattle) {
+            try { closeBuildingDialog(); } catch (eModal) {}
+            window.startBattle('training_dummy');
         }
-        
         return true;
+    },
+    // 跟人切磋：点到为止。入了门走同门真打；城里用场上散修补位。
+    spar: function() {
+        if (!window.currentCharData) return false;
+        if (window.checkSoulBlock && window.checkSoulBlock('演武')) return false;
+        try { closeBuildingDialog(); } catch (eModal) {}
+        if (window.currentCharData.sect && typeof window.openSparPanel === 'function') {
+            window.openSparPanel();
+            return true;
+        }
+        if (typeof window.startCityYardSpar === 'function') {
+            return window.startCityYardSpar();
+        }
+        showMessage('场上这会儿没人应手。', 'info');
+        return false;
     },
     
     // v20.7 静心修炼（原 meditate 死按钮补活）：以真气换少量真元
@@ -324,10 +329,14 @@ buildingEffectsRegistry['training'] = {
         if (window.showBuildingEffectDialog) {
             showBuildingEffectDialog('演武场', `
                 <div class="space-y-3">
-                    <p class="text-sm text-gray-400 mb-2">选择训练方式：</p>
-                    <button onclick="useBuildingEffect('training', 'train')" class="w-full bg-red-700 hover:bg-red-600 p-3 rounded">
-                        <span class="text-red-400 font-bold">⚔️ 实战训练</span> <span class="text-xs text-gray-400">(20精力)</span><br>
-                        <span class="text-xs text-gray-400">获得历练，可能遭遇训练对手</span>
+                    <p class="text-sm text-gray-400 mb-2">桩上练架子，还是下场跟人过两招？</p>
+                    <button onclick="useBuildingEffect('training', 'train')" class="w-full bg-stone-700 hover:bg-stone-600 p-3 rounded">
+                        <span class="text-amber-300 font-bold">🪵 打木桩</span> <span class="text-xs text-gray-400">(20精力)</span><br>
+                        <span class="text-xs text-gray-400">走一趟架子，再真打一场木人桩</span>
+                    </button>
+                    <button onclick="useBuildingEffect('training', 'spar')" class="w-full bg-red-700 hover:bg-red-600 p-3 rounded">
+                        <span class="text-red-400 font-bold">🤺 跟人切磋</span> <span class="text-xs text-gray-400">(点到为止)</span><br>
+                        <span class="text-xs text-gray-400">入门挑同门；城里与场上散修过招，不结仇、不搜刮</span>
                     </button>
                     <button onclick="useBuildingEffect('training', 'meditate')" class="w-full bg-blue-700 hover:bg-blue-600 p-3 rounded">
                         <span class="text-blue-400 font-bold">🧘 静心修炼</span> <span class="text-xs text-gray-400">(30真气)</span><br>
@@ -868,12 +877,23 @@ function _removeAllBuildingDialogs() {
 }
 function showBuildingEffectDialog(title, content) {
     _removeAllBuildingDialogs();
+    // 真实小世界·店铺时辰（world-ledger）：戌时(19)后多数铺面打烊——夜有夜的样子。
+    // 夜市/赌坊/坊/客栈/酒肆/钱庄夜柜照常。旧历/校场等非买卖场所不受闸。
+    try {
+        if (window.WorldLedger && typeof window.WorldLedger.isShopOpen === 'function') {
+            var _nowH = (window.timeSystem && window.timeSystem.gameTime && typeof window.timeSystem.gameTime.currentHour === 'number') ? window.timeSystem.gameTime.currentHour : null;
+            if (_nowH !== null && !window.WorldLedger.isShopOpen(title, _nowH) && /铺|行|坊|市|店|当|肆|楼/.test(title || '')) {
+                showMessage('⏰ 时辰已晚，' + title + '上了门板——明早再来罢。（夜市、赌坊与客栈的不夜灯还亮着）', 'warning');
+                return;
+            }
+        }
+    } catch (eOpen) {}
     const modal = document.createElement('div');
     modal.id = 'building-effect-modal';
     modal.className = 'fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50';
     
     modal.innerHTML = `
-        <div class="bg-gray-900 border border-yellow-600 rounded-lg p-6 max-w-md w-full mx-4 max-h-[80vh] overflow-y-auto">
+        <div class="bg-gray-900 border border-yellow-600 rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
             <h3 class="text-xl font-bold text-yellow-400 mb-4">${title}</h3>
             <div class="mb-4">${content}</div>
             <button onclick="closeBuildingDialog()" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded w-full">

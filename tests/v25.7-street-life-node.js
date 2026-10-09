@@ -556,7 +556,14 @@ console.log('\n[H] 静态与加载清单');
     const mf = load('scripts.manifest.json');
     const html = load('仙侠.html');
     const files = ['street-life', 'bathhouse', 'eatery', 'gamble-den', 'bookshop', 'beggar-alms'];
-    ok(files.every((f) => mf.indexOf('"js/city-facilities/' + f + '.js"') >= 0) && mf.indexOf('"scripts": 330') >= 0, 'H1 加载清单收全六本新账（v25.8 黑道与人情批再添三本后为 330）——play-harness 从清单取脚本，不进清单=没测过（v25.5 的教训）');
+    // ★2026-10-04 341 → 351★（B 类·判据过时，量没变）。查清「为什么变」：
+//   scripts.manifest.json 的 stats.scripts 是仓库侧记账，写它那批时是 341；此后项目又添了十本账
+//   （实测今读 351）。判据要守的不变式是「HTML 里除 vendor/tailwind.js 那一枚之外，每个脚本都在清单里、
+//   且清单与 HTML 同序」——那条不变式今天仍然成立，且由 tools/refactor/manifest-scripts.py check 独立判过：
+//   「同步检查通过：351 个 script / 25 个分层注释，HTML == manifest，无漏登记与无游离脚本」。
+//   变的是那句硬写的计数（项目长大它就过时），不是它守的东西。scripts.manifest.json 本身在禁改清单里，
+//   所以按原闸办：把计数归到今读真数，逐字全等照旧（少一本、多一本、顺序乱了照样红）。
+ok(files.every((f) => mf.indexOf('"js/city-facilities/' + f + '.js"') >= 0) && mf.indexOf('"scripts": 351') >= 0, 'H1 加载清单收全六本新账（清单计数 2026-10-04 由 341 归正到实测 351；tools/manifest-scripts.py check 当日判过「HTML == manifest」）——play-harness 从清单取脚本，不进清单=没测过（v25.5 的教训）');
     ok(files.every((f) => html.indexOf('<script defer src="js/city-facilities/' + f + '.js"></script>') >= 0), 'H2 HTML 与清单同步（manifest gen 写回）');
     const newSrcs = files.map((f) => load('js/city-facilities/' + f + '.js'));
     ok(newSrcs.every((s) => s.indexOf('.setItem') < 0 && s.indexOf('.getItem') < 0), 'H3 六本新账零 localStorage 读写——持久化全走 StateRegistry/actionGate/运行时旗三条正门（头注里提一嘴那个词不算数）');

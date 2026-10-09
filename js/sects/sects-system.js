@@ -1023,6 +1023,17 @@ function collectSectResources() {
     var _govSect = discipleState.sectName || discipleState.sectId;
     var _fam = false;
     try { _fam = !!(window.SectGov && typeof window.SectGov.famine === 'function' && window.SectGov.famine(_govSect)); } catch (e) {}
+    // v27.13：月例随库房丰歉浮动（宗门月账的玩家侧手感）——门派的穷富要从自己份例上读得出来：
+    // 库丰加半成带一（收入端有孝敬香火回灌的家底），库薄打折、库空对半（发的是执事垫的赊账），
+    // 支出侧跟着库房缩水，穷门派死得慢一点；阈值两档夹逼，防单日大起大落。
+    var _fluct = 1;
+    try {
+        var _econFl = (typeof window.getSectEconomySnapshot === 'function') ? window.getSectEconomySnapshot(_govSect) : null;
+        var _stockFl = _econFl ? (Number(_econFl.stock) || 0) : 0;
+        if (_stockFl >= 300) _fluct = 1.15;
+        else if (_stockFl < 30) _fluct = (_stockFl <= 0 ? 0.5 : 0.75);
+    } catch (eFl) { console.warn('[静默失败] js/sects/sects-system.js · collectSectResources：库房丰歉查问没接住，份例按平发', eFl && eFl.message); }
+    baseStones = Math.max(1, Math.round(baseStones * _fluct));
     if (_fam) baseStones = Math.floor(baseStones / 2);
     if (window.inventory && window.inventory.currency) {
         window.inventory.currency.spiritStones = (window.inventory.currency.spiritStones || 0) + baseStones;
@@ -1031,12 +1042,19 @@ function collectSectResources() {
     }
     // 发出去的灵石真从门派库里扣（单一真源：resources 即灵石库）
     try { if (window.SectGov && typeof window.SectGov.deductStore === 'function') window.SectGov.deductStore(_govSect, 'stone', baseStones); } catch (e) { console.warn('[静默失败] js/sects/sects-system.js:980 · 宗门俸禄扣库：发出去的灵石没从门派库里扣掉，账对不上，玩家察觉时库已空', e && e.message); }
+    // v27.13：发出的月例同步入宗门月账支出侧（只记账不动库——扣库走上面的 deductStore 单一真源）
+    try { if (typeof window.noteSectExpense === 'function') window.noteSectExpense(_govSect, baseStones); } catch (e) { console.warn('[静默失败] js/sects/sects-system.js · collectSectResources：月例入月账没接住，本月支出侧少记一笔', e && e.message); }
     discipleState._lastSalaryDay = day;
     if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI();
 
     if (!window._isInLongRetreat && window.showMessage) {
         var econ = typeof window.getSectEconomySnapshot === 'function' ? window.getSectEconomySnapshot(discipleState.sectId) : null;
-        var suffix = econ ? '；宗门库存' + econ.stock + '（日净' + (econ.net >= 0 ? '+' : '') + econ.net + '）' : '';
+        // v27.13：份例条顺带把月账念给玩家听——收入各源与用度当场对账，门派穷富看得见来路。
+        // v27.13 续批（过堂⑥·宗门产业经营）：月报口径三源→四源——产业拆「产业+坊市」两路念（坊市摊位是本批补的恒产格），
+        // 四路收入−用度＝日净当场对得上账；打理佣金已在快照里拨给弟子私账，不在这四路里重复出现。
+        var suffix = econ ? '；宗门库存' + econ.stock + '（日入 产业' + (Number(econ.industry) || 0) + '＋坊市' + (Number(econ.market) || 0)
+            + '＋孝敬' + (econ.filial || 0) + '＋香火' + (econ.incense || 0)
+            + '，用度-' + econ.upkeep + '，日净' + (econ.net >= 0 ? '+' : '') + econ.net + '）' : '';
         if (_fam) suffix = '；门中断粮，俸禄减半——大家都在熬' + suffix;
         var payParts = [];
         if (baseCopper > 0) payParts.push('铜钱+' + baseCopper);
@@ -1842,9 +1860,27 @@ function acceptElderTask(taskType) {
         try { window.sectLedgerNote && window.sectLedgerNote(rewards.contribution, '长老差事'); } catch (e) {}
         ds.tasksCompleted = (Number(ds.tasksCompleted) || 0) + 1;
     }
+    // v27.13：差事赏钱也走月例同款正门——门派的钱不是印出来的，凭空发就是把库房当印钞机。
+    // 降档口径抄 collectSectResources（月例）：库薄（<30）打七五折、库空对半（发的是执事垫的赊账），
+    // 断粮（famine）再减半；平库足额发。实发数真从库房扣（SectGov.deductStore，库不足夹 0＝欠饷），
+    // 并同步入宗门月账支出侧（noteSectExpense 只记账不动库）。
     if (rewards.spiritStones && window.inventory && window.inventory.currency) {
-        window.inventory.currency.spiritStones = (Number(window.inventory.currency.spiritStones) || 0) + rewards.spiritStones;
+        var _paidStones = rewards.spiritStones;
+        try {
+            var _econEt = (typeof window.getSectEconomySnapshot === 'function') ? window.getSectEconomySnapshot(sectName) : null;
+            var _stockEt = _econEt ? (Number(_econEt.stock) || 0) : 0;
+            if (_stockEt < 30) _paidStones = Math.max(1, Math.round(_paidStones * (_stockEt <= 0 ? 0.5 : 0.75)));
+            var _famEt = false;
+            try { _famEt = !!(window.SectGov && typeof window.SectGov.famine === 'function' && window.SectGov.famine(sectName)); } catch (eFa) {}
+            if (_famEt) _paidStones = Math.max(1, Math.floor(_paidStones / 2));
+        } catch (eEt) { console.warn('[静默失败] js/sects/sects-system.js · acceptElderTask：库房丰歉查问没接住，差事赏钱按平发', eEt && eEt.message); }
+        window.inventory.currency.spiritStones = (Number(window.inventory.currency.spiritStones) || 0) + _paidStones;
         if (window.currentCharData) window.currentCharData.spiritStones = window.inventory.currency.spiritStones;
+        // 发出去的赏钱真从门派库里扣（单一真源：resources 即灵石库；库不足时 deductStore 夹 0，等于执事垫账）
+        try { if (window.SectGov && typeof window.SectGov.deductStore === 'function') window.SectGov.deductStore(sectName, 'stone', _paidStones); } catch (eDs) { console.warn('[静默失败] js/sects/sects-system.js · acceptElderTask：差事赏钱扣库没接住，账对不上', eDs && eDs.message); }
+        // 赏钱同步入宗门月账支出侧（只记账不动库——扣库走上面的 deductStore 单一真源）
+        try { if (typeof window.noteSectExpense === 'function') window.noteSectExpense(sectName, _paidStones); } catch (eNo) { console.warn('[静默失败] js/sects/sects-system.js · acceptElderTask：差事赏钱入月账没接住，本月支出侧少记一笔', eNo && eNo.message); }
+        rewards._paidStones = _paidStones; // 消息条念实发数——账实相符，玩家对得上账
     }
     if (typeof window.addFame === 'function' && rewards.fame) {
         try { window.addFame(rewards.fame); } catch (eF) {}
@@ -1855,7 +1891,7 @@ function acceptElderTask(taskType) {
     }
     if (window.showMessage) {
         var msg = '👑 长者事务：' + title + '（贡献+' + rewards.contribution;
-        if (rewards.spiritStones) msg += '、灵石+' + rewards.spiritStones;
+        if (rewards.spiritStones) msg += '、灵石+' + (rewards._paidStones || rewards.spiritStones);
         if (rewards.fame) msg += '、名气+' + rewards.fame;
         msg += '，耗时 ' + cost.minutes + ' 分钟、精力 -' + cost.energy + '）';
         window.showMessage(msg, 'success');
@@ -2214,6 +2250,61 @@ function openSectManagementUI() {
             html += '</div>';
         });
     }
+    // v27.13 续批（过堂⑥·宗门产业经营）：月账月报块——monthBook 此前只记不念，这里给它一个读者：
+    // 本月四源小计（产业/坊市/孝敬/香火）与收入/用度/结余、上月封存账、打理名册摘要，同页念清。
+    // 旧档缺 sources（加键不升版）→ 只念合计；无账 → 一句「账本新开」。任何一处缺席都不挡面板其余内容。
+    try {
+        var _itM = window.SECT_INTERNAL && window.SECT_INTERNAL[sectName];
+        if (_itM) {
+            html += '<hr class="border-gray-600 mt-3">';
+            html += '<p class="text-sm text-emerald-300">🏭 产业经营·月账</p>';
+            var _bmM = _itM.monthBook;
+            if (_bmM && typeof _bmM.month === 'number') {
+                var _srcM = (_bmM.sources && typeof _bmM.sources === 'object') ? _bmM.sources : null;
+                html += '<div class="bg-gray-800/60 border border-gray-700 rounded p-2 text-xs text-gray-300 space-y-0.5">';
+                html += '<p class="text-gray-400">本月（第' + (Number(_bmM.month) || 0) + '月）' + (_srcM ? '' : '——四源小计自本轮起记，此前只记了合计') + '</p>';
+                if (_srcM) {
+                    html += '<p>产业 ' + (Number(_srcM.industry) || 0) + ' ＋ 坊市 ' + (Number(_srcM.market) || 0)
+                        + ' ＋ 孝敬 ' + (Number(_srcM.filial) || 0) + ' ＋ 香火 ' + (Number(_srcM.incense) || 0)
+                        + ' ＝ 收入 <b class="text-green-300">' + (Number(_bmM.income) || 0) + '</b></p>';
+                } else {
+                    html += '<p>收入合计 <b class="text-green-300">' + (Number(_bmM.income) || 0) + '</b></p>';
+                }
+                html += '<p>用度支出 <b class="text-red-300">' + (Number(_bmM.out) || 0) + '</b>（月例/赏格/维护）</p>';
+                var _balM = (Number(_bmM.income) || 0) - (Number(_bmM.out) || 0);
+                html += '<p>本月结余 <b class="' + (_balM >= 0 ? 'text-cyan-300' : 'text-red-400') + '">' + (_balM >= 0 ? '+' : '') + _balM + '</b></p>';
+                html += '</div>';
+            } else {
+                html += '<p class="text-xs text-gray-500">月账新开——今晚日结后开始记账。</p>';
+            }
+            var _lmM = _itM.lastMonthBook;
+            if (_lmM && typeof _lmM.month === 'number') {
+                var _lsrcM = (_lmM.sources && typeof _lmM.sources === 'object') ? _lmM.sources : null;
+                html += '<p class="text-xs text-gray-500 mt-1">上月（第' + (Number(_lmM.month) || 0) + '月）：收入 ' + (Number(_lmM.income) || 0)
+                    + '，支出 ' + (Number(_lmM.out) || 0) + '，结余 ' + ((Number(_lmM.income) || 0) - (Number(_lmM.out) || 0))
+                    + (_lsrcM ? '（产业' + (Number(_lsrcM.industry) || 0) + '／坊市' + (Number(_lsrcM.market) || 0)
+                        + '／孝敬' + (Number(_lsrcM.filial) || 0) + '／香火' + (Number(_lsrcM.incense) || 0) + '）' : '')
+                    + '</p>';
+            }
+            try {
+                var _tinfoM = (typeof window.getSectTendInfo === 'function') ? window.getSectTendInfo(sectName) : null;
+                var _deepM = window.SECT_DEEP_DATA && window.SECT_DEEP_DATA[sectName];
+                if (_tinfoM && _deepM && Array.isArray(_deepM.specialResources)) {
+                    var _rowsM = [];
+                    _deepM.specialResources.forEach(function (r) {
+                        if (!r || !r.id) return;
+                        var _nM = Math.max(0, Math.min(9, Math.floor(Number(_tinfoM.assign[r.id]) || 0)));
+                        _rowsM.push((r.name || r.id) + ' ×' + _nM);
+                    });
+                    if (_rowsM.length) {
+                        html += '<p class="text-xs text-gray-400 mt-1">打理名册（可派 ' + (Number(_tinfoM.pool) || 0)
+                            + ' 人，已派 ' + (Number(_tinfoM.used) || 0) + '）——加减在「门派详情」的建筑卡上：' + _rowsM.join('、') + '</p>';
+                    }
+                }
+            } catch (eTin) { /* 指派名册摘要缺席不挡月账块 */ }
+            html += '<p class="text-[10px] text-gray-500 mt-1">弟子打理的产业增量随月账入公库；其中两成半作佣金发给有私账的弟子——没有私账的，那一分照旧留在公库。</p>';
+        }
+    } catch (eLedg) { console.warn('[静默失败] js/sects/sects-system.js · openSectManagementUI：月账月报块没画成，面板其余照旧', eLedg && eLedg.message); }
     html += '</div>';
     if (typeof window.showModal === 'function') {
         window.showModal(sectName + '·宗门管理', html);

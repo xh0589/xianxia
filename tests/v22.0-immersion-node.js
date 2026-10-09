@@ -19,19 +19,23 @@ function read(rel) { return fs.readFileSync(path.join(ROOT, rel), 'utf8'); }
     ok(html.indexOf('id="setting-social-event-panel"') >= 0 && html.indexOf('onchange="toggleSocialEventPanel()"') >= 0,
         'A1 设置页有「社交面板显示个人事件」开关');
     const sepLine = html.split('\n').filter(l => l.indexOf('setting-social-event-panel') >= 0)[0] || '';
-    ok(sepLine.indexOf('checked') < 0, 'A2 开关默认关闭（input 不带 checked）');
+    ok(/id="setting-social-event-panel"[^>]*\bchecked\b/.test(sepLine),
+        'A2 开关在 html 里默认就是勾上的（还没跑 initSettings 时也不说反话）');
     ok(html.indexOf('📜似有心事') >= 0 && html.indexOf('📜有新事件') < 0, 'A3 人脉筛选改为「似有心事」口径');
 
     const app = read('js/app.js');
     ok(/function toggleSocialEventPanel\(\)[\s\S]{0,400}window\._settings\.socialEventPanel = !!cb\.checked[\s\S]{0,200}xianxia_settings/.test(app),
         'A4 开关写入 _settings 并持久化');
     ok(app.indexOf('window.toggleSocialEventPanel = toggleSocialEventPanel;') >= 0, 'A5 开关函数已导出');
-    ok(/sepCb[\s\S]{0,120}socialEventPanel === true/.test(app), 'A6 initSettings 回填勾选态（默认 false）');
+    ok(/sepCb[\s\S]{0,160}socialEventPanel === false\)/.test(app), 'A6 initSettings 回填勾选态（默认开：没写过这个键＝罗列清单）');
 
     const npe = read('js/npcs/npc-personal-events.js');
-    ok(/function getPersonalEventButtons\(npc, npcId\) \{[\s\S]{0,600}socialEventPanel === true\)\) return '';/.test(npe),
-        'A7 面板清单函数带沉浸闸（未开启即返回空）');
-    ok(npe.indexOf('injectSectSecrets();') < npe.indexOf("socialEventPanel === true)) return '';"),
+    // 本批把默认翻过来了：清单默认罗列，只有显式 false 才进沉浸模式（见 tests/npc-private-visible-node.js）
+    ok(/function isPersonalEventListShown\(\)[\s\S]{0,200}socialEventPanel === false\)/.test(npe),
+        'A7 沉浸判定口只认「显式 false」（没写过＝罗列）');
+    ok(/function getPersonalEventButtons\(npc, npcId\) \{[\s\S]{0,900}if \(!isPersonalEventListShown\(\)\) return '';/.test(npe),
+        'A7b 面板清单函数带沉浸闸（显式关掉才返回空）');
+    ok(npe.indexOf('injectSectSecrets();') < npe.indexOf("if (!isPersonalEventListShown()) return '';"),
         'A8 秘密补注入先于沉浸闸（懒注册掌门的秘密不断供）');
     ['window.isEventReadyNow', 'window.isPersonalLineFinished', 'window.tryInterceptPersonalEvent', 'window.personalEventGreetGate'].forEach(fn => {
         ok(npe.indexOf(fn + ' =') >= 0, 'A9 导出 ' + fn);
@@ -207,11 +211,17 @@ let pool = null;
     w.__npcs['sect_leader_修罗宫'] = npc;
     w._settings = {};
 
-    // C1/C2 面板清单闸
-    eq(w.getPersonalEventButtons(npc, 'sect_leader_修罗宫'), '', 'C1 沉浸模式（默认）：面板不罗列事件清单');
+    // C1/C2 面板清单闸（默认已翻面为「罗列」；显式 false 才是沉浸模式）
+    const 默认Html = w.getPersonalEventButtons(npc, 'sect_leader_修罗宫');
+    ok(默认Html.length > 50 && 默认Html.indexOf('个人事件') >= 0,
+        'C1 默认（没写过这个键）：面板罗列事件清单，不再整栏空');
+    ok(w.getPersonalEventButtons(npc, 'sect_leader_修罗宫').indexOf("triggerPersonalEvent('") >= 0,
+        'C1b 默认态清单里带可点的桩（不是只有栏目标题）');
+    w._settings.socialEventPanel = false;
+    eq(w.getPersonalEventButtons(npc, 'sect_leader_修罗宫'), '', 'C1c 显式 false → 沉浸模式：面板不罗列');
     w._settings.socialEventPanel = true;
     const onHtml = w.getPersonalEventButtons(npc, 'sect_leader_修罗宫');
-    ok(onHtml.length > 50 && onHtml.indexOf('个人事件') >= 0, 'C2 开启开关：清单恢复显示');
+    ok(onHtml.length > 50 && onHtml.indexOf('个人事件') >= 0, 'C2 显式 true：清单照旧显示（老玩家勾选过的不受影响）');
     w._settings.socialEventPanel = false;
 
     // C3 就绪判定
@@ -266,17 +276,23 @@ let pool = null;
     eq(w.isPersonalLineFinished('sect_leader_修罗宫'), false, 'C6d 重置后线路复活');
 }
 
-// ============ D 拦截运行时：一对话就拦住面板并开场 ============
+// ============ D 拦截运行时：一对话就拦住面板并开场（沉浸模式 = 显式关掉清单） ============
 {
     const w = makeWorld({});
     vm.runInContext(read('js/npcs/npc-personal-events.js'), w, { filename: 'npe.js' });
     vm.runInContext(read('js/npcs/baihua-personal-events.js'), w, { filename: 'bh.js' });
     const npc = fakeLeader('sect_leader_修罗宫', '绯泪', 25);
     w.__npcs['sect_leader_修罗宫'] = npc;
+
+    // D0 默认态（没写过这个键）：清单罗列 ⇒ 总闸不拦，面板照常给玩家看入口
     w._settings = {};
+    w.__modals.length = 0;
+    eq(w.personalEventGreetGate(npc, 'sect_leader_修罗宫'), false, 'D0 默认态不拦面板（玩家自己点清单）');
+    eq(w.__modals.length, 0, 'D0b 默认态不弹事件（弹窗位留给清单里的选择）');
 
     // D1 沉浸模式：拦截成功 → 返回 true、事件弹窗已建、面板不再显示（调用方 return）
-    eq(w.personalEventGreetGate(npc, 'sect_leader_修罗宫'), true, 'D1 就绪低门槛事件：交谈总闸拦截成功');
+    w._settings.socialEventPanel = false;
+    eq(w.personalEventGreetGate(npc, 'sect_leader_修罗宫'), true, 'D1 沉浸模式（显式 false）：就绪低门槛事件交谈总闸拦截成功');
     eq(w.__modals.length, 1, 'D2 事件弹窗恰好一座（不叠台）');
     eq(w._pendingEventComplete, 'xl_event_001', 'D3 开场的正是链头首桩「深夜的灯」');
     ok(String(w.__modals[0].className).indexOf('personal-event-modal') >= 0, 'D4 弹窗类名入闸（后续防叠台判定可认）');
@@ -297,7 +313,7 @@ let pool = null;
     w.__modals.length = 0;
     w._pendingEventComplete = null;
     const gateOn = w.personalEventGreetGate(npc, 'sect_leader_修罗宫');
-    eq(gateOn, false, 'D6 开启面板显示：总闸不拦截（玩家自己点清单）');
+    eq(gateOn, false, 'D6 显式 true：总闸不拦截（玩家自己点清单）');
     eq(w.__modals.length, 0, 'D6b 不拦截即无即刻弹窗（概率路走延时，沙盒定时器不发）');
     w._settings.socialEventPanel = false;
 

@@ -11,12 +11,36 @@
 
     /** 角色/世界进度键（新游戏与删档应清除；不得跨角色继承） */
     // F-11 修复：之前漏列 xianxia_storyline_choices（既不清也不收，剧情抉择跨角色串档）
-    //           同时 xianxia_sect_diplomacy/xianxia_tracked_quests 在清单但 collect/apply 不收，读档丢失
+    //
+    // ⚠️⚠️ 下面这行旧注记**是错的，已作废**（原文：「同时 xianxia_sect_diplomacy/xianxia_tracked_quests
+    // 在清单但 collect/apply 不收，读档丢失」）。实测（差分法，见 tests/sideledger-roundtrip-node.js 的 B 段）：
+    // 那两本**collect 收得好好的**——它们各自注册了 StateRegistry 模块（sect-visit.js:901 / quest-system.js:2247），
+    // exportAll 照收。真正的病灶是**反过来的那一半**：模块的 `import` 只改内存、**不把键写回盘**，
+    // 而 applyFullGameState 开头的 clearCharacterStorage() 早就把键从盘上删了 ⇒
+    // **键从此不在盘上（清得掉），而下一次刷新时读方读到 null 就按默认值/随机数重建（收不回）**。
+    // 「注册了 StateRegistry 模块」只补上了内存那一半，不等于键会回来。这两本已补进 SIDE_LEDGER_KEYS。
+    //
+    // 本批补 4 个漏列的角色级键（逐个读过写入方语义才点的名，见下面 SIDE_LEDGER_KEYS 的同款判据）：
+    //   xianxia_merged_skills     融合功法注册表（cultivation.js:1121 / grand-legacy.js:479）
+    //                              —— 存的是**完整 def**（名字/效果/图标），页面加载时 rehydrateMergedSkills
+    //                              把它塞回 skillPages 并 unlock(…,'learned')。它是角色自创的功法本身，
+    //                              留着就是新角色的功法册里挂着上一局的名字（目录污染）。
+    //   xianxia_asm_ledger        嫉妒「双人余波」账（jealousy-assembly.js:293）——按日记录两人同框，
+    //                              余波 3~10 日后待发；跨角色残留＝新角色开局就撞上一世的旧余波。
+    //   xianxia_collective_ledger 集体戏账（jealousy-collective.js:66）——灯节场次/坊市与擂台冷却/
+    //                              大典一次性(weddingDone)/风评队列，全是本局进度。
+    //   xianxia_rival_chain_cd    宿敌寻仇冷却（rivalry-chain.js:72）——按绝对日键控，本局节流账。
+    // ⚠️ **不列** xianxia_map_overlay：审计稿把它写成「已探索地图残留」，与代码实况不符——
+    //    world-map.js:293-320 里这个键只存 '1'/'0'，是「九州路线标记图层显隐」的**显示偏好**
+    //    （与 xianxia_settings 同族，写法也同：saveToStorage + 设置页勾选框 + toggleMapOverlay）。
+    //    它该跟着账号走，不该跟着角色走。把它塞进角色级＝每开一局就替玩家关一次图面标注。
     var CHARACTER_STORAGE_KEYS = [
         'xianxia_arena_ranking',
+        'xianxia_asm_ledger',
         'xianxia_beasts',
         'xianxia_choices',
         'xianxia_city_temp',
+        'xianxia_collective_ledger',
         'xianxia_daily_events',
         'xianxia_enhancement_pity',
         'xianxia_event_flags',
@@ -28,6 +52,7 @@
         'xianxia_lifespan',
         'xianxia_location_data',
         'xianxia_mail_system',
+        'xianxia_merged_skills',
         'xianxia_npc_records',
         'xianxia_party_data',
         'xianxia_personal_event_flags',
@@ -36,6 +61,7 @@
         'xianxia_quest_progress',
         'xianxia_quick_moves',
         'xianxia_reputation',
+        'xianxia_rival_chain_cd',
         'xianxia_save',
         'xianxia_scenario_progress',
         'xianxia_sect_diplomacy',
@@ -46,6 +72,66 @@
         'xianxia_travel_data',
         'xianxia_world_events',
         'borrowRecords'
+    ];
+
+    /**
+     * 白名单里「**光靠 collect 收不回来**」的那几本旁账：值整体是 JSON 文本，
+     * collect 取原文随槽存、apply 把原文写回 localStorage（不 writeKey——见回灌处那段注释）。
+     *
+     * 为什么要这张单：applyFullGameState 开头会 clearCharacterStorage()（先清后灌，灌不回来的就没了）。
+     * 白名单键只有**键本身**被写回盘上，读档后的刷新才认得出账。三条回灌通路：
+     *   ① writeKey('<key>', saveData.<字段>)  —— 结构化字段那条（reputation/landmarks/… 共 24 键）
+     *   ② 本单：原文随槽往返
+     *   ③ 别的模块自己在 apply 里 saveToStorage（如 xianxia_personal_event_flags，game-state.js:1412）
+     * **三条都不覆盖的键 = 每次读档抹一次，键从此不在盘上。**
+     *
+     * 两类键会掉进这个坑，判据不同，分开记：
+     *
+     * 【甲】没有 StateRegistry 模块、collect 一点没碰它（原来那 4 本）：
+     *   xianxia_merged_skills     融合功法注册表（cultivation.js:1121 / grand-legacy.js:479）
+     *                             —— 完整 def，页面加载 rehydrateMergedSkills 塞回 skillPages 并 unlock。
+     *                             抹掉＝这门功法再也回不来（融合早已发生、双方功法也已消耗，重融不出来）。
+     *   xianxia_asm_ledger        嫉妒「双人余波」账（jealousy-assembly.js:293）——余波 3~10 日后待发。
+     *   xianxia_collective_ledger 集体戏账（jealousy-collective.js:66）——灯节场次/冷却/大典一次性/风评队列。
+     *   xianxia_rival_chain_cd    宿敌寻仇冷却（rivalry-chain.js:72）——按绝对日键控。
+     *
+     * 【乙】**有** StateRegistry 模块、collect 也收了，但那个模块的 `import` 只改内存、**不回写键**
+     *      （本批新补的 5 本）。这类更隐蔽：肉眼看 collect/apply 都「有处理」，键却照样消失。
+     *      逐个的模块注册处与它的 import（都不回写）：
+     *   xianxia_sect_diplomacy    sect-visit.js:901 `sectDiplomacy`——import 只 Object.assign 到
+     *                             SECT_DIPLOMACY_STATE，不调 saveSectDiplomacy()（:675）。
+     *                             ★本族最重的一个：读档后刷新，initSectDiplomacy()（sect-visit.js:640，
+     *                             由 app.js:11902 在页面加载时调）读到 null ⇒ **按 Math.random 重生成整张外交矩阵**
+     *                             并立刻 saveSectDiplomacy() 写回盘上 ⇒ 玩家的结盟/仇怨/条约被随机数覆盖。
+     *   xianxia_tracked_quests    quest-system.js:2247 `trackedQuests`——import 只重填 _trackedQuests，
+     *                             不调 saveTrackedQuests()（:1598）。刷新后 quest-system.js:1587 读到 null ⇒
+     *                             追踪栏清空并自动改追「第一个未完成的主线」。
+     *   xianxia_storyline_choices storylines-v2/batch1.js:44 `storylineChoices`——import 不回写 LS_KEY。
+     *                             ★不可回头抉择的记录（batch1.js:8「第4段为不可回头抉择」），丢了就再也选不回来。
+     *   xianxia_mail_system       mail-system.js:592 `mail`——import 只赋 window._mailSystemData，不调
+     *                             saveMailData()（:539）。寄出的信/收藏在刷新后读不到。
+     *   xianxia_quick_moves       equipment.js:692 `quickMoves`——import 只重填闭包 quickMoveSlots。
+     *
+     * ⚠️ 判据里**不含**的键（别往这张单上乱加，各有各的道理）：
+     *   xianxia_game_time  time-system.js:113 明写「禁止 xianxia_game_time 自动持久化」——
+     *                      游戏时间以 saveData.gameTime 进槽，这个键是设计上就不该存在的。
+     *   xianxia_professions 全仓只有白名单这一处命中，**无任何写入方也无任何读取方**（占位残留）。
+     *   borrowRecords      注册了模块（npc-borrow-service.js:159）但全仓**没有任何一处往这个键写盘**，
+     *                      内存账在 global.borrowRecords 上，与这条 localStorage 键无关。
+     *   xianxia_map_overlay 见 CHARACTER_STORAGE_KEYS 上方那段：账号级显示偏好，两张单都不该收。
+     */
+    var SIDE_LEDGER_KEYS = [
+        // 【甲】无模块、collect 零覆盖
+        'xianxia_merged_skills',
+        'xianxia_asm_ledger',
+        'xianxia_collective_ledger',
+        'xianxia_rival_chain_cd',
+        // 【乙】有模块，但 import 只改内存、不回写键
+        'xianxia_sect_diplomacy',
+        'xianxia_tracked_quests',
+        'xianxia_storyline_choices',
+        'xianxia_mail_system',
+        'xianxia_quick_moves'
     ];
 
     /** 账号级：删「所有存档」时默认保留；新游戏不读入角色进度 */
@@ -60,11 +146,31 @@
         }
     }
 
+    /**
+     * 清角色级键。options.protectKeys：这次**不许删**的键（见 applyFullGameState 的调用处）。
+     *
+     * 为什么要有这个口：白名单里混着两种性质不同的键——
+     *   ①「角色键」：背包/声望/地标……换角色必须清，清了由 apply 逐条灌回来；
+     *   ②「当前档键」xianxia_save：它不是角色的附属账，而是**这一刻正在被读取的那份存档本体**
+     *      （app.js:3227 continueCandidate 的「继续仙途」、app.js:3286 摘要槽的同名完整档兜底、
+     *        auto-save.js:155 载入自动档前先落一份备份，全靠它）。
+     * 把它当 ① 那样先删后灌，等于让存档在读自己的过程中把自己删掉；而 applyFullGameState 中间
+     * 有十几处**没有 try 包裹**的回灌（new ItemInstance / importQuestState / KnowledgeSystem 等），
+     * 任何一处抛错都会当场断在半路——末尾那句 writeKey('xianxia_save', saveData) 根本走不到。
+     * 实测（.scratch/fix-critical-progress/repro-bug1.cjs 场景 2）：档里存着已下架的物品模板时，
+     * 一次读档就让 xianxia_save 变成「键不存在」，「继续仙途」随之再也认不出这个角色。
+     * ⇒ 读档这条路把 ② 挂进 protectKeys：清完立刻回填，键全程在盘上；万一中途抛错，
+     *   留下的还是**上一份完整档**（玩家刷新后仍能续上），而不是一颗被读档动作抹掉的空键。
+     */
     function clearCharacterStorage(options) {
         options = options || {};
         var alsoAccount = !!options.alsoAccount;
+        var protect = (options.protectKeys && typeof options.protectKeys.length === 'number') ? options.protectKeys : null;
         CHARACTER_STORAGE_KEYS.forEach(function (k) {
-            try { localStorage.removeItem(k); } catch (e) {}
+            if (protect && protect.indexOf(k) !== -1) return;   // 保护键：本次不删（理由见上方注释）
+            try { localStorage.removeItem(k); } catch (e) {
+                console.warn('[GameState] 角色级键删不掉：' + k + '（隐私模式或存储受限；本键的旧值会跨角色残留）', e && e.message);
+            }
         });
         // 动态键：地图种子、宗门专精冷却、NPC故事线进度等
         try {
@@ -373,6 +479,27 @@
             saveData.partyData = { members: [], formation: 'standard' };
         }
 
+        // 旁账随槽：融合功法注册表 / 嫉妒双人余波账 / 集体戏账 / 宿敌寻仇冷却（甲类，无模块、collect 零覆盖），
+        // 以及外交关系 / 追踪任务 / 剧情抉择 / 飞鸽传书 / 常用招式（乙类，有模块但 import 不回写键）。
+        // 取**原文**（这几个键的值本身就是 JSON 文本，各写入方自带序列化），不在这里二次 parse 再拼，
+        // 免得把谁家的账本结构焊死在存档层。缺键就不落这一格（老档没这格 ⇒ apply 侧整段跳过，
+        // 不会拿空值去盖住浏览器里现役角色的账）。
+        try {
+            var sideLedgers = {};
+            SIDE_LEDGER_KEYS.forEach(function (k) {
+                try {
+                    var raw = localStorage.getItem(k);
+                    if (raw) sideLedgers[k] = raw;
+                } catch (eOne) {
+                    // 单本读不出来（隐私模式/配额满）不该连累另外几本：这一本缺席，apply 侧就不动它
+                    console.warn('[GameState] 旁账读不出来：' + k, eOne && eOne.message);
+                }
+            });
+            if (Object.keys(sideLedgers).length) saveData.sideLedgers = sideLedgers;
+        } catch (eSide) {
+            console.warn('[GameState] 旁账整体收集失败（读档时这几本不会被抹，但也不随槽走）:', eSide && eSide.message);
+        }
+
         // 门派
         if (global.discipleState) {
             saveData.discipleState = JSON.parse(JSON.stringify(global.discipleState));
@@ -617,6 +744,37 @@
         if (typeof global.resetWorldEventsState === 'function') {
             try { global.resetWorldEventsState(); } catch (e) { console.warn('[GameState] 世界事件重置失败:', e); }
         }
+        // 旁账的**内存态**也得跟键一起清（键清了、内存留着，等于没清）：
+        // ① 融合功法 def：页面加载时 rehydrateMergedSkills 已把上一局的完整 def 塞进 skillPages，
+        //    而秘境「残破功法」事件正是从 skillPages 随机抽一门记为「听闻」（app.js:10115），
+        //    不看掌握状态 ⇒ 新角色会抽中上一局自创功法的名字（app.js:319 的 initStarterKnowledge
+        //    只清知识账 techniqueKnowledge，清不到功法表本身）。
+        //    「哪一类 id 算注册表条目」由 cultivation.js 的 LEDGER_SKILL_ID_PREFIXES 独家持有，这里
+        //    不自己抄一份——抄一份就是两处各记一次命名规则，日后加前缀必漏一边。
+        //    连带清 legacyart_（grand-legacy.js:438 的自创功法）：它与 merged_ 同属 xianxia_merged_skills
+        //    一本注册表、同样被 rehydrateMergedSkills 灌进 skillPages，只清一族等于漏一半。
+        // ② 嫉妒两本账各有闭包缓存（_ledger / _cled），不清缓存下一次写入就把旧条目原样写回键里。
+        //    各模块都备好了「丢弃缓存、重读磁盘」的口子（_asmLedgerReload / _collectiveLedgerReload），直接用。
+        try {
+            if (typeof global._purgeLedgerSkillDefsFromPages === 'function') {
+                global._purgeLedgerSkillDefsFromPages();
+            } else if (Array.isArray(global.skillPages)) {
+                // 退路（脚本顺序未到位）：只清 merged_，与本函数修前的旧行为一字不差，不算扩权
+                for (var pgI = 0; pgI < global.skillPages.length; pgI++) {
+                    var pg = global.skillPages[pgI];
+                    if (!Array.isArray(pg)) continue;
+                    for (var skI = pg.length - 1; skI >= 0; skI--) {
+                        if (pg[skI] && String(pg[skI].id).indexOf('merged_') === 0) pg.splice(skI, 1);
+                    }
+                }
+            }
+        } catch (eMsPurge) {
+            console.warn('[GameState] 融合功法表清空失败：上一局自创的功法名可能仍留在功法表里', eMsPurge && eMsPurge.message);
+        }
+        try { if (typeof global._asmLedgerReload === 'function') global._asmLedgerReload(); }
+        catch (eAsPurge) { console.warn('[GameState] 嫉妒余波账内存重置失败：', eAsPurge && eAsPurge.message); }
+        try { if (typeof global._collectiveLedgerReload === 'function') global._collectiveLedgerReload(); }
+        catch (eClPurge) { console.warn('[GameState] 集体戏账内存重置失败：', eClPurge && eClPurge.message); }
 
         // 背包
         if (global.inventory) {
@@ -769,7 +927,21 @@
         if (!saveData || !saveData.charName) return false;
 
         // 读档前清空上一角色兼容键，杜绝 A/B 槽通过 localStorage 串状态。
-        clearCharacterStorage({ alsoAccount: false });
+        //
+        // ⚠️ `xianxia_save` 必须挂进 protectKeys：它不是「上一角色的附属账」，而是**此刻正在
+        // 被应用的那份档本体**（app.js:3227「继续仙途」与 :3286 摘要槽的同名完整档兜底都靠它，
+        // auto-save.js:155 载入自动档前也先往它落一份备份）。当普通角色键删掉，等于读档先自毁；
+        // 而本函数从这一行到末尾有十几处无 try 的回灌（new ItemInstance / importQuestState /
+        // KnowledgeSystem.importData …），任何一处抛错末尾的「载入即定妆」回填就都走不到。
+        // 实测证据见 .scratch/fix-critical-progress/repro-bug1.cjs 场景 2。
+        //
+        // 另抄一份原文做兜底：这颗键全程在盘上，正常路径末尾会被新档覆盖；万一末尾回填自己也
+        // 写不进去（配额满），至少盘上留着上一份完整档，而不是一颗空键。
+        var prevSaveRaw = null;
+        try { prevSaveRaw = localStorage.getItem('xianxia_save'); } catch (ePrevSnap) {
+            console.warn('[GameState] 读档前抄不下 xianxia_save 原文（存储受限）：本次载入中途抛错时没有本地副本可留', ePrevSnap && ePrevSnap.message);
+        }
+        clearCharacterStorage({ alsoAccount: false, protectKeys: ['xianxia_save'] });
 
         var n = function (v, d) { return v != null ? v : d; };
 
@@ -971,16 +1143,76 @@
             }
         }
 
-        // 知识层
+        // 知识层（功法账：knowledge-system.js 的 techniqueKnowledge 正账 ↔ 旧账 learnedSecrets 镜像）
+        //
+        // ★病灶一 · 读档抹掉功法账：原判据是裸 truthy `if (saveData.techniqueKnowledge)`，
+        // 而 {} 在 JS 里是真值 ⇒ 档里只要落的是空对象就永远走 importData({})，
+        // 旧档迁移那条腿（migrateFromLearnedSecrets）**永远走不到**。空对象并不稀有：
+        // 写档侧 collectFullGameState:368 与 app.js:3026 都在「KnowledgeSystem 缺席 / 知识册还空」
+        // 时写出 {}，而那份档的 learnedSecrets（:367）照样是真账。
+        // 后果不可恢复：秘籍早已被 inventory.js:468 消耗掉，账再被读档抹成 0 ⇒ 玩家练的门全丢
+        // （另一代理真机实测 learnedSecrets 49 → 0、ArtEffects.learnedCount 49 → 0、
+        //   combatBonus() 由 {defense:30,speed:80,dodge:45,counter:50} 变成 {}）。
+        // 改成「有键且非空」：缺键 / undefined / null / {} / [] / 非对象 一律落到下面那条腿。
+        //
+        // ★权威判据（techniqueKnowledge 与 learnedSecrets 都有值时听谁的）：**并集，只补不盖**。
+        //   · techniqueKnowledge 是结构化正账（knowledge-system.js:5 的唯一数据源约定）；
+        //   · learnedSecrets 虽由 syncLearnedSecretsList() 派生，但它**不是纯派生**——
+        //     inventory.js:772、grand-legacy.js:473、cultivation.js:1146 三条回退腿在
+        //     KnowledgeSystem 缺席（或它抛错）时直接往数组里塞 id，所以数组里可能有正账没有的门
+        //     （自创/融合功法就是走这两条登记的）。只认一边都是在赌运气。
+        //   · 并集方向单调：unlock 不允许降级（knowledge-system.js:239），
+        //     所以读一次与读三次结果一致（幂等），且绝不清空任何一边已有的真账。
+        //   · 并集**只补正账缺的那些**：已经登在册的门不再 unlock 第二遍——unlock 内部会走
+        //     Codex.discover，对已有条目那是 count++（codex-tutorial.js:90），
+        //     每读一次档抬一次「见过次数」是凭空长出来的账，不该有。
         if (global.KnowledgeSystem) {
-            if (saveData.techniqueKnowledge) {
-                global.KnowledgeSystem.importData(saveData.techniqueKnowledge);
-            } else if (saveData.learnedSecrets && saveData.learnedSecrets.length) {
-                global.KnowledgeSystem.migrateFromLearnedSecrets(saveData.learnedSecrets);
+            var ks = global.KnowledgeSystem;
+            var tk = saveData.techniqueKnowledge;
+            // 「有键且非空」，不是裸 truthy。数组/字符串这类非账本形状一律按「账本侧没内容」处理
+            var tkHasEntries = !!(tk && typeof tk === 'object' && !Array.isArray(tk) && Object.keys(tk).length > 0);
+            var lsSaved = Array.isArray(saveData.learnedSecrets) ? saveData.learnedSecrets : null;
+
+            if (tkHasEntries) {
+                ks.importData(tk);            // 正账进门：整体替换（本档的账就是这一份，不与上一局混合）
+            } else if (lsSaved && lsSaved.length) {
+                ks.migrateFromLearnedSecrets(lsSaved);   // 空对象/缺键的老档：从旧账迁移（原来永远走不到）
             } else {
-                global.KnowledgeSystem.initStarterKnowledge();
+                ks.initStarterKnowledge();   // 两本都空 = 新号底色（凡人只「听闻」吐纳术）
             }
-            global.learnedSecrets = global.KnowledgeSystem.syncLearnedSecretsList();
+
+            // 旧账并集：把正账侧登不到的 id 迁进来。迁完即 self-heal —— 本次载入的真账会随下一次
+            // 存档以「有键」形态写回本地，那份 {} 的坏档从此不再产生（不必另加任何存档键）。
+            if (lsSaved && lsSaved.length) {
+                var ledger = ks.techniqueKnowledge || {};
+                var covered = {};
+                Object.keys(ledger).forEach(function (kid) {
+                    var ent = ledger[kid] || {};
+                    covered[kid] = true;
+                    if (ent.manualId) covered[String(ent.manualId)] = true;   // 镜像：sync 会把 manualId 也写进旧账
+                });
+                var missing = [];
+                lsSaved.forEach(function (sid) {
+                    if (sid == null || sid === '') return;
+                    var skey = String(sid);
+                    if (covered[skey]) return;
+                    covered[skey] = true;      // 旧账自身就有镜像重复（skillId 与其 manualId 同时在册）
+                    missing.push(skey);
+                });
+                if (missing.length) ks.migrateFromLearnedSecrets(missing);
+            }
+
+            // ★病灶二 · 那个无条件覆盖赋值：syncLearnedSecretsList() 只收 state>=learned 的条目，
+            // 且它内部已经把 global.learnedSecrets 写成了这个结果。档里明明记着 N 门、算出来却是空时，
+            // 原来那句无条件赋值会把玩家真账当场抹成 0。判据：**宁可原样留旧账，也绝不允许非空 → 空**。
+            var synced = ks.syncLearnedSecretsList();
+            if ((!synced || !synced.length) && lsSaved && lsSaved.length) {
+                global.learnedSecrets = lsSaved.slice();
+                console.warn('[GameState] 知识账算不出任何「已学会」的功法，按存档里的旧账原样保留（'
+                    + lsSaved.length + ' 门未被抹掉）');
+            } else {
+                global.learnedSecrets = synced;
+            }
         } else if (saveData.learnedSecrets) {
             global.learnedSecrets = saveData.learnedSecrets;
         }
@@ -1131,8 +1363,16 @@
             // 第一百一十波 · NEW-104：槽里缺这格（null/undefined）就跳过——绝不能删键。
             // 旧版 null 走 removeItem：载入一份老档/别的角色的档，会当场把现行角色的
             // 声望、地标、每日事件等真数据键从浏览器里删掉（现场 7 份档 6 份带删键效果）。
+            var wrote = true;
             if (val == null) return;
-            try { if (global.saveToStorage) global.saveToStorage(key, JSON.stringify(val)); else localStorage.setItem(key, JSON.stringify(val)); } catch (e) {}
+            try {
+                wrote = global.saveToStorage ? global.saveToStorage(key, JSON.stringify(val)) !== false
+                    : (localStorage.setItem(key, JSON.stringify(val)), true);   // saveToStorage 自己在配额满时吞异常返回 false（并已向玩家报过警）
+            } catch (e) {
+                wrote = false;
+                console.warn('[静默失败] js/core/game-state.js · writeKey：键写不进盘——' + key + ' 没落盘（隐私模式或存储已满）', e && e.message);
+            }
+            return wrote;   // 末尾「当前档」那一步要看它：写不进去时宁可把上一份完整档顶回去
         }
 
         writeKey('xianxia_reputation', saveData.reputation);
@@ -1282,23 +1522,76 @@
             }
         } catch (e) {}
 
+        // 旁账回灌：SIDE_LEDGER_KEYS 上那几本都在 CHARACTER_STORAGE_KEYS 里，开头的 clearCharacterStorage() 刚抹过，
+        // 这里把 collect 时随槽带回来的原文写回去。**写原文不 writeKey**：writeKey 会 JSON.stringify，
+        // 而这几个键的值本身已经是 JSON 文本，再套一层就写出 "[[...]]" 这种双层串，读方当场解析失败。
+        // ★这一段就是乙类键（外交/追踪/抉择/邮件/常用招式）唯一的回写通路：它们的 StateRegistry 模块
+        //   import 只改内存，不写键（sect-visit.js:904 / quest-system.js:2250 / mail-system.js:597 等），
+        //   少了这段，读档后键就留在「已删」状态，下一次刷新读方按默认值重建 ⇒ 玩家真账被覆盖。
+        // 灌完顺手把三处内存态拉回磁盘（仅甲类需要，乙类模块的 import 自己管内存）：融合功法注册表要在
+        // skillPages 里重建，嫉妒两本账各有闭包缓存（不清缓存的话，下一次写入会把上一局的旧条目原样写回键里）。
+        //
+        // ⚠️ 换档污染：读档前**先摘**功法表里的注册表条目（上面这一步之前必须做）。
+        // 页面加载那一刻 rehydrateMergedSkills 就把当时 localStorage 里的 def 灌进了 skillPages，
+        // 而 skillPages 不随存档往返（equipment.js:221 的 const 表、:660 挂上）——切档只换磁盘、
+        // 换不掉这张内存表。上一批只把本档账灌了回去，没先把上一局的条目摘掉，
+        // 结果两局的目录条目同时挂在功法册里：看着乱，canEquip 也过不去（def 不在新档的知识账里）。
+        // 摘在写入之前还有个好处：万一 writeToStorage 这一步抛了，最坏结果是功法册空着（看得见的空），
+        // 而不是留着上一局的目录条目冒充本档的。
+        try {
+            if (typeof global._purgeLedgerSkillDefsFromPages === 'function') global._purgeLedgerSkillDefsFromPages();
+        } catch (eMsPurge) {
+            console.warn('[GameState] 读档：功法表里的上一局条目摘不干净（可能有重名残留）', eMsPurge && eMsPurge.message);
+        }
+        if (saveData.sideLedgers && typeof saveData.sideLedgers === 'object') {
+            // 只认单上点过名的键：档是浏览器本地数据，但读档路径不该有能力往任意键上写东西
+            //（否则一个改过的档就能顺手把 xianxia_settings 之类账号级键覆写掉）。
+            SIDE_LEDGER_KEYS.forEach(function (k) {
+                if (saveData.sideLedgers[k] == null) return;
+                try {
+                    if (global.saveToStorage) global.saveToStorage(k, saveData.sideLedgers[k]);
+                    else localStorage.setItem(k, saveData.sideLedgers[k]);
+                } catch (eSide) {
+                    console.warn('[GameState] 旁账回灌失败：' + k, eSide && eSide.message);
+                }
+            });
+            try { if (typeof global.rehydrateMergedSkills === 'function') global.rehydrateMergedSkills(); }
+            catch (eMs) { console.warn('[GameState] 融合功法回册失败：档里的自创功法名这次没能进功法册', eMs && eMs.message); }
+            try { if (typeof global._asmLedgerReload === 'function') global._asmLedgerReload(); }
+            catch (eAs) { console.warn('[GameState] 嫉妒余波账回灌内存失败：', eAs && eAs.message); }
+            try { if (typeof global._collectiveLedgerReload === 'function') global._collectiveLedgerReload(); }
+            catch (eCl) { console.warn('[GameState] 集体戏账回灌内存失败：', eCl && eCl.message); }
+        }
+
         // v12.1：最后恢复模块自注册状态；这一步覆盖兼容 localStorage 的旧值。
         if (global.StateRegistry && typeof global.StateRegistry.importAll === 'function') {
             try { global.StateRegistry.importAll(saveData.modules || {}); }
             catch (e) { console.warn('[GameState] 模块状态恢复失败:', e); }
         }
 
-        // 载入即定妆：本函数开头 clearCharacterStorage() 会连 `xianxia_save` 一起删（它在
-        // CHARACTER_STORAGE_KEYS 里），而那一份正是此刻应用的档——读一次等于抹一次。
-        // 只靠 xianxia_save 存活的档（auto-save.js:154 独写此键）因此一读就没；载入摘要槽时
-        // app.js:2908 的「同名完整档」兜底同样落在被自己删掉的键上。
-        writeKey('xianxia_save', saveData);
+        // 载入即定妆：盘上的「当前档」永远等于刚应用这一份。
+        // （`xianxia_save` 现在已挂进开头 clearCharacterStorage 的 protectKeys，所以这一行是**覆盖**
+        //  而不是「补救被删掉的键」；但保留它仍是对的——它同时管住「盘上的当前档 = 内存里这一局」这条
+        //  不变量：换档、导出、自动档备份三条路都要靠它对齐。中途抛错时末尾这行走不到，
+        //  留下的仍是开头那份完整原文，见下面的兜底。）
+        if (!writeKey('xianxia_save', saveData) && prevSaveRaw) {
+            // 存不下新档（多半是配额满）：至少别把上一份完整档也赔进去。
+            // 走单源 saveToStorage（全库纪律：存档键不裸写，告警与去重都归它）。
+            try {
+                if (!global.saveToStorage) localStorage.setItem('xianxia_save', prevSaveRaw);
+                else global.saveToStorage('xianxia_save', prevSaveRaw);
+            } catch (ePrev) {
+                console.warn('[GameState] xianxia_save 新旧两份都写不进盘（存储已满）——玩家此刻刷新将无法续档，'
+                    + '建议清理旧存档', ePrev && ePrev.message);
+            }
+        }
 
         return true;
     }
 
     var GameState = {
         CHARACTER_STORAGE_KEYS: CHARACTER_STORAGE_KEYS,
+        SIDE_LEDGER_KEYS: SIDE_LEDGER_KEYS,
         ACCOUNT_KEYS: ACCOUNT_KEYS,
         clearCharacterStorage: clearCharacterStorage,
         collectFullGameState: collectFullGameState,

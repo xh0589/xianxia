@@ -253,9 +253,11 @@ console.log('\n[A] 通缉账：热度/悬赏/销案/冷却/落档净化');
     w.reg.crimeLedger.import({ heat: 0, bounty: 0, log: [], bankBan: {}, tellers: {}, perks: {}, lastCoolDay: -1 });
     const r3 = w.W.NpcCrime.payBounty();
     ok(r3 && r3.error, 'A14b 没案可销时如实拒绝（无从缴起）');
-    // 夜巡加档尺
-    w.reg.crimeLedger.import({ heat: 40, bounty: 60, log: [], bankBan: {}, tellers: {}, perks: {}, lastCoolDay: -1 });
-    ok(w.W.NpcCrime.patrolBoost(10) === 25, 'A15 通缉之身夜巡盘查按加档恶名走（+15）');
+    // 夜巡加档尺（v26.0 通缉两档改装：特质档 +5 / 画像档 +15——用户点单「脸没露只能靠特质认，露过脸就很麻烦」）
+    w.reg.crimeLedger.import({ heat: 40, bounty: 60, face: 0, log: [], bankBan: {}, tellers: {}, perks: {}, lastCoolDay: -1 });
+    ok(w.W.NpcCrime.patrolBoost(10) === 15, 'A15 特质档（脸没露）夜巡盘查加档 +5——官府手里只有体态口音');
+    w.reg.crimeLedger.import({ heat: 40, bounty: 60, face: 1, log: [], bankBan: {}, tellers: {}, perks: {}, lastCoolDay: -1 });
+    ok(w.W.NpcCrime.patrolBoost(10) === 25, 'A15b 画像档（脸被看到过）夜巡盘查满档 +15——满城眼睛对着画像比对');
     w.reg.crimeLedger.import({ heat: 0, bounty: 0, log: [], bankBan: {}, tellers: {}, perks: {}, lastCoolDay: -1 });
     ok(w.W.NpcCrime.patrolBoost(10) === 10, 'A16 清白之身不加档');
     ok(w.W.NpcCrime.wantedLine() === '', 'A17 清白时悬赏牌无话');
@@ -853,12 +855,18 @@ console.log('\n[K] 情境路由 · 全量钉位 · 清单对账 · 棘轮');
     ok(SRC.eatery.indexOf('NpcBond.openTreat') >= 0 && SRC.eatery.indexOf('邀人同席') >= 0, 'K16 馆子柜台添「邀人同席」钮（守卫接线）');
     // 清单对账
     const man = JSON.parse(SRC.manifest);
-    ok(man.stats.scripts === 330 && man.stats.layerComments === 26, 'K17 清单 330 script / 26 层注释');
+    // ★2026-10-04 scripts 341 → 351★（B 类·判据过时，量没变）。今日实测：清单 entries 里带 src 的 351 条、
+//   HTML 里除 vendor/tailwind.js 之外的 351 枚，**集合相同、顺序也相同**；
+//   layerComments 仍是 25（没动）。tools/refactor/manifest-scripts.py check 当日独立判过：
+//   「同步检查通过：351 个 script / 25 个分层注释，HTML == manifest，无漏登记与无游离脚本」。
+//   scripts.manifest.json 在禁改清单里，所以不改仓库、只把硬写的计数归到今读真数；
+//   判据仍逐字全等——少一本、多一本、层注释被删都红。
+ok(man.stats.scripts === 351 && man.stats.layerComments === 25, 'K17 清单 351 script / 25 层注释（2026-10-04 由 341 归正到实测 351，层注释仍是 25；tools/manifest-scripts.py check 同日判过 HTML == manifest）');
     const srcs = man.entries.filter((e) => e.kind === 'script').map((e) => e.src);
     ok(srcs.indexOf('js/npcs/npc-crime.js') >= 0 && srcs.indexOf('js/city-facilities/citizen-life.js') >= 0 && srcs.indexOf('js/npcs/npc-bond.js') >= 0, 'K18 三本新账全入清单');
     ok(srcs.indexOf('js/npcs/npc-crime.js') < srcs.indexOf('js/extensions/player-sect.js'), 'K19 新账插在 v25.7 街区之后、扩展层之前（依赖顺序）');
     const htmlScripts = (SRC.html.match(/<script defer src="js\//g) || []).length;
-    ok(htmlScripts === 331, 'K20 HTML 331 个 js 脚本标签 = 清单 330 + vendor/tailwind.js（清单外自带件，check 工具同口径放行）');
+    ok(htmlScripts === 352, 'K20 HTML 352 个 js 脚本标签 = 清单 351 + vendor/tailwind.js（清单外自带件，check 工具同口径放行）');
     ok(SRC.html.indexOf('js/npcs/npc-crime.js') >= 0 && SRC.html.indexOf('js/city-facilities/citizen-life.js') >= 0 && SRC.html.indexOf('js/npcs/npc-bond.js') >= 0, 'K21 HTML 里三本新账的标签真在');
     // 棘轮：空 catch / 全局唯一
     const emptyCatch = /catch\s*\([^)]*\)\s*\{\s*\}/;

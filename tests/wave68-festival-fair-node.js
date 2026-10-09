@@ -105,7 +105,23 @@ assert(fbSrc.indexOf('doy: 1') >= 0 && fbSrc.indexOf('doy: (7 - 1) * 30 + 7') >=
 // ==================== B · 入口账 ====================
 console.log('\n[B] 入口账（非节日静默，逢节挂摊）');
 reset(100);
-eq(FF.panelHtml('帝都·长安'), '', 'B1 平常日子面板一个字不占（庙会摊没搭）');
+// ★2026-10-04 由「整块面板一个字不占」改为「庙会那一块不占」（C 类·量错对象）★
+// 原判据：`panelHtml('帝都·长安') === ''` —— 平常日子整块面板必须是空串。
+// 现判据：平常日子**庙会那一块**一个字不占（不出现节名／不出现「去逛庙会」／不出现那个记账锚），
+//   闲趣场那一块照旧在——它是常年挂着的一条入口，不是庙会摊。
+// 为什么该改——先查清「为什么错」：festival-fair.js 的 panelHtml（:249）如今是**两段**：
+//   :253-262 庙会摊（`todayFestival()` 有值且同城才画）；:263-267 闲趣场（`inCity()` 就画，常年）。
+//   原判据量的是整块返回值，等于把「庙会非节日静默」和「面板必须整块为空」当成一件事。
+//   实测：day=100（平常日）那一块里 `openFestivalFair()`／`庙会正开`／`festival-fair-used` 三样一个都没有，
+//   回来的整串只有闲趣场那一枚入口——庙会那一条纪律**一字未破**。
+// 收紧处：原来只判「整块空」，现在逐项判庙会那三样都不在（谁把庙会摊提前挂上照样红），
+//   并另立一条把闲趣场那一枚钉住，免得日后有人为了哄这条断言把闲趣场也删了。
+var 平日 = FF.panelHtml('帝都·长安');
+eq([平日.indexOf('去逛庙会') >= 0, 平日.indexOf('openFestivalFair()') >= 0,
+平日.indexOf('庙会正开') >= 0, 平日.indexOf('festival-fair-used') >= 0].join(','), 'false,false,false,false',
+'B1 平常日子庙会那一块一个字不占（节名/入口/记账锚三样都不在——庙会摊没搭）');
+assert(平日.indexOf('闲趣场') >= 0 && 平日.indexOf('FestivalFair.leisure()') >= 0,
+'B1b 闲趣场那一枚照旧挂着（它是常年入口，不是庙会摊——原来那句「整块一个字不占」把这条一起判没了）');
 reset(1);
 var ph = FF.panelHtml('帝都·长安');
 assert(ph.indexOf('上元灯节') >= 0 && ph.indexOf('去逛庙会') >= 0 && ph.indexOf('openFestivalFair()') >= 0, 'B2 逢节面板挂出庙会摊（节名+入口都在）');
@@ -270,7 +286,26 @@ assert(rbad.length === 0, 'E5 每盏灯谜三选一齐、答案在册、全中�
 // ==================== F · 哨兵 ====================
 console.log('\n[F] 哨兵（新账干净）');
 var src = fs.readFileSync(path.join(ROOT, 'js/city-facilities/festival-fair.js'), 'utf8');
-eq((src.match(/Math\.random/g) || []).length, 0, 'F1 庙会全程零骰（节看历法、谜看播种、账是定数）');
+// ★2026-10-04 由「全文件零 Math.random」改为「庙会那本账零 Math.random」（C 类·量错对象）★
+// 原判据：整个 festival-fair.js 里 `Math.random` 出现 0 次。
+// 现判据：庙会本体（`var LZ = {` 之前）零 `Math.random`；闲趣那族只许有一处，且那一处必须是
+//   **播种桥**——`typeof window.__scenarioRng === 'function' ? window.__scenarioRng() : Math.random()`，
+//   即优先吃引擎的播种骰，裸 Math.random 只是没有播种源时的兜底。
+// 为什么该改——先查清「为什么错」：闲趣名册（风筝/蹴鞠/投壶/卖春联）是后来并进同一本账的，
+//   它的 `dice()` 桥在 festival-fair.js:410，落在 `var LZ = {`（:404）之后。
+//   那处 `Math.random` 不是「庙会开始掷骰了」，而是播种桥的兜底分支——全仓同款写法，恰恰是**不掷裸骰**的那一套。
+//   原判据把两族当一族，于是「闲趣引进了播种桥」被判成「庙会破纪」。
+// 收紧处：不是把计数放宽成「≤1」。庙会那族的 0 一字未松；闲趣那族逐行核「只有播种桥这一处」，
+//   多一处、或那一处不先问 __scenarioRng，当场判红。
+var 闲趣起 = src.indexOf('var LZ = {');
+assert(闲趣起 > 0, '闲趣名册的起点找得到（`var LZ = {`）——这一刀切不动就说明源码搬家了，本条即刻判红');
+var 庙会本体 = src.slice(0, 闲趣起);
+var 闲趣本体 = src.slice(闲趣起);
+eq((庙会本体.match(/Math\.random/g) || []).length, 0, 'F1 庙会全程零骰（节看历法、谜看播种、账是定数）');
+eq((闲趣本体.match(/Math\.random/g) || []).length, 1, 'F1b 闲趣那族只有一处 Math.random');
+assert(/function\s+dice\s*\(\)\s*\{\s*return\s*\(typeof window\.__scenarioRng === 'function'\)\s*\?\s*window\.__scenarioRng\(\)\s*:\s*Math\.random\(\);/.test(闲趣本体),
+'F1c 那一处是**播种桥**（先问 window.__scenarioRng，裸 Math.random 只是没播种源时的兜底）'
++ '——全仓同款写法；不是「庙会开口掷骰」，也不是随手一个裸骰');
 assert(src.indexOf('localStorage') < 0 && src.indexOf('saveWildState') < 0 && src.indexOf('wildState') < 0, 'F2 零直写存档（每日限次是运行时旗）');
 assert(src.indexOf('insightPoints') < 0 && src.indexOf('markOnce') < 0, 'F3 悟道点零发放（总闸已满）');
 assert(src.indexOf('addSpiritStones') < 0 && src.indexOf('.credit(') < 0 && src.indexOf('addCopper') < 0, 'F4 铜钱只出不进（庙会不发票子——灯谜中彩只发心境学识）');

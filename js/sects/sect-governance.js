@@ -305,6 +305,8 @@
                     var _tev = W.Tournament._store()[sect].currentEvent;
                     if (_tev) _tev.stakeBonus = (Number(_tev.stakeBonus) || 0) + 80;
                 } catch (eStake) {}
+                // v27.13：赏格支出同步入宗门月账（只记账不动库——八十灵石已在上面 it.resources 里扣过）
+                try { if (typeof W.noteSectExpense === 'function') W.noteSectExpense(sect, 80); } catch (eBook) { console.warn('[静默失败] js/sects/sect-governance.js · DECISIONS.tour_prize：赏格入月账没接住，本月支出侧少记一笔', eBook && eBook.message); }
                 return leaderName(sect) + '给正在进行的大比加了彩头——魁首另得灵石八十。榜下的人挤得更密了。';
             }
         }

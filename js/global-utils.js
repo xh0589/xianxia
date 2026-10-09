@@ -265,7 +265,7 @@ window.XianXia = window.XianXia || {};
         };
     })();
 
-    // ===== 第九十五波·外包修复批：弹窗收口两件套 =====
+    // ===== 第九十五波·修复批：弹窗收口两件套 =====
     // NEW-35：收摊/上工/打盹这类「流程终点」要能软收 showModal 开的遮罩——
     // 别照抄 event-system 的 closeModal（那个关的是奇遇窗，对 #xianxia-modal-overlay 无效）
     if (typeof window.closeModalSoft !== 'function') {
@@ -564,11 +564,17 @@ window.XianXia = window.XianXia || {};
             localStorage.setItem(key, value);
             return true;
         } catch (e) {
+            // v27.21（sol 审 A-4）：按 e.name 分类——配额满与存储被禁是两回事，别拿同一句话吓唬两种人；
+            // v27.21（sol 审 A-1）：去 Markdown 星号——本提示走 textContent，** 会原样印在屏上（UI 实锤 bug）。
+            var _quota21 = e && (e.name === 'QuotaExceededError' || (e.code === 22));
             if (!_盘满已警 && window.showMessage) {
                 _盘满已警 = true;
-                window.showMessage('⚠️ 存盘失败：浏览器的存储空间可能已满。这一部分进度**没有存上**（旧档还在）。建议清理旧存档后重试。', 'error');
+                window.showMessage(_quota21
+                    ? '⚠️ 存盘失败：浏览器的存储空间已满。这部分进度没有存上（旧档还在）。请删除旧存档后重试（删除会连同自动存档一起清）。'
+                    : '⚠️ 存盘失败：浏览器本地存储不可用（隐私模式/站点被限制存储）。这部分进度没有存上（旧档还在）。可换普通窗口或放宽站点存储权限。',
+                    'error');
             }
-            if (window.console && console.error) console.error('[存盘失败] ' + key + '：', e && e.message);
+            if (window.console && console.error) console.error('[存盘失败] ' + key + '（' + (e && e.name) + '）：', e && e.message);
             return false;
         }
     };

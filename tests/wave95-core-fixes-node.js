@@ -1,5 +1,5 @@
 /**
- * wave95-core-fixes-node.js — 第九十五波 · 外包实机 BUG 修复批（核心线）验收：
+ * wave95-core-fixes-node.js — 第九十五波 · 实机 BUG 修复批（核心线）验收：
  *   针对 FIX_NOTES.md 里 NEW-01/07/08/09/12/16/20/21/22/24/25/26/30/36/42/44/47/48 的核心侧修复。
  *   （NPC/邮件线见 wave95-npc-mail-fixes-node.js，经济/设施线见 wave95-economy-facility-fixes-node.js）
  *   A 钱包一本账（NEW-36/31/06/12）：角色钱包是背包钱包的转发视图，读写都落唯一权威，镜像不再漂移

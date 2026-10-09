@@ -1502,6 +1502,707 @@ function appendPEMessage(type, content, npcIcon, npcName, emotion) {
     msgArea.scrollTop = msgArea.scrollHeight;
 }
 
+// ============ v26.9 NPC 事件后果受控枚举（609 个裸 effect 取值 → 8 类真实结算） ============
+// 病根：2818 个选项的 effect 是裸字符串、609 个不同取值，引擎层不认任何取值——
+//       每个事件自带 effects() 闭包 switch(choice)，漏一个 case 就静默什么都不发生；
+//       实测 938 个闭包只回 affection/msg，直接写 npc 的只有 trust（540 个选项，19.2%）。
+//       hatred / favor / respect / love / fear 五轨 **零闭包触碰**，全是空闲账。
+// 修法：给 effect 定 8 类受控类型，每类有真实结算；未登记的走兼容层（只改好感）并告警。
+// 零骰：全部为确定性写入，无 Math.random。
+
+// ---- 空闲账本探针 ----
+function _peRel(npc) { return (npc && npc.relationship) ? npc.relationship : null; }
+// 夹取写入，返回**实际**变化量（0 底轨在 0 处写入返回 0，据此换账或如实说明，不假装生效）
+function _peBump(npc, track, delta) {
+    var rel = _peRel(npc);
+    if (!rel || !delta) return 0;
+    var lo = (track === 'affection') ? -100 : 0;
+    var before = Number(rel[track]);
+    if (!isFinite(before)) before = 0;
+    var after = Math.max(lo, Math.min(100, before + delta));
+    rel[track] = after;
+    return after - before;
+}
+// 玩家账（知情账/欠账/路线账）：window.eventFlags 随存档走（core/game-state.js:481 存、:805 清）
+function _peLedger(bucket, key, n) {
+    if (!window.eventFlags || typeof window.eventFlags !== 'object') window.eventFlags = {};
+    var k = bucket + '_' + key;
+    var v = (Number(window.eventFlags[k]) || 0) + n;
+    window.eventFlags[k] = v;
+    return v;
+}
+function _peSign(n) { return (n > 0 ? '+' : '') + n; }
+
+// 启途接线：从事件定义里把这个 effect 取值对应的选项原话找出来（启途要把「约」记进档）
+// 找不到就返回空串——记档那一步会跳过，不硬编一句假话。
+function _peOptionText(eventDef, value) {
+    if (!eventDef || !Array.isArray(eventDef.scenes)) return '';
+    for (var i = 0; i < eventDef.scenes.length; i++) {
+        var os = eventDef.scenes[i] && eventDef.scenes[i].options;
+        if (!os || !os.length) continue;
+        for (var j = 0; j < os.length; j++) {
+            if (os[j] && os[j].effect === value && typeof os[j].text === 'string') return os[j].text;
+        }
+    }
+    return '';
+}
+function _peNeg(npcId) {
+    if (!window._negativeChoiceCount) window._negativeChoiceCount = {};
+    window._negativeChoiceCount[npcId] = (window._negativeChoiceCount[npcId] || 0) + 1;
+}
+
+// ---- 8 类受控类型。每类 settle() 必须写进真账本，且对不同取值给出可测的不同结果 ----
+var NPC_EFFECT_KINDS = {
+    // ① 立誓：守诺 / 应下 / 坦白 / 专一 / 担责 —— 信任轨 + 承诺旗落笔（旗随存档走）
+    pledge: {
+        label: '立誓', icon: '🤝',
+        settle: function (c) {
+            var w = c.w, lines = [];
+            var d = c.guard.trustTouched ? 0 : _peBump(c.npc, 'trust', w);
+            var flag = 'pe_pledge_' + c.value;
+            if (c.npc && typeof c.npc.setFlag === 'function') c.npc.setFlag(flag);
+            var n = _peLedger('pe_pledge', c.npcId, 1);
+            if (d > 0) lines.push({ icon: '🤝', text: '信任 ' + _peSign(d), tone: 'good' });
+            else if (c.guard.trustTouched) lines.push({ icon: '🤝', text: '信任已另有账在记（不重复计）', tone: 'flat' });
+            else lines.push({ icon: '🤝', text: '信任已满，未再动', tone: 'flat' });
+            lines.push({ icon: '📌', text: '承诺落笔：' + flag + '（第 ' + n + ' 桩）', tone: 'mark' });
+            return { deltas: { trust: d }, lines: lines };
+        }
+    },
+// ② 温存：亲近 / 照料 / 同行 / 玩笑 —— 爱意轨 + 情分轨
+    // 四个子分支走**不同账本配比**：玩笑只混熟不心；亲昵走爱意；同行走情分；照料两样都顾。
+    // 不拆分支的话 130 个取值会落成同一笔账——那就是换了说法的假选择。
+    warmth: {
+        label: '温存', icon: '🫧',
+        settle: function (c) {
+            var w = c.w, br = c.branch, lines = [], d = {};
+            var dlWant, dfWant, 说;
+            if (br === 'tease') {            // 打趣玩笑：混熟，不动心
+                dlWant = 0; dfWant = w;
+                说 = '玩笑只换熟，不换心';
+            } else if (br === 'close') {      // 亲昵：走爱意
+                dlWant = 2 * w; dfWant = w;
+                说 = '这一下近了';
+            } else if (br === 'along') {      // 同行：走情分
+                dlWant = w; dfWant = 2 * w;
+                说 = '同路一段，情分记着';
+            } else {                          // 照料：两样都顾（默认）
+                dlWant = w; dfWant = 2 * w;
+                说 = '照料之功，两样都记';
+            }
+            var dl = (dlWant && !c.guard.loveTouched) ? _peBump(c.npc, 'love', dlWant) : 0;
+            var df = _peBump(c.npc, 'favor', dfWant);
+            d.love = dl; d.favor = df;
+            lines.push({ icon: '🫧', text: 说, tone: 'flat' });
+            if (dlWant && dl > 0) lines.push({ icon: '💗', text: '爱意 ' + _peSign(dl), tone: 'good' });
+            else if (dlWant && c.guard.loveTouched) lines.push({ icon: '💗', text: '爱意已另有账在记（不重复计）', tone: 'flat' });
+            else if (dlWant) lines.push({ icon: '💗', text: '爱意已满，未再动', tone: 'flat' });
+            if (df > 0) lines.push({ icon: '🎁', text: '情分 ' + _peSign(df), tone: 'good' });
+            else lines.push({ icon: '🎁', text: '情分已满，未再动', tone: 'flat' });
+            return { deltas: d, lines: lines };
+        }
+    },
+    // ③ 敬服：请教 / 挺身 / 居中 / 精进 —— 敬重轨 + 「护过她 / 居过中」两本专项旗
+    respect: {
+        label: '敬服', icon: '🎖',
+        settle: function (c) {
+            var br = c.branch, lines = [], 倍 = 1;
+            if (br === 'shield') {           // 挺身护短：敬重翻倍，并落「护过她」旗
+                倍 = 2;
+                if (c.npc && typeof c.npc.setFlag === 'function') c.npc.setFlag('pe_shielded_' + c.npcId);
+                lines.push({ icon: '🛡', text: '这一下是替她挡的，她记着', tone: 'mark' });
+            } else if (br === 'mediate') {   // 居中调停：落「居中」旗
+                if (c.npc && typeof c.npc.setFlag === 'function') c.npc.setFlag('pe_broker_' + c.npcId);
+                lines.push({ icon: '🤝', text: '替两边说话的人，她记着', tone: 'mark' });
+            }
+            var d = _peBump(c.npc, 'respect', c.w * 倍);
+            lines.push({
+                icon: '🎖',
+                text: d > 0 ? '敬重 ' + _peSign(d) : '敬重已满，未再动',
+                tone: d > 0 ? 'good' : 'flat'
+            });
+            if (d <= 0) {
+                var n = _peLedger('pe_learned', c.npcId, 1);
+                lines.push({ icon: '📖', text: '敬重已满，转记受教：第 ' + n + ' 次', tone: 'mark' });
+            }
+            return { deltas: { respect: d }, lines: lines };
+        }
+    },
+    // ④ 得知：探问 / 记事 / 读文 / 受托盯看 —— 知情账（eventFlags，别的系统可读）+ NPC 记忆印象
+    insight: {
+        label: '得知', icon: '🔎',
+        settle: function (c) {
+            var key = c.npcId + '_' + c.value;
+            var n = _peLedger('pe_know', key, 1);
+            var mem = (c.npc && c.npc.memory) ? c.npc.memory : null;
+            var before = (mem && mem.impressions) ? (Number(mem.impressions['pe_insight_' + c.value]) || 0) : 0;
+            if (mem && mem.impressions) mem.impressions['pe_insight_' + c.value] = before + 1;
+            return {
+                deltas: { know: n },
+                lines: [
+                    { icon: '🔎', text: '知情账：' + key + ' 第 ' + n + ' 回', tone: 'know' },
+                    { icon: '🧠', text: '她记下这一问（印象 ' + (before + 1) + ' 次）', tone: 'mark' }
+                ]
+            };
+        }
+    },
+// ⑤ 结怨：四个子分支走**不同账本组合**（嘲讽伤敬重 / 伤人留恐惧 / 背叛砸信任 / 争执两败）
+    // 分支保证可辨：每支都往 eventFlags 记一本**专属名字**的账（轻重蔑/伤人/背弃/争执），
+    // 不靠 0 底轨凑差别——敬重/信任在 0 处减不动是事实，那种情形下如实说明而不是假装减了。
+    spite: {
+        label: '结怨', icon: '🥀',
+        settle: function (c) {
+            var w = c.w, br = c.branch || 'humiliate', lines = [], d = {};
+            if (br === 'humiliate') {          // 嘲讽：她不怕你，只是不屑你
+                d.hatred = _peBump(c.npc, 'hatred', w);
+                d.respect = _peBump(c.npc, 'respect', -w);
+                var ns = _peLedger('pe_slight', c.npcId, 1);
+                lines.push({ icon: '🥀', text: '怨 ' + _peSign(d.hatred) + '（轻蔑不为敬）', tone: 'bad' });
+                lines.push({
+                    icon: '🎖',
+                    text: d.respect < 0 ? '敬重 ' + _peSign(d.respect) : '她本来就没敬重过你，轻蔑减无可减',
+                    tone: d.respect < 0 ? 'bad' : 'flat'
+                });
+                lines.push({ icon: '🪨', text: '轻蔑账：第 ' + ns + ' 回', tone: 'mark' });
+            } else if (br === 'harm') {        // 伤人：她怕了
+                d.hatred = _peBump(c.npc, 'hatred', w);
+                d.fear = _peBump(c.npc, 'fear', w);
+                var nh = _peLedger('pe_hurt', c.npcId, 1);
+                lines.push({ icon: '🥀', text: '怨 ' + _peSign(d.hatred), tone: 'bad' });
+                lines.push({ icon: '😨', text: '惧 ' + _peSign(d.fear) + '（她记住这一下了）', tone: 'bad' });
+                lines.push({ icon: '🩸', text: '伤人账：第 ' + nh + ' 回', tone: 'mark' });
+            } else if (br === 'betray') {      // 背叛 / 闪躲：伤的是信任
+                d.hatred = _peBump(c.npc, 'hatred', Math.ceil(w / 2));
+                d.trust = c.guard.trustTouched ? 0 : _peBump(c.npc, 'trust', -w);
+                if (c.npc && typeof c.npc.setFlag === 'function') c.npc.setFlag('pe_betray_' + c.value);
+                var nb = _peLedger('pe_broke', c.npcId, 1);
+                lines.push({ icon: '🥀', text: '怨 ' + _peSign(d.hatred), tone: 'bad' });
+                lines.push({
+                    icon: '🤝',
+                    text: c.guard.trustTouched ? '信任已另有账在记（不重复计）'
+                        : (d.trust < 0 ? '信任 ' + _peSign(d.trust) : '信任本就是空的——这一回伤不到它，只有怨'),
+                    tone: 'bad'
+                });
+                lines.push({ icon: '🚩', text: '背弃留痕：pe_betray_' + c.value + '（第 ' + nb + ' 回）', tone: 'mark' });
+            } else {                            // quarrel 争执：两败俱伤
+                d.hatred = _peBump(c.npc, 'hatred', w);
+                d.respect = _peBump(c.npc, 'respect', -w);
+                d.trust = c.guard.trustTouched ? 0 : _peBump(c.npc, 'trust', -Math.ceil(w / 2));
+                var nq = _peLedger('pe_quarrel', c.npcId, 1);
+                lines.push({ icon: '🥀', text: '怨 ' + _peSign(d.hatred), tone: 'bad' });
+                lines.push({
+                    icon: '🎖',
+                    text: d.respect < 0 ? '敬重 ' + _peSign(d.respect) : '敬重减无可减（她从未敬重过你）',
+                    tone: d.respect < 0 ? 'bad' : 'flat'
+                });
+                lines.push({
+                    icon: '🤝',
+                    text: c.guard.trustTouched ? '信任已另有账在记（不重复计）'
+                        : (d.trust < 0 ? '信任 ' + _peSign(d.trust) : '信任减无可减'),
+                    tone: 'bad'
+                });
+                lines.push({ icon: '⚔', text: '争执账：第 ' + nq + ' 回', tone: 'mark' });
+            }
+            return { deltas: d, lines: lines };
+        }
+    },
+// ⑥ 付价：三种真资源（灵石 / 精力 / 精力+她怕）；出力再分「真出力 / 跑腿 / 采集」三档代价
+    cost: {
+        label: '付价', icon: '⚖',
+        settle: function (c) {
+            var w = c.w, br = c.branch || 'labor', sub = c.sub || '', cd = window.currentCharData, lines = [], d = {};
+            function 付精力(耗, 涉险) {
+                var paid = (typeof window._payCost === 'function') ? window._payCost('energy', 耗) : { ok: false, why: 'no_pay_api' };
+                d.energy = (paid && paid.ok) ? -耗 : 0;
+                if (paid && paid.ok) {
+                    lines.push({ icon: 涉险 ? '🩸' : '🔋', text: (涉险 ? '涉险：' : '') + '精力 −' + 耗, tone: 'cost' });
+                } else {
+                    _peLedger('pe_debt', c.npcId, 耗); _peNeg(c.npcId);
+                    lines.push({ icon: '⚖', text: '精力不足（' + ((paid && paid.why) || 'unknown') + '），欠下 ' + 耗 + '，负账 +1', tone: 'cost' });
+                }
+                return paid;
+            }
+            if (br === 'coin') {
+                var have = cd ? (Number(cd.spiritStones) || 0) : 0;
+                if (cd && have >= w) {
+                    cd.spiritStones = have - w; d.spiritStones = -w;
+                    lines.push({ icon: '💰', text: '灵石 −' + w + '（余 ' + cd.spiritStones + '）', tone: 'cost' });
+                } else {
+                    _peLedger('pe_debt', c.npcId, w); _peNeg(c.npcId);
+                    lines.push({ icon: '⚖', text: '灵石不足（余 ' + have + '），欠下 ' + w + '，负账 +1', tone: 'cost' });
+                }
+            } else if (br === 'risk') {
+                付精力(w, true);
+                d.fear = _peBump(c.npc, 'fear', Math.ceil(w / 2));
+                lines.push({ icon: '😨', text: '惧 ' + _peSign(d.fear), tone: 'bad' });
+            } else { // labor：真出力 / 跑腿（折半）/ 采集（另记一本采得账）
+                if (sub === 'errand') {
+                    var 半 = Math.max(1, Math.ceil(w / 2));
+                    付精力(半, false);
+                    lines.push({ icon: '🏃', text: '跑腿一趟，耗 ' + 半 + '（比真出大力轻）', tone: 'mark' });
+                } else if (sub === 'gather') {
+                    付精力(w, false);
+                    var ng = _peLedger('pe_gather', c.npcId, 1);
+                    lines.push({ icon: '🧺', text: '采得账：第 ' + ng + ' 趟（东西进了她的库，不进你的囊）', tone: 'mark' });
+                } else {
+                    付精力(w, false);
+                }
+            }
+            return { deltas: d, lines: lines };
+        }
+    },
+    // ⑦ 疏离：冷落 / 离场 / 回绝定缘 —— 三支走不同账（爱意为 0 时如实说明，不假装减了）
+    distance: {
+        label: '疏离', icon: '🚪',
+        settle: function (c) {
+            var w = c.w, br = c.branch, lines = [], d = {};
+            var 怨增 = (br === 'refuse') ? w : Math.ceil(w / 2);
+            d.hatred = _peBump(c.npc, 'hatred', 怨增);
+            var dl = c.guard.loveTouched ? 0 : _peBump(c.npc, 'love', -w);
+            d.love = dl;
+            var 说;
+            if (br === 'ignore') 说 = '当没看见——这一下连话都省了';
+            else if (br === 'leave') 说 = '转身就走——她记的是那道背影';
+            else if (br === 'refuse') 说 = '把话说绝了——不是冷淡，是回绝';
+            else 说 = '疏远留痕';
+            lines.push({ icon: '🚪', text: 说 + '：怨 ' + _peSign(d.hatred), tone: 'bad' });
+            lines.push({
+                icon: '🫧',
+                text: dl < 0 ? '爱意 ' + _peSign(dl)
+                    : (c.guard.loveTouched ? '爱意已另有账在记（不重复计）' : '爱意本就是空的（冷落落不到账上，只落怨）'),
+                tone: dl < 0 ? 'bad' : 'flat'
+            });
+            if (br === 'refuse') {
+                if (c.npc && typeof c.npc.setFlag === 'function') c.npc.setFlag('pe_refused_' + c.npcId);
+                lines.push({ icon: '🚩', text: '已回绝留痕：pe_refused_' + c.npcId + '（往后这场线按回绝过算）', tone: 'mark' });
+            } else if (br === 'leave') {
+                var nl = _peLedger('pe_coldwalk', c.npcId, 1);
+                lines.push({ icon: '👣', text: '冷脚印：第 ' + nl + ' 回', tone: 'mark' });
+            }
+            return { deltas: d, lines: lines };
+        }
+    },
+// ⑧ 启途：把这一桩钉成「往后算数」的标记 —— 关系旗（hasFlag 可读）+ 路线账（eventFlags 随存档走）
+    // 启途接线：原写法只留一个名字，读侧拿不到「约」的内容，玩家在后续对话里也无从看见这条路。
+    //   现在多记一本注记账——把玩家自己按下的那句原话存进 eventFlags（随存档走），
+    //   读侧 openRouteLabel() 才有话可说；并且旗第一次落与重落给不同的回执（玩家看得出差别）。
+    open: {
+        label: '启途', icon: '🧭',
+        settle: function (c) {
+            var flag = peOpenFlagName(c.npcId, c.value);
+            var 首落 = !(c.npc && typeof c.npc.hasFlag === 'function' && c.npc.hasFlag(flag));
+            if (c.npc && typeof c.npc.setFlag === 'function') c.npc.setFlag(flag);
+            var v = _peLedger('pe_route', c.npcId, 1);
+            var lines = [
+                { icon: '🧭', text: (首落 ? '路线已开：' : '这条路你又走了一遍：') + flag, tone: 'mark' },
+                { icon: '🗺️', text: '这条路往后算数（第 ' + v + ' 次开路）', tone: 'mark' }
+            ];
+            // 注记账：记下「约」的原话。已有注记不覆写——第一次说的才是那桩约。
+            var noteKey = peOpenNoteKey(c.npcId, c.value);
+            var note = (c.choiceText || '').replace(/\s+/g, ' ').slice(0, 60);
+            if (!window.eventFlags || typeof window.eventFlags !== 'object') window.eventFlags = {};
+            if (!window.eventFlags[noteKey] && note) {
+                window.eventFlags[noteKey] = note;
+                lines.push({ icon: '📜', text: '约的原话已记进档（往后读档还在）：' + note, tone: 'mark' });
+            } else if (window.eventFlags[noteKey]) {
+                lines.push({ icon: '📜', text: '这一约头一回说的是：' + window.eventFlags[noteKey], tone: 'flat' });
+            }
+            // 头一回落旗时给一点分量：往后再撞见同一条路不会重复给（首落判定）
+            var d = {};
+            if (首落 && c.npc) {
+                d.trust = _peBump(c.npc, 'trust', 1);
+                lines.push({
+                    icon: '🤝',
+                    text: d.trust > 0 ? '立约之人，她记你一笔信任 +' + d.trust : '立约之人，她记下这一笔（信任已满，未再动）',
+                    tone: d.trust > 0 ? 'good' : 'flat'
+                });
+            }
+            return { deltas: d, lines: lines };
+        }
+    }
+};
+
+// ---- 609 取值 → 'kind' 或 'kind:branch'（逐条按选项实际文义归类，非正则猜） ----
+var NPC_EFFECT_SPEC = {
+    pledge:
+        'vow promise keep accept trust vouch remember determined declare take_blame mutual only present both_hands both_fire ' +
+        'seal sign host_sign guest_file mark record file ritual fix tell admit yes own reassure side take return cover witness ' +
+        'both obey wear sheath anchor token rosin wick sword let beads third glove seed gui banner anchorline keep_half bead ' +
+        'pledge apprentice book drink_promise send_token suppress trust_me confess',
+'warmth:close':
+        'hold touch hug hand lean sit sleep close nod leg share stay',
+    'warmth:along':
+        'accompany walk go join visit follow escort ferry boat carry drag together wait',
+    'warmth:tease':
+        'tease jest joke banter play light_now',
+    warmth:
+        'care warm tea watch tend comfort escort together silent lamp ink treat ' +
+        'friend_stay lover_stay lover_travel friend_travel friend_carry friend_rest friend_spar lover_carry lover_rest ' +
+        'eat feed feed_true porridge soup drink wine honey sweet help aid assist quiet mute worry concern relief hope ' +
+        'soothe use water lantern join cloak call dawn meet comb smile alive tired beautiful more flower kitchen ' +
+        'stool half come heal robe roof lamps ease bag box child man kin help_wrap shoulder calm bend pick meal catch ' +
+        'give stitch thread shell gear needle gentle soft mirror dance taste mother vigil rest mend brace face hot drug ' +
+        'wipe light rewalk first seat wood lover fill game feel live ' +
+        'afar bandage greet offer steward save silent_do take_needle',
+'respect:shield': 'shield defend guard stand protect rally rescue',
+    'respect:mediate': 'mediate convey clerk counter',
+    respect:
+        'learn teach praise respect study practice diligent drill prep prepare endure work carve forge master manage ' +
+        'guide persuade compete position defer amend solve finish find thanks self back steady shout salute kneel focus brave careful ' +
+        'choose prove apologize polite thank bow prize her_choice fear_ok solemn proud smooth bridge plan duty defy ' +
+        'craft hands humble honor safe train vigil',
+    insight:
+        'ask why how what where who ask_bead ask_blank ask_cloth ask_damo ask_doc ask_heng ask_note ask_page ask_qin ask_rule ' +
+        'ask_wd ask_zhu ask_zhupi probe honest truth origin verify check reason dontknow depends read read_count read_loud ' +
+        'read_name read_pine read_trust read_wait word words scribe page note annotate copy translate point count understand ' +
+        'clear see look story talk speak reckon hear guess doubt believe press answer heart name echo starter report break worth ' +
+        'peek letter surprised scent chance unfair who_for qi conch test same howlong reverse shock debate bluff real fit ' +
+        'reef pen keel chess thin thick lead trace pass split valve weir tags tag format rules code channel law annex account ' +
+        'drum dry shelf relay listen whistle curious search replace skim knock mention right different you sign signal caller ' +
+        'write plain fear rubbing seek flip gap line blank public snake callout fault who_win match straw windward throat ' +
+        'street rule smoke say acknowledge straight draw aside recipe ' +
+        'ask_carve ask_fourth ask_friend ask_later direct delivery name_it remember_date route cost fair ' +
+        'blame_gap reframe thanks_owed silent_test breakthrough',
+    'spite:humiliate': 'mock mock_neg scoff sneer taunt jeer laugh laugh_neg cruel worthless useless sloppy dark scorn insult hate hate_now leech',
+    'spite:harm': 'grab grab_neg stab rip tear burn blood pain snap shut douse snatch force',
+    'spite:betray': 'deny deflect lie flee desert sneak snoop leak erase undo remove unmask forget cross sell_neg buy_neg ' +
+        'stall_neg obey_neg push_neg leave_neg shrug_neg tease_neg tool_neg bowl_neg dilute excuse',
+    'spite:quarrel': 'argue complain blame rebuke scold accuse',
+    'cost:coin': 'pay price buy pawn haggle exchange swap trade lend bet debt cheap double triple two stall sell',
+'cost:labor:errand': 'fetch deliver run sweep sail shift',
+    'cost:labor:gather': 'gather sort sift fish weed brew cook boil charcoal clay coal grain oil salvage',
+    'cost:labor': 'haul climb dive wade dig labor carry chain rope runner basket redo herd allnight drive mount tour ' +
+        'wind bellows hook stack salt burn_too pluck callus stone gild hammer pole',
+    'cost:risk': 'spar chase rush intercept dash fire blast breach ride cut hurry strike fireline barehand destroy trick',
+    'cost:coin': 'pay price buy pawn haggle exchange swap trade lend bet debt cheap double triple two stall sell',
+    'distance:ignore':
+        'ignore dumb casual skip never untouched drop normal shrug dump bow_out mimic',
+    'distance:leave':
+        'leave leave_neg leave_with quit retreat out alone others other_way avoid independent giveup partial dodge backoff',
+    'distance:refuse':
+        'refuse cold dismiss no_love miss none hesitate leftover enough fall up neutral stop slow hide bitter regret ' +
+        'shrink push loss notest',
+    open: 'unseal friend again enter continue year boat side_guest side_host cheer_guest cheer_host host_first host_ans ' +
+        'wait_glove take_chopsticks hisbowl newpair glove_on refire light_now returnwhistle allin add rival wujiu daily ' +
+        'companion next shore ferry defect redeem third_way disciples vessel'
+};
+
+// 同类内不同取值的权重差异（未列者取 kind 默认权重）
+var NPC_EFFECT_WEIGHTS = {
+    vow: 3, promise: 3, only: 3, present: 3, seal: 3, mutual: 3, tell: 3, reassure: 3, cover: 3, witness: 3, both: 3,
+    lover_travel: 4, lover_carry: 4, lover_stay: 3, friend_travel: 3, friend_stay: 3, friend_rest: 3, hug: 3, hold: 2,
+    stay: 2, share: 2, care: 2, silent: 1, wait: 2, lamp: 2,
+    rescue: 3, shield: 3, defend: 3, rally: 3, guard: 2, learn: 2, teach: 2, praise: 2, respect: 2, mediate: 3, convey: 2,
+    ask: 1, probe: 2, honest: 2, admit: 2, press: 2, answer: 2, read: 1,
+    stab: 4, grab: 3, tear: 3, rip: 3, burn: 3, force: 3, hurt: 3,
+    betray: 4, deny: 3, deflect: 2, lie: 3, unmask: 3, forget: 2,
+    mock: 3, taunt: 3, sneer: 2, jeer: 2, argue: 3, accuse: 2, hate: 3,
+    pay: 3, buy: 3, price: 3, bet: 3, cheap: 1, double: 2,
+    spar: 3, ambush: 4, fire: 3, blast: 3, cut: 3, chase: 2,
+    refuse: 3, ignore: 2, dismiss: 3, quit: 3, giveup: 3, retreat: 2, cold: 2, none: 3, alone: 3, no_love: 3, others: 3,
+    friend: 3, none_o: 3
+};
+var NPC_EFFECT_DEFAULT_W = { pledge: 2, warmth: 1, respect: 2, insight: 1, spite: 2, cost: 2, distance: 2, open: 1 };
+
+var NPC_EFFECT_MAP = (function () {
+    var map = {};
+    for (var k in NPC_EFFECT_SPEC) {
+        var list = String(NPC_EFFECT_SPEC[k]).split(/\s+/);
+        for (var i = 0; i < list.length; i++) {
+            if (!list[i]) continue;
+            map[list[i]] = k;
+        }
+    }
+    return map;
+})();
+
+// 兼容层台账：未登记取值走原路径（只改好感），每个取值只告警一次（可逐步收敛）
+var NPC_EFFECT_COMPAT = { unknown: {}, unknownOptions: 0, settledOptions: 0, warned: {} };
+
+// ---- 结算入口 ----
+// guard: {trustTouched, loveTouched} —— 闭包或通用层已经动过的轨不再重复写（防双计）
+function settleNpcEventConsequence(npc, eventDef, choice, guard) {
+    var value = String(choice == null ? '' : choice);
+    var spec = NPC_EFFECT_MAP[value];
+    if (!spec) {
+        NPC_EFFECT_COMPAT.unknownOptions++;
+        NPC_EFFECT_COMPAT.unknown[value] = (NPC_EFFECT_COMPAT.unknown[value] || 0) + 1;
+        if (!NPC_EFFECT_COMPAT.warned[value]) {
+            NPC_EFFECT_COMPAT.warned[value] = true;
+            console.warn('[个人事件] 后果取值未登记，走兼容层（只改好感）："' + value + '"（事件 ' +
+                (eventDef && eventDef.id) + '）——请把它登记进 NPC_EFFECT_SPEC');
+        }
+        return null;
+    }
+var parts = spec.split(':');
+    var kind = parts[0];
+    var branch = parts[1] || null;
+    var sub = parts[2] || null;
+    var def = NPC_EFFECT_KINDS[kind];
+    if (!def || typeof def.settle !== 'function') {
+        console.warn('[个人事件] 后果类型 ' + kind + ' 已登记但没有结算函数（值 "' + value +
+            '"）——这是「登记了但不处理」的空实现，必须补 settle()');
+        return null;
+    }
+    var w = NPC_EFFECT_WEIGHTS[value];
+    if (typeof w !== 'number') w = NPC_EFFECT_DEFAULT_W[kind] || 1;
+var ctx = {
+        npc: npc, npcId: (eventDef && eventDef.npcId) || (npc && npc.id) || 'unknown',
+        value: value, kind: kind, branch: branch, sub: sub, w: w,
+        choiceText: _peOptionText(eventDef, value),
+        guard: guard || { trustTouched: false, loveTouched: false }
+    };
+    var out;
+    try {
+        out = def.settle(ctx);
+    } catch (e) {
+        console.warn('[个人事件] 后果结算抛错（值 "' + value + '" 类型 ' + spec + '）：' + (e && e.message));
+        return null;
+    }
+    if (!out || !out.lines || !out.lines.length) {
+        console.warn('[个人事件] 后果结算返回空结果（值 "' + value + '" 类型 ' + spec + '）——结算函数可能是空实现');
+        return null;
+    }
+NPC_EFFECT_COMPAT.settledOptions++;
+    return {
+        kind: kind, branch: branch, sub: sub, label: def.label, icon: def.icon,
+        value: value, deltas: out.deltas || {}, lines: out.lines
+    };
+}
+
+// 把结算行画进对话流（与既有「好感度 +N」同一条结算流，不是假面板）
+function renderNpcEventConsequence(ev, outcome) {
+    if (!ev || !ev.msgArea || !outcome) return;
+    var toneColor = {
+        good: 'text-rose-300', bad: 'text-red-400', cost: 'text-amber-300',
+        mark: 'text-sky-300', know: 'text-cyan-300', flat: 'text-gray-500'
+    };
+    var div = document.createElement('div');
+    div.className = 'text-center py-0.5';
+    var html = '<p class="text-[10px] text-gray-600">后果·' + outcome.label + '（' + outcome.value + '）</p>';
+    for (var i = 0; i < outcome.lines.length; i++) {
+        var ln = outcome.lines[i];
+        html += '<p class="' + (toneColor[ln.tone] || 'text-gray-400') + ' text-xs">' + ln.icon + ' ' + ln.text + '</p>';
+    }
+div.innerHTML = html;
+    ev.msgArea.appendChild(div);
+    ev.msgArea.scrollTop = ev.msgArea.scrollHeight;
+}
+
+// ======================================================================
+// 启途接线：「启途」旗标的消费端
+//
+// 病根（实测）：⑧ 启途是八类后果里**唯一一类结算后不留任何可读状态**的——
+//   它只写 npc.relationship.flags 里的 pe_open_<npcId>_<value> 和 eventFlags.pe_route_<npcId>，
+//   两本账全仓零读方（实测：pe_pledge/pe_shielded/pe_broker/pe_betray/pe_refused/pe_know/
+//   pe_slight/pe_hurt/pe_broke/pe_quarrel/pe_learned/pe_debt/pe_gather/pe_coldwalk/pe_route
+//   在 js/ 树外的命中数均为 0）。其余七类结算的是 affection/hate/fear/trust/love/favor/
+//   respect 与灵石/精力——那些轨与真资源全仓有读方，所以只有「启途」是白点。
+//
+// 度量结论（.scratch/open-flag-progress/）：988 场 2938 个选项里，open 类共 76 个选项、
+//   73 面旗标。逐个跑它所属事件的 effects() 看分支返不返 ending：
+//     · 33 面 —— 分支自带 ending 且已挂 endingMap（例：shao_event_013 的 friend → 禅契）。
+//                 后果**已经兑现**，旗标只是冗余记账，不另造消费者。
+//     · 40 面 —— 分支不返 ending，旗标当时真的无人读（下表 NPC_OPEN_ROUTE_FOLLOWS 接其中 8 面，
+//                 每条都注明前情在哪个事件哪一句；余下列在 NPC_OPEN_ROUTE_OPEN_REMAIN 注明为何不接）。
+//
+// 读侧 API（本节新增，全在引擎层，别的文件不必改）：
+//   hasOpenRoute / openRoutesOf / openRouteCount / openRouteLabel / applyEventEffects
+//   handlePersonalEventChoice 改调 applyEventEffects（不包事件对象——本文件在 仙侠.html 里
+//   排第 97 位，heroine-aftermath/wujiu-jealousy 等消费端在 151~159 位，晚于本文件覆盖式赋值，
+//   在这里装饰会被冲掉，故挂在唯一的调用点上）。
+// ======================================================================
+
+// 旗名与账名（写侧与读侧共用的唯一定义，改这里两处一起改）
+function peOpenFlagName(npcId, value) { return 'pe_open_' + npcId + '_' + value; }
+function peOpenNoteKey(npcId, value) { return 'pe_open_note_' + npcId + '_' + value; }
+function peRouteKey(npcId) { return 'pe_route_' + npcId; }
+
+// 取一个 NPC（认 npc 对象或 npcId 两种写法）
+function _peOpenNpc(who) {
+    if (!who) return null;
+    if (typeof who === 'string') {
+        return (window.npcManager && typeof window.npcManager.getNPC === 'function')
+            ? window.npcManager.getNPC(who) : null;
+    }
+    return who;
+}
+
+// ★旗标读侧：这条关系上「已经开过哪些路」。先看 NPC 旗（随 NPC 存档往返，见 npc-system.js:1426/1559），
+//   旗不在时回落到 eventFlags 的注记账（随 GameState.eventFlags 存档，见 core/game-state.js）。
+function hasOpenRoute(who, value) {
+    var npc = _peOpenNpc(who);
+    if (npc && typeof npc.hasFlag === 'function' && npc.hasFlag(peOpenFlagName(npc.id, value))) return true;
+    var id = npc ? npc.id : who;
+    return !!(window.eventFlags && window.eventFlags[peOpenNoteKey(id, value)]);
+}
+
+// 该关系上开过的全部路（按开路先后）
+function openRoutesOf(who) {
+    var npc = _peOpenNpc(who);
+    var id = npc ? npc.id : who;
+    var out = [];
+    try {
+        if (npc && npc.relationship && npc.relationship.flags && typeof npc.relationship.flags.forEach === 'function') {
+            npc.relationship.flags.forEach(function (f) {
+                var s = String(f);
+                if (s.indexOf('pe_open_' + id + '_') === 0) out.push(s.slice(('pe_open_' + id + '_').length));
+            });
+        }
+    } catch (eOpen1) {
+        console.warn('[启途] 读关系旗上的已开路失败（' + id + '）：' + (eOpen1 && eOpen1.message));
+    }
+    if (window.eventFlags && typeof window.eventFlags === 'object') {
+        var pfx = 'pe_open_note_' + id + '_';
+        for (var k in window.eventFlags) {
+            if (k.indexOf(pfx) === 0 && out.indexOf(k.slice(pfx.length)) < 0) out.push(k.slice(pfx.length));
+        }
+    }
+    return out;
+}
+
+// 开过几条路（eventFlags 的路线账，随存档走）
+function openRouteCount(who) {
+    var npc = _peOpenNpc(who);
+    var id = npc ? npc.id : who;
+    return (Number(window.eventFlags && window.eventFlags[peRouteKey(id)]) || 0);
+}
+
+// 某条路的「约」——结算那一刻把玩家自己按下的那句原话记进 eventFlags，随存档走。
+// （NPC 旗只存名字不存话；话存在这里，所以读档后仍能把这面旗原样说给玩家听。）
+function openRouteLabel(who, value) {
+    var npc = _peOpenNpc(who);
+    var id = npc ? npc.id : who;
+    var s = window.eventFlags && window.eventFlags[peOpenNoteKey(id, value)];
+    return typeof s === 'string' ? s : '';
+}
+
+// ---------------------------------------------------------------------
+// 消费端表：每条注明「前情在哪个事件的哪一句」——没有前情可指的，不许进这张表。
+// 键是消费端事件 id；aff 是本条给玩家的**额外**好感（原有效果之外另计，正负皆可）。
+// ---------------------------------------------------------------------
+var NPC_OPEN_ROUTE_FOLLOWS = {
+    // 唐门·白丝手套那条线：tm_event_duel_lu opt1「wait_glove」立下的条件是
+    // 「晏姑娘的手套还没摘——她肯空手接你的针那日，你再落凿」。而 tm_event_aftermath 开场
+    // 就是「她坐在炉前，手套褪下来搁在膝上，空着那双带青痕的手」——那个条件兑现了。
+    'tm_event_aftermath': [
+        {
+            npc: 'sect_leader_唐门', value: 'wait_glove', aff: 4, icon: '🧤',
+            line: '炉前那双手套是她自己褪下来的——炉前立过的那个约（你刻碑前要等她空手接针），今日算兑现了。'
+        },
+        {
+            npc: 'sect_leader_唐门', value: 'glove_on', aff: -3, icon: '🧤',
+            line: '手套是你替她一只一只戴回去的。她退回手套里——碑上那两个字，往后有的等了。'
+        }
+    ],
+    // 无咎·灶上那条线：wujiu_event_j08 opt2 写下「都归灶上管」，
+    // wujiu_event_j09 开场他一手一碗「我不跟人争。饭压实了——一样」——那句是它的下半句。
+    'wujiu_event_j09': [
+        {
+            npc: 'shaolin_wujiu', value: 'add', aff: 4, icon: '🍚',
+            line: '「都归灶上管」那句你亲笔添在名帖底下——今日两碗一样平的饭，他把那句的下半句说完了。'
+        }
+    ],
+    // 少林·碗筷那条线：shao_event_duel_wujiu opt1「take_chopsticks」当众把「常来」坐实，
+    // wujiu_event_j07 开场就是那只锔钵「不盛饭，盛两双筷子」——那双筷子要有位置，得先当众认过。
+    'wujiu_event_j07': [
+        {
+            npc: 'sect_leader_少林寺', value: 'take_chopsticks', aff: 3, icon: '🥢',
+            line: '钵里那双筷子，是你当众认下的「常吃」——第三回递过去的，第四回就不用再找话头了。'
+        }
+    ],
+    // 无咎·名帖为什么写两个名字：j07 之后筷子已经不是两双（newpair 三双）／碗已经不是他的（hisbowl）
+    'wujiu_event_j08': [
+        {
+            npc: 'shaolin_wujiu', value: 'newpair', aff: 3, icon: '🥢',
+            line: '上回你给他换的那双竹筷还插在钵里——三双筷子摆着，名帖上多写一个名字，就不算瞒。'
+        },
+        {
+            npc: 'shaolin_wujiu', value: 'hisbowl', aff: 3, icon: '🥣',
+            line: '往后你吃的是他那只碗——碗都换了主人，名帖上再添一个名字，他不写才叫欺心。'
+        }
+    ],
+    // 无咎·灶火那条线：j04 opt0「refire」拨火重新生起来（「这碗热一热，一人一半」），
+    // j05 他却把钵端出灶房——火是灭的，才需要把钵当人情送出去。
+    'wujiu_event_j05': [
+        {
+            npc: 'shaolin_wujiu', value: 'refire', aff: 3, icon: '🔥',
+            line: '上回你蹲下去把那碗饭重新生起来了——灶上的火是热的，所以这一回他端的是自家那只钵。'
+        }
+    ],
+    // 少林·季检时灶台边上「多摆了一副碗筷」：wujiu_event_008 opt1「friend」
+    // 「留你在灶上……你上山，他烧饭，永远有一碗热的」。
+    'shao_event_duel_wujiu': [
+        {
+            npc: 'shaolin_wujiu', value: 'friend', aff: 3, icon: '🍚',
+            line: '灶角那只碗是你在柴账上留过名的那一只——他今日摆出来，不是季检摆的。'
+        }
+    ]
+};
+
+// 余下未接的 open 旗：逐条注明「为什么没有可指认的前情」，不硬造消费者。
+// kind: 'served' = 该分支自带 ending 且已挂 endingMap（后果已兑现，旗标只是冗余记账）
+//       'stance' = 该分支的差别已由同一分支的好感增减交付（旗标只是把这一笔记了个名字）
+var NPC_OPEN_ROUTE_LEDGER_NOTE = {
+    // 12 面「双派对局里的立场」旗：对局场没有后续事件，立场的好坏当場就记在好感上
+    stance: ['side_host', 'side_guest', 'allin', 'cheer_host', 'cheer_guest', 'host_first',
+        'host_ans', 'light_now', 'wait_glove', 'unseal', 'take_chopsticks', 'returnwhistle'],
+    // 27 面「立约后未再兑现」旗：所属分支不返 ending，且该关系上查无以它为前情的后续事件
+    noFollowup: ['again', 'enter', 'next', 'ferry', 'continue', 'shore', 'year', 'boat', 'daily',
+        'third_way', 'disciples', 'vessel', 'redeem', 'refire', 'defect', 'companion'],
+    // 2 面「写在自己这一场的末选上」旗：由本场最后一个选项落下，而本场不是 ambient、无重演，
+    //   同一条路上没有第二个场可读它（j09 那两碗，端过就完了）
+    selfTerminal: ['wujiu', 'rival']
+};
+
+// 记一笔：这个事件消费端对某条路的读账（测试与面板都用它，避免「表里有、代码里没读」）
+function _peOpenFollowHits(evId) { return (NPC_OPEN_ROUTE_FOLLOWS[evId] || []).length; }
+
+// ★★消费端挂载点：事件自己的 effects() 跑完之后，把「开过的路」对它产生的后果接上。
+//   之所以拦在这一层而不是装饰事件对象：本文件在 仙侠.html 里排第 97 位，
+//   heroine-aftermath.js(157)/wujiu-jealousy.js(159)/shaolin-pojie-events.js(151) 都晚于它，
+//   在本文件尾部装饰会被它们的覆盖式赋值冲掉；而 handlePersonalEventChoice 是全游戏
+//   唯一调用 events() 的地方（js/npcs/npc-personal-events.js:1988），拦这里既唯一又顺序无关。
+function applyEventEffects(eventDef, npc, choice) {
+    var out = null;
+    if (eventDef && typeof eventDef.effects === 'function') {
+        try { out = eventDef.effects(npc, choice); }
+        catch (e) {
+            console.warn('[启途] 事件 effects() 抛错（' + ((eventDef && eventDef.id) || '?') + ' / ' + choice + '）：' + (e && e.message));
+            out = null;
+        }
+    }
+    if (!out) out = {};
+    var evId = (eventDef && eventDef.id) || '';
+    var rules = NPC_OPEN_ROUTE_FOLLOWS[evId];
+    if (!rules || !rules.length) return out;
+    var hit = [];
+    for (var i = 0; i < rules.length; i++) {
+        var r = rules[i];
+        // 同一条关系（事件所属 NPC 就是这面旗的主人）时直接用手上这个 NPC 实例读旗，
+        // 不绕 npcManager——懒注册的门派 NPC 在册前，绕注册表会把旗读丢。
+        var who = (npc && npc.id === r.npc) ? npc : r.npc;
+        if (!hasOpenRoute(who, r.value)) continue;   // ← 旗标在这里被读
+        hit.push(r);
+        if (r.aff && npc && npc.relationship) {
+            npc.relationship.affection = Math.max(-100, Math.min(100,
+                (Number(npc.relationship.affection) || 0) + r.aff));
+            out.affection = (Number(out.affection) || 0) + r.aff;
+        }
+    }
+    if (!hit.length) return out;
+    // 玩家看得见的：一条「旧路应验」提示 + 好感增减
+    var d = (Number(out.affection) || 0);
+    out.msg = (out.msg ? out.msg + '\n\n' : '')
+        + '🧭 已开的路应验（' + hit.map(function (r) { return r.value; }).join('、') + '）：'
+        + (d > 0 ? '好感 ' + (d > 0 ? '+' : '') + d : (d < 0 ? '好感 ' + d : '无好感增减'));
+    for (var j = 0; j < hit.length; j++) {
+        out.msg += '\n' + hit[j].icon + ' ' + hit[j].line;
+    }
+    out.openRouteHits = hit.map(function (r) { return r.npc + ':' + r.value; });
+    return out;
+}
+
 // 处理选择分支（在对话流中追加玩家的选择和后续对话）
 window.handlePersonalEventChoice = function(sceneIndex, choiceIndex) {
     var ev = window._currentPersonalEvent;
@@ -1527,8 +2228,15 @@ window.handlePersonalEventChoice = function(sceneIndex, choiceIndex) {
     ev.msgArea.appendChild(playerDiv);
     ev.msgArea.scrollTop = ev.msgArea.scrollHeight;
     
-    // 应用效果
-    var result = ev.eventDef.effects(npc, choice.effect);
+// 应用效果
+    // v26.9 受控枚举：先拍下闭包动手前的信任/爱意轨，结算时据此避开重复计账
+    // （实测 938 个闭包里 540 个选项会自己写 trust，另有通用层给 tell/vow 写 love）
+    var _peGuard = { trustTouched: false, loveTouched: false };
+    if (npc && npc.relationship) {
+        _peGuard._trust0 = Number(npc.relationship.trust) || 0;
+        _peGuard._love0 = Number(npc.relationship.love) || 0;
+    }
+    var result = applyEventEffects(ev.eventDef, npc, choice.effect);
     // 吃醋事件：按情敌性别加一句有意思的话语（同性/异性分流）
     if (ev.eventDef.requireRivalRomance && result && result.msg && typeof window.detectRivalRomance === 'function' && typeof window._rivalSexFlavor === 'function') {
         var _rivalForFlavor = window.detectRivalRomance(ev.eventDef.npcId);
@@ -1558,10 +2266,26 @@ window.handlePersonalEventChoice = function(sceneIndex, choiceIndex) {
         affDiv.className = 'text-center py-0.5';
         var affSymbol = result.affection > 0 ? '💗' : '💔';
         affDiv.innerHTML = '<p class="text-gray-500 text-xs">' + affSymbol + ' 好感度 ' + (result.affection > 0 ? '+' : '') + result.affection + '</p>';
-        ev.msgArea.appendChild(affDiv);
+ev.msgArea.appendChild(affDiv);
         ev.msgArea.scrollTop = ev.msgArea.scrollHeight;
     }
-    
+
+    // ===== v26.9 受控枚举结算：裸 effect 取值 → 8 类真实后果（信任/爱意/情分/敬重/怨/惧/知情账/灵石/精力/欠账/旗） =====
+    // 放在好感之后：好感仍是原来那一笔标量，这里补的是它从来没告诉玩家的其余后果。
+    // 闭包或上面通用层已经动过的轨按快照标记，结算层不重复写（trust 540 个选项、love tell/vow 两处）。
+    if (npc && npc.relationship) {
+        _peGuard.trustTouched = (Number(npc.relationship.trust) || 0) !== _peGuard._trust0;
+        _peGuard.loveTouched = (Number(npc.relationship.love) || 0) !== _peGuard._love0;
+    }
+    var _peOutcome = null;
+    try {
+        _peOutcome = settleNpcEventConsequence(npc, ev.eventDef, choice.effect, _peGuard);
+    } catch (e) {
+        // 不让结算层的异常掐断事件流：这一笔后果跳过，好感与反应照旧落地，并留告警
+        console.warn('[个人事件] 后果结算入口抛错（事件 ' + (ev.eventDef && ev.eventDef.id) + ' 取值 "' + choice.effect + '"）：' + (e && e.message));
+    }
+    if (_peOutcome) renderNpcEventConsequence(ev, _peOutcome);
+
     // 记录冷却天数
     if (ev.eventDef.cooldown > 0) {
         if (!window._eventCooldowns) window._eventCooldowns = {};
@@ -1828,6 +2552,19 @@ function _ambientRearmOk(npc, ev) {
     return (today - last) >= (Number(ev.repeatEvery) || 14);
 }
 
+// ============ 清单是否罗列：全局唯一判定口 ============
+// v22.0 这里是「默认关」：设置没勾就不罗列清单，事件改由交谈自然引出。
+// 本批把默认翻过来（禁止设计.md 第 2 条 + 「看不见不是沉浸，是丢内容」）：
+//   清单默认罗列——入口必须看得见；只有玩家在设置里**显式勾掉**才进沉浸模式。
+// 判据只认「显式 false」，所以：
+//   · 没写过这个键的档（新档 / 从没碰过这个开关的老档）→ 罗列；
+//   · v22.0 时代真把它勾掉过的玩家 → 仍按他自己的选择走（不推翻玩家已表达的偏好）；
+//   · 勾选过 true 的老档 → 罗列（与旧行为一致）。
+// 因此旧档零迁移：一个键都没有的场合从「关」变「开」，写过的都不动。
+function isPersonalEventListShown() {
+    return !(window._settings && window._settings.socialEventPanel === false);
+}
+
 // ============ 获取NPC的个人事件按钮（用于对话面板显示） ============
 // v20.3 修订：不再用「首个事件测门禁，不过就整栏隐藏」的探针法——
 // 那会让异派/不在场/远程查看时整栏凭空消失，玩家不知道为什么。
@@ -1839,10 +2576,10 @@ function getPersonalEventButtons(npc, npcId) {
     // 懒注册的门派掌门（registerSectNPCs 到访才建）全靠这趟面板级补注入，必须先于沉浸闸执行。
     injectSectSecrets();
 
-    // v22.0 沉浸模式（默认）：设置未开启「社交面板显示个人事件」时不罗列清单——
+    // 沉浸模式：只有玩家显式把设置页「社交面板显示个人事件」勾掉，才不罗列清单——
     // 事件改由交谈自然引出（personalEventGreetGate：拦面板开场 / 「她叫住了你」概率弹出）。
-    // 各故事线（batch1/2/3 等）对 window.getPersonalEventButtons 的包装链最终都落到这里，一处闸全局生效。
-    if (!(window._settings && window._settings.socialEventPanel === true)) return '';
+    // 各故事线（batch1/2/3 等）对 window.getPersonalEventButtons 的包装链最终都落到这里，一处判定全局生效。
+    if (!isPersonalEventListShown()) return '';
 
     // 查找属于该NPC的所有个人事件
     var eventList = [];
@@ -1852,7 +2589,10 @@ function getPersonalEventButtons(npc, npcId) {
             eventList.push(ev);
         }
     }
-    if (eventList.length === 0) return '';
+    // 「已开的路」与事件桩是两笔账：旗开着却查不到桩（事件号改名、桩被搬去别的批次）时，
+    // 仍然要把这条路告诉玩家——只落旗不落字等于丢内容。所以这里不是「有桩才画」。
+    var _routes = openRoutesOf(npcId);
+    if (eventList.length === 0 && _routes.length === 0) return '';
 
     var player = window.currentCharData || {};
     var isConcubine = player.isConcubine || window.discipleState?.isConcubine || false;
@@ -1882,14 +2622,35 @@ function getPersonalEventButtons(npc, npcId) {
     html += '<span class="transition-transform group-open:rotate-90">▶</span>';
     html += '<span>📜 个人事件</span>';
     html += '<span class="text-xs text-gray-500 font-normal">（已完成 ' + triggeredCount + '/' + oneShotList.length + ' · 日常可重演 ' + eventList.filter(function(ev) { return !!ev.ambient; }).length + ' 桩）</span>';
-    // v20.33 信任露出：信任是话语的成色（吃醋安抚折价线 10），养回靠到场——赴约+1、陪节+2
+// v20.33 信任露出：信任是话语的成色（吃醋安抚折价线 10），养回靠到场——赴约+1、陪节+2
     html += '<span class="text-xs text-gray-500 font-normal">· 信任 ' + ((npc.relationship && npc.relationship.trust) || 0) + '</span>';
+    // 已开的路在收起状态下也要看得见：<details> 默认折起，明写条数，玩家才知道点开有东西
+    if (_routes.length > 0) {
+        html += '<span class="text-xs text-sky-400 font-normal" data-open-route-count="' + _routes.length + '">· 🧭 已开 ' + _routes.length + ' 条路</span>';
+    }
     // 未结识时在标题旁给一句总括提示，不再整栏隐藏
     if (!metNpc) {
         html += '<span class="text-xs text-gray-600 font-normal">· 尚未与此人结识</span>';
     }
-    html += '</summary>';
+html += '</summary>';
     html += '<div class="space-y-3">';
+
+    // 启途接线·「已开的路」：启途旗标过去只落旗不说话，玩家看不见自己开过什么。
+    // 这里把本关系上已开过的路连同「约的原话」列出来——原话是结算那一刻玩家自己按下的那句，
+    // 存在 eventFlags 里随存档走，所以读档后这块仍在（NPC 旗也在，见 npc-system.js:1426/1559）。
+    if (_routes.length > 0) {
+        html += '<div class="bg-sky-950/30 border border-sky-800/50 rounded p-2">';
+        html += '<p class="text-xs font-bold text-sky-300 mb-1">🧭 已开的路（' + _routes.length +
+            ' 条 · 共走过 ' + openRouteCount(npcId) + ' 回）</p>';
+        for (var _ri = 0; _ri < _routes.length; _ri++) {
+            var _rv = _routes[_ri];
+            var _rl = openRouteLabel(npcId, _rv);
+            html += '<p class="text-xs text-sky-200/80">· <span class="text-sky-400">' + _rv + '</span>' +
+                (_rl ? '：「' + _rl + '」' : '（约的原话未存档）') + '</p>';
+        }
+        html += '</div>';
+    }
+
     
     // 渲染一条事件链（带标题）
     function renderChain(chainList, chainTitle) {
@@ -2051,14 +2812,16 @@ function getPersonalEventButtons(npc, npcId) {
 }
 
 // ============ v22.0 交谈即入戏：通用事件接线 ============
-// 「社交面板显示个人事件」默认关闭后，清单不再罗列——该发生的事必须在交谈时自然发生，
-// 否则整条私人线在沉浸模式下不可达。接线分两路：
+// 玩家在设置里勾掉「社交面板显示个人事件」（沉浸模式）后清单不再罗列——
+// 那时该发生的事必须在交谈时自然发生，否则整条私人线不可达。接线分两路：
 //   ① 拦面板（确定性）：事件已就绪（链头/好感/资格门禁/条件全过、夜戏守夜时辰）且
 //      「门槛低」（好感≤20）或本就没有自动弹出标记的——玩家一开口，事件直接开场，社交面板不再显示。
 //      ambient 日常小事隔够重演周期（默认14日）也会在交谈里自然撞见，主线大事优先。
 //   ② 概率弹出：带 autoTrigger 标记的高门槛事件走原有 maybeAutoTriggerPersonalEvent('greet')
 //      ——「她叫住了你」，弹不弹看概率与时辰，不拦面板；各线原有的 daily/sect 钩子照旧。
 // 面板开关开启时不拦截（玩家自己点清单），只保留②。
+// 默认口径（本批翻面后）：清单默认罗列 ⇒ 默认**不**拦截，面板照常出，玩家自己点；
+// 玩家在设置里显式勾掉「社交面板显示个人事件」才进沉浸模式，那时清单不画，就绪的事必须当场开场。
 
 // 事件此刻是否就绪（与自动触发同一套门禁，另守 autoTrigger.timeRange 时辰窗——夜戏夜演）
 function isEventReadyNow(npc, ev, affection) {
@@ -2125,10 +2888,11 @@ function personalEventGreetGate(npc, npcId) {
     for (var k in NPC_PERSONAL_EVENTS) {
         if (NPC_PERSONAL_EVENTS[k] && NPC_PERSONAL_EVENTS[k].npcId === npcId) { hasAny = true; break; }
     }
-    if (!hasAny) return false;
+if (!hasAny) return false;
     if (isPersonalLineFinished(npcId)) return false; // 终章已演完，余韵留白
-    // 沉浸模式（默认）：先试确定性拦面板
-    if (!(window._settings && window._settings.socialEventPanel === true)) {
+    // 沉浸模式（玩家显式关掉了清单罗列）：先试确定性拦面板——
+    // 清单不画，就绪的事必须在这一句话里开场，否则整条私人线不可达。
+    if (!isPersonalEventListShown()) {
         if (tryInterceptPersonalEvent(npc, npcId)) return true;
     }
     // 概率路：全线通用「她叫住了你」——此前只有逐线硬编码的几条线有 greet 源，
@@ -2152,11 +2916,13 @@ if (typeof window !== 'undefined') {
     window.getSecretDisplayHtml = getSecretDisplayHtml;
     window.getSecretHtml = getSecretDisplayHtml;
     window.injectSectSecrets = injectSectSecrets;
-    // v22.0 交谈即入戏
+// v22.0 交谈即入戏
     window.isEventReadyNow = isEventReadyNow;
     window.isPersonalLineFinished = isPersonalLineFinished;
     window.tryInterceptPersonalEvent = tryInterceptPersonalEvent;
     window.personalEventGreetGate = personalEventGreetGate;
+    // 清单是否罗列（唯一判定口）：默认罗列，只有显式勾掉设置才进沉浸模式
+    window.isPersonalEventListShown = isPersonalEventListShown;
 }
 
 // ============ 秘密显示HTML（用于对话面板） ============
@@ -2289,8 +3055,27 @@ if (typeof window !== 'undefined') {
     window.NPC_ENDING_SETS = NPC_ENDING_SETS;
     window.registerEndingSet = registerEndingSet;
     window.registerEndingCallback = registerEndingCallback;
-    window._ambientRearmOk = _ambientRearmOk;
+window._ambientRearmOk = _ambientRearmOk;
     window._ensureAmbientTag = _ensureAmbientTag;
+    // v26.9 后果受控枚举：类型表 / 映射表 / 兼容层台账 / 结算与渲染入口，全部挂 window 供测试与调试取数
+    window.NPC_EFFECT_KINDS = NPC_EFFECT_KINDS;
+    window.NPC_EFFECT_SPEC = NPC_EFFECT_SPEC;
+    window.NPC_EFFECT_MAP = NPC_EFFECT_MAP;
+    window.NPC_EFFECT_WEIGHTS = NPC_EFFECT_WEIGHTS;
+    window.NPC_EFFECT_COMPAT = NPC_EFFECT_COMPAT;
+    window.settleNpcEventConsequence = settleNpcEventConsequence;
+    window.renderNpcEventConsequence = renderNpcEventConsequence;
+    // 启途接线：旗标的读侧与消费端（后续事件/面板靠它们看见已开的路）
+    window.peOpenFlagName = peOpenFlagName;
+    window.peOpenNoteKey = peOpenNoteKey;
+    window.peRouteKey = peRouteKey;
+    window.hasOpenRoute = hasOpenRoute;
+    window.openRoutesOf = openRoutesOf;
+    window.openRouteCount = openRouteCount;
+    window.openRouteLabel = openRouteLabel;
+    window.applyEventEffects = applyEventEffects;
+    window.NPC_OPEN_ROUTE_FOLLOWS = NPC_OPEN_ROUTE_FOLLOWS;
+    window.NPC_OPEN_ROUTE_LEDGER_NOTE = NPC_OPEN_ROUTE_LEDGER_NOTE;
 }
 
 console.log('[个人事件] 系统加载完成，已注册 ' + Object.keys(NPC_PERSONAL_EVENTS).length + ' 个事件');

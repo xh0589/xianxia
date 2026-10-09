@@ -329,6 +329,9 @@ const scenarioEngine = {
             else if (eff.bank.op === 'withdraw') bankResult = BS.withdraw();
             else if (eff.bank.op === 'borrow') bankResult = BS.borrow(eff.bank.amount);
             else if (eff.bank.op === 'repay') bankResult = BS.repay();
+            else if (eff.bank.op === 'lend') bankResult = BS.lendOut(eff.bank.amount);   // v27.1 放印子钱
+            else if (eff.bank.op === 'ticket_buy') bankResult = BS.buyTicket(eff.bank.amount); // 真实小世界·钱票开票
+            else if (eff.bank.op === 'ticket_redeem') bankResult = BS.redeemTicket();          // 真实小世界·钱票兑现
             else return { success: false, reason: 'reward_service_unavailable' };
             if (!bankResult || bankResult.success === false || bankResult.error) {
                 return { success: false, reason: 'bank', error: (bankResult && bankResult.error) || '钱庄交割未成' };
@@ -472,6 +475,71 @@ const scenarioEngine = {
             }
         }
 
+        // v27.2 善举与声望批：eff.deeds = {op:'open'}——善堂柜上的善举名册（reputation-system.js 正门）。
+        // 名册自己管城/门槛/交割，剧本层只递话，不另立账。
+        if (eff.deeds && typeof eff.deeds === 'object') {
+            if (eff.deeds.op !== 'open' || typeof window.openGoodDeeds !== 'function') {
+                return { success: false, reason: 'deeds', error: '善堂柜上眼下没有这本名册' };
+            }
+            window.openGoodDeeds();
+            var drest = [];
+            for (var dk in eff) { if (dk !== 'deeds' && dk !== 'msg' && dk !== 'msgType' && dk !== 'time') drest.push(dk); }
+            if (drest.length === 0) {
+                if (eff.msg) log.add(eff.msg, eff.msgType || 'info');
+                if (eff.time && window.advanceTime) window.advanceTime(eff.time, '设施交互');
+                return { success: true, messages: [] };
+            }
+        }
+
+        // v27.4 黑道与断案批：eff.crimeworks = {op:'open'}——黑市后巷的黑道营生名册（crime-works.js 正门）。
+        // 名册自己管城/门槛/日戳/明账，剧本层只递话，不另立账。
+        if (eff.crimeworks && typeof eff.crimeworks === 'object') {
+            if (eff.crimeworks.op !== 'open' || typeof window.openCrimeWorks !== 'function') {
+                return { success: false, reason: 'crimeworks', error: '后巷眼下没有这条门路' };
+            }
+            window.openCrimeWorks();
+            var wrest = [];
+            for (var wk in eff) { if (wk !== 'crimeworks' && wk !== 'msg' && wk !== 'msgType' && wk !== 'time') wrest.push(wk); }
+            if (wrest.length === 0) {
+                if (eff.msg) log.add(eff.msg, eff.msgType || 'info');
+                if (eff.time && window.advanceTime) window.advanceTime(eff.time, '设施交互');
+                return { success: true, messages: [] };
+            }
+        }
+
+        // v27.4 黑道与断案批：eff.cases = {op:'open'}——司法堂案卷房（case-system.js 正门）。
+        if (eff.cases && typeof eff.cases === 'object') {
+            if (eff.cases.op !== 'open' || typeof window.openCaseSystem !== 'function') {
+                return { success: false, reason: 'cases', error: '司法堂眼下没有案卷房' };
+            }
+            window.openCaseSystem();
+            var csrest = [];
+            for (var csk in eff) { if (csk !== 'cases' && csk !== 'msg' && csk !== 'msgType' && csk !== 'time') csrest.push(csk); }
+            if (csrest.length === 0) {
+                if (eff.msg) log.add(eff.msg, eff.msgType || 'info');
+                if (eff.time && window.advanceTime) window.advanceTime(eff.time, '设施交互');
+                return { success: true, messages: [] };
+            }
+        }
+
+        // v27.6 大业收官批：eff.grand = {op:'open'|'tour'|'court'}——大业名册 / 比武大会 / 朝政（grand-legacy.js · dynasty-court.js 正门）。
+        if (eff.grand && typeof eff.grand === 'object') {
+            var GL = window.GrandLegacy;
+            if (!GL || (eff.grand.op !== 'open' && eff.grand.op !== 'tour' && eff.grand.op !== 'court') || typeof GL.tourGate !== 'function') {
+                return { success: false, reason: 'grand', error: '大业名册眼下开不起来' };
+            }
+            if (eff.grand.op === 'open') { if (typeof window.openGrandLegacy === 'function') window.openGrandLegacy(); }
+            else if (eff.grand.op === 'court') { if (typeof window.openDynastyCourt === 'function') window.openDynastyCourt(); }
+            else { GL.tourGate(); }
+            var glrest = [];
+            for (var glk in eff) { if (glk !== 'grand' && glk !== 'msg' && glk !== 'msgType' && glk !== 'time') glrest.push(glk); }
+            if (glrest.length === 0) {
+                if (eff.msg) log.add(eff.msg, eff.msgType || 'info');
+                if (eff.time && window.advanceTime) window.advanceTime(eff.time, '设施交互');
+                return { success: true, messages: [] };
+            }
+        }
+
         // v20.86：eff.facility = {id}——门派设施结算钩子：真设施管道原样走一遍
         // （门禁/真气/贡献成本/每日份例/冷却全由设施系统自理，剧本层不另立账）。
         // 设施结算失败则整笔不成交——与钱庄账本同一条纪律，拦下的缘由原样上屏。
@@ -497,7 +565,7 @@ const scenarioEngine = {
         // v25.8 顺带修一处旧账：caravan 此前不在剥单里——它带着别的键走到这儿会被 RewardService 整笔拒掉。
         var plain = {};
         for (var qk in eff) {
-            if (qk === 'bank' || qk === 'pawn' || qk === 'fence' || qk === 'facility' || qk === 'peddler' || qk === 'caravan' || qk === 'teller' || qk === 'crime') continue;
+            if (qk === 'bank' || qk === 'pawn' || qk === 'fence' || qk === 'facility' || qk === 'peddler' || qk === 'caravan' || qk === 'teller' || qk === 'crime' || qk === 'deeds' || qk === 'crimeworks' || qk === 'cases' || qk === 'grand') continue;
             plain[qk] = eff[qk];
         }
         if (window.RewardService) {

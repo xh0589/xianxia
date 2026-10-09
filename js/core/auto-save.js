@@ -33,14 +33,18 @@ function _loadSlots() {
 }
 
 function _saveSlots(slots) {
+    // v27.21（sol 审 A-3，P1）：写失败要如实返回 false——doAutoSave 拿到它才不更新"上次自动保存"、
+    // 不返回 true。旧版吞掉结果照报成功，玩家以为存上了实际丢了（比存不上更坏）。
     try {
         localStorage.setItem(AUTO_KEY, JSON.stringify(slots));
+        return true;
     } catch (e) {
         // v20.87 自动档写失败不再静默——玩家以为存上了实际丢了是最坏情况
         if (!_quotaWarned && window.showMessage) {
             _quotaWarned = true;
-            window.showMessage('⚠️ 自动存档写入失败：浏览器存储空间可能已满，建议删掉旧存档', 'error');
+            window.showMessage('⚠️ 自动存档写入失败：浏览器存储空间可能已满，建议删掉旧存档（删除会连同自动档一起清）', 'error');
         }
+        return false;
     }
 }
 
@@ -89,7 +93,11 @@ function doAutoSave(trigger) {
         slots.push(entry);
         // 仅保留最近 MAX_SLOTS 个
         if (slots.length > MAX_SLOTS) slots = slots.slice(slots.length - MAX_SLOTS);
-        _saveSlots(slots);
+        var _slotsOk21 = _saveSlots(slots);   // v27.21：槽位写失败=这轮自动档没存上，如实往下走
+
+        // v27.21（sol 审 A-3）：主档（saveGame 内部已写 xianxia_save）与自动槽**双成才算成功**——
+        // 槽位失败不更新"上次自动保存"、返回 false（UI 与触发方都拿得到真话）。时间戳不假走。
+        if (!_slotsOk21) return false;
 
         // 更新"上次自动保存"提示（不弹 toast）
         var el = document.getElementById('last-auto-save-time');
@@ -106,8 +114,11 @@ function tickAutoSaveDay() {
         if (day <= 0) return;
         if (day === _lastAutoDay) return;          // 同一天内不重复
         if (day % INTERVAL_DAYS !== 0) return;       // 非 7 天倍数跳过
-        _lastAutoDay = day;
-        doAutoSave('day');
+        // v27.23（sol 外审回流·已实锤收刀）：只有 doAutoSave('day') 真写成功才记当天——
+        // 旧序「先记后存」在写失败（配额满/隐私模式）时当天标记照立、后续 tick 全跳过，
+        // 当天再无重试。修后失败允许同日下个 tick 重试（间隔一个游戏 tick，非风暴）；
+        // day%7 节奏不受影响（day8 跳、day14 照常）。返回值语义=v27.21 立的「主档+槽位双成才 true」。
+        if (doAutoSave('day')) _lastAutoDay = day;
     } catch (e) {}
 }
 

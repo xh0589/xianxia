@@ -15,10 +15,21 @@ function _inSect(sectName) {
     return ds.isInSect && ds.sectId === sectName;
 }
 
+// 士气读口：与 js/sects/sect-events.js 的 _moraleOf 同一套口径。旧写法 `d.morale || 50` ——
+//   士气**正好是 0** 时得 50，于是本文件（**结算侧**）在谷底加减的是一个不存在的 50：
+//   灾变 -10 得 40（谷底反涨）、福利 +10 得 60（一键半满）。
+//   玩家能碰到本文件的唯一入口是 getSectEventDisplay（sect-visit.js:559），而它只挂在
+//   showSectInnerView 里，那道门是 `ds.sectId === sectName`（sect-visit.js:461）——所以这是玩家自己那本账。
+//   士气是**取值**不是「有没有」：null/undefined/非有限数才落 50，0 就是 0。
+function _moraleVal(d) {
+    var m = (d == null || d.morale == null) ? 50 : Number(d.morale);
+    return isFinite(m) ? m : 50;
+}
 function _morale(sectName, delta) {
     var d = _internal(sectName);
     if (!d) return;
-    d.morale = delta >= 0 ? Math.min(100, (d.morale || 50) + delta) : Math.max(0, (d.morale || 50) + delta);
+    var base = _moraleVal(d);
+    d.morale = delta >= 0 ? Math.min(100, base + delta) : Math.max(0, base + delta);
 }
 
 function _resources(sectName, delta) {

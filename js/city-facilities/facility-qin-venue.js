@@ -42,6 +42,21 @@
         } catch (e) { return ''; }
     }
 
+    // v27.5 听戏（第9件）：「戏班写戏」里程碑（v27.2 声望链 id:'opera'）立过了，
+    // 台上就可能在唱写你的那出《义人传》——扫各城善举账的里程碑栏，立过就算（守卫式，缺账静默）。
+    function operaAboutYou() {
+        try {
+            var GD = window.GoodDeeds;
+            var rep = window.cityReputation;
+            if (!GD || typeof GD.ledgerOf !== 'function' || !rep) return false;
+            for (var ck in rep) {
+                var led = GD.ledgerOf(ck);
+                if (led && Array.isArray(led.milestones) && led.milestones.indexOf('opera') >= 0) return true;
+            }
+        } catch (e) {}
+        return false;
+    }
+
     window.scenarioEngine.register('goulan_washe', {
         id: 'goulan_washe', name: '勾栏瓦舍', icon: '🎭',
         desc: '登台卖艺赚打赏、幕后练琴长音律——琴与嗓子都是饭碗',
@@ -181,6 +196,23 @@
                                 cost: { copper: 8 }, mood: 6, lifeSkill: { name: '音律', exp: 1 },
                                 msg: function () { return crowdLine() + '一人一桌一扇一抚尺，百鸟齐鸣绕梁不散——你闭上眼，几乎以为身在春山。换气与转音的门道，也偷师了几分。'; },
                                 time: 45
+                            }
+                        },
+                        // v27.5 听戏（第9件）：整本大戏头排座——比皮影杂耍贵些、长些，戏文里全是兴亡离合。
+                        // 里程碑「戏班写戏」立过了，唱的兴许就是《义人传》——心境另加（明账写在效果里）。
+                        {
+                            text: '🎭 听一整出大戏（15 文钱 · 头排座听足两个时辰）', next: null,
+                            effects: {
+                                cost: { copper: 15 },
+                                mood: function () { return operaAboutYou() ? 16 : 12; },
+                                lifeSkill: { name: '学识', exp: 2 },
+                                msg: function () {
+                                    return crowdLine() + (operaAboutYou()
+                                        ? '今日的头牌正是那出《义人传》——台上唱到你雪夜施粥那一段，满场寂然，邻座的老太太又在抹眼泪。你压低了斗笠看完全场，散场时喉头有点热：戏文把你唱俊了三分，可那份心，没唱错。'
+                                        : '锣鼓三通，名角登台——一出整本的大戏，唱的是前朝兴亡、才子佳人。你坐在头排，两个时辰里跟着戏文笑了三回、叹了两回，出门时天色向晚，心里却满满当当。');
+                                },
+                                msgType: 'success',
+                                time: 120
                             }
                         },
                         { text: '👋 离了勾栏', next: null }

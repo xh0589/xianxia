@@ -8,6 +8,58 @@
         return Math.max(min, Math.min(max, v));
     }
 
+    // ============ 境界刻度：只借一把尺（js/global-utils.js 的 window.REALM_ORDER，十二境） ============
+    //
+    // 病灶：本书曾自抄两份境界序，两份都断在渡劫——
+    //   · 玩家攻防速韧那一份（炼气..渡劫 九档）⇒ `indexOf('飞升')` 得 -1 ⇒ 四项境界加成**整项归零**。
+    //     实测（.scratch/fix-critical-progress/probe-bug2.cjs）：固定六维 strength=10 时，
+    //     渡劫一层 atk43/def31/spd23/tgh19，飞升一层 atk10/def6/spd7/tgh3 —— **越修越弱**，
+    //     渡劫→飞升→金仙这两次突破在战斗上一次也没兑现，「境界」在面板与战斗里同时沦为装饰。
+    //   · 敌人等级那一份（凡人..渡劫 十档）只是 getRealmTier 缺席时的回落，生产路径吃的是
+    //     getRealmTier（真源十二境），飞升/金仙 本来就接得上；但回落一旦发生（沙箱/局部加载）
+    //     就把飞升折回炼气，等于在最顶两境复发同一族病。
+    //
+    // 修法：两处同读 window.REALM_ORDER，本文件不再留任何自抄序。
+    // ⚠️ 序号基准刻意**减掉「凡人」那一档**：旧表的序号是「炼气＝0」，不减会把 炼气 及以上
+    //    十档全体 +4攻/+3防/+2速/+2韧 —— 那是把前十档的数值挪了，不是把假值改回真值。
+    //    减完 炼气..渡劫 十个读数逐格不变（零漂移，见 probe-bug2.cjs 末段核对），
+    //    只有原本恒为 0 的顶端两档真正开始长。
+    //
+    // 数值依据（顶两档的设计值）：旧公式本来就是 `序号 × 系数 + 层数` 的**线性**式，
+    // 每进一境固定 +4攻/+3防/+2速/+2韧。飞升＝序号 9、金仙＝10 沿用同一条线，
+    // 不另开「×1.2 倍率」那类第二套算法——同一把尺、同一格坡度，玩家读得出来是连续的。
+    // 同层对比：渡劫一层 43/31 → 飞升一层 47/34 → 金仙一层 51/37。
+    function _境界序号(realm) {
+        // 「炼气＝0」的境界序号；认不出的名 ⇒ -1（不吃加成，别默默当成炼气）
+        if (realm == null || realm === '') return -1;
+        var i = -1;
+        try {
+            if (typeof window.realmIndex === 'function') i = Number(window.realmIndex(realm));
+        } catch (eIdx) {
+            console.warn('[静默失败] js/combat-stats.js · _境界序号：全局那把尺读不出来，本局按无境界加成算', eIdx && eIdx.message);
+            return -1;
+        }
+        if (!isFinite(i) || i < 1) return -1;   // 凡人（0）与认不出的名（-1）都不进这套加成
+        return i - 1;                           // 扣掉「凡人」那一档 ⇒ 炼气＝0，与旧抄本同基准
+    }
+
+    function _境界档位(realm) {
+        // 敌人刻度用的全序档位（凡人＝0 … 金仙＝11），与上同一把尺
+        try {
+            if (typeof window.realmIndex === 'function') {
+                var t = Number(window.realmIndex(realm));
+                if (isFinite(t)) return t;
+            }
+            if (typeof window.getRealmTier === 'function') {
+                var t2 = Number(window.getRealmTier(realm));
+                if (isFinite(t2)) return t2;
+            }
+        } catch (eTier) {
+            console.warn('[静默失败] js/combat-stats.js · _境界档位：境界尺没量出来，敌人按炼气档捏', eTier && eTier.message);
+        }
+        return 1;
+    }
+
     function _getCombatBonuses() {
         try {
             if (typeof window.getCombatBonuses === 'function') {
@@ -94,9 +146,8 @@
         // 这里给玩家补境界派生加成（纯派生计算，不写存档；面板与战斗同走这个入口，突破即生效）。
         var realmAtk = 0, realmDef = 0, realmSpd = 0, realmTgh = 0;
         if (isPlayer) {
-            var _REALM_ORDER = ['炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'];
             var _rcd = (typeof window.getCurrentCharData === 'function') ? window.getCurrentCharData() : window.currentCharData;
-            var _ri = _rcd ? _REALM_ORDER.indexOf(_rcd.realm) : -1;
+            var _ri = _rcd ? _境界序号(_rcd.realm) : -1;
             if (_ri >= 0) {
                 var _ly = Math.max(1, Math.min(9, Number(_rcd.layer) || 1));
                 realmAtk = _ri * 4 + _ly;
@@ -381,20 +432,12 @@
     // 此前 charData.level 恒为 1（创角写死后无任何正常玩法更新它），主战斗入口
     // `level = charData.level || layer` 永远出 1 级怪——筑基起敌人只打得动 1 点血，
     // 金丹起彻底沦为木桩；胜利奖励也被钉死在 +2 历练 +1 真元，与指数级修为需求差 5-8 个数量级。
-    var REALM_TIERS = ['凡人', '炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'];
-    function _realmTierOf(realm) {
-        try {
-            if (typeof window.getRealmTier === 'function') {
-                var t = window.getRealmTier(realm);
-                if (isFinite(t)) return t;
-            }
-        } catch (e) {}
-        var i = REALM_TIERS.indexOf(realm);
-        return i >= 0 ? i : 1;
-    }
-    // 敌人等级 = 境界连续刻度：炼气1层→1，渡劫9层→65。斜率 7/境（不是 9——渡劫怪六维
-    // 若顶到 base=2L+5=167，对满装玩家每击 50+ 太狠；7 落 135，伤害带 20-40 正好）。
-    // 境界边界允许 1 级回落（炼气9=9 > 筑基1=8）：刚突破的人碾压上一层，符合体感。
+    function _realmTierOf(realm) { return _境界档位(realm); }
+    // 敌人等级 = 境界连续刻度：炼气1层→1，渡劫9层→65，斜率 7/境；顶端两档沿同一条线接上去——
+    // 飞升一层 64（≈渡劫九层 65：刚证道的仙人对上圆满大乘，体感上仍是「换了一层皮」）、飞升九层 72、
+    // 金仙一层 71、金仙九层 79。斜率取 7 而不是 9 的原由不变：9 会让渡劫怪六维顶到 base=2L+5=167，
+    // 对满装玩家每击 50+ 太狠；7 落 135 时伤害带 20-40 正好，按同一比例外插到 79（base=163）仍在带内。
+    // 边界允许 1 级回落（炼气9=9 > 筑基1=8）：刚突破的人碾压上一层，符合体感。
     window.realmScaledEnemyLevel = function (cd) {
         cd = cd || {};
         var tier = _realmTierOf(cd.realm);

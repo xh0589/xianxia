@@ -336,7 +336,12 @@ console.log('\n[C] 秘境（exploreDungeonFloor／onDungeonBattleResolved，从 
 function 装秘境(改) {
     const W = 造窗();
     const 源 = load('js/app.js');
-    let 体 = ['function exploreDungeonFloor() {', 'function onDungeonBattleResolved(won) {', 'function 货账话(账, 名目) {'].map(h => 切函数(源, h)).join('\n');
+    // 三座秘境分池后，结算那两条路径要向「取数的那只手」要本座的脸与进度账，
+    //   故切片表把这四只一并切进来（数据跟着取数的手走，沙箱里才不会是 undefined）。
+    let 体 = ['function exploreDungeonFloor() {', 'function onDungeonBattleResolved(won) {', 'function 货账话(账, 名目) {',
+        'function dungeonFaceTable() {', 'function dungeonFaceOf(dungeonId) {',
+        'function dungeonNoteReached(dungeonId, floor, cap) {', 'function dungeonNoteCleared(dungeonId, cap) {'
+    ].map(h => 切函数(源, h)).join('\n');
     if (改) 体 = 改(体);
     W._load串('(function(){\nvar currentCharData = window.currentCharData;\nvar dungeonState = null;\n'
         + 'function showMessage(t, ty) { window._msgs.push(String(t)); window._tones.push(ty); }\n'
@@ -389,8 +394,11 @@ function 装秘境(改) {
     定骰(W, [0.0]); 装通道(W, [0]); W._复位(); W._msgs.length = 0; W._tones.length = 0;
     const 石0 = W.inventory.currency.spiritStones;
     W.__探(W.__满层(), { type: 'inscription', msg: 'x' });
-    ok(/仍留在秘境内/.test(W._最近()) && W.currentCharData.dungeonProgress['r'] === 1,
-        'C6 通关彩头满包：那件东西留在境内，但通关是真通关（进度仍记 1）——' + JSON.stringify(W._最近()));
+    // 秘境进度那一栏的真语义已改成「历史最深层」：这座沙箱秘境 3 层（__满层 maxFloor=3），
+    // 通关就是到过第 3 层 —— 旧码在这里写 1，拿最深层那栏冒充「下次从哪儿进」，
+    // 于是通完关重进变第 1 层、屏上还念「历史进度：第 1 层」。现在写 3。
+    ok(/仍留在秘境内/.test(W._最近()) && W.currentCharData.dungeonProgress['r'] === 3,
+        'C6 通关彩头满包：那件东西留在境内，但通关是真通关（最深层记 3，不是旧码那枚骗人的 1）——' + JSON.stringify(W._最近()));
 
     定骰(W, [0.0]); 装通道(W, [1]); W._复位(); W._msgs.length = 0; W._tones.length = 0;
     W.__探(W.__满层(), { type: 'inscription', msg: 'x' });
@@ -403,8 +411,8 @@ function 装秘境(改) {
     W.__战(W.__满层(), true);
     ok(/那件稀有装备没能带走/.test(W._最近()) && W._最近tone() === 'warning',
         'C9 打赢守卫通关那一屏：装备没进囊就明说没带走——' + JSON.stringify(W._最近()));
-    ok(W.currentCharData.dungeonProgress['r'] === 1 && W._记.some(x => x[1] === 'dungeon:completed'),
-        'C10 同一屏：通关进度与 dungeon:completed 事件照旧（彩头是附加，不是通关的门票）');
+    ok(W.currentCharData.dungeonProgress['r'] === 3 && W._记.some(x => x[1] === 'dungeon:completed'),
+        'C10 同一屏：通关进度（最深层 3）与 dungeon:completed 事件照旧（彩头是附加，不是通关的门票）');
     ok(W.inventory.currency.spiritStones > 石0, 'C11 通关灵石照进账（300＋手头 100 起）');
 
     装通道(W, [1]); W._复位(); W._msgs.length = 0; W._tones.length = 0;

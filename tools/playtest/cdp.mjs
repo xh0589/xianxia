@@ -7,18 +7,24 @@
  *   表现为"浏览器反复开/关"，且探查失败会连带丢掉游戏会话。
  *   本文件走原生 CDP，脚本抛异常只影响这一次命令，不影响浏览器与页面。
  *
- * 用法：
+ * 用法（★旗标放哪都行：`type --port 9333 文字`、`--port 9333 type 文字` 等价）：
  *   node tools/playtest/cdp.mjs launch  [--port 9222] [--profile .scratch/cdp-profile]
- *   node tools/playtest/cdp.mjs shot    <outPng> [--full] [--port 9222]
+ *   node tools/playtest/cdp.mjs shot    <outPng> [--full] [--out <path>] [--port 9222]
  *   node tools/playtest/cdp.mjs eval   <jsFile|-> [--port 9222]
  *   node tools/playtest/cdp.mjs text   [--port 9222]          页面可见文字
  *   node tools/playtest/cdp.mjs click  <selector> [--port 9222]
- *   node tools/playtest/cdp.mjs clickat <x> <y>                  按坐标点（find 的输出）
- *   node tools/playtest/cdp.mjs type   <text> [--enter]          真键盘事件打字
+ *   node tools/playtest/cdp.mjs clickat <x> <y>                按坐标点（find 的输出）
+ *   node tools/playtest/cdp.mjs clicktext <文字>               按可见文字点（省掉手拼选择器）
+ *   node tools/playtest/cdp.mjs type   <text> [--enter]        真键盘事件打字（往当前焦点）
+ *   node tools/playtest/cdp.mjs typeinto <selector> <text>     先聚焦该元素再打字
  *   node tools/playtest/cdp.mjs dialogs                         处理挂起的原生对话框
- *   node tools/playtest/cdp.mjs find   <text>                按文字定位可点元素
+ *   node tools/playtest/cdp.mjs find   <text>                  按文字定位可点元素
  *   node tools/playtest/cdp.mjs logs   [--port 9222]          控制台错误
  *   node tools/playtest/cdp.mjs stop   [--port 9222]
+ *
+ * 环境变量（省得每次敲长串旗标）：
+ *   CDP_PORT=9333            等价 --port 9333
+ *   CDP_PROFILE=<目录>        等价 --profile <目录>
  *
  * 关键设计：
  *   - eval 一律包 try/catch，异常作为 {__err} 返回，绝不让页面崩
@@ -28,6 +34,9 @@
  *     所以每个交互命令都挂 Page.javascriptDialogOpening 监听，
  *     弹窗一出现就按 acceptDialog 策略自动应答，并把文案记到窗口
  *     ——否则「突破」这种带 confirm() 的按钮一点就超时，后续全废
+ *   - 截图类命令先 Page.bringToFront 唤醒目标：没唤醒过的标签页上
+ *     Page.captureScreenshot 可能**整条不回**，一路等到超时（同连接 eval 却只要 11ms）。
+ *     实测数据与复现脚本见 shot() 里那段注释。
  */
 
 import { spawn } from 'node:child_process';
@@ -40,13 +49,37 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 import { setTimeout as sleep } from 'node:timers/promises';
 
 // ---------- 参数 ----------
+// ⚠️ 旗标必须「先摘干净、再取位置参数」，而且**位置不限**（命令前/后都行）。
+//   早先的 flag() 只在 argv 里找值、**不摘**，`cmd` 与位置参数又都直接读 argv[0]/argv[1]，
+//   于是 `type --port 9333 文字` 里 argv[1] 仍是 '--port'：
+//     · click/find  → 把 '--port' 当选择器（报「选择器没匹配到元素」）
+//     · clickat     → x=NaN
+//     · type        → argv.slice(1) 把 '--port 9333' 一起 join 进去，★旗标被原样打进输入框
+//   两个代理都撞上这条，各自从建了绕法（.scratch/saveload-cultivation-fix-progress/cdp9333.mjs）。
+//   现在：值型旗标连下一个 token 一起摘走，布尔型只摘自己，剩下的才是位置参数。
+const VALUE_FLAGS = new Set(['port', 'profile', 'url', 'file', 'out', 'width', 'height', 'chrome']);
+const BOOL_FLAGS = new Set(['full', 'decline', 'reset', 'enter']);
 const argv = process.argv.slice(2);
-const cmd = argv[0];
-function flag(name, dflt) {
-  const i = argv.indexOf('--' + name);
-  return i >= 0 ? (argv[i + 1] ?? true) : dflt;
+const flags = Object.create(null);
+const pos = [];                       // 摘掉旗标之后的位置参数（pos[0] 是命令）
+for (let i = 0; i < argv.length; i++) {
+  const a = argv[i];
+  if (a.startsWith('--')) {
+    const name = a.slice(2);
+    // 未知旗标按布尔处理：**不**吞掉后面的 token，免得把正文/选择器吃掉
+    if (VALUE_FLAGS.has(name) && i + 1 < argv.length) flags[name] = argv[++i];
+    else flags[name] = true;
+    continue;
+  }
+  pos.push(a);
 }
-const PORT = Number(flag('port', 9222));
+const cmd = pos[0];
+function flag(name, dflt) {
+  return Object.prototype.hasOwnProperty.call(flags, name) ? flags[name] : dflt;
+}
+// 端口/profile 也认环境变量：验收浏览器常年开在 9333 + 独立 profile 上，
+// 每次敲一长串 --port/--profile 很烦（cdp9333.mjs 当初就是靠 CDP_PORT 绕开这个）。
+const PORT = Number(flag('port', process.env.CDP_PORT || 9222));
 const CHROME = flag(
   'chrome',
   process.env.PROGRAMFILES
@@ -62,8 +95,11 @@ function readViewport() {
   try { return JSON.parse(readFileSync(VP_STATE, 'utf8')); } catch (e) { return null; }
 }
 function writeViewport(v) {
+  // ⚠️ 这里原先写的是 path.dirname(...) —— 本文件只 import 了 { dirname, resolve, join }，
+  //    **没有** `path` 这个名字。于是 `mobile` 命令一落盘就 ReferenceError（视口粘不住）。
+  //    一直没报上来，是因为它只在 mobile 这一条路上触发。改用直接引进来的 dirname。
   try {
-    if (!existsSync(path.dirname(VP_STATE))) mkdirSync(path.dirname(VP_STATE), { recursive: true });
+    if (!existsSync(dirname(VP_STATE))) mkdirSync(dirname(VP_STATE), { recursive: true });
     writeFileSync(VP_STATE, JSON.stringify(v), 'utf8');
   } catch (e) { /* 存不上就退化成非粘性，不影响正确性 */ }
 }
@@ -274,7 +310,9 @@ async function requireLivePage() {
 // ---------- 各命令 ----------
 const commands = {
   async launch() {
-    const profile = resolve(String(flag('profile', '.scratch/cdp-profile')));
+    // CDP_PROFILE 是从验收通道（cdp9333.mjs 那套）收进来的：验收浏览器常年用独立 profile，
+    // 免得和别人的 .scratch/cdp-profile 抢同一个 user-data-dir。
+    const profile = resolve(String(flag('profile', process.env.CDP_PROFILE || '.scratch/cdp-profile')));
     if (!existsSync(profile)) mkdirSync(profile, { recursive: true });
     if (existsSync(CHROME)) {
       // 已有实例就直接复用，避免"又开一个窗口"
@@ -391,22 +429,39 @@ const commands = {
   },
 
   async shot() {
-    const out = resolve(String(flag('out', argv[1] || '.scratch/shot.png')));
+    const out = resolve(String(flag('out', pos[1] || '.scratch/shot.png')));
     if (!existsSync(dirname(out))) mkdirSync(dirname(out), { recursive: true });
     const t = await requireLivePage();
     const full = !!flag('full', false);
     const v = readViewport();
 
-    // ⚠️ 两处必须同连接，否则窄屏截图全白做：
+    // ⚠️ 三处必须同连接，否则窄屏截图全白做：
     //   ① 粘性视口（mobile 记下的）绑在连接上，getLayoutMetrics 另开连接读不到；
     //   ② captureScreenshot 不带 clip 时按**窗口实际像素**出图，
     //      于是「已切到 390×844」却截出 2048 宽的图。
-    //   所以：设视口 → 量尺寸 → 截图，全在一条 session 里顺序发。
+    //   ③ ★必须先 Page.bringToFront —— 见下面那段实测。
+    //   所以：唤醒页面 → 设视口 → 量尺寸 → 截图，全在一条 session 里顺序发。
     const vpStep = !v ? null : (v.reset
       ? { method: 'Emulation.clearDeviceMetricsOverride' }
       : { method: 'Emulation.setDeviceMetricsOverride', params: { width: v.width, height: v.height, deviceScaleFactor: 1, mobile: false } });
 
+    // ★★ 「shot 存一张后卡满 60s」的真正病因（实测，不是 stdout、也不是连接析构）：
+    //   Page.captureScreenshot 发出去后**根本收不到回应**，session() 一路等到超时。
+    //   同一次连接上的 Runtime.evaluate 只要 11ms 就回 ⇒ 连接本身没问题。
+    //   复现与判据（.scratch/three-fixes-progress/probe-shot.cjs，端口 9222 实测）：
+    //     T1 evaluate                 11ms  ✓
+    //     T2 captureScreenshot 无clip  15016ms ✗ 收不到回应
+    //     T3 captureScreenshot 带clip   2601ms ✓（慢，但能回）
+    //     T4 bringToFront + setWebLifecycleState:active 之后 capture  130ms ✓
+    //   也就是说：目标标签页**从没被 bringToFront 唤醒过**时，截图可能整条不回。
+    //   唤醒之后又快又稳。所以下面每条截图路径都先唤醒，同一条 session 里连着做。
+    const wakeSteps = [
+      { method: 'Page.bringToFront' },
+      { method: 'Page.setWebLifecycleState', params: { state: 'active' } },
+    ];
+
     const steps = [
+      ...wakeSteps,
       ...(vpStep ? [vpStep] : []),
       { method: 'Page.getLayoutMetrics' },
     ];
@@ -418,6 +473,7 @@ const commands = {
 
     const clipH = full ? Math.min(20000, Math.ceil(metrics.cssContentSize.height)) : vh;
     const shotSteps = [
+      ...wakeSteps,
       ...(vpStep ? [vpStep] : []),
       { method: 'Page.captureScreenshot', params: { format: 'png', clip: { x: 0, y: 0, width: vw, height: clipH, scale: 1 } } },
     ];
@@ -429,11 +485,16 @@ const commands = {
     }
     writeFileSync(out, Buffer.from(r.data, 'base64'));
     console.log('已保存 ' + out + '（视口 ' + vw + '×' + clipH + (full ? '，整页' : '') + '）');
+    // 落盘后**明确退出**：WebSocket 是半双工握柄，close() 之后底层 socket 何时真正析构
+    // 由 libuv 说了算，事件循环可能还挂着几十秒——进程留着不退，调用方看着就像「卡住了」。
+    // 这不是本次 60s 的病因（那是上面的 captureScreenshot 不回），但顺手堵掉，省得下次误判。
+    process.exit(0);
   },
 
   /** click：不用 Playwright 的可见性/拦截判定，直接派发真实鼠标事件 */
   async click() {
-    const sel = String(argv[1]);
+    const sel = String(pos[1] === undefined ? '' : pos[1]);
+    if (!sel) { console.error('用法: click <selector>（选择器是位置参数，--port/--profile 放哪都行）'); return; }
     const t = await requireLivePage();
     const js = `(() => {
       const el = document.querySelector(${JSON.stringify(sel)});
@@ -497,7 +558,8 @@ const commands = {
    * find：按可见文字找可点元素，报出稳定选择器
    */
   async find() {
-    const needle = String(argv[1]);
+    const needle = String(pos[1] === undefined ? '' : pos[1]);
+    if (!needle) { console.error('用法: find <text>'); return; }
     const t = await requireLivePage();
     const js = `(() => {
       const n = ${JSON.stringify(needle)};
@@ -574,8 +636,8 @@ const commands = {
    * 用法：clickat <x> <y>
    */
   async clickat() {
-    const x = Number(argv[1]);
-    const y = Number(argv[2]);
+    const x = Number(pos[1]);
+    const y = Number(pos[2]);
     if (!isFinite(x) || !isFinite(y)) return console.error('用法: clickat <x> <y>（坐标取自 find 的输出）');
     const t = await requireLivePage();
     // 先报落点是谁，避免"点了没反应"时不知道点到了什么
@@ -600,8 +662,11 @@ const commands = {
    * 另 --enter 在打完字后回车。
    */
   async type() {
-    const text = argv.slice(1).filter(a => a !== '--enter').join(' ');
-    const pressEnter = argv.includes('--enter');
+    // ★位置参数已摘掉旗标：pos.slice(1) 里**不可能**再有 --port/--enter。
+    //   改前是 argv.slice(1).filter(a => a !== '--enter')，只滤掉了 --enter，
+    //   `--port 9333 文字` 会把旗标连值一起 join 进去打进输入框（两个代理都撞过）。
+    const text = pos.slice(1).join(' ');
+    const pressEnter = !!flag('enter', false);
     const t = await requireLivePage();
     // 逐字符派发：keyDown → char → keyUp，与真实键盘事件序列一致
     for (const ch of String(text)) {
@@ -621,6 +686,81 @@ const commands = {
       returnByValue: true,
     });
     console.log('已输入 ' + text.length + ' 字；焦点处 = ' + ((r && r.result && r.result.value) || '(读不到)'));
+  },
+
+  /**
+   * typeinto <selector> <text>：先把焦点落到指定元素，再照 type 那样逐字派发。
+   *
+   * 收自 .scratch/saveload-cultivation-fix-progress/cdp9333.mjs（那份是绕开本工具的旗标
+   * 解析 bug 才写的minimal通道，绕法已经没必要留了，但这个「先 focus 再打字」的动作
+   * 本工具原来没有，值得留下）。本工具的 type 只往**当前焦点**里打，新开页面时焦点
+   * 常常不在输入框上，于是「打不进」和「旗标被吃进输入框」两件事混在一起很难分辨。
+   * 用法：typeinto "#char-name" 验档叟 [--enter]
+   */
+  async typeinto() {
+    const sel = String(pos[1] === undefined ? '' : pos[1]);
+    if (!sel) { console.error('用法: typeinto <selector> <text> [--enter]'); return; }
+    const text = pos.slice(2).join(' ');
+    const pressEnter = !!flag('enter', false);
+    const t = await requireLivePage();
+    // 先 focus，并**回读元素身份**：没找到就直接说没找到，别让后面的字打去别处
+    const f = await send(t.webSocketDebuggerUrl, 'Runtime.evaluate', {
+      expression: `(()=>{const e=document.querySelector(${JSON.stringify(sel)});if(!e)return '(没找到 '+${JSON.stringify(sel)}+')';e.focus();return 'ok:'+(e.id||e.tagName);})()`,
+      returnByValue: true,
+    });
+    const who = (f && f.result && f.result.value) || '(读不到)';
+    if (String(who).indexOf('ok:') !== 0) { console.error('【失败】' + who); return; }
+    for (const ch of String(text)) {
+      await send(t.webSocketDebuggerUrl, 'Input.dispatchKeyEvent', { type: 'keyDown', text: ch, unmodifiedText: ch });
+      await send(t.webSocketDebuggerUrl, 'Input.dispatchKeyEvent', { type: 'keyUp' });
+      await sleep(25);
+    }
+    if (pressEnter) {
+      await send(t.webSocketDebuggerUrl, 'Input.dispatchKeyEvent', { type: 'rawKeyDown', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, key: 'Enter', code: 'Enter' });
+      await send(t.webSocketDebuggerUrl, 'Input.dispatchKeyEvent', { type: 'char', text: '\r' });
+      await send(t.webSocketDebuggerUrl, 'Input.dispatchKeyEvent', { type: 'keyUp', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13, key: 'Enter', code: 'Enter' });
+    }
+    await sleep(200);
+    // 回读该元素自己的 value，而不是 document.activeElement —— 后者在弹窗/失焦时会指向别处
+    const r = await send(t.webSocketDebuggerUrl, 'Runtime.evaluate', {
+      expression: `(()=>{const e=document.querySelector(${JSON.stringify(sel)});return e?(e.id||e.tagName)+'='+String(e.value===undefined?e.innerText:e.value).slice(0,60):'(没了)')})()`,
+      returnByValue: true,
+    });
+    console.log('已输入 ' + text.length + ' 字；' + sel + ' = ' + ((r && r.result && r.result.value) || '(读不到)'));
+  },
+
+  /**
+   * clicktext <文字>：按**可见文字**点，找不到可见的可点元素就报出来，不瞎点。
+   *
+   * 收自 cdp9333.mjs 的同名命令。本工具的 click 必须吃选择器，而这个游戏大量按钮的
+   * onclick 内嵌中文名册，PowerShell 5.1 下引号常被吃掉；find 能定位、click 却点不着，
+   * 中间那一步手拼坐标很烦。clicktext 把「定位 + 报落点 + 点」并成一条。
+   * 用法：clicktext 突破
+   */
+  async clicktext() {
+    const needle = String(pos[1] === undefined ? '' : pos[1]);
+    if (!needle) { console.error('用法: clicktext <文字>'); return; }
+    const t = await requireLivePage();
+    const js = `(() => {
+      const n = ${JSON.stringify(needle)};
+      const el = [...document.querySelectorAll('button,[onclick],a,[role=button]')]
+        .filter(e => (e.innerText||e.textContent||'').trim().indexOf(n) >= 0 && e.offsetParent !== null)[0];
+      if (!el) return {ok:false, err:'没找到可见的含「'+n+'」的可点元素'};
+      el.scrollIntoView({block:'center'});
+      const r = el.getBoundingClientRect();
+      const x = Math.round(r.left + r.width/2), y = Math.round(r.top + r.height/2);
+      const top = document.elementFromPoint(x,y);
+      return {ok:true, x, y, label:(el.innerText||'').trim().replace(/\\s+/g,' ').slice(0,40),
+        hit: !!(top && (top === el || el.contains(top))),
+        topEl: top ? top.tagName+'.'+String(top.className).slice(0,40) : null};
+    })()`;
+    const [r] = await act(t, [{ method: 'Runtime.evaluate', params: { expression: js, returnByValue: true } }]);
+    const v = r && r.result && r.result.value;
+    const info = typeof v === 'string' ? JSON.parse(v) : v;
+    if (!info || !info.ok) { console.log(JSON.stringify(info, null, 2)); return; }
+    await clickAt(t, info.x, info.y);
+    await sleep(500);
+    console.log('已点「' + info.label + '」@(' + info.x + ',' + info.y + ')，落点命中=' + info.hit + '，落点元素=' + info.topEl);
   },
 
   /**

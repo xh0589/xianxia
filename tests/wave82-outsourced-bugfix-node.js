@@ -1,5 +1,5 @@
 /**
- * wave82-outsourced-bugfix-node.js — 第八十二波 · 外包核查修复批 验收：
+ * wave82-outsourced-bugfix-node.js — 第八十二波 · 核查修复批 验收：
  *   A 正式入袋账：堆叠入袋也发 item:obtained（任务计数不再瞎）、满包部分入袋如实报数、返回值真值兼容
  *   B 采药与渲染链：采药走 addItem 不再直写裸格子；裸格子遗毒有守卫（渲染/分类不再抛错）；读档 uid 条件覆盖
  *   C 灵泉取水：汲水真出一瓶灵泉水（事件齐）、余泽满照旧取水、背包满不扣精力；任务目标对准新物品
@@ -345,7 +345,7 @@ scanSeg(clinicSeg, 'clinic');
 eq(leak, null, 'J5 新话术零中英混排（漏: ' + leak + '）');
 assert(src('js/city-facilities/festival-fair.js').indexOf('先锁定玩家实际看到的这道题') >= 0, 'J6 灯谜修复有波次锚点');
 
-// ==================== K · 跨模块真链（外包验收要求#5：采集产物→正式背包→摊面按钮同款查找→出售） ====================
+// ==================== K · 跨模块真链（验收要求#5：采集产物→正式背包→摊面按钮同款查找→出售） ====================
 console.log('\n[K] 跨模块真链：采集入袋 → 摆摊出售');
 load('js/city-facilities/street-stall.js');
 var SS = global.StreetStall;
@@ -370,6 +370,6 @@ assert(global.inventory.currency.spiritStones > stonesBeforeK, 'K5 货款真入�
 eq(herbInst.count, 1, 'K6 货真离囊（二剩一）');
 try { SS.close(); } catch (eK) {}
 
-console.log('\n========== 第八十二波 · 外包核查修复批 ==========');
+console.log('\n========== 第八十二波 · 核查修复批 ==========');
 console.log('通过：' + passed + '　失败：' + failed);
 process.exit(failed ? 1 : 0);

@@ -121,18 +121,20 @@ console.log('\n[B] 成就点亮（按账亮、真发奖、不重复）');
     assert(ach('travel_regions5').isCompleted, 'B3 五域足迹：「行走山河」点亮');
     assert(!ach('travel_regions9').isCompleted, 'B4 五域不到九域：「踏遍九州」不亮（门槛是真的）');
     assert(!ach('travel_8000').isCompleted, 'B5 三百四十步不到八千里：「万里独行」不亮');
-    eq(wallet.stones - w0, 250, 'B6 灵石奖励真进钱包（50+80+120=250，走统一货币入口）');
-    eq((global.currentCharData.tempering || 0) - t0, 30, 'B7 历练奖励真落角色账（初出茅庐 30）');
+    // 奖励口径：游历这一路的成就只发历练（按稀有度：七品10 五品15 五品15），钱袋与名气一分不发
+    eq(wallet.stones - w0, 0, 'B6 点亮三枚游历成就：灵石分毫不动（旧版是 50+80+120=250）');
+    eq((global.currentCharData.tempering || 0) - t0, 40, 'B7 历练奖励真落角色账（七品10+五品15+五品15=40）');
     var fameSum = rewardCalls.slice(r0).reduce(function (a, c) { return a + (c.r.fame || 0); }, 0);
-    eq(fameSum, 13, 'B8 名气奖励走 RewardService 真账（5+8=13）');
+    eq(fameSum, 0, 'B8 名气一分钟都没走统一发放通道（旧版是 5+8=13）——成就墙只记名分');
     assert(rewardCalls.slice(r0).every(function (c) { return c.source === 'achievement'; }), 'B9 奖励来路记着「成就」（有名义）');
 
     // 不重复发
-    var w1 = wallet.stones, r1 = rewardCalls.length;
+    var w1 = wallet.stones, r1 = rewardCalls.length, t1 = global.currentCharData.tempering || 0;
     global.checkAchievementsNow();
     global.checkAchievementsNow();
     eq(wallet.stones, w1, 'B10 再查两轮：分文不重发（一生一次）');
     eq(rewardCalls.length, r1, 'B11 名气账也不重记');
+    eq(global.currentCharData.tempering || 0, t1, 'B11b 历练也不二次进账（老版这里会重发一次）');
 
     // 走一步当场点亮（钩子真接上：99 步 → 第 100 步）
     // 只把「初出茅庐」一枚压回未亮态重走（预设成就是共享实例，整表重置会连坐别枚的账）
@@ -152,11 +154,12 @@ console.log('\n[B] 成就点亮（按账亮、真发奖、不重复）');
 
     // 顶格两枚
     setTravel(9, 12, 8000);
-    var w2 = wallet.stones;
+    var w2 = wallet.stones, t2 = global.currentCharData.tempering || 0;
     global.checkAchievementsNow();
     assert(ach('travel_regions9').isCompleted, 'B16 九域踏遍：「踏遍九州」点亮');
     assert(ach('travel_8000').isCompleted, 'B17 八千里路：「万里独行」点亮');
-    eq(wallet.stones - w2, 400, 'B18 顶格两枚灵石入账（200+200）');
+    eq(wallet.stones - w2, 0, 'B18 顶格两枚：灵石分毫不动（旧版是 200+200=400）');
+    eq((global.currentCharData.tempering || 0) - t2, 65, 'B18b 顶格两枚只发历练（三品25+一品40=65）');
     assert(ach('travel_100').isCompleted && ach('travel_landmarks').isCompleted && ach('travel_regions5').isCompleted, 'B19 五枚全亮（一轮大游历走完该有的名分都在）');
 }
 

@@ -2,26 +2,29 @@
 // 功法熟练度、突破、领悟、境界质变、功法组合、心魔系统
 
 // ============ 功法熟练度等级 ============
+// v27.13：修复①-BUG-1 等级名三对重名（炉火纯青/登堂入室/出神入化），按主档候选序列重排 id2-7（id0/1/8/9 本就与序列一致未动）；数值/倍率/耗气一律未动；全库 grep 确认无按名匹配逻辑。
 const PROFICIENCY_LEVELS = [
     { id: 0, name: '初窥门径', multiplier: 1.0, qiCost: 0 },
     { id: 1, name: '略有小成', multiplier: 1.2, qiCost: 5 },
-    { id: 2, name: '炉火纯青', multiplier: 1.5, qiCost: 10 },
-    { id: 3, name: '登堂入室', multiplier: 1.8, qiCost: 20 },
-    { id: 4, name: '出神入化', multiplier: 2.2, qiCost: 30 },
-    { id: 5, name: '炉火纯青', multiplier: 2.5, qiCost: 50 },
-    { id: 6, name: '融会贯通', multiplier: 3.0, qiCost: 80 },
-    { id: 7, name: '登峰造极', multiplier: 3.5, qiCost: 120 },
+    { id: 2, name: '驾轻就熟', multiplier: 1.5, qiCost: 10 },
+    { id: 3, name: '炉火纯青', multiplier: 1.8, qiCost: 20 },
+    { id: 4, name: '融会贯通', multiplier: 2.2, qiCost: 30 },
+    { id: 5, name: '出类拔萃', multiplier: 2.5, qiCost: 50 },
+    { id: 6, name: '登峰造极', multiplier: 3.0, qiCost: 80 },
+    { id: 7, name: '心领神会', multiplier: 3.5, qiCost: 120 },
     { id: 8, name: '出神入化', multiplier: 4.0, qiCost: 180 },
     { id: 9, name: '返璞归真', multiplier: 5.0, qiCost: 300 }
 ];
 
 // ============ 功法熟练度5大阶段 ============
+// v27.13：①-改良-1 解锁效果文案换血（主档替稿）——面板话改人话，数值（+10%/+15%/+25%/+50%）照旧括里报；
+// 阶段名/图标/levels 区间一字未动（本表 unlockEffect 全仓无逻辑消费方，纯展示文案）。
 const PROFICIENCY_MASTERIES = [
-    { id: 1, name: '入门', icon: '🌱', color: 'text-gray-400', levels: [0, 1], unlockEffect: '基础效果激活，修炼效率+10%' },
-    { id: 2, name: '熟练', icon: '🌿', color: 'text-green-400', levels: [2, 3], unlockEffect: '新增连击效果，攻击+15%' },
-    { id: 3, name: '精通', icon: '🔥', color: 'text-blue-400', levels: [4, 5], unlockEffect: '新增附加效果' },
-    { id: 4, name: '大成', icon: '⭐', color: 'text-purple-400', levels: [6, 7], unlockEffect: '范围效果扩大，属性+25%' },
-    { id: 5, name: '化境', icon: '👑', color: 'text-red-400', levels: [8, 9], unlockEffect: '终极奥义解锁，全属性+50%' }
+    { id: 1, name: '入门', icon: '🌱', color: 'text-gray-400', levels: [0, 1], unlockEffect: '气血初通——一遍有一遍的收成（修炼效率+10%）' },
+    { id: 2, name: '熟练', icon: '🌿', color: 'text-green-400', levels: [2, 3], unlockEffect: '行气如常——真气走的路比昨日直了些（攻击+15%）' },
+    { id: 3, name: '精通', icon: '🔥', color: 'text-blue-400', levels: [4, 5], unlockEffect: '闭目见脉——不看书诀，手自己知道往哪放' },
+    { id: 4, name: '大成', icon: '⭐', color: 'text-purple-400', levels: [6, 7], unlockEffect: '一气贯通——功法长进了肉里，忘不掉了（属性+25%）' },
+    { id: 5, name: '化境', icon: '👑', color: 'text-red-400', levels: [8, 9], unlockEffect: '人功合一——这门功夫已是你，你就是这门功夫（全属性+50%）' }
 ];
 function getProficiencyMastery(skillId) {
     var info = proficiencyData[skillId];
@@ -42,8 +45,23 @@ function getMasteryProgress(skillId) {
     var posInStage = level - stageStart;
     return Math.min(100, Math.floor((posInStage + 1) / stageRange * 100));
 }
+// v27.13：①-漏洞-2 训练领悟纯随机无因果——"悟"有两套逻辑（这里一套掷骰、悟道树一套账本），悟道树攒的道心不进公式。
+// 修法（主档口径）：触发率 = 0.05 + 道心/200，让道心进公式。
+// 道心账＝悟道树六维里的"道心"一线：enlightenment-tree.js 的 will 节点（道心初固，意志+5）与
+// profound 节点（道心通明，六维各+5 含意志+5）——经 window.getEnlightenmentBonus() 汇出的
+// willpower 加成即道心值（5=初固，10=通明满账）。触发率两档：初固 0.075 / 通明 0.10，无道心 0.05 照旧。
+// 兜底：树未加载（getEnlightenmentBonus 读不到/抛错/道心不在册）时道心按 0 记，退回 5% 照旧掷骰，不挡修炼。
 function triggerTrainingInsight(skillId) {
-    if (Math.random() < 0.05) {
+    var _daoHeart = 0;
+    try {
+        var _bonus = (typeof window.getEnlightenmentBonus === 'function') ? window.getEnlightenmentBonus() : null;
+        if (_bonus && Number.isFinite(Number(_bonus.willpower))) _daoHeart = Math.max(0, Number(_bonus.willpower));
+    } catch (e) {
+        console.warn('[静默失败] js/cultivation/cultivation.js · triggerTrainingInsight：悟道树道心读不到，按 0 记（触发率退回 5%）', e && e.message);
+    }
+    var _chance = 0.05 + _daoHeart / 200;
+    if (_chance > 0.5) _chance = 0.5; // 防御封顶：道心账日后扩表，"领悟"也不许变"顿顿悟"
+    if (Math.random() < _chance) {
         var texts = ['你突然领悟了这门功法的精髓所在！', '天地灵气与你共鸣，你感到功法境界有所提升。', '你回忆起师父的教诲，对功法有了新的理解。'];
         var text = texts[Math.floor(Math.random() * texts.length)];
         if (window.showMessage) window.showMessage('💡 ' + text, 'success');
@@ -518,6 +536,17 @@ function updateCultivationUI() {
                     '</div></div>';
             }
         }
+        // v27.6 大业收官：大业名册（科举→城主→称帝 / 传教→土地公 / 自创功法·著经·比武大会）——一生一回的里程碑总门
+        if (window.GrandLegacy && typeof window.GrandLegacy.open === 'function') {
+            var _gl = window.GrandLegacy.state ? window.GrandLegacy.state() : {};
+            var _glDone = (_gl.examPassed && _gl.examPassed[3] ? 1 : 0) + (_gl.office ? 1 : 0) + (_gl.emperor ? 1 : 0)
+                + (_gl.faith ? 1 : 0) + (_gl.earthgod ? 1 : 0) + (_gl.art ? 1 : 0) + (_gl.scripture ? 1 : 0) + (_gl.tourDone ? 1 : 0);
+            html += '<div class="bg-purple-900/30 p-3 rounded border border-purple-600/50 flex items-center justify-between">' +
+                '<div><span class="text-lg">🏛️</span><span class="font-bold text-purple-300 ml-2">大业名册</span>' +
+                '<span class="text-xs text-purple-200 ml-2">一生一回的大事业 · 已就 ' + _glDone + ' 桩' + (_gl.emperor ? ' · 已面南称孤' : _gl.office ? ' · 一城之主' : '') + '</span></div>' +
+                '<button onclick="window.openGrandLegacy()" class="bg-purple-600 hover:bg-purple-500 text-white px-3 py-1 rounded text-xs">' + (_glDone ? '翻看名册' : '看有哪些大业') + '</button>' +
+                '</div>';
+        }
         // 1.8 本命法宝：金丹+可炼制，喂材料升级，战斗加成随等级
         if (_tier >= 3) {
             var _ba = window.currentCharData && window.currentCharData._bondedArtifact;
@@ -528,17 +557,49 @@ function updateCultivationUI() {
                     '<button onclick="window.forgeBondedArtifact()" class="bg-yellow-600 hover:bg-yellow-500 text-gray-900 px-3 py-1 rounded text-xs">凝聚炼制</button>' +
                     '</div>';
             } else {
-                // v25.5 器灵养成：3 阶可唤醒，唤醒后能交感——器灵等级进同一战斗乘区（+2%/级）
+                // 器灵养成：唤醒有三道门（阶数 / 材料档位 / 主人因果），门门上脸（禁止设计 #2：锁就亮锁、写清为什么锁）
+                //   ★ 判据一律读 window.spiritAwakenReadiness()，本处不再自己拿 level >= 3 瞎判断——
+                //   阶数够而只喂过凡铁级料时，旧写法会说「可唤醒」，真点却被材料门拒（凡铁不该有灵）。
                 var _sp = _ba.spirit;
-                var _spTxt = (_sp && _sp.awakened)
-                    ? ' · 器灵「' + _sp.name + '」' + _sp.level + '级（' + (_sp.exp||0) + '/' + (_sp.expMax||50) + '）'
-                    : ((_ba.level >= 3) ? ' · 灵性已足，器灵可唤醒' : '');
-                var _spBtn = (_sp && _sp.awakened)
-                    ? '<button onclick="window.communeWithSpirit()" class="bg-yellow-800 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs">器灵交感</button>'
-                    : ((_ba.level >= 3) ? '<button onclick="window.awakenArtifactSpirit()" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded text-xs">唤醒器灵</button>' : '');
+                var _spTxt = '', _spGate = '', _spBtn = '';
+                var _gTxt = (window.SPIRIT_GRADE_TEXT && window.SPIRIT_GRADE_TEXT.length)
+                    ? window.SPIRIT_GRADE_TEXT : ['粗铁级', '下品级', '中品级', '上品级', '珍品级', '五行级'];
+                if (_sp && _sp.awakened) {
+                    // 器灵已醒：另一套文案（器灵等级进同一战斗乘区，每级 +2%）
+                    _spTxt = ' · 器灵「' + _sp.name + '」' + _sp.level + '级（' + (_sp.exp||0) + '/' + (_sp.expMax||50) + '）';
+                    _spBtn = '<button onclick="window.communeWithSpirit()" class="bg-yellow-800 hover:bg-yellow-700 text-white px-3 py-1 rounded text-xs">器灵交感</button>';
+                } else {
+                    var _rdy = (typeof window.spiritAwakenReadiness === 'function') ? window.spiritAwakenReadiness() : null;
+                    if (_rdy) {
+                        var _gMat = _rdy.legacyNoMats
+                            ? '✓ 材料：无料可考（旧器未喂料，本回从旧例放行）'
+                            : (_rdy.gradeOk
+                                ? '✓ 材料：' + _gTxt[_rdy.grade] + (_rdy.gradeName ? '·' + _rdy.gradeName : '') + '，够格起灵'
+                                : '🔒 材料：只吃过' + (_gTxt[_rdy.grade] || '粗铁级') + (_rdy.gradeName || '')
+                                    + '，器灵不启（需' + (_gTxt[_rdy.gradeNeed] || '上品级') + '：秘银/雷晶/妖丹/龙骨/陨铁）');
+                        var _gKar = _rdy.karmaOk
+                            ? '✓ 因果：' + _rdy.karma + '（' + _rdy.karmaText + '），主人无逆理之谋'
+                            : '🔒 因果：业果太深（' + _rdy.karma + '·' + _rdy.karmaText + '），器灵闭目不睁（需 ≥ ' + _rdy.karmaNeed + '）';
+                        var _gLv = _rdy.levelOk
+                            ? '✓ 阶数：' + _rdy.level + '/' + _rdy.levelNeed
+                            : '🔒 阶数：' + _rdy.level + '/' + _rdy.levelNeed + '，喂材料再升 ' + (_rdy.levelNeed - _rdy.level) + ' 阶';
+                        _spGate = '<div class="mt-1 text-xs leading-5 text-yellow-200/90">' + _gMat + '<br>' + _gKar + '<br>' + _gLv + '</div>';
+                        if (_rdy.ok) {
+                            _spTxt = ' · 灵性已足，器灵可唤醒';
+                            _spBtn = '<button onclick="window.awakenArtifactSpirit()" class="bg-amber-600 hover:bg-amber-500 text-white px-3 py-1 rounded text-xs">唤醒器灵</button>';
+                        } else {
+                            // 门未齐：亮锁 + 把缺哪道门、要什么写死在面板上（不藏栏、不谎称可用）
+                            _spTxt = ' · 器灵未醒（门未齐）';
+                            _spBtn = '<button disabled title="' + _rdy.why + '" class="bg-gray-800 text-gray-500 cursor-not-allowed px-3 py-1 rounded text-xs">🔒 唤醒器灵 · 门未齐</button>';
+                        }
+                    } else {
+                        // 读口缺席：既不说可用、也不藏栏，只说清为什么这一栏没细账
+                        _spTxt = ' · 器灵未醒（觉醒资格读口未在位，无细账）';
+                    }
+                }
                 html += '<div class="bg-yellow-900/30 p-3 rounded border border-yellow-600/50 flex items-center justify-between">' +
                     '<div><span class="text-lg">🔱</span><span class="font-bold text-yellow-400 ml-2">' + _ba.name + '</span>' +
-                    '<span class="text-xs text-yellow-300 ml-2">' + _ba.level + '阶 · 经验' + (_ba.exp||0) + '/' + (_ba.expMax||50) + ' · 攻防+' + ((_ba.level-1)*5) + '%' + _spTxt + '</span></div>' +
+                    '<span class="text-xs text-yellow-300 ml-2">' + _ba.level + '阶 · 经验' + (_ba.exp||0) + '/' + (_ba.expMax||50) + ' · 攻防+' + ((_ba.level-1)*5) + '%' + _spTxt + '</span>' + _spGate + '</div>' +
                     '<div class="flex gap-2">' + _spBtn +
                     '<button onclick="window.feedArtifact()" class="bg-yellow-700 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs">喂材料</button>' +
                     '</div></div>';
@@ -804,58 +865,60 @@ function openCultivationUI() {
 
 // 境界质变效果定义
 // 9境界质变效果（炼气→筑基→金丹→元婴→化神→炼虚→合体→大乘→渡劫）
+// v27.13：①-改良-2 九境一句话换血——"此身何变"：名称/描述改人话（化神/金丹/元婴/渡劫用主档替稿，
+// 炼气/筑基/炼虚/合体/大乘按同风格自拟），机制尾句原文照搬；icon/bonuses 一字未动（飞升/金仙两境不在本批，未动）。
 var REALM_UNIQUE_EFFECTS = {
     '炼气': {
-        name: '灵气感应',
-        desc: '能感知天地灵气流动，采集效率+20%',
+        name: '气感初生',
+        desc: '你第一次听见天地在呼吸——能感知天地灵气流动，采集效率+20%',
         icon: '👁️',
         bonuses: { gathering: 1.2, herb: 1.2 }
     },
     '筑基': {
-        name: '御物术',
-        desc: '以气御物，隔空取物，远程攻击+15%',
+        name: '随手拈来',
+        desc: '气第一次离开身子，替你做事——以气御物，隔空取物，远程攻击+15%',
         icon: '🌀',
         bonuses: { remote_attack: 1.15, speed: 1.1 }
     },
     '金丹': {
-        name: '金丹护体',
-        desc: '金丹自动护主，受伤时15%概率完全格挡',
+        name: '丹成一粒',
+        desc: '气海有了核，散了也能聚回来——金丹自动护主，受伤时15%概率完全格挡',
         icon: '🛡️',
         bonuses: { block: 15, defense: 1.15 }
     },
     '元婴': {
-        name: '元婴出窍',
-        desc: '元婴可离体探索，获得额外视野和感知能力，神识范围100～300丈',
+        name: '元婴坐镇',
+        desc: '肉身毁了，还有你——元婴可离体探索，获得额外视野和感知能力，神识范围100～300丈',
         icon: '🌟',
         bonuses: { exploration: 1.3, dodge: 1.1 }
     },
     '化神': {
-        name: '领域展开',
-        desc: '战斗时展开领域，压制敌人全属性10%，神识范围300～1000丈',
+        name: '神游物外',
+        desc: '你闭眼，世界替你看——战斗时展开领域，压制敌人全属性10%，神识范围300～1000丈',
         icon: '⚡',
         bonuses: { attack: 1.2, penetrate: 15 }
     },
     '炼虚': {
-        name: '虚空融合',
-        desc: '灵力与虚空融合，空间感知+法则碎片，神识范围1000～3000丈',
+        name: '踏虚而行',
+        desc: '身子淡了半分，天地却近了——灵力与虚空融合，空间感知+法则碎片，神识范围1000～3000丈',
         icon: '🌀',
         bonuses: { teleport_cost: 0.5, speed: 1.2, space_damage: 1.25 }
     },
     '合体': {
         name: '法天象地',
-        desc: '法身与元神一体，领域展开·言出法随，神识范围3000～10000丈',
+        desc: '站着就是山，抬手就是法——法身与元神一体，领域展开·言出法随，神识范围3000～10000丈',
         icon: '🗿',
         bonuses: { attack: 1.3, defense: 1.3, health: 1.3 }
     },
     '大乘': {
         name: '天人感应',
-        desc: '天机推演+法则掌控，预知危险，闪避率+20%，暴击率+15%',
+        desc: '天要下雨，你先知道——天机推演+法则掌控，预知危险，闪避率+20%，暴击率+15%',
         icon: '🔮',
         bonuses: { dodge: 20, crit: 15, cultivation: 1.2 }
     },
     '渡劫': {
-        name: '渡劫飞升',
-        desc: '天劫对抗，飞升之门开启，千里感知，全属性大幅提升',
+        name: '只欠东风',
+        desc: '就差那一道雷——天劫对抗，飞升之门开启，千里感知，全属性大幅提升',
         icon: '⚡',
         bonuses: { attack: 1.5, defense: 1.5, block: 25, penetrate: 25 }
     },
@@ -1112,8 +1175,13 @@ var MERGED_SAVE_KEY = 'xianxia_merged_skills';
 var _MERGE_EFFECT_TEXT = {
     sword: '剑法伤害', dao: '刀法伤害', fist: '拳掌伤害', spear: '枪法伤害', odd: '奇门伤害',
     attack: '攻击', defensePct: '防御', dodgePct: '闪避', critPct: '暴击',
-    qiRegen: '真气恢复', hpRegen: '生命恢复', maxQiPct: '真气上限'
+    qiRegen: '真气恢复', hpRegen: '生命恢复', maxQiPct: '真气上限',
+    // 第一批·词表补齐后新增的百分点键（源串一律带 %，故仍走上面那档）
+    lifesteal: '吸血', venom: '毒系伤害', allElem: '全系伤害'
 };
+// 点数键：源串不带 %（反击+20 / 闪避+45）。混进上面那档会被写成「反击+30%」——
+// 点数与百分点是两个通道，串错了就是两把尺打架，故单列一档。
+var _MERGE_FLAT_TEXT = { counter: '反击', dodge: '闪避' };
 var _MERGE_ELEM_TEXT = { fire: '火系', ice: '冰系', water: '水系', metal: '金系', wood: '木系', earth: '土系', thunder: '雷系', wind: '风系', void: '暗系' };
 
 function _skillIsMastered(id) {
@@ -1161,6 +1229,7 @@ function _composeMergedEffect(s1, s2) {
     var parts = [];
     for (var k in merged) {
         if (_MERGE_EFFECT_TEXT[k]) parts.push(_MERGE_EFFECT_TEXT[k] + '+' + merged[k] + '%');
+        else if (_MERGE_FLAT_TEXT[k]) parts.push(_MERGE_FLAT_TEXT[k] + '+' + merged[k]);
         else if (k.indexOf('elem_') === 0 && _MERGE_ELEM_TEXT[k.slice(5)]) parts.push(_MERGE_ELEM_TEXT[k.slice(5)] + '伤害+' + merged[k] + '%');
     }
     return parts.length ? parts.join('，') : '攻击+8%';
@@ -1194,6 +1263,45 @@ function _registerMergedSkill(def) {
         }
     }
     _markSkillLearned(def.id);
+}
+
+// 换档重来：把「上一局」留在功法表里的注册表条目摘干净，由读档方再按本档账回册。
+//
+// 为什么要有这一步：rehydrateMergedSkills 在**页面加载时**就跑过一次，把当时 localStorage 里的
+// def 全塞进 window.skillPages。skillPages 本身不随存档往返（equipment.js:221 的 const 表 + :660 挂上），
+// 所以切档只换 localStorage、换不掉这张内存表 —— 上一局的融合/自创功法名就和新档的一起挂在功法册里，
+// 看着乱，canEquip 也过不去（def 不在新档的知识账里）。
+//
+// 命名规则（purge 的判据就是它，不是拍脑袋）：
+//   · merged_     —— 本文件 :1240 合成：'merged_' + [skill1Id, skill2Id].sort().join('_')
+//   · legacyart_  —— grand-legacy.js:438 合成：'legacyart_' + absDay()
+// 两个都是 xianxia_merged_skills 这一本注册表的两个写入方（grand-legacy.js:455「注册走融合功法同一本账」），
+// rehydrateMergedSkills 把两族一起灌进 skillPages ⇒ 跨档污染也是两族一起来，只清一族等于漏一半。
+// 全工程**没有任何一处**用字面量定义这两个前缀的 id（普查过 js/ 全树，0 处），所以按前缀清
+// 绝无可能误伤玩家正当学到的原版功法——equipment.js 里 148 个功法 id 的前缀只有
+// acc1/acc2/body/feet/hands/head/mainHand/move/neck/offHand/ring1/ring2/skill/waist，一个都不沾边。
+var LEDGER_SKILL_ID_PREFIXES = ['merged_', 'legacyart_'];
+function _isLedgerSkillId(id) {
+    if (!id) return false;
+    var s = String(id);
+    for (var i = 0; i < LEDGER_SKILL_ID_PREFIXES.length; i++) {
+        if (s.indexOf(LEDGER_SKILL_ID_PREFIXES[i]) === 0) return true;
+    }
+    return false;
+}
+// 把 skillPages 里的注册表条目整体摘掉（倒序 splice，不动数组身份——equipment.js:660 挂出去的是同一个引用）
+function _purgeLedgerSkillDefsFromPages() {
+    var pages = window.skillPages;
+    if (!Array.isArray(pages)) return 0;
+    var n = 0;
+    for (var p = 0; p < pages.length; p++) {
+        var page = pages[p];
+        if (!Array.isArray(page)) continue;
+        for (var i = page.length - 1; i >= 0; i--) {
+            if (page[i] && _isLedgerSkillId(page[i].id)) { page.splice(i, 1); n++; }
+        }
+    }
+    return n;
 }
 
 // 重载回册：注册表存的是完整 def，刷新后重建进功法表与知识账（与存档里的 learnedSecrets 双保险）

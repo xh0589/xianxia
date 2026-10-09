@@ -129,7 +129,19 @@ ok(/locationSystem\.currentLocation = '帝都·长安'/.test(appSrc), '⑤ start
     w.getCurrentCharData = () => ({ realm, layer, attrs: { strength: 20, dexterity: 20, intelligence: 10, willpower: 10, constitution: 20, meridian: 10 }, combatSkills: {} });
     const sandbox = { window: w, console: { log() {}, warn() {}, error() {} } };
     vm.createContext(sandbox);
+    // 装**真尺**：js/combat-stats.js 的境界加成已改为借 window.REALM_ORDER（不再自抄九档表），
+    // 本沙箱原先没装尺，测的其实是「尺缺席时」那条降级支路——生产页面上不存在。
+    // 尺从**真文件原文**里切出来执行（不手抄第二张序，尺改了本套件自动跟）。
+    const guSrc = load('js/global-utils.js');
+    const orderM = guSrc.match(/var REALM_ORDER = \[[^\]]*\];/);
+    const idxM = guSrc.match(/window\.realmIndex = function \(realm\) \{[\s\S]*?\n {4}\};/);
+    ok(!!orderM && !!idxM, '⑥ 真尺能从 js/global-utils.js 原文里切出来（否则本段测的不是生产路径）');
+    if (orderM && idxM) {
+        vm.runInContext('(function(){' + orderM[0] + 'window.REALM_ORDER = REALM_ORDER;' + idxM[0] + '})()', sandbox, { filename: 'realm-ruler' });
+    }
     vm.runInContext(load('js/combat-stats.js'), sandbox, { filename: 'combat-stats.js' });
+    ok(Array.isArray(w.REALM_ORDER) && w.REALM_ORDER.indexOf('飞升') > 0 && w.REALM_ORDER.indexOf('金仙') > 0,
+        '⑥ 尺上飞升/金仙都在（十二境）');
     const base = w.getDerivedCombatStats(null);
     realm = '炼气'; layer = 2;
     const qi2 = w.getDerivedCombatStats(null);
@@ -143,9 +155,20 @@ ok(/locationSystem\.currentLocation = '帝都·长安'/.test(appSrc), '⑤ start
     ok(gold.toughness > base.toughness, '⑥ 金丹三层韧性高于炼气一层');
     ok(baby.attack > gold.attack && baby.defense > gold.defense, '⑥ 元婴全面强于金丹（境界单调递增）');
     ok(qi2.attack > base.attack, '⑥ 同境界升层也有小幅成长');
+    // 顶端两档：旧式自抄表断在渡劫 ⇒ 飞升/金仙 境界加成整项归零（实测 atk10/def6，渡劫一层 43/31）
+    realm = '渡劫'; layer = 1;
+    const duJie = w.getDerivedCombatStats(null);
+    realm = '飞升'; layer = 1;
+    const feiSheng = w.getDerivedCombatStats(null);
+    realm = '金仙'; layer = 1;
+    const jinXian = w.getDerivedCombatStats(null);
+    ok(feiSheng.attack > duJie.attack && feiSheng.defense > duJie.defense,
+        '⑥ 飞升一层攻防高于渡劫一层（' + feiSheng.attack + '/' + feiSheng.defense + ' vs ' + duJie.attack + '/' + duJie.defense + '）');
+    ok(jinXian.attack > feiSheng.attack && jinXian.defense > feiSheng.defense,
+        '⑥ 金仙一层攻防高于飞升一层（' + jinXian.attack + '/' + jinXian.defense + ' vs ' + feiSheng.attack + '/' + feiSheng.defense + '）');
     // 非玩家实体不吃境界加成
     const npcBefore = w.getDerivedCombatStats({ type: 'npc', attrs: { strength: 20, dexterity: 20, intelligence: 10, willpower: 10, constitution: 20, meridian: 10 }, skills: {}, toughness: null });
-    realm = '渡劫'; layer = 9;
+    realm = '金仙'; layer = 9;
     const npcAfter = w.getDerivedCombatStats({ type: 'npc', attrs: { strength: 20, dexterity: 20, intelligence: 10, willpower: 10, constitution: 20, meridian: 10 }, skills: {}, toughness: null });
     ok(npcBefore.attack === npcAfter.attack, '⑥ 境界加成只作用于玩家，NPC 不受玩家境界影响');
 }

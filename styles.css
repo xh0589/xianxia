@@ -236,6 +236,9 @@ input[type=number]::-webkit-outer-spin-button {
     stroke: #fbbf24;
     stroke-width: 2;
 }
+ /* 兜底：窄屏必藏（html 层 xl:flex 之外再钉一道） */
+}
+
 /* 丹田特殊hover */
 #body-dantian:hover {
     filter: brightness(1.6);
@@ -255,4 +258,117 @@ input[type=number]::-webkit-outer-spin-button {
 .durability-legend-block {
     flex: 1;
     height: 100%;
+}
+
+/* ===== 查看人体=人体进窗内左右两侧（用户批 2026-10-03 08:32） =====
+   三轮迭代定案：22:52 窗外贴片（否）→ 23:13 底部展开拉宽（否：怎么又做回底部）
+   → 今晨定案：人体在窗内左右两侧（左=我方 hudl-battle- 克隆、右=敌方
+   hudr-battle- 克隆），窗因两侧而宽（75rem/1200px）；底部 battle-body-view
+   保留为精读账，其让位规则（ui-craft.css 第 11 节 TA 旧规）原样不动。
+   撤掉的 23:13 让位系（readout 收 160/foot 帽 22vh/view 吃剩余）已删。 */
+.battle-modal-wide { max-width: 75rem !important; }
+
+/* 左右人体栏（09:05 终版）：300px 定宽；SVG 上限 ~44vh，
+   SVG 底下=汇总行+22 部位耐久数字账（2 列紧凑格，flex-1 滚）。
+   左栏含 party 队员切换钮族（战斗带队友时可换看队员躯体）。 */
+.battle-side {
+    display: flex;
+    flex-direction: column;
+    padding: 0 8px;
+    min-height: 0;
+    border-left: 1px solid #374151;
+}
+#battle-side-enemy { border-left: 0; border-right: 1px solid #374151; }
+.battle-side-head {
+    font-size: 12px;
+    color: #fbbf24;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px;
+    padding: 4px 0;
+    border-bottom: 1px solid #374151;
+    white-space: nowrap;
+}
+.battle-side-party { display: inline-flex; gap: 2px; overflow-x: auto; }
+.battle-side-party button {
+    font-size: 10px;
+    color: #d1d5db;
+    background: #4b5563;
+    border: 0;
+    border-radius: 4px;
+    padding: 1px 6px;
+    cursor: pointer;
+}
+.battle-side-svg {
+    flex: 0 0 auto;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 0;
+}
+.battle-side-svg svg { width: auto !important; height: auto !important; max-width: 100%; max-height: 44vh; }
+/* ↑ !important 压掉源 SVG 的 inline width:160px（栏版人体按 44vh 撑大显示） */
+.battle-side-svg .party-member-svg svg { width: 100%; height: auto; }
+.battle-side-svg .party-member-svg p { font-size: 10px; color: #9ca3af; text-align: center; margin: 0 0 2px; }
+.battle-side-sum {
+    font-size: 12px;
+    text-align: center;
+    padding: 4px 0;
+    border-top: 1px solid #374151;
+    white-space: nowrap;
+}
+.battle-side-sum--ok { color: #22c55e; }
+.battle-side-sum--warn { color: #fbbf24; }
+.battle-side-sum--bad { color: #ef4444; }
+.battle-side-list {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 6px;
+    padding: 4px 2px;
+}
+.battle-side-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(55, 65, 81, 0.45);
+    border-radius: 4px;
+    padding: 1px 5px;
+}
+.battle-side-list-label { font-size: 10px; color: #d1d5db; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.battle-side-list-num { font-size: 10px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ===== 状态卡紧凑行（用户批 2026-10-03 08:32：精力/真气/心情三卡合一） =====
+   旧态：三张整格卡各放一条 3px 进度条（大量留白），所在地/时间也是两整格。
+   改：一卡多行，每行=标签+细条+数字一行排（卡数 8→5，md:col-span-2 吃两列）。 */
+.stat-compact-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 0;
+}
+.stat-compact-row + .stat-compact-row {
+    border-top: 1px solid rgba(75, 85, 99, 0.5);
+}
+.stat-compact-label {
+    flex-shrink: 0;
+    width: 4.5em;
+    text-align: left;
+}
+.stat-compact-track {
+    flex: 1;
+    min-width: 0;
+    height: 6px;
+    background: #4b5563;
+    border-radius: 3px;
+    overflow: hidden;
+}
+.stat-compact-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.3s ease;
 }

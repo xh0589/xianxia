@@ -92,7 +92,20 @@ eq(copper(), 500, 'A3 应募不要钱（东家不收份子）');
 eq(global.inventory.currency.spiritStones, 1000, 'A4 灵石也分毫不动');
 assert(logCount('25 铜') >= 1, 'A5 上工册回执报工钱');
 reset('炎城');
-eq(CJ.jobsHere('炎城').length, 0, 'A6 集市城没有长活岗（岗跟着建筑走）');
+// ★2026-10-04 由「炎城零岗」改为「炎城的岗＝名册里挂在炎城实有建筑上的那些」（B 类·判据过时）★
+// 原判据：`jobsHere('炎城').length === 0` —— 拿炎城当「一岗没有」的反证城。
+// 现判据：反证城换成**真的一岗没有**的太虚山（它的建筑是 cultivation / temple，一个都不在岗表里）；
+//   炎城则按规则本身判——它的建筑是 market / inn，名册里挂在这两样上的岗一个都不能少、一个都不许多。
+// 为什么该改——先查清「为什么变」：差事名册从四行扩到十三行（「岗跟着城里实有的建筑走，一个键不添」），
+//   新行里有 `guide 向导带路`（building: `inn`，日薪 35）。本测试自己的 CITY_DB 里炎城正是
+//   `['market', 'inn']`——炎城有客栈，于是它现在**理应**有一岗。原判据量的是一个已经不存在的事实。
+// 纪律本身没破：`jobsHere`（city-jobs.js:193）仍然是「JOBS 里 building 落在本城建筑表内的那些」，
+//   一行都没改。所以这里改成按规则判，并**另立一条真反证**（太虚山零岗），覆盖面比原来只多不少。
+var 炎城岗 = CJ.jobsHere('炎城').map(function (j) { return j.key; });
+eq(炎城岗.join(','), 'guide', 'A6 炎城（market+inn）只有「向导带路」这一岗——名册挂 inn 的行都到齐、没有多出没有的');
+reset('太虚山');
+eq(CJ.jobsHere('太虚山').length, 0, 'A6b 真反证：太虚山（cultivation+temple，一个都不在岗表里）真的零岗——'
+    + '「岗跟着建筑走」这条纪律仍在，不是名册一扩就没处钉了');
 eq(CJ.apply('shop_assistant'), false, 'A7 没岗的城应募被拒');
 assert(msgCount('差事跟着铺面走') >= 1, 'A8 拒得有话');
 reset('太虚山');
@@ -272,7 +285,13 @@ reset('洛水城');
 var ph = CJ.panelHtml('洛水城');
 assert(ph.indexOf('寻个差事') >= 0 && ph.indexOf('CityJobs.open()') >= 0, 'F1 有岗的城挂招工口');
 reset('炎城');
-eq(CJ.panelHtml('炎城'), '', 'F2 没岗没差事——面板一个字不占');
+// ★2026-10-04 同 A6：反证城换太虚山★。炎城现在有「向导带路」（它有客栈），
+//   按 city-jobs.js:452 的门（`!jobsHere(ct).length && !gigsHere(ct)` 才返回空串）它理应挂出入口。
+//   「没岗没差事——面板一个字不占」这一条**没有消失**，它搬到 F3（太虚山）上继续钉着，
+//   本条改成钉住新设计：城里有岗就挂入口，且挂的是招工口那一枚。
+assert(CJ.panelHtml('炎城').indexOf('寻个差事') >= 0 && CJ.panelHtml('炎城').indexOf('CityJobs.open()') >= 0,
+'F2 有岗的城挂招工口（炎城如今有「向导带路」——原判据拿它当零岗反证城，前提已经不成立）；'
++ '「一个字不占」那一条由 F3（太虚山）继续钉着');
 reset('太虚山');
 eq(CJ.panelHtml('太虚山'), '', 'F3 仙山静默');
 reset('洛水城');
@@ -295,7 +314,26 @@ assert(locSrc.indexOf('window.CityJobs.panelHtml(cityName)') >= 0 && locSrc.inde
 // ==================== G · 哨兵 ====================
 console.log('\n[G] 哨兵（新账干净）');
 var src = fs.readFileSync(path.join(ROOT, 'js/city-facilities/city-jobs.js'), 'utf8');
-eq((src.match(/Math\.random/g) || []).length, 0, 'G1 营生全程零骰（工钱、涨工、辞人全是定数）');
+// ★2026-10-04 由「全文件零 Math.random」改为「工钱/涨工/辞人零骰，外快那一笔走播种桥」（B 类·判据过时）★
+// 原判据：整个 city-jobs.js 里 `Math.random` 出现 0 次。
+// 现判据：① 全文只有一处 `Math.random`，且必须是**播种桥**（先问 window.__scenarioRng）；
+//   ② 那四行原有长活的工钱路径上一颗骰都没有（JOBS 里不许带 perk）——工钱、涨工、辞人三件仍是定数；
+//   ③ 外快那一笔（`if (j.perk)`）走的是同一把播种桥，且源码里自带一行明账说明。
+// 为什么该改——先查清「为什么变」：名册扩行时给部分差事加了 `perk`（外快/红包/记功），
+//   city-jobs.js:280 自己写着：「v27.3 反转位外快：工钱仍是定数（零骰纪律不破），
+//   红包/记功是引擎骰的额外一笔——明账写在差事行里」。
+//   于是「零骰」这条纪律的**对象**从来不是「一笔都不能掷」，而是「工钱不许靠骰子」；
+//   原判据按字面扫文件，把那把**播种桥**也数进去了（`__scenarioRng` 优先，裸 Math.random 只是兜底）。
+// 收紧处：不是把计数放宽成「≤1 就算过」。逐项都钉：全文恰好一处、那一处必须先问播种源、
+//   原有四岗一个都不许带 perk（谁给「铺子伙计」挂个外快，这条立刻红）。
+eq((src.match(/Math\.random/g) || []).length, 1, 'G1 全文只有一处 Math.random（外快与两门大差事共用的那一把播种桥）');
+assert(/function\s+dice\s*\(\)\s*\{\s*return\s*\(typeof window\.__scenarioRng === 'function'\)\s*\?\s*window\.__scenarioRng\(\)\s*:\s*Math\.random\(\);/.test(src),
+'G1a 那一处是**播种桥**（先问 window.__scenarioRng，裸 Math.random 只是没播种源时的兜底）——不是随手一个裸骰');
+var 原有四岗 = ['shop_assistant', 'tutor', 'clinic_helper', 'night_watch'];
+eq(原有四岗.filter(function (k) { return !!(CJ.JOBS[k] && CJ.JOBS[k].perk); }).length, 0,
+'G1b 原有四岗一个都没挂外快——工钱、涨工、辞人三件仍是定数（外快只加在新行上，且是额外一笔）');
+assert(src.indexOf('工钱仍是定数') >= 0 && src.indexOf('if (j.perk)') >= 0 && src.indexOf('dice() < j.perk.p') >= 0,
+'G1c 外快那一笔在源码里自带明账（写着「工钱仍是定数」+ perk 闸 + 播种骰），不是悄悄加的一笔');
 assert(src.indexOf('localStorage') < 0 && src.indexOf('saveWildState') < 0 && src.indexOf('wildState') < 0, 'G2 零直写存档（工账是角色单字段）');
 assert(src.indexOf('insightPoints') < 0 && src.indexOf('markOnce') < 0, 'G3 悟道点零发放（总闸已满）');
 assert(src.indexOf('addCopper') < 0 && src.indexOf('addSpiritStones') < 0 && src.indexOf('.credit(') < 0, 'G4 零直接发票子（工钱只走统一结算）');
@@ -312,14 +350,43 @@ var leak = null;
 eq(leak, null, 'G5 营生话术零拉丁（漏: ' + leak + '）');
 var htmlSrc = fs.readFileSync(path.join(ROOT, '仙侠.html'), 'utf8');
 assert(htmlSrc.indexOf('js/city-facilities/city-jobs.js') > htmlSrc.indexOf('js/city-facilities/city-lodging.js'), 'G6 页面挂载在赁屋之后（同批新账排一处）');
-var maxWage = 0;
-for (var jk in CJ.JOBS) maxWage = Math.max(maxWage, CJ.JOBS[jk].wage);
-eq(maxWage, 45, 'G7 顶薪四十五铜（封顶后五十八——营生路不是印钞路）');
+var maxWage = 0, topJob = null;
+for (var jk in CJ.JOBS) if (CJ.JOBS[jk].wage > maxWage) { maxWage = CJ.JOBS[jk].wage; topJob = jk; }
+// ★2026-10-04 由四十五铜改为五十五铜（B 类·判据过时）★
+// 原判据：顶薪 45 铜（封顶后五十八）。
+// 现判据：顶薪 55 铜，且顶薪那一行挂在**城里实有的建筑**上（大户宅院），封顶三成后是 71。
+// 为什么该改——先查清「为什么变」：名册从四行扩到十三行，新行里工钱最高的是
+//   `house_steward 大户管家`（building: `garden_villa`，日薪 55）。原判据量的是一个已经不在表上的数。
+// 「营生路不是印钞路」这条口径没破：55 仍是「一日一份工钱」的量级，且涨工照样 ten 工一涨、封顶三成
+//   （G8／G9 两条没动），一日做满也只到 71。
+eq(maxWage, 55, 'G7 顶薪五十五铜（大户管家那一行；一日做满、连涨三成到七十一——营生路不是印钞路）');
+assert(topJob === 'house_steward' && CJ.JOBS[topJob].building === 'garden_villa',
+'G7a 顶薪那一行是大户管家、挂在宅院上——顶薪不是凭空抬的数，是名册里真实存在的一行');
 eq(CJ.CFG.RAISE_EVERY, 10, 'G8 十个工一涨钉死');
 eq(CJ.CFG.RAISE_CAP, 3, 'G9 封顶三成钉死');
 eq(CJ.CFG.ABSENT_DAYS, 7, 'G10 旷工七日辞人钉死');
-var knownBuildings = ['shop', 'library', 'medical_clinic', 'fire_department'];
-assert(Object.keys(CJ.JOBS).every(function (k) { return knownBuildings.indexOf(CJ.JOBS[k].building) >= 0; }), 'G11 四岗都挂既有建筑（城市建筑清单一个键不添）');
+// ★2026-10-04 由四键扩到十二键（B 类·判据过时），但**不是把名单放宽就算过**★
+// 原判据：每个岗的 building 都在那四个写死的键里（shop/library/medical_clinic/fire_department）。
+// 现判据：每个岗的 building 都必须命中**真实城市建筑名册**——从 js/location-system.js 的
+//   `scenarioFacilities` 与 js/app.js 的建筑表里现读，一个键都不许新造。
+// 为什么该改——先查清「为什么变」：名册扩到十三行，新增的 building 有 inn / granary /
+//   pawn_shop / salt_iron_office / garden_villa / tax_bureau / court / goulan_washe。
+//   原判据写死四键，等于把「岗只能挂这四样」当纪律——而纪律的原话是「岗跟着城里实有的建筑走，
+//   一个键不添」：**一个键不添**说的是不许新造建筑，不是不许挂已有的建筑。
+// 收紧处：比原来强得多。原来那把尺只要有人新造一个键就红；现在这把尺直接回仓里把建筑名册读出来对账，
+//   新造一个不存在的键一样红，而挂上真实存在却没被认领的建筑反而能过（那本来就是纪律要的样子）。
+var 建筑名册 = '';
+[fs.readFileSync(path.join(ROOT, 'js/location-system.js'), 'utf8'),
+fs.readFileSync(path.join(ROOT, 'js/app.js'), 'utf8'),
+fs.readFileSync(path.join(ROOT, 'js/building-effects.js'), 'utf8')].forEach(function (s) { 建筑名册 += s; });
+var 岗建筑 = [];
+Object.keys(CJ.JOBS).forEach(function (k) { 岗建筑.push(CJ.JOBS[k].building); });
+var 没这一座 = 岗建筑.filter(function (b) { return 建筑名册.indexOf("'" + b + "'") < 0; });
+eq(没这一座.join(','), '', 'G11 每一岗都挂在城里实有的建筑上（' + 岗建筑.length + ' 岗 / '
+    + new Set(岗建筑).size + ' 座建筑，全仓建筑名册逐个对得上，一个键不添）');
+eq(Object.keys(CJ.JOBS).length, 13, 'G11b 名册十三行（扩行是明账，一行不多一行不少——防止悄悄再添占位行）');
+assert(Object.keys(CJ.JOBS).every(function (k) { return !!(CJ.JOBS[k].wage > 0 && CJ.JOBS[k].name && CJ.JOBS[k].desc); }),
+'G11c 每一行都有工钱、名号与一句说明（名册不许留占位假值）');
 assert(newDayCbs.length >= 1, 'G12 跨日总账挂上了新日订阅');
 
 console.log('\n========== 第七十二波 · 城里长期营生 ==========');

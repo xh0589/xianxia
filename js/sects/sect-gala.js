@@ -361,6 +361,19 @@
             if (W.XianXia && W.XianXia.DataManager && W.XianXia.DataManager.addSpiritStones) W.XianXia.DataManager.addSpiritStones(half);
             else if (W.inventory && W.inventory.currency) W.inventory.currency.spiritStones = (Number(W.inventory.currency.spiritStones) || 0) + half;
         } catch (e3) {}
+        // v27.13 拍卖流水入城市账本（④改良）：盛会落槌也是拍卖成交——成交额（半价即盛会行情的槌价）
+        // 入会场城的市面流水（noteAuctionSale 正门，日结商税照抽），行情正门照走（你把货出手了，价该松）。
+        // 盛会账走 venue 真源不用脚下位置（当天你在山上）；山门不是城，不入城市账（与 sectCityDeed 同一条判法）。
+        // 公库折现（doGalaSellStore）是宗门库内部账——货折灵石入库，市面资金没进出，不入城市流水。
+        try {
+            var _sect = mySect() || builtSect();
+            var _sc = _sect ? sched()[_sect] : null;
+            var _venue = _sc && _sc.venue;
+            if (_venue && _venue !== _sect + '山门') {
+                if (W.WorldLedger && typeof W.WorldLedger.noteAuctionSale === 'function') W.WorldLedger.noteAuctionSale(half, _venue);
+                if (W.MarketDynamic && typeof W.MarketDynamic.notePlayerTrade === 'function') W.MarketDynamic.notePlayerTrade(itemId, 1, false);
+            }
+        } catch (eLed) { console.warn('[静默失败] js/sects/sect-gala.js · doGalaSell：盛会落槌没入城市账', eLed && eLed.message); }
         _close();
         log('🏺 槌落——你那件东西拍了' + half + '灵石。盛会行情，比平日里好出手。（灵石+' + half + '）', 'success');
     };

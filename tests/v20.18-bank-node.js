@@ -194,18 +194,60 @@ var cd2 = W2.w.currentCharData;
 assert(cd2._bank.debt === 100 && cd2.karma === -3 && cd2.notoriety === 2,
     'C4 借贷银钱与业障/恶名同笔结算（混挂键不丢）');
 st = eng2.start('money_house', 'loan');
-res = eng2.choose(5); // 还清：未到期只还本 500→400
+// ★2026-10-04 判据改的是「怎么认出那一枚钮」，不是「认哪一格」★
+// 原判据：`eng2.choose(5)` —— 把「还清欠柜上的账」当成柜面第 6 格。
+// 现判据：按那一枚钮**自己声明的账本动作**（effects.bank.op === 'repay'）去认它，
+//   也就是玩家在屏上认它的那两个字（「还清欠柜上的账」），与柜面增删几行无关。
+// 为什么该改——先查清「为什么变」：柜面第一格新插了一枚「📦 当一件龙鳞甲换灵石（250，卖断）」
+//   （facility-batch2.js:28，带 require.items.mat_dragon_scale，没鳞甲时灰显「缺少mat_dragon_scale」），
+//   后面每一格整体后移一位，「还清欠柜上的账」由 5 挪到 6。
+// 原码 choose(5) 于是点进了「放印子钱」——那一支带 next，会把牌面推进 loan_lend 节点；
+//   引擎 start() 又按 progress 把 activeState 还原到 loan_lend（scenario-engine.js:43-46），
+//   于是后面那句 choose(1) 落到 lendOut 的欠条闸上，回报的是放贷那句话
+//   「你自己还欠着柜上的欠条没销——钱庄不替欠债的人作保放款。」
+//   ★一条错下标把后面两条判据一起带歪，而且带歪之后看起来还像在测钱庄。★
+// 收紧处（本次新增，原来一条都没有）：认不出当场判红；认出来的那一枚屏上原文仍须是「还清欠柜上的账」；
+//   屏上那一列（enabled，含灰显）逐字核一遍，不再拿剧本原数组当屏；每一步开牌前先验确实停在 loan_start。
+var 柜面 = function (tag) {
+    // 玩家关窗再开门：先 cancel()（scenario-engine.js:167「取消当前情境」，删掉 progress），
+    // 再 start()。原码只 start() 不 cancel()，而 start() 会按 progress 还原上一次的节点
+    // （scenario-engine.js:43-46）——于是「再开一次钱庄」其实还站在上一次的节点上，
+    // 后面那句 choose(1) 落到放贷闸上，报回来的是放贷那句话，看着却像在测钱庄。
+    // 这一步不是绕过引擎，是走玩家真走的路：关窗＝cancel，重开＝start。
+    eng2.cancel();
+    var s = eng2.start('money_house', 'loan');
+    assert(s && !s.done && eng2.activeState && eng2.activeState.currentNode === 'loan_start',
+        (tag || 'C5') + ' 关窗重开后柜面确实从头开在 loan_start（只 start 不 cancel 会被 progress 拽回上一次那一格）');
+    return s;
+};
+var 还清钮 = eng2.facilities['money_house'].scenarios[0].nodes.loan_start.choices.map(function (c, i) {
+    return { i: i, c: c, op: c.effects && c.effects.bank && c.effects.bank.op };
+}).filter(function (x) { return x.op === 'repay'; });
+assert(还清钮.length === 1, '柜面上恰有一枚「还清」动作的钮（读到 ' + 还清钮.length + ' 枚）——两枚就是两笔账、两本');
+var 还清 = 还清钮[0];
+assert(/还清欠柜上的账/.test(还清.c.text), '那一枚钮在屏上仍念「还清欠柜上的账」（现读：' + 还清.c.text + '）');
+var 屏列 = 柜面('C5').choices;
+assert(屏列.length === eng2.facilities['money_house'].scenarios[0].nodes.loan_start.choices.length,
+    '屏上那一列与柜面脚本同长（' + 屏列.length + ' 枚）——引擎按下标直取原数组，两边对不上就是屏与账已经分叉');
+assert(屏列[还清.i] && /还清欠柜上的账/.test(屏列[还清.i].text) && 屏列[还清.i].disabled === false,
+    '屏上第 ' + 还清.i + ' 格就是那枚「还清」，且此刻可点（灰显＝玩家按不动）');
+res = eng2.choose(还清.i); // 还清：连本带息 120、账页注销（500→380）
 assert(W2.currency.spiritStones === 380 && cd2._bank.debt === 0, 'C5 店内"还清欠款"连本带息 120、账页注销（500→380）');
-st = eng2.start('money_house', 'loan');
+assert(res && !res.error, 'C5b 还清那一笔真过账（引擎→账本→结算事务全链路），没被吞成一句报错：'
+    + JSON.stringify(res && res.error));
+st = 柜面();
 res = eng2.choose(1); // 存100
-res = eng2.start('money_house', 'loan');
+st = 柜面();
 eng2.choose(4);
 res = eng2.start('money_house', 'loan');
 // 双欠条拦截：先造一张欠款再试第二张
 cd2._bank.debt = 100; cd2._bank.debtDue = CURDAY + 30;
-st = eng2.start('money_house', 'loan');
+st = 柜面('C6');
 eng2.choose(4); // loan_borrow
 res = eng2.choose(0); // 再签押 → 账本原样报错
+// 原判据写死 '欠条未销，钱庄不再放贷'。那句仍在 bank-service.js:146 的 borrow 闸上，一字未动；
+// 另一句「你自己还欠着柜上的欠条没销——钱庄不替欠债的人作保放款。」在 bank-service.js:202，
+// 归 lendOut（放印子钱）那一笔——两笔业务、两句话，各说各的，不是同一句被谁改写过。
 assert(res && res.error === '欠条未销，钱庄不再放贷',
     'C6 账本失败原样上屏（不被吞成笼统的"结算失败"）：' + JSON.stringify(res && res.error));
 

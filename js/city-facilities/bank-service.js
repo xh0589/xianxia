@@ -8,6 +8,17 @@
     var DEPOSIT_RATE = 0.05;      // 存月息五
     var LOAN_RATE = 0.2;          // 借一还二成息（借100一月后还120）
     var LOAN_TERM = 30;           // 借期一月
+    // ---- v27.1 营生扩展批：放印子钱（玩家做放贷那一头，钱庄居中作保）----
+    var LEND_RATE = 0.2;          // 放一收二成息（与借字同价——钱庄抽的头已算在里头）
+    var LEND_TERM = 30;           // 放期一月
+    var LEND_MIN = 100;           // 单笔起放
+    var LEND_MAX_EACH = 500;      // 单笔封顶（大额要抵押，柜上不替你抵押）
+    var LEND_MAX_ACTIVE = 2;      // 同时在外的欠条至多两张
+    var LEND_REPAY_P = 0.80;      // 到期如约连本带息（十有八九）
+    var LEND_LATE_P = 0.15;       // 到期苦求宽限十日（账照旧）
+    // 余下 5%：卷铺盖跑路——柜上追债人出门追十五日，六成追回本金（息没了），四成坏账
+    var LEND_CHASE_DAYS = 15;
+    var LEND_CHASE_BACK_P = 0.6;
 
     function num(v) { return Number(v) || 0; }
     function char() { return global.currentCharData || null; }
@@ -34,6 +45,20 @@
         b.debt = Math.max(0, num(b.debt));
         b.debtDue = num(b.debtDue);
         b.lastCol = num(b.lastCol);
+        // v27.1 放出去的欠条（印子钱账）——归一化：坏账不进门，字段全夹板
+        if (!Array.isArray(b.loansOut)) b.loansOut = [];
+        b.loansOut = b.loansOut.filter(function (l) {
+            return l && typeof l === 'object' && num(l.amount) > 0 && (l.state === 'active' || l.state === 'chase');
+        }).slice(0, LEND_MAX_ACTIVE + 2).map(function (l) {
+            return {
+                amount: Math.max(1, Math.floor(num(l.amount))),
+                outDay: Math.floor(num(l.outDay)),
+                dueDay: Math.floor(num(l.dueDay)),
+                state: l.state === 'chase' ? 'chase' : 'active',
+                lateCount: Math.max(0, Math.min(99, Math.floor(num(l.lateCount)))),
+                chaseUntil: Math.floor(num(l.chaseUntil))
+            };
+        });
         return b;
     }
     function log(m, t) { (global.gameLog || { add: function () {} }).add(m, t || 'info'); }
@@ -55,12 +80,50 @@
             if (!b) return null;
             var months = b.deposit > 0 ? Math.floor(Math.max(0, day() - b.depStart) / MONTH_DAYS) : 0;
             var interest = Math.round(b.deposit * DEPOSIT_RATE * months);
+            // v27.1 放出去的欠条（印子钱）也上汇总牌面
+            var outActive = 0, outChase = 0, outPrincipal = 0;
+            (b.loansOut || []).forEach(function (l) {
+                outPrincipal += l.amount;
+                if (l.state === 'chase') outChase++; else outActive++;
+            });
             return {
                 deposit: b.deposit, depStart: b.depStart, debt: b.debt, debtDue: b.debtDue,
                 months: months, interest: interest,
                 owed: b.debt > 0 ? Math.round(b.debt * (1 + LOAN_RATE)) : 0,
-                overdue: b.debt > 0 && day() > b.debtDue
+                overdue: b.debt > 0 && day() > b.debtDue,
+                loansOut: b.loansOut || [], outActive: outActive, outChase: outChase, outPrincipal: outPrincipal
             };
+        },
+
+        // 真实小世界·钱票（world-ledger）：大额银钱换成钱票随身——票无重量不可抢，
+        // 异地钱庄凭票取现，开票抽二分水费。巨贾走商不再背着钱山赶路。
+        buyTicket: function (amount) {
+            var ban = banGate();
+            if (ban) return ban;
+            amount = Math.floor(num(amount));
+            if (amount < 100) return { error: '钱票起点 100 灵石——零钱柜上不票据化' };
+            var wallet = (global.inventory && global.inventory.currency) ? global.inventory.currency : null;
+            var cd = global.currentCharData;
+            var have = wallet ? (Number(wallet.spiritStones) || 0) : (cd ? (Number(cd.spiritStones) || 0) : 0);
+            if (have < amount) return { error: '身上灵石不足 ' + amount + '，开不出这张票' };
+            var wl = global.WorldLedger;
+            if (!wl || typeof wl.issueTicket !== 'function') return { error: '柜上票据簿不在手边' };
+            if (wallet) wallet.spiritStones = have - amount;
+            if (cd) cd.spiritStones = wallet ? wallet.spiritStones : have - amount;
+            var fee = Math.floor(amount * 0.02); // 开票即收二分水费——工本与保兑
+            var tk = wl.issueTicket(amount - fee);
+            return { success: true, ticket: tk, messages: ['钱票写就：凭票即付 ' + (amount - fee) + ' 灵石（开票水费 ' + fee + '）——票在囊中轻如无物，异地本号分柜皆可兑。'] };
+        },
+        redeemTicket: function () {
+            var wl = global.WorldLedger;
+            if (!wl || typeof wl.redeemTicket !== 'function') return { error: '柜上票据簿不在手边' };
+            var tk = wl.redeemTicket(); // 兑手中最早一张（异地分号通兑）
+            if (!tk) return { error: '你身上没有钱票' };
+            var wallet = (global.inventory && global.inventory.currency) ? global.inventory.currency : null;
+            var cd = global.currentCharData;
+            if (wallet) wallet.spiritStones = (Number(wallet.spiritStones) || 0) + tk.amount;
+            if (cd) cd.spiritStones = wallet ? wallet.spiritStones : (Number(cd.spiritStones) || 0) + tk.amount;
+            return { success: true, amount: tk.amount, messages: ['钱票兑现：' + tk.amount + ' 灵石落袋（' + (tk.issueCity || '他城') + '开票，本柜保兑）。'] };
         },
 
         deposit: function (amount) {
@@ -159,15 +222,85 @@
             return { success: true, waived: waived, messages: ['欠条焚毁，连本带息 ' + waived + ' 灵石一笔勾销'] };
         },
 
+        // ============ v27.1 放印子钱：你做放贷的那一头，钱庄居中作保 ============
+        // 明账：一月期、二成息；十之八九如约，十之一五求宽限，余下卷铺盖跑路——
+        // 跑路的柜上追债人追十五日，六成追回本金（息没了），四成坏账（放贷的风险，签字那天就写在小字里）。
+        lendOut: function (amount) {
+            var ban = banGate();
+            if (ban) return ban;
+            var b = ledger();
+            if (!b) return { error: '钱庄不与无名氏打交道' };
+            if (b.debt > 0) return { error: '你自己还欠着柜上的欠条没销——钱庄不替欠债的人作保放款。' };
+            var active = 0;
+            b.loansOut.forEach(function (l) { if (l.state === 'active') active++; });
+            if (active >= LEND_MAX_ACTIVE) return { error: '在外的欠条已有 ' + active + ' 张——柜上作保不过 ' + LEND_MAX_ACTIVE + ' 张，收了旧的再放新的。' };
+            amount = Math.floor(num(amount));
+            if (amount < LEND_MIN) return { error: '不足 ' + LEND_MIN + ' 灵石——这点钱，柜上懒得立欠条。' };
+            if (amount > LEND_MAX_EACH) return { error: '单笔至多 ' + LEND_MAX_EACH + ' 灵石——大额要抵押，柜上不替你抵押。' };
+            if (stonesNow() < amount) return { error: '手头灵石不足' };
+            var r = payStones(-amount);
+            if (!r || !r.success) return { error: '放款未成' };
+            b.loansOut.push({ amount: amount, outDay: day(), dueDay: day() + LEND_TERM, state: 'active', lateCount: 0, chaseUntil: 0 });
+            log('💸 你经钱庄放出去 ' + amount + ' 灵石。借主是柜上的熟客，欠条写死：' + LEND_TERM + ' 日后连本带息还 ' + Math.round(amount * (1 + LEND_RATE)) + ' 灵石。掌柜压低声音：「十之八九如约；也有苦求宽限的——至于卷铺盖跑路的，柜上追债人自会出门，追不追得回，那是另一本账。」', 'info');
+            return { success: true, messages: ['放出 ' + amount + ' 灵石，' + LEND_TERM + ' 日后应收 ' + Math.round(amount * (1 + LEND_RATE)) + '（含息）'] };
+        },
+
+        // 放贷到期账：每逢新日一轮——如约/宽限/跑路/追回/坏账，全按明账骰
+        checkLoansOut: function () {
+            var b = ledger();
+            if (!b || !b.loansOut.length) return null;
+            var settledAny = false;
+            for (var i = b.loansOut.length - 1; i >= 0; i--) {
+                var l = b.loansOut[i];
+                if (l.state === 'active') {
+                    if (day() < l.dueDay) continue;
+                    var roll = Math.random();
+                    if (roll < LEND_REPAY_P) {
+                        var due = Math.round(l.amount * (1 + LEND_RATE));
+                        var pr = payStones(due);
+                        if (pr && pr.success) {
+                            log('🧾 欠条自己走回了家：借主把 ' + due + ' 灵石连本带息送上柜来，冲你拱手作别。（放印子钱，赚的是行情的钱，担的是人心的险）', 'success');
+                            b.loansOut.splice(i, 1);
+                            settledAny = true;
+                        }
+                    } else if (roll < LEND_REPAY_P + LEND_LATE_P) {
+                        l.dueDay = day() + 10;
+                        l.lateCount += 1;
+                        log('🧾 借主红着脸来求：「再宽限十日，十日一定还清。」掌柜看你——欠条是你的名，宽不宽你点头。（账照旧，十日后再结）', 'info');
+                    } else {
+                        l.state = 'chase';
+                        l.chaseUntil = day() + LEND_CHASE_DAYS;
+                        log('🧾 到期日人去屋空——借主卷铺盖跑了！钱庄追债人已经出门（十五日内见分晓）。掌柜摊手：「追回算你的本金，追不回，这笔就销在你账上。」', 'warning');
+                    }
+                } else if (l.state === 'chase') {
+                    if (day() < l.chaseUntil) continue;
+                    if (Math.random() < LEND_CHASE_BACK_P) {
+                        var pr2 = payStones(l.amount);
+                        if (pr2 && pr2.success) log('🧾 追债人把借主拎了回来——本金 ' + l.amount + ' 灵石如数追回，利息是一个子儿也没有了。这张欠条到此为止。', 'info');
+                    } else {
+                        log('🧾 追债人追了十五日，空手而回——借主没了影。' + l.amount + ' 灵石成了坏账，钱庄把这笔账销了。放印子钱的风险，你算是尝了个全套。', 'danger');
+                        try { if (global.playerPushDeed) global.playerPushDeed('bad', '你在钱庄吃了一张坏账——茶棚里有人拿这事下酒'); } catch (eDeed) {}
+                    }
+                    b.loansOut.splice(i, 1);
+                    settledAny = true;
+                }
+            }
+            return settledAny ? { settled: true } : null;
+        },
+
         // 柜台话术（情境弹窗共用，账目如实播报）
         describe: function () {
             var s = BankService.summary();
-            var t = '钱庄掌柜热情招呼："客官存灵石月息五、随存随取，抵押公道，借贷也便。"';
+            var t = '钱庄掌柜热情招呼："客官存灵石月息五、随存随取，抵押公道，借贷也便。手有余钱的，柜上也居中说合放贷——月息二分，十之八九如约。"';
             if (!s) return t;
             if (s.deposit > 0) t += '\n\n你在柜上的存款：' + s.deposit + ' 灵石' + (s.interest > 0 ? '（已生息 ' + s.interest + '）' : '（未满一月，尚未生息）') + '。';
             if (s.debt > 0) t += s.overdue
                 ? '\n掌柜压低声音："阁下的欠条已经逾期——今日不清，改日账房亲自登门。"'
                 : '\n掌柜压低声音："欠柜上 ' + s.debt + ' 灵石，' + Math.max(0, s.debtDue - day()) + ' 日后到期。欠条会走路。"';
+            // v27.1 放出去的印子钱也如实上牌面
+            if (s.outActive > 0 || s.outChase > 0) {
+                t += '\n\n你放出去的欠条：在外 ' + s.outActive + ' 张（本金 ' + s.outPrincipal + ' 灵石' + (s.outChase > 0 ? '，另有 ' + s.outChase + ' 张跑了路、追债人在外头追着' : '') + '）。到期它自己会走回柜上来。';
+            }
             return t;
         },
 
@@ -209,7 +342,7 @@
             if (BankService._wired) return;
             BankService._wired = true;
             if (global.timeSystem && typeof global.timeSystem.onNewDaySubscribe === 'function') {
-                global.timeSystem.onNewDaySubscribe(function () { BankService.checkOverdue(); });
+                global.timeSystem.onNewDaySubscribe(function () { BankService.checkOverdue(); BankService.checkLoansOut(); });
             }
         }
     };

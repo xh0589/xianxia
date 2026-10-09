@@ -208,6 +208,28 @@ regions: [], catchable: false
         innate: ["pounce", "escape"],
         teachable: ["pounce", "escape"],
         regions: ['北冥', '天空', '东南海域'], catchable: true
+    },
+    // ===== v27.0 凡兽档：凡俗牲口——坐骑的最底层（马太低级，就配凡人与炼气赶路）=====
+    // 不能战、不修行、无进化繁育、不可收服（没有魂印可烙——凡马烙不进灵识），只能马市买。
+    // 进同一本兽栏账（小名/骑乘/陪伴羁绊全共用），但**不占魂印格**——魂印只缚灵兽。
+    // 速度刻意压在风狼（1.5）之下：境界一上去，凡马自然退役，可卖回马市或留着当念想。
+    horse_common: {
+        name: '凡马', type: 'mundane', level: 1, realm: '凡俗',
+        attrs: { strength: 6, dexterity: 6, constitution: 7, willpower: 3, intelligence: 2, meridian: 0 },
+        skills: [], mount: { speed: 1.2 }, innate: [], teachable: [],
+        regions: [], catchable: false, mundane: true, feedCopper: 2, basePrice: 700
+    },
+    mule_common: {
+        name: '青骡', type: 'mundane', level: 1, realm: '凡俗',
+        attrs: { strength: 7, dexterity: 4, constitution: 9, willpower: 4, intelligence: 2, meridian: 0 },
+        skills: [], mount: { speed: 1.1 }, innate: [], teachable: [],
+        regions: [], catchable: false, mundane: true, feedCopper: 2, basePrice: 400
+    },
+    horse_fine: {
+        name: '骏马', type: 'mundane', level: 1, realm: '凡俗',
+        attrs: { strength: 8, dexterity: 9, constitution: 8, willpower: 4, intelligence: 3, meridian: 0 },
+        skills: [], mount: { speed: 1.4 }, innate: [], teachable: [],
+        regions: [], catchable: false, mundane: true, feedCopper: 3, basePrice: 1800
     }
 };
 
@@ -234,6 +256,27 @@ function ensureBeastTrait(b) { if (!b.trait) b.trait = rollBeastTrait(); return 
 function beastDisplayName(b) {
     if (!b) return '';
     return b.petName ? b.petName + '·' + b.name : (b.name || '');
+}
+
+// ==================== v27.0 凡兽账：马市买来的牲口，与灵兽同栏不同册 ====================
+// 凡兽判定认模板 mundane 标（兽身上的 mundane 字段是冗余备份，防模板账日后改动）
+function isMundaneBeast(b) {
+    if (!b) return false;
+    if (b.mundane) return true;
+    var t = BEAST_TEMPLATES[b.templateId];
+    return !!(t && t.mundane);
+}
+// 魂印只缚灵兽——兽栏上限、收服/买兽/繁育的满栏判定全数这本账，凡马骡子不占格
+function spiritBeastCount() {
+    var n = 0;
+    for (var i = 0; i < tamedBeasts.length; i++) if (!isMundaneBeast(tamedBeasts[i])) n++;
+    return n;
+}
+var MUNDANE_PEN_CAP = 3;   // 凡兽不占魂印但占厩——厩里至多三头，再多草料都拌不开
+function mundaneBeastCount() {
+    var n = 0;
+    for (var i = 0; i < tamedBeasts.length; i++) if (isMundaneBeast(tamedBeasts[i])) n++;
+    return n;
 }
 
 // 第八十八波·兽栏魂印上限：收服灵兽须以灵识烙魂印，能分几道随境界走——
@@ -296,6 +339,20 @@ function initBeastTaming() {
         }
     } catch (e) {}
     try { sweepInvalidBeastLines(); } catch (eSweep) {}   // 第八十五波：错挂血脉的旧档开机洗册
+    // v27.13：开机先把绝种账过一遍价目表、顺手把货架钩子补挂上（此口由 app.js 初始化调用，
+    // window.openBeastShop 必已就位）——读档即见当前绝迹行情，不必等坊市重开
+    try { _applyExtinctionToShopStock(); _ensureShopShelfHook(); }
+    catch (eExtInit) { console.warn('[静默失败] js/beast-taming.js · initBeastTaming：绝种涨价账没过——坊市照常原价', eExtInit && eExtInit.message); }
+    // v27.0 草料日结订阅：凡兽每日自动扣草料钱——挂在时间系统的翻日口上（B3 订阅者先例），无按钮无日常
+    try {
+        var _subFodder = function () {
+            if (window.timeSystem && typeof window.timeSystem.onNewDaySubscribe === 'function') {
+                window.timeSystem.onNewDaySubscribe(mundaneFodderTick);
+            }
+        };
+        if (window.timeSystem && typeof window.timeSystem.onNewDaySubscribe === 'function') _subFodder();
+        else if (typeof window.addEventListener === 'function') window.addEventListener('load', _subFodder);
+    } catch (eFodderSub) { console.warn('[静默失败] js/beast-taming.js · initBeastTaming：草料日结没挂上翻日口——凡马白吃不扣钱，掉膘账整个失灵', eFodderSub && eFodderSub.message); }
 }
 
 function saveBeastData() {
@@ -341,6 +398,11 @@ function getCurrentRegionName() {
 function trainBeast(index) {
     var beast = tamedBeasts[index];
     if (!beast) return false;
+    // v27.0 凡兽不修行：吃草长膘不长修为——培养口如实拦下
+    if (isMundaneBeast(beast)) {
+        if (window.showMessage) window.showMessage(beastDisplayName(beast) + ' 是头凡俗牲口，不修行——草料喂足就是它的全部前程。想要能长本事的，去灵兽坊接只幼兽。', 'info');
+        return false;
+    }
     // v20.9：培养成本=精力+时辰（世界真实约束）。旧"每日3次"是人为计数器，已删——
     // 精力与游戏时辰本身就是天花板：一天满精力也练不出多少级。
     var cd = window.currentCharData;
@@ -444,6 +506,11 @@ function setActiveBeast(index) {
     if (index < 0 || index >= tamedBeasts.length) {
         activeBeastIndex = -1;
     } else {
+        // v27.0 凡兽不上阵：拉车的牲口列不了战列——出战口拦下（骑乘口照常放行）
+        if (isMundaneBeast(tamedBeasts[index])) {
+            if (window.showMessage) window.showMessage(beastDisplayName(tamedBeasts[index]) + ' 是头凡兽，驮你赶路可以，上阵见血是不行的。', 'warning');
+            return false;
+        }
         // 第八十四波·力竭的兽不应战：出战口如实拦下（不再默默带了个不上场的挂件）
         try {
             var _b = tamedBeasts[index];
@@ -470,6 +537,11 @@ function setActiveMount(index) {
         var b = tamedBeasts[index];
         if (!b.mount) {
             if (window.showMessage) window.showMessage(b.name + ' 不可骑乘', 'warning');
+            return false;
+        }
+        // v27.0 车马行：挂出去的牲口先牵回来才骑得
+        if (b.outToLivery) {
+            if (window.showMessage) window.showMessage(beastDisplayName(b) + ' 挂车马行替人拉车去了——先把它牵回来，缰绳才在你手里。', 'warning');
             return false;
         }
         // 第八十八波·力竭的兽载不动人：出战口早拦了，骑乘口却还放行——
@@ -506,14 +578,22 @@ function getActiveBeast() {
 function getActiveMount() {
     if (activeMountIndex < 0 || activeMountIndex >= tamedBeasts.length) return null;
     var b = tamedBeasts[activeMountIndex];
-    return b && b.mount ? b : null;
+    if (!b || !b.mount) return null;
+    // v27.0 车马行：挂出去的牲口在替人拉车——当值坐骑被挂出， riding 账如实落空
+    if (b.outToLivery) return null;
+    return b;
 }
 
 /** 骑乘对旅行时间的倍率（<1 更快） */
 function getMountTravelTimeMultiplier() {
     var m = getActiveMount();
     if (!m || !m.mount || !m.mount.speed) return 1.0;
-    return 1 / m.mount.speed;
+    // v27.0 凡兽成色账：相口齿相出的好/次成色落在 qualityAdj 上；
+    // 草料断顿掉膘（thin）的牲口脚软——速度打八折，草料补上就回来
+    var sp = (m.mount.speed || 1) + (m.qualityAdj || 0);
+    if (m.thin) sp = sp * 0.8;
+    if (!(sp > 0.1)) sp = 0.1;
+    return 1 / sp;
 }
 
 /** 将出战灵兽转为战斗 Entity 数据 */
@@ -526,6 +606,8 @@ function getActiveBeastCombatData() {
 function _beastCombatDataAt(index, asMount) {
     var beast = (index >= 0 && index < tamedBeasts.length) ? tamedBeasts[index] : null;
     if (!beast) return null;
+    // v27.0 凡兽不入战账：拉车的牲口拼不出战斗数据（出战/坐骑两个口一并堵死）
+    if (isMundaneBeast(beast)) return null;
     if (asMount && !beast.mount) return null;
     // 第八十四波·伤势真账：力竭（气血归零）的兽不听号令——旧版受伤 API 全库零调用，
     // 灵兽倒下等于没事；现在战倒记重伤、日结疗养回一成、可喂丹药，力竭期间不再出战（坐骑也不驮人上阵）。
@@ -695,8 +777,9 @@ function captureBeastAfterBattle(enemy) {
     } catch (eRealmGate) {}
     // 第八十八波·兽栏魂印：收服灵兽须以灵识烙一道魂印，境界越高灵识越能分——
     // 兽栏不是无底洞（魂印 3+境界序数）。旧档超额的既往不咎，只是烙不进新的了。
-    if (tamedBeasts.length >= getBeastPenCap()) {
-        if (window.showMessage) window.showMessage('你的灵识已分不出更多——兽栏满了（魂印 ' + tamedBeasts.length + '/' + getBeastPenCap() + '，随境界增长）。放生一只，才烙得进新的。', 'warning');
+    // v27.0 改数灵兽账：凡马骡子不占魂印，满栏判定只数灵兽
+    if (spiritBeastCount() >= getBeastPenCap()) {
+        if (window.showMessage) window.showMessage('你的灵识已分不出更多——兽栏满了（魂印 ' + spiritBeastCount() + '/' + getBeastPenCap() + '，随境界增长）。放生一只，才烙得进新的。', 'warning');
         return false;
     }
     var hasTrap = false;
@@ -828,6 +911,24 @@ function beastConsumeItem(itemId, count) {
 window.feedBeast = function (index) {
     var b = tamedBeasts[index];
     if (!b) return;
+    // v27.0 凡兽吃草不吃灵草：每日一把青料（免费，日限一次防白刷亲密），掉膘的喂了就回膘
+    if (isMundaneBeast(b)) {
+        var _tdF = (typeof window.getAbsoluteDay === 'function') ? window.getAbsoluteDay() : null;
+        if (_tdF != null && b._lastFodderDay === _tdF) {
+            if (window.showMessage) window.showMessage(beastDisplayName(b) + ' 今天已经喂过了——它正打着响鼻消食。', 'info');
+            return;
+        }
+        b._lastFodderDay = _tdF;
+        b.affection = Math.min(100, (b.affection || 0) + 4);
+        var _wasThin = !!b.thin;
+        if (_wasThin) b.thin = false;
+        saveBeastData();
+        if (window.showMessage) window.showMessage(_wasThin
+            ? '🌾 你给' + beastDisplayName(b) + '添了满满一槽草料——它埋头吃了个干净，肋下的瘦相眼见着回了膘。（骑乘提速恢复）'
+            : '🌾 你给' + beastDisplayName(b) + '添了一把青料——它蹭了蹭你的手心，慢慢嚼着。亲密度+4。', 'success');
+        if (typeof window.renderBeastList === 'function') window.renderBeastList();
+        return;
+    }
     ensureBeastTrait(b);
     if ((b.affection || 0) >= 100) { if (window.showMessage) window.showMessage(beastDisplayName(b) + ' 蹭了蹭你——亲密度已满。', 'info'); return; }
     // 第八十四波·灵草双账合一：野外采药出的是 mat_spirit_grass，坊市卖的是 spirit_grass——
@@ -994,6 +1095,11 @@ window.healBeastWithPill = function (index, tier) {
 window.openBreedModal = function (index) {
     var b = tamedBeasts[index];
     if (!b || !window.BeastEvolution) return;
+    // v27.0 凡兽不入血脉账： pairing 口说人话拦下
+    if (isMundaneBeast(b)) {
+        if (window.showMessage) window.showMessage(beastDisplayName(b) + ' 是凡俗牲口，不入血脉谱——配对没有意义，它的崽还是凡马。', 'info');
+        return;
+    }
     var bidA = _beastEvoBid(index);
     var lineA = window.BeastEvolution.getLine(bidA);
     var stageA = window.BeastEvolution.getStage(bidA);
@@ -1021,9 +1127,9 @@ window.openBreedModal = function (index) {
 window.breedBeasts = function (ia, ib) {
     var a = tamedBeasts[ia], o = tamedBeasts[ib];
     if (!a || !o || ia === ib || !window.BeastEvolution) return;
-    // 第八十八波·兽栏魂印：崽出壳也要烙魂印——满栏没窝，先拦后收钱
-    if (tamedBeasts.length >= getBeastPenCap()) {
-        if (window.showMessage) window.showMessage('兽栏满了（魂印 ' + tamedBeasts.length + '/' + getBeastPenCap() + '）——崽出壳也没窝安置，先放生一只再配对。', 'warning'); return;
+    // 第八十八波·兽栏魂印：崽出壳也要烙魂印——满栏没窝，先拦后收钱（v27.0 只数灵兽，凡兽不占格）
+    if (spiritBeastCount() >= getBeastPenCap()) {
+        if (window.showMessage) window.showMessage('兽栏满了（魂印 ' + spiritBeastCount() + '/' + getBeastPenCap() + '）——崽出壳也没窝安置，先放生一只再配对。', 'warning'); return;
     }
     var bidA = _beastEvoBid(ia), bidB = _beastEvoBid(ib);
     if (window.BeastEvolution.getLine(bidA) !== window.BeastEvolution.getLine(bidB)) { if (window.showMessage) window.showMessage('血脉不同线，配不成对。', 'warning'); return; }
@@ -1094,16 +1200,83 @@ var BEAST_SHOP_STOCK = {
     fire_phoenix: { price: 2600, gloss: '一生只见一次的凤雏，铺子也攒了半辈子运气' }
 };
 
+// ==================== v27.13：绝种的后果——坊市断供涨价 ====================
+// 主档：某兽真打绝了，灵兽坊断货涨价。消费 window.WildEcology 读口（randomMap.js 绝种账），
+// 口径：绝种兽种不再算正常货源（不按原价补架）；还挂在架上的几头按缺货行情提价（×2 取整），
+// 价签文案点一句「此兽野外已绝迹，坊里就剩这几头了」。读口缺席/抛错一律按未绝种放行——
+// 绝不因生态账缺席拦死买卖。复生自愈：死账到期兽种回活，底价与文案自动还原，无需补账。
+function _beastShopExtinct(templateId) {
+    try {
+        var we = window.WildEcology;
+        if (!we || typeof we.isExtinct !== 'function') return false;   // 判定缺席＝按未绝种放行
+        return we.isExtinct(templateId) === true;
+    } catch (e) {
+        console.warn('[静默失败] js/beast-taming.js · _beastShopExtinct：绝种判定缺席——按未绝种放行', e && e.message);
+        return false;
+    }
+}
+// 把绝种账过一遍价目表：只动价签与文案，条目永不删（删了复生就回不了货）。
+// 幂等：_basePrice/_baseGloss 记底价底文，反复过账不复利；回活即还原。
+function _applyExtinctionToShopStock() {
+    for (var id in BEAST_SHOP_STOCK) {
+        var st = BEAST_SHOP_STOCK[id];
+        if (!st) continue;
+        if (typeof st._basePrice !== 'number') st._basePrice = st.price;
+        if (_beastShopExtinct(id)) {
+            st.price = Math.round(st._basePrice * 2);   // 缺货行情：×2 取整
+            if (!st._extinctMarked) {
+                st._extinctMarked = true;
+                if (typeof st._baseGloss !== 'string') st._baseGloss = st.gloss || '';
+                st.gloss = (st._baseGloss ? st._baseGloss + '——' : '') + '此兽野外已绝迹，坊里就剩这几头了';
+            }
+        } else if (st._extinctMarked) {
+            st._extinctMarked = false;
+            st.price = st._basePrice;
+            if (typeof st._baseGloss === 'string') st.gloss = st._baseGloss;
+        }
+    }
+}
+// 货架钩子：app.js openBeastShop（:11024）每次开张前先把绝种账过一遍——渲染函数一字不动，
+// 只换它读的价目表（数据驱动，坊市货架渲染零侵入）。本文件先于 app.js 求值（仙侠.html :2238/:2325），
+// 顶层挂不上就等 window load 再挂；挂不上也不拦开张：buyBeast 里另有实收兜底。
+function _ensureShopShelfHook() {
+    try {
+        if (typeof window.openBeastShop !== 'function') return false;   // app.js 还没跑
+        if (window.openBeastShop._v2713ecology) return true;            // 已挂过，别叠层
+        var _orig = window.openBeastShop;
+        var _hooked = function () {
+            try { _applyExtinctionToShopStock(); }
+            catch (eShelf) { console.warn('[静默失败] js/beast-taming.js · openBeastShop货架钩子：绝种账没过——货架照常开张', eShelf && eShelf.message); }
+            return _orig.apply(this, arguments);
+        };
+        _hooked._v2713ecology = true;
+        window.openBeastShop = _hooked;
+        return true;
+    } catch (eHook) {
+        console.warn('[静默失败] js/beast-taming.js · _ensureShopShelfHook：货架钩子没挂上——坊市照常', eHook && eHook.message);
+        return false;
+    }
+}
+(function _v2713shopHookInstall() {
+    if (_ensureShopShelfHook()) return;
+    try { window.addEventListener('load', function () { _ensureShopShelfHook(); }, { once: true }); }
+    catch (eLoad) { console.warn('[静默失败] js/beast-taming.js · _v2713shopHookInstall：load 兜底没挂上——坊市照常', eLoad && eLoad.message); }
+})();
+
 function buyBeast(templateId) {
+    // v27.13：购入前先把绝种账过一遍——货架价签与实收同一口径；账缺席照常原价，绝不拦买卖
+    var _v2713extinct = false;
+    try { _applyExtinctionToShopStock(); _v2713extinct = _beastShopExtinct(templateId); _ensureShopShelfHook(); }
+    catch (eExtBuy) { console.warn('[静默失败] js/beast-taming.js · buyBeast：绝种涨价账没过——按原价收', eExtBuy && eExtBuy.message); }
     var tpl = BEAST_TEMPLATES[templateId];
     var stock = BEAST_SHOP_STOCK[templateId];
     if (!tpl || !stock || tpl.catchable === false) {
         if (window.showMessage) window.showMessage('铺子掌柜摇头：这兽，铺子里没有。', 'warning');
         return false;
     }
-    // 第八十八波·兽栏魂印：满栏买不进（先拦后收钱——钱货两讫前把话说清）
-    if (tamedBeasts.length >= getBeastPenCap()) {
-        if (window.showMessage) window.showMessage('掌柜看了看你身后的兽群，摆手道：「客官，您的灵识分不出更多魂印了（' + tamedBeasts.length + '/' + getBeastPenCap() + '）——先安置好现有的，再来接新崽。」', 'warning');
+    // 第八十八波·兽栏魂印：满栏买不进（先拦后收钱——钱货两讫前把话说清；v27.0 只数灵兽，凡兽不占格）
+    if (spiritBeastCount() >= getBeastPenCap()) {
+        if (window.showMessage) window.showMessage('掌柜看了看你身后的兽群，摆手道：「客官，您的灵识分不出更多魂印了（' + spiritBeastCount() + '/' + getBeastPenCap() + '）——先安置好现有的，再来接新崽。」', 'warning');
         return false;
     }
     var price = stock.price;
@@ -1142,6 +1315,10 @@ function buyBeast(templateId) {
     // 铺子买的灵狐永远走不了狐线蜕变，图鉴上也查无此兽。银货两讫就该入册，与野外收服同口径。
     tryRegisterTamedBeast(tamedBeasts.length - 1);
     if (window.showMessage) window.showMessage('🐾 银货两讫，「' + tpl.name + '」幼兽拿草茎戳了戳你的手背。', 'success');
+    // v27.13：绝种兽种的最后一手——把缺货行情的账当面点清，别让客人回头觉得坊里宰客
+    if (_v2713extinct && window.showMessage) {
+        window.showMessage('⚰️ 「' + tpl.name + '」野外已绝迹——这几头是坊里压箱底的存货，价码按缺货行情翻了倍。', 'info');
+    }
     if (typeof window.renderBeastList === 'function') window.renderBeastList();
     return true;
 }
@@ -1283,6 +1460,156 @@ window.releaseBeastNow = function (index) {
     return true;
 };
 
+// ==================== v27.0 凡兽柜上账：买入口 / 卖回口 / 草料日结 ====================
+// 马市（horse-market.js）只管柜台与砍价，牲口的进出账全走这里——与灵兽同一本 tamedBeasts，
+// 但入册不烙魂印（不进图鉴、不入血脉线、不认 uid），出栏按半价卖回，指针随splice同放生口径挪。
+function buyMundaneBeast(templateId, opts) {
+    var tpl = BEAST_TEMPLATES[templateId];
+    if (!tpl || !tpl.mundane) return false;
+    if (mundaneBeastCount() >= MUNDANE_PEN_CAP) {
+        if (window.showMessage) window.showMessage('厩里已经拴满三头了——再买，草料都拌不开。', 'warning');
+        return false;
+    }
+    opts = opts || {};
+    tamedBeasts.push({
+        templateId: templateId,
+        name: tpl.name,
+        level: 1,
+        exp: 0,
+        affection: 40,   // 牲口贩子喂熟的：不怕人，也还不认你
+        skills: [],
+        combatAbilities: [],
+        mount: tpl.mount ? Object.assign({}, tpl.mount) : null,
+        mundane: true,
+        qualityAdj: opts.qualityAdj || 0,
+        qualityName: opts.qualityName || '中平',
+        thin: false
+    });
+    if (opts.petName) tamedBeasts[tamedBeasts.length - 1].petName = String(opts.petName).slice(0, 6);
+    saveBeastData();
+    if (typeof window.renderBeastList === 'function') window.renderBeastList();
+    return true;
+}
+
+// 卖回马市：半价牵走。先弹确认（牵走就回不来了），再落账
+window.openSellMundaneModal = function (index) {
+    var b = tamedBeasts[index];
+    if (!b || !isMundaneBeast(b)) return;
+    var back = _mundaneSellPrice(b);
+    var nm = beastDisplayName(b);
+    var html = '<p class="text-sm text-gray-300 mb-2">把「' + nm + '」卖回马市？</p>'
+        + '<p class="text-xs text-gray-400 mb-3">牲口贩子出价 ' + back + ' 铜钱（买价的一半，行规如此）。' + (b.thin ? '它现在还掉着膘，贩子压了压价。' : '') + '牵走就回不来了。</p>'
+        + '<button onclick="sellMundaneBeastNow(' + index + ')" class="w-full bg-amber-700 hover:bg-amber-600 text-white px-3 py-2 rounded text-sm mb-1">🪙 收钱，牵走</button>'
+        + '<button onclick="this.closest(\'#xianxia-modal-overlay\') && this.closest(\'#xianxia-modal-overlay\').remove()" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2 rounded text-sm">再养养</button>';
+    if (typeof window.showModal === 'function') window.showModal('🪙 卖回马市 · ' + nm, html);
+};
+
+function _mundaneBasePrice(b) {
+    var t = BEAST_TEMPLATES[b.templateId];
+    var base = (t && t.basePrice) || 700;
+    return base;
+}
+function _mundaneSellPrice(b) {
+    var half = Math.floor(_mundaneBasePrice(b) / 2);
+    if (b.thin) half = Math.floor(half * 0.7);   // 掉膘的牲口贩子压价
+    return Math.max(1, half);
+}
+
+window.sellMundaneBeastNow = function (index) {
+    var b = tamedBeasts[index];
+    if (!b || !isMundaneBeast(b)) return false;
+    var back = _mundaneSellPrice(b);
+    var nm = beastDisplayName(b);
+    tamedBeasts.splice(index, 1);
+    // 出战/骑乘指针跟着挪（卖走的若是当值坐骑，摘牌）——与放生同口径
+    if (activeBeastIndex === index) activeBeastIndex = -1;
+    else if (activeBeastIndex > index) activeBeastIndex--;
+    if (activeMountIndex === index) activeMountIndex = -1;
+    else if (activeMountIndex > index) activeMountIndex--;
+    var dm = window.XianXia && window.XianXia.DataManager;
+    if (dm && typeof dm.addCopper === 'function') dm.addCopper(back);
+    else if (window.currentCharData) window.currentCharData.copper = (window.currentCharData.copper || 0) + back;
+    if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI();
+    saveBeastData();
+    if (window.showMessage) window.showMessage('🪙 贩子验了验' + nm + '的口齿，数出 ' + back + ' 铜钱——缰绳交出去了，厩里空出一格。', 'success');
+    if (typeof window.renderBeastList === 'function') window.renderBeastList();
+    return true;
+};
+
+// 车马行挂出/牵回：牲口挂出去替人拉车（每日车马行结租钱），代价是它不在你缰绳底下——
+// 当值坐骑被挂出即摘牌。租金日结与劳损账在 horse-market.js 的柜台侧，这里只管进出账与指针。
+window.hireOutBeast = function (index) {
+    var b = tamedBeasts[index];
+    if (!b || !isMundaneBeast(b)) return false;
+    if (b.outToLivery) return true;
+    if (b.thin) {
+        if (window.showMessage) window.showMessage(beastDisplayName(b) + ' 还掉着膘——车马行的管事摸摸它的肋骨，摇头不收。', 'warning');
+        return false;
+    }
+    b.outToLivery = true;
+    if (activeMountIndex === index) activeMountIndex = -1;
+    saveBeastData();
+    if (typeof window.renderBeastList === 'function') window.renderBeastList();
+    if (window.showMessage) window.showMessage('🐴 ' + beastDisplayName(b) + ' 挂进了车马行——往后每日替你挣租钱，只是缰绳暂且交出去了。', 'success');
+    return true;
+};
+window.bringBackBeast = function (index) {
+    var b = tamedBeasts[index];
+    if (!b || !isMundaneBeast(b) || !b.outToLivery) return false;
+    b.outToLivery = false;
+    saveBeastData();
+    if (typeof window.renderBeastList === 'function') window.renderBeastList();
+    if (window.showMessage) window.showMessage('🐴 你从车马行牵回了' + beastDisplayName(b) + '——它认得你，缰绳一到手就打了个响鼻。', 'success');
+    return true;
+};
+
+// 马贼得手：牲口被牵走——与卖回同口径（splice+指针挪），只是一文钱没有（mount-events 调用）
+window.stealMundaneBeast = function (index) {
+    var b = tamedBeasts[index];
+    if (!b || !isMundaneBeast(b)) return null;
+    var nm = beastDisplayName(b);
+    tamedBeasts.splice(index, 1);
+    if (activeBeastIndex === index) activeBeastIndex = -1;
+    else if (activeBeastIndex > index) activeBeastIndex--;
+    if (activeMountIndex === index) activeMountIndex = -1;
+    else if (activeMountIndex > index) activeMountIndex--;
+    saveBeastData();
+    if (typeof window.renderBeastList === 'function') window.renderBeastList();
+    return nm;
+};
+
+// 草料日结：凡兽每日自动扣草料钱（铜钱级，无按钮无日常）——欠费掉膘（骑乘减速），不死不跑；
+// 手动喂食或账上补齐，膘就回来。灵兽不走这本账（喂养本来就是可选的亲密动作）。
+function mundaneFodderTick() {
+    var list = [];
+    for (var i = 0; i < tamedBeasts.length; i++) if (isMundaneBeast(tamedBeasts[i])) list.push(tamedBeasts[i]);
+    if (!list.length) return;
+    var cost = 0;
+    list.forEach(function (b) {
+        var t = BEAST_TEMPLATES[b.templateId];
+        cost += (t && t.feedCopper) || 2;
+    });
+    var dm = window.XianXia && window.XianXia.DataManager;
+    var paid = false;
+    if (dm && typeof dm.deductCopper === 'function') {
+        paid = !!dm.deductCopper(cost);
+    } else if (window.currentCharData && (window.currentCharData.copper || 0) >= cost) {
+        window.currentCharData.copper -= cost;
+        paid = true;
+    }
+    var changed = false;
+    if (paid) {
+        list.forEach(function (b) { if (b.thin) { b.thin = false; changed = true; } });
+        if (changed && window.showMessage) window.showMessage('🌾 草料钱补齐（' + cost + ' 铜）——厩里的牲口回了膘，脚上有劲了。', 'success');
+        if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI();
+    } else {
+        list.forEach(function (b) { if (!b.thin) { b.thin = true; changed = true; } });
+        if (changed && window.showMessage) window.showMessage('🐴 草料钱不够（每日 ' + cost + ' 铜）——厩里的牲口饿得掉了膘，骑它赶路脚软（速度打折）。补上钱或亲手喂草料就回来。', 'warning');
+    }
+    if (changed) saveBeastData();
+}
+window.mundaneFodderTick = mundaneFodderTick;
+
 // 导出
 window.BEAST_TEMPLATES = BEAST_TEMPLATES;
 window.BEAST_SHOP_STOCK = BEAST_SHOP_STOCK;
@@ -1316,3 +1643,9 @@ window.teachBeastAbility = teachBeastAbility;
 // 第八十八波·兽栏同栖录
 window.beastDisplayName = beastDisplayName;
 window.getBeastPenCap = getBeastPenCap;
+// v27.0 凡兽账
+window.isMundaneBeast = isMundaneBeast;
+window.spiritBeastCount = spiritBeastCount;
+window.mundaneBeastCount = mundaneBeastCount;
+window.MUNDANE_PEN_CAP = MUNDANE_PEN_CAP;
+window.buyMundaneBeast = buyMundaneBeast;

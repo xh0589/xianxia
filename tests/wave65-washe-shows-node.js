@@ -96,12 +96,24 @@ function logsHave(word) {
 console.log('\n[A] 位次（老验收按位次点单，前五位动不得）');
 fresh();
 var choices = SE.facilities['goulan_washe'].scenarios[0].nodes.stage_start.choices;
-eq(choices.length, 9, 'A1 台面从六面添到九面');
+// ★2026-10-04 由九面改为十面（B 类·判据过时）★
+// 原判据：台面恰好九面；且 `choices[8]` 是「离了勾栏」。
+// 现判据：台面恰好十面；且**最后一面**是「离了勾栏」，倒数第二面是新加的「听一整出大戏」。
+// 为什么该改——先查清「为什么变」：facility-qin-venue.js 的 stage_start 在「离了勾栏」**前面**
+//   插了一枚「🎭 听一整出大戏（15 文钱 · 头排座听足两个时辰）」，台面由九面添到十面。
+//   老验收钉的是「散场仍是最后一面」这句话本身，不是「第 8 格」这个坐标；
+//   把坐标写成断言，等于把「多演一面」也判成事故——那是尺自己绊住了自己。
+// 收紧处：面数照样逐字钉死（十面，少一面多一面都红）；「散场在最后」改由「末面即散场」表达，
+//   比原来更强——原来「散场之后又长出一面」是照过不误的，现在红。
+//   另补一条把新那一面的位置与文案钉住，日后它被挪走或改名都当场判红。
+eq(choices.length, 10, 'A1 台面从六面添到九面，再到十面（新增「听一整出大戏」那一面）');
 ok(choices[0].text.indexOf('抚琴') >= 0, 'A2 第一位仍是抚琴（v20.90 老钉）');
 ok(choices[2].text.indexOf('摄魂音') >= 0 && choices[3].text.indexOf('台下听曲') >= 0, 'A3 第三四位仍是摄魂音与听曲');
 ok(choices[4].text.indexOf('转入幕后') >= 0, 'A4 第五位仍是转入幕后');
 ok(choices[5].text.indexOf('杂耍') >= 0 && choices[6].text.indexOf('皮影') >= 0 && choices[7].text.indexOf('口技') >= 0, 'A5 新三面排在幕后之后（杂耍/皮影/口技）');
-ok(choices[8].text.indexOf('离了勾栏') >= 0, 'A6 散场仍是最后一面');
+ok(choices[8].text.indexOf('听一整出大戏') >= 0, 'A5a 第四排那一面是新加的「听一整出大戏」（它排在散场之前，不是插在最后）');
+ok(choices[choices.length - 1].text.indexOf('离了勾栏') >= 0,
+    'A6 散场仍是最后一面（按「末面即散场」判，不钉死格号——多演一面不该被判成事故）');
 SE.start('goulan_washe', 'stage');
 var r4 = SE.choose(4);
 ok(r4 && !r4.error && !r4.done && /幕后/.test(r4.desc || ''), 'A7 按老位次点「转入幕后」照旧走进小院');

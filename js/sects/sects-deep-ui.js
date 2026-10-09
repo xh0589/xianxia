@@ -902,12 +902,21 @@ function showSectDeepOverview(sectName) {
 
     var economy = typeof window.getSectEconomySnapshot === 'function' ? window.getSectEconomySnapshot(sectName) : null;
     if (economy) {
-        html += '<div class="grid grid-cols-4 gap-2">';
+        // v27.13：面板跟上月账口径——孝敬/香火两源入账后，只摆「日产/用度/日净」三格会账对不上（净额大于产减用），
+        // 六格齐摆，收入−支出=结余当场读得通。
+        html += '<div class="grid grid-cols-6 gap-2">';
         html += '<div class="bg-gray-800 p-2 rounded text-center"><p class="text-xs text-gray-400">宗门库存</p><p class="text-amber-300 font-bold text-sm">' + economy.stock + '</p></div>';
-        html += '<div class="bg-gray-800 p-2 rounded text-center"><p class="text-xs text-gray-400">日产</p><p class="text-green-400 font-bold text-sm">+' + economy.gross + '</p></div>';
+        html += '<div class="bg-gray-800 p-2 rounded text-center"><p class="text-xs text-gray-400">产业</p><p class="text-green-400 font-bold text-sm">+' + economy.gross + '</p></div>';
+        html += '<div class="bg-gray-800 p-2 rounded text-center" title="弟子在外营生按门规孝敬回山"><p class="text-xs text-gray-400">孝敬</p><p class="text-green-400 font-bold text-sm">+' + (economy.filial || 0) + '</p></div>';
+        html += '<div class="bg-gray-800 p-2 rounded text-center" title="山下庙宇香客随喜（命门里靠香火吃饭的门派才有）"><p class="text-xs text-gray-400">香火</p><p class="text-green-400 font-bold text-sm">+' + (economy.incense || 0) + '</p></div>';
         html += '<div class="bg-gray-800 p-2 rounded text-center"><p class="text-xs text-gray-400">弟子用度</p><p class="text-red-300 font-bold text-sm">-' + economy.upkeep + '</p></div>';
         html += '<div class="bg-gray-800 p-2 rounded text-center"><p class="text-xs text-gray-400">日净</p><p class="' + (economy.net >= 0 ? 'text-cyan-300' : 'text-red-400') + ' font-bold text-sm">' + (economy.net >= 0 ? '+' : '') + economy.net + '</p></div>';
         html += '</div>';
+        // v27.13 续批（过堂⑥新增·宗门产业经营）：账面可见——「产业」格里有多少是弟子打理出来的，得当场读得出；
+        // tend 缺席（旧快照/未指派）一律不画这行，面板与旧版一字不差。
+        if ((Number(economy.tend) || 0) > 0) {
+            html += '<p class="text-[10px] text-gray-500 mt-1">👥 弟子打理产业 +' + Math.floor(Number(economy.tend) || 0) + '／日（已并进上方「产业」，随月账入公库）</p>';
+        }
     }
     
     // 特殊资源（v20.2：地标建筑可交互）
@@ -923,6 +932,22 @@ function showSectDeepOverview(sectName) {
             html += '<span class="text-green-400 text-xs">效能 ' + r.output + '</span>';
             html += '</div>';
             html += '<p class="text-gray-500 text-xs mb-2">' + (r.desc || '') + '</p>';
+            // v27.13 续批（过堂⑥新增·宗门产业经营）：指派就挂在这张现成建筑卡上，不另建管理面板——
+            // 名册与日产加成一次取全（getSectTendInfo，与月账产业源同一把尺）；本门弟子可加减指派（±1，
+            // 单格与总池的夹逼都在 setSectResourceTend 模型侧），外派/未入宗的看的是只读名册。
+            // 指派缺席/旧档 → 按 ×0 显示，产出走基值，一行不炸。
+            var _tinfo = (typeof window.getSectTendInfo === 'function') ? window.getSectTendInfo(sectName) : null;
+            var _tn = (_tinfo && _tinfo.assign) ? Math.max(0, Math.min(9, Math.floor(Number(_tinfo.assign[r.id]) || 0))) : 0;
+            var _tb = (_tinfo && _tinfo.bonusOf) ? Math.floor(Number(_tinfo.bonusOf[r.id]) || 0) : 0;
+            html += '<div class="flex items-center justify-between text-xs mb-2">';
+            html += '<span class="' + (_tn > 0 ? 'text-cyan-300' : 'text-gray-600') + '">👥 弟子打理 ×' + _tn + (_tn > 0 && _tb > 0 ? '（日产 +' + _tb + '）' : '') + '</span>';
+            if (ds.isInSect && ds.sectId === sectName && typeof window.setSectResourceTend === 'function') {
+                html += '<span class="flex gap-1">'
+                    + '<button onclick="sectTendAdjust(\'' + sectName + '\', \'' + r.id + '\', -1)" class="bg-gray-700 hover:bg-gray-600 text-gray-200 w-6 h-6 rounded leading-none" title="撤回一名打理的弟子">−</button>'
+                    + '<button onclick="sectTendAdjust(\'' + sectName + '\', \'' + r.id + '\', 1)" class="bg-cyan-800 hover:bg-cyan-700 text-white w-6 h-6 rounded leading-none" title="派一名弟子去打理（产出加成随月账入公库）">＋</button>'
+                    + '</span>';
+            }
+            html += '</div>';
             if (actionLabel) {
                 html += '<button onclick="useSectResource(\'' + sectName + '\', \'' + r.id + '\')" class="w-full bg-blue-700 hover:bg-blue-600 text-white px-2 py-1 rounded text-xs">' + actionLabel + '</button>';
             } else {
@@ -986,6 +1011,22 @@ function showSectDeepOverview(sectName) {
     }
 }
 
+// ============ v27.13 续批（过堂⑥新增·宗门产业经营）：指派/撤回的唯一入口 ============
+// 模型侧（sect-internal.js setSectResourceTend）只管名册夹逼与报错理由；这里管话音与刷新——
+// 点一下加减钮，名册动了就重开同一张深度面板，玩家当场看到「弟子打理 ×n」与六格「产业」的变化。
+// 模型缺席（老档/未加载）→ 一句兜底话音，不抛错不建面板。
+function sectTendAdjust(sectName, resourceId, delta) {
+    var r = (typeof window.setSectResourceTend === 'function') ? window.setSectResourceTend(sectName, resourceId, delta) : null;
+    if (!r || !r.ok) {
+        if (window.showMessage) window.showMessage((r && r.reason) ? r.reason : '执事翻着名册直摇头——这处产业指派不上人。', 'warning');
+    } else {
+        if (window.showMessage) window.showMessage(Number(delta) >= 0
+            ? '你点名一名弟子去打理【' + r.name + '】——此后产出加成随月账入公库。'
+            : '你把【' + r.name + '】上的弟子唤了回来，让他安心修行。', 'info');
+    }
+    showSectDeepOverview(sectName);
+}
+
 // ============ 集成到内院面板 ============
 // 在 showSectInnerView 中，如果有深度数据，在按钮栏添加"深度"按钮
 function getSectDeepButtons(sectName) {
@@ -1008,4 +1049,5 @@ window.showSectDeepTasks = showSectDeepTasks;
 window.sectCompleteTask = sectCompleteTask;
 window.showSectFactions = showSectFactions;
 window.showSectDeepOverview = showSectDeepOverview;
+window.sectTendAdjust = sectTendAdjust; // v27.13 续批：产业格指派/撤回入口（建筑卡 ± 钮调用）
 window.getSectDeepButtons = getSectDeepButtons;

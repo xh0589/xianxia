@@ -162,15 +162,44 @@ d = FC.settle();
 assert(!d.error && d.trust === 0, 'B10 托人说和：破财消嫌隙，信用回到桌面上');
 
 // ============ C: 引擎真跑 ============
-// C1 举报的代价：真记进信用簿
 var Wc = fullWorld({ stones: 1000 });
+// ★2026-10-04 判据改的是「怎么认出那一枚钮」，不是「认哪一格」★
+// 原判据：`eng.choose(3)` 当举报、`choose(4)` 当说和——把两枚钮当成黑市柜面上的第 4、第 5 格。
+// 现判据：按那一枚钮**自己声明的账本动作**去认它（举报＝`fence.kind === 'snitch'`，
+//   说和＝`fence.op === 'settle'`，问暗柜＝`next === 'bl_hidden'`），也就是玩家在屏上认它的那几个字。
+// 为什么该改——先查清「为什么变」：`bl_start` 在第三格新插了一枚
+//   「🌙 摸进后巷，寻条黑道营生的门路」（effects.crimeworks.op === 'open'），后面每一格整体后移一位，
+//   举报由 3 挪到 4、说和由 4 挪到 5。原码 choose(3) 于是点进了新那一枚，choose(4) 点成了举报——
+//   **一条错下标把 C1～C4c 七条判据一起带歪**，而且带歪之后每一条都还长得像在测黑市。
+// 收紧处（本次新增，原来一条都没有）：认不出当场判红；认出来的那一枚屏上原文逐字核；
+//   并把新插那一枚的位置与文案钉住（挪走或改名当场红）。
+var bl = Wc.eng.facilities['black_market'].scenarios.filter(function (s) { return s.id === 'black_deal'; })[0];
+var blStart = bl.nodes.bl_start;
+function 认一枚(tag, 判) {
+    var 命中 = blStart.choices.map(function (c, i) { return { i: i, c: c }; }).filter(function (x) { return 判(x.c); });
+    assert(命中.length === 1, tag + ' 柜面上恰有一枚（读到 ' + 命中.length + ' 枚）——两枚就是两笔账');
+    return 命中[0];
+}
+var 后巷钮 = 认一枚('摸进后巷', function (c) { return !!(c.effects && c.effects.crimeworks); });
+assert(/摸进后巷/.test(后巷钮.c.text), 'C0a 新插那一枚屏上仍念「摸进后巷，寻条黑道营生的门路」（现读：' + 后巷钮.c.text + '）');
+assert(后巷钮.i === 3, 'C0b 它就排在第三格（现读第 ' + 后巷钮.i + ' 格）——后头两枚整体后移一位，这就是 C1～C4c 那七条一起歪掉的病根');
+var 举报钮 = 认一枚('举报', function (c) { return !!(c.effects && c.effects.fence && c.effects.fence.kind === 'snitch'); });
+assert(/举报给镇邪司/.test(举报钮.c.text), 'C0c 举报那一枚屏上仍念「举报给镇邪司」（现读：' + 举报钮.c.text + '）');
+var 说和钮 = 认一枚('说和', function (c) { return !!(c.effects && c.effects.fence && c.effects.fence.op === 'settle'); });
+assert(/说和/.test(说和钮.c.text) && 说和钮.i > 举报钮.i, 'C0d 说和那一枚屏上仍念「托中间人说和」，且排在举报之后（现读：' + 说和钮.c.text + '）');
+var 暗柜钮 = 认一枚('问暗柜', function (c) { return c.next === 'bl_hidden'; });
+assert(/柜底可有真货/.test(暗柜钮.c.text), 'C0e 问暗柜那一枚屏上仍念「柜底可有真货」（现读：' + 暗柜钮.c.text + '）');
+var 买卷钮 = 认一枚('买残卷', function (c) { return c.next === 'bl_buy'; });
+assert(/买下禁术残卷/.test(买卷钮.c.text), 'C0f 买残卷那一枚屏上仍念「买下禁术残卷」（现读：' + 买卷钮.c.text + '）');
+
+// C1 举报的代价：真记进信用簿
 Wc.eng.start('black_market', 'black_deal');
-var res = Wc.eng.choose(3); // 举报
+var res = Wc.eng.choose(举报钮.i); // 举报
 assert(!(res && res.error) && Wc.w.currentCharData._fence.trust === -2 && Wc.w.currentCharData._fence.snitches === 1,
     'C1 举报黑市：嘉奖照领，但信用簿记了重重一笔（trust -2，前科 +1）');
 // C2 黑名单拒售：整笔拦下、分文不动
 Wc.eng.start('black_market', 'black_deal');
-Wc.eng.choose(0); // 到 bl_buy
+Wc.eng.choose(买卷钮.i); // 到 bl_buy
 var before = Wc.currency.spiritStones;
 res = Wc.eng.choose(0); // 付 500 收残卷
 assert(res && res.error && res.error.indexOf('没摊子接你的单') >= 0 && Wc.currency.spiritStones === before,
@@ -178,23 +207,23 @@ assert(res && res.error && res.error.indexOf('没摊子接你的单') >= 0 && Wc
 // C3 说和：100 灵石划钱消嫌隙；无嫌隙时空跑不划钱
 restart(Wc, 'black_market', 'black_deal');
 before = Wc.currency.spiritStones;
-res = Wc.eng.choose(4); // 说和
+res = Wc.eng.choose(说和钮.i); // 说和
 assert(!(res && res.error) && Wc.currency.spiritStones === before - 100 && Wc.w.currentCharData._fence.trust === 0,
     'C3a 托人说和 100 灵石成交，条子揭了（' + before + '→' + Wc.currency.spiritStones + '）');
 restart(Wc, 'black_market', 'black_deal');
 before = Wc.currency.spiritStones;
-res = Wc.eng.choose(4);
+res = Wc.eng.choose(说和钮.i);
 assert(res && res.error && res.error.indexOf('并无嫌隙') >= 0 && Wc.currency.spiritStones === before,
     'C3b 无嫌隙时说和被拒且分文不划——不是交钱就能刷信用的提款机');
 // C4 暗柜：信用 0 不开门；攒到 2 才放货、老主顾折扣更低
 restart(Wc, 'black_market', 'black_deal');
-Wc.eng.choose(1); // 问暗柜
+Wc.eng.choose(暗柜钮.i); // 问暗柜
 res = Wc.eng.choose(0); // 取全册
 assert(res && res.error && res.error.indexOf('没你的座') >= 0 && Wc.currency.spiritStones === before,
     'C4a 交情不够暗柜不放手（文案原样上屏、钱不打）');
 Wc.FC.adjust(2, null); // 又做了几笔生意把交情攒起来
 restart(Wc, 'black_market', 'black_deal');
-Wc.eng.choose(1);
+Wc.eng.choose(暗柜钮.i);
 before = Wc.currency.spiritStones;
 res = Wc.eng.choose(0);
 assert(!(res && res.error) && Wc.currency.spiritStones === before - 450 &&
@@ -203,7 +232,7 @@ assert(!(res && res.error) && Wc.currency.spiritStones === before - 450 &&
     'C4b 信用 2 入暗柜：全册 450（九折）成交、真货入手、信用再涨（' + before + '→' + Wc.currency.spiritStones + '）');
 Wc.FC.adjust(2, null); // 信用 5：老主顾价 85 折
 restart(Wc, 'black_market', 'black_deal');
-Wc.eng.choose(1);
+Wc.eng.choose(暗柜钮.i);
 before = Wc.currency.spiritStones;
 res = Wc.eng.choose(0);
 assert(!(res && res.error) && Wc.currency.spiritStones === before - 425,

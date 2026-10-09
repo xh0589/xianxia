@@ -12,15 +12,27 @@ const TRAVEL_METHODS = {
         risk: 0.1,            // 10%遭遇事件概率
         desc: '安全但缓慢'
     },
-    HORSE: { 
-        id: 'horse', 
-        name: '骑马', 
-        icon: '🐴', 
+    HORSE: {
+        id: 'horse',
+        name: '骑马',
+        icon: '🐴',
         timeCost: 60,         // 1小时
         energyCost: 10,       // 消耗10精力
         cost: 50,             // 50铜钱
         risk: 0.08,
         desc: '平衡的选择'
+    },
+    // v27.0 坐骑批：骡车——比骑马慢、比步行快、比骑马便宜，车板上能打个盹（精力几乎不耗）。
+    // 自有坐骑（灵兽/凡兽）走骑乘提速账，不必雇车；这是没牲口的人的舒适档。
+    MULE_CART: {
+        id: 'mule_cart',
+        name: '骡车',
+        icon: '🛞',
+        timeCost: 90,         // 1.5小时
+        energyCost: 3,        // 坐在车板上，颠是颠了点，人不累
+        cost: 30,             // 30铜钱
+        risk: 0.06,
+        desc: '雇一辆骡车：慢些，但省力气，车板上能打个盹'
     },
     FLOAT_SWORD: { 
         id: 'float_sword', 
@@ -379,9 +391,10 @@ function startTravel(toCity, method = 'walk') {
     }
     
     // v7.1 骑乘缩短旅行时间
+    // v27.0：坐骡车的人不骑马——骡车不吃骑乘提速（传送阵是法术位移，本就快到骑乘无从加速）
     let actualTimeCost = travelMethod.timeCost;
     let mountNote = '';
-    if (typeof window.getMountTravelTimeMultiplier === 'function') {
+    if (travelMethod.id !== 'mule_cart' && typeof window.getMountTravelTimeMultiplier === 'function') {
         const mul = window.getMountTravelTimeMultiplier();
         if (mul && mul !== 1) {
             actualTimeCost = Math.max(5, Math.floor(travelMethod.timeCost * mul));
@@ -548,7 +561,8 @@ function completeTravel(risk = 0.1) {
             if (typeof window.locationSystem.travelToCity === 'function') {
                 window.locationSystem.travelToCity(toCity);
             } else if (typeof window.locationSystem.enterCity === 'function') {
-                window.locationSystem.enterCity(toCity);
+                // v26.1：走路/骑马/御剑抵达要过城门盘查；唯独传送阵是法术位移，skipGate
+                window.locationSystem.enterCity(toCity, { skipGate: travelState.method === 'teleport' });
             } else if (typeof window.enterCity === 'function') {
                 window.enterCity(toCity);
             }
@@ -561,6 +575,14 @@ function completeTravel(risk = 0.1) {
 
     // 途中事件先触发，再同步落地城市状态；关闭页面也不会丢失抵达结算。
     arriveDest();
+
+    // v27.0 骑乘低频事件：带着坐骑赶路，进城那一刻牲口可能被锣鼓幡影惊了——
+    // 自动结算不弹窗（抵达口可能正排着城门盘查的模态，不抢台）
+    try {
+        if (window.MountEvents && typeof window.MountEvents.maybeJolt === 'function') {
+            window.MountEvents.maybeJolt(travelState.method);
+        }
+    } catch (eJolt) {}
 }
 
 // ============ 触发旅行事件 ============

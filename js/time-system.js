@@ -403,10 +403,21 @@ function onNewMonth() {
 // ============ 更新季节 ============
 function updateSeason() {
     const month = gameTime.currentMonth;
+    var _prevSeason16 = gameTime.currentSeason;
     if (month <= 2) gameTime.currentSeason = 'spring';
     else if (month <= 5) gameTime.currentSeason = 'summer';
     else if (month <= 8) gameTime.currentSeason = 'autumn';
     else gameTime.currentSeason = 'winter';
+    // v27.16：⑬改良-3 季节广播口（onSeasonChange）——换季那一次向 EventBus 发一声。
+    // 冬天的城与夏天的城无别（总档⑬漏洞三）：药藏/事件池/出行/妖兽行为从此全订阅这一个口，
+    // 不再各自读 currentSeason 轮询。订阅方示例：EventBus.on('seasonChange', fn)——payload {season, prev, month, day}。
+    if (_prevSeason16 !== gameTime.currentSeason) {
+        try {
+            var _payload16 = { season: gameTime.currentSeason, prev: _prevSeason16, month: gameTime.currentMonth, day: gameTime.currentDay };
+            if (window.EventBus && typeof window.EventBus.emit === 'function') window.EventBus.emit('seasonChange', _payload16);
+            if (window.GameEvents && window.GameEvents !== window.EventBus && typeof window.GameEvents.emit === 'function') window.GameEvents.emit('seasonChange', _payload16);
+        } catch (eSs16) { console.warn('[静默失败] js/time-system.js · updateSeason：换季那声广播没发出去（订阅方这季听不到）', eSs16 && eSs16.message); }
+    }
 }
 
 // ============ 自然恢复（每日） ============

@@ -471,17 +471,52 @@
     };
 
     // ============ 四、发射与每日钩子 ============
-    function _asmFire(ev) {
-        if (!ev) return;
-        try { NPC_PERSONAL_EVENTS[ev.id] = ev; } catch (e) { return; }
+    // 座位判归上一批做好的共用排队器（heroine-rivalry.js 导出 window.__jealRequestSeat，
+    // 加载序更早：仙侠.html:2128 早于本文件 2194）。装配事件是一次性的（flag: eid+'_done'，
+    // 无 onFied 回调），共用队列的 _jealFireOnce 语义与这里原本的单发完全一致，
+    // 且抢不到座位时它会排队等空位——旧写法那句「命中即 return」会把一场照面直接作废。
+    var ASM_SEAT_DEFER = [];
+    function _asmSeatTaken() {
+        if (typeof window !== 'undefined' && typeof window.__jealModalOpen === 'function') {
+            try { return !!window.__jealModalOpen(); }
+            catch (e) { console.warn('[声口装配] 共用座位判问不出声，改按同一条选择器判：', e && e.message); }
+        }
+        return !!(typeof document !== 'undefined' && document.querySelector
+            && document.querySelector('.personal-event-modal'));
+    }
+    // 返回 'fired' / 'queued' / 'gave-way' / 'no-npc' / 'gated'——调用方据此决定要不要销账。
+    // 旧写法返回 undefined，调用方无从判断，于是先把账销了再发（座一被占，这一回合就永久作废）。
+    // onBooked：这一桩真的开演出去（或已被共用队列接下排期）时才执行——销账只认它。
+    function _asmFire(ev, onBooked) {
+        if (!ev) return 'no-event';
+        try { NPC_PERSONAL_EVENTS[ev.id] = ev; } catch (e) { return 'no-pool'; }
+        var npcId = ev.npcId || '';
         setTimeout(function () {
-            if (document.querySelector && document.querySelector('.personal-event-modal')) return;
-            var npc = window.npcManager && window.npcManager.getNPC ? window.npcManager.getNPC(ev.npcId) : null;
+            if (typeof window !== 'undefined' && typeof window.__jealRequestSeat === 'function') {
+                var r = window.__jealRequestSeat(ev.id, npcId, (npcId || ''));
+                if (r === 'fired' || r === 'queued') {
+                    if (typeof onBooked === 'function') onBooked(r);
+                    return;
+                }
+            }
+            if (_asmSeatTaken()) {
+                ASM_SEAT_DEFER.push({ evId: ev.id, npcId: npcId, kind: ev.guestId ? 'duel' : 'after' });
+                if (ASM_SEAT_DEFER.length > 40) ASM_SEAT_DEFER.shift();
+                return;
+            }
+            var npc = window.npcManager && window.npcManager.getNPC ? window.npcManager.getNPC(npcId) : null;
             if (!npc) return;
             if (typeof canPlayerAccessPersonalEvent === 'function' && !canPlayerAccessPersonalEvent(ev, npc)) return;
-            if (typeof triggerPersonalEvent === 'function') triggerPersonalEvent(ev.id);
+            if (typeof triggerPersonalEvent === 'function' && triggerPersonalEvent(ev.id)) {
+                if (typeof onBooked === 'function') onBooked('fired');
+            }
         }, 1200);
+        // 座位此刻就被人占着：当场就告诉调用方，别让调用方先把账销掉
+        return _asmSeatTaken() ? 'gave-way' : 'fired';
     }
+    window.__jealAsmSeat = function () {
+        return { deferred: ASM_SEAT_DEFER.slice(), deferredCount: ASM_SEAT_DEFER.length, seatTaken: _asmSeatTaken() };
+    };
     window._asmTryCompose = function (hostId) {
         // 手动/测试入口：给主人当场装配一位来客
         if (typeof window._jealAllRivals !== 'function') return null;
@@ -500,16 +535,27 @@
                 if (!window.currentCharData || !window.npcManager) return;
                 var loc = window.currentCharData.location || '';
                 if (!loc) return;
-                if (document.querySelector && document.querySelector('.personal-event-modal')) return;
                 var today = (window.timeSystem.gameTime && window.timeSystem.gameTime.currentDay) || 1;
 
                 // 余波优先：旧账发酵比新戏开场更真
                 var pend = _ldgPendingAftermath(today, loc);
                 if (pend && !pend.entry.after) {
                     if (Math.random() < 0.55) {
-                        pend.entry.after = true;
-                        _ldgSave();
-                        _asmFire(window.composePairAftermath(pend.speaker, pend.other, pend.entry.day, pend.entry.choice));
+                        // 座位判先过一遍：占着就让这一回合欠着（账本窗口 3~10 日，改日必然重来），
+                        // 绝不先销 entry.after 再发——旧写法在这儿把照面永久作废过。
+                        if (_asmSeatTaken()) {
+                            ASM_SEAT_DEFER.push({ evId: 'asm_after_pending', npcId: pend.speaker, kind: 'after' });
+                            if (ASM_SEAT_DEFER.length > 40) ASM_SEAT_DEFER.shift();
+                            return;
+                        }
+                        var afterEv = window.composePairAftermath(pend.speaker, pend.other, pend.entry.day, pend.entry.choice);
+                        if (afterEv) {
+                            _asmFire(afterEv, function () {
+                                // 只在真的开演出去的那一刻销账（开演失败这一回合仍然欠着）
+                                pend.entry.after = true;
+                                _ldgSave();
+                            });
+                        }
                         return;
                     }
                 }
@@ -534,7 +580,8 @@
                 });
                 if (!rivals.length) return;
                 var guest = rivals[Math.floor(Math.random() * rivals.length)];
-                if (Math.random() < 0.3) _asmFire(window.composePairDuel(host, guest.id));
+                // 座位被占就不装配：装出来的那一桩是一次性的，无人开演就等于白写一份声口
+                if (Math.random() < 0.3 && !_asmSeatTaken()) _asmFire(window.composePairDuel(host, guest.id));
             } catch (e) { console.warn('[声口装配] 每日钩子失败:', e); }
         });
     }

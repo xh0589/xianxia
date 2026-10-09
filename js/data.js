@@ -101,18 +101,27 @@ function getDurabilityLabel(value) {
     return '尽毁';
 }
 
-// 修仙境界数据（9境界：炼气→筑基→金丹→元婴→化神→炼虚→合体→大乘→渡劫）
-const realmLevels = [
-    { realm: '炼气', layers: 9, baseQi: 100 },
-    { realm: '筑基', layers: 9, baseQi: 300 },
-    { realm: '金丹', layers: 9, baseQi: 600 },
-    { realm: '元婴', layers: 9, baseQi: 1200 },
-    { realm: '化神', layers: 9, baseQi: 2500 },
-    { realm: '炼虚', layers: 9, baseQi: 5000 },
-    { realm: '合体', layers: 9, baseQi: 8000 },
-    { realm: '大乘', layers: 9, baseQi: 12000 },
-    { realm: '渡劫', layers: 9, baseQi: 15000 }
-];
+// 修仙境界数据（真气底表）
+// ⚠️ 境界**名单与顺序不再在本文件自抄**：一律取 window.REALM_ORDER（js/global-utils.js:899，
+//    十二境：凡人…渡劫→飞升→金仙，加载序上它在本文件之前 —— 仙侠.html:1961 早于 :1976）。
+//    旧式是本地手抄九档（炼气…渡劫），飞升/金仙 两境在这张表里根本不存在；
+//    本表已无 js/ 内的读者（实测 `rg realmLevels js/` 只命中本文件），补齐纯属口径对齐，
+//    不改任何数值路径。真源若缺席（单独加载本文件的沙箱），退化为空表并告警，不静默抄一份。
+const _境界真气底 = {
+    '炼气': 100, '筑基': 300, '金丹': 600, '元婴': 1200, '化神': 2500,
+    '炼虚': 5000, '合体': 8000, '大乘': 12000, '渡劫': 15000,
+    // 飞升/金仙：沿渡劫 15000 的 ×2 续上去（设计值，本表无读者，改它不挪任何战斗/修炼数值）
+    '飞升': 30000, '金仙': 60000
+};
+const realmLevels = (function () {
+    var order = (typeof window !== 'undefined' && window.REALM_ORDER) ? window.REALM_ORDER : null;
+    if (!order || !order.length) {
+        console.warn('[境界尺] js/data.js：window.REALM_ORDER 未就位，realmLevels 出空表（勿手抄第二份序）');
+        return [];
+    }
+    return order.filter(function (名) { return 名 !== '凡人'; })   // 这张表从炼气起，凡人不在突破阶梯里
+        .map(function (名) { return { realm: 名, layers: 9, baseQi: _境界真气底[名] }; });
+})();
 
 // 随机地图地形类型
 const terrainTypes = [
@@ -143,6 +152,20 @@ const buildingTypes = [
 ];
 
 // ==================== 境界突破配置（v9.7 新增） ====================
+// ⚠️ 这张表的**名单与顺序同样取自 window.REALM_ORDER**，不再手抄（本地手抄的那份断在渡劫）。
+//
+// ★ 但它的**切点是故意的：只到「渡劫」，不给飞升/金仙两行**——这不是漏，是门：
+//   这张表是「凡间九境的突破花费阶梯」（qiBase/essenceBase/temperingBase 供
+//   breakthrough-system.js 的 getEssenceRequired/getTemperingRequired/getQiMax 与
+//   breakthrough-ritual.js 的仪式门槛读）。飞升与金仙**不走这道门**：
+//   js/cultivation/breakthrough-system.js:174-185 明文拦下「九境表之外的境界」
+//   （realmIndex<0 ⇒ 返回 false，文案「🌅 你已超脱凡尘、不入九境……修为精进请走『二段飞升』」），
+//   飞升的进阶另有整条链（天劫 → 证道 → 二段飞升）。
+//   ⚠️ 反过来说：**给这两行补上是会开后门的**——补上之后 getRealmIndex('飞升') 由 -1 变 9，
+//   那道拦截随之失效，飞升/金仙 就能从凡间突破门直接「突破」进金仙，整条飞升链被绕过。
+//   所以「口径统一」在这一格的做法是**把切点写清楚并钉住**，不是把行数凑齐。
+//   本表逐档读数（炼气 qiBase 50 / essenceBase 30 / temperingBase 5 … 渡劫 12800/2.4e9/3.2e6）
+//   一格未动；十个序号也与 window.REALM_ORDER 中「炼气…渡劫」那一段逐名同序（炼气＝0 … 渡劫＝8）。
 const REALM_CONFIG = {
     realms: [
         { name: '炼气', index: 0, qiBase: 50, essenceBase: 30, temperingBase: 5 },
@@ -155,8 +178,24 @@ const REALM_CONFIG = {
         { name: '大乘', index: 7, qiBase: 6400, essenceBase: 300000000, temperingBase: 650000 },
         { name: '渡劫', index: 8, qiBase: 12800, essenceBase: 2400000000, temperingBase: 3200000 }
     ],
-    layerMultipliers: [1.0, 1.7, 2.8, 4.2, 6.0, 8.0, 10.5, 13.5, 17.5]
+    layerMultipliers: [1.0, 1.7, 2.8, 4.2, 6.0, 8.0, 10.5, 13.5, 17.5],
+    // 真源上「凡间九境」那一段的起止（凡人/飞升/金仙 三档**故意不在表内**，理由见上）。
+    realmSpan: { from: '炼气', to: '渡劫' }
 };
+
+// 口径自检：表内名单必须与 window.REALM_ORDER 的「炼气…渡劫」段逐名同序。
+// 这里只**报账**不改表——序号错位会直接把突破花费送到别的档位上，属数值事故，必须有人看见。
+(function () {
+    if (typeof window === 'undefined' || !window.REALM_ORDER) return;
+    var 起 = window.REALM_ORDER.indexOf(REALM_CONFIG.realms[0].name);
+    var 止 = window.REALM_ORDER.indexOf(REALM_CONFIG.realms[REALM_CONFIG.realms.length - 1].name);
+    var 段 = window.REALM_ORDER.slice(起, 止 + 1);
+    var 名 = REALM_CONFIG.realms.map(function (r) { return r.name; });
+    if (段.join('|') !== 名.join('|')) {
+        console.warn('[境界尺] js/data.js：REALM_CONFIG.realms 与 window.REALM_ORDER 的「' + REALM_CONFIG.realmSpan.from
+            + '…' + REALM_CONFIG.realmSpan.to + '」段不同序（表=' + 名.join('、') + ' 尺=' + 段.join('、') + '）——突破花费会送错档');
+    }
+})();
 
 // ==================== 导出到 window 对象 ====================
 window.attributes = attributes;

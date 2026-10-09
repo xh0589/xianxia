@@ -1,7 +1,7 @@
 /**
- * wave95-economy-facility-fixes-node.js — 第九十五波 · 经济/设施/情境簇外包修复 验收
+ * wave95-economy-facility-fixes-node.js — 第九十五波 · 经济/设施/情境簇修复 验收
  *
- * 验收点（编号=外包测试报告 FIX_NOTES 编号）：
+ * 验收点（编号=测试报告 FIX_NOTES 编号）：
  *   A NEW-28：带 roll 的选项，选项级 time 不再被吞；分支内 time 优先；cost 折叠不被合并破坏
  *   B NEW-29：拍卖「奋力跟价」一次摇点定落槌价——播报价 === 实扣价
  *   C NEW-31：强化扣费走 EconomyTransaction.debit（镜像回填）；余额不足整笔不成交；无事务模块兜底双写

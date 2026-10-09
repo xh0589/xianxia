@@ -599,6 +599,8 @@ function plantCrop(cropId) {
     try { if (window.FormationSystem && typeof window.FormationSystem.getBuff === 'function') fieldPct += Number(window.FormationSystem.getBuff('field', 'fieldSpeedPct')) || 0; } catch (eFa) {}
     try { if (window.CaveFacilities && typeof window.CaveFacilities.getBuff === 'function') fieldPct += Number(window.CaveFacilities.getBuff('player', 'fieldSpeedPct')) || 0; } catch (eFc) {}
     if (fieldPct > 0) grow = Math.max(1, Math.ceil(grow / (1 + fieldPct / 100)));
+    // v27.1 灵田雇工：雇来的长工锄草松土——生长期再打个七五折（工钱另算，见灵田雇工账）
+    try { if (getFarmhand()) grow = Math.max(1, Math.ceil(grow * FARMHAND_GROW_MUL)); } catch (eFh) {}
     var baseYield = crop.yieldCount || 1;
     // v9.8: yield * (1 + planting/200)
     var yieldCount = Math.max(1, Math.floor(baseYield * (1 + plantSkill / 200)));
@@ -719,6 +721,103 @@ function harvestAllReady() {
     return n;
 }
 
+// ==================== v27.1 灵田雇工（第26件·东家侧）：雇长工，替你锄草收成真 ====================
+// 灵田此前全靠自己：熟了三日不收就蔫（v20.44 老账）。雇工下田后：
+//   ① 锄草松土——下种时生长期再打个七五折；
+//   ② 代收割成——翻日账里熟一畦收一畦，灵植不再蔫在地里（雇工最大的价值就是这一条）；
+//   ③ 工钱如实——安家钱30灵石，日薪2灵石翻日自动扣；欠薪三日辞工（铺子伙计同款家法）。
+// 账挂 playerHouse.farmhand（洞府存档随身走，不开新键）；收成走 harvestCrop 正门，一件不私藏。
+var FARMHAND_NAMES = ['老周', '田二', '石伯', '阿甘', '福叔', '铁牛'];
+var FARMHAND_HIRE = 30;
+var FARMHAND_WAGE = 2;
+var FARMHAND_ARREARS_QUIT = 3;
+var FARMHAND_GROW_MUL = 0.75;
+
+function getFarmhand() {
+    return (playerHouse && playerHouse.type && playerHouse.farmhand) || null;
+}
+
+window.hireFarmhand = function () {
+    if (!playerHouse || !playerHouse.type) {
+        if (window.showMessage) window.showMessage('连个洞府都没有，田托付给谁去？', 'warning');
+        return false;
+    }
+    if (playerHouse.farmhand) {
+        if (window.showMessage) window.showMessage('「' + playerHouse.farmhand.name + '」正在田里做工呢——灵田就这几畦，用不着第二双锄头。', 'info');
+        return false;
+    }
+    var paid = false;
+    try {
+        var dm = window.XianXia && window.XianXia.DataManager;
+        if (dm && typeof dm.deductSpiritStones === 'function') paid = !!dm.deductSpiritStones(FARMHAND_HIRE);
+        else if (window.currentCharData && (Number(window.currentCharData.spiritStones) || 0) >= FARMHAND_HIRE) { window.currentCharData.spiritStones -= FARMHAND_HIRE; paid = true; }
+    } catch (ePay) { console.warn('[静默失败] js/house-system.js · hireFarmhand：安家钱没扣成——雇工契没立', ePay && ePay.message); }
+    if (!paid) {
+        if (window.showMessage) window.showMessage('雇工的安家钱要 ' + FARMHAND_HIRE + ' 灵石——手头不足，中人没法立契。', 'warning');
+        return false;
+    }
+    var nm = FARMHAND_NAMES[Math.floor(Math.random() * FARMHAND_NAMES.length)];
+    playerHouse.farmhand = { name: nm, hiredDay: getHouseGameDay(), arrears: 0 };
+    saveHouseData();
+    if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI();
+    if (window.gameLog && window.gameLog.add) window.gameLog.add('🧑‍🌾 长工「' + nm + '」挽起裤脚下了灵田（安家钱 ' + FARMHAND_HIRE + ' 灵石）——锄草、浇水，熟了替你收割；日薪 ' + FARMHAND_WAGE + ' 灵石翻日自动支，欠薪三日辞工。', 'success');
+    if (window.showMessage) window.showMessage('🧑‍🌾 长工「' + nm + '」上工了——生长期×' + FARMHAND_GROW_MUL + '，熟了代收，灵植不蔫。', 'success');
+    if (typeof window.renderHouseStatus === 'function') window.renderHouseStatus();
+    return true;
+};
+
+window.fireFarmhand = function () {
+    var fh = getFarmhand();
+    if (!fh) { if (window.showMessage) window.showMessage('田里没有雇工。', 'info'); return false; }
+    var nm = fh.name;
+    playerHouse.farmhand = null;
+    saveHouseData();
+    if (window.showMessage) window.showMessage('🧑‍🌾 你结了「' + nm + '」的工钱送他下山——灵田又归你自己照看了。', 'info');
+    if (typeof window.renderHouseStatus === 'function') window.renderHouseStatus();
+    return true;
+};
+
+// 翻日账：代收成真 + 支工钱（无按钮无日常）
+function farmhandDaily() {
+    var fh = getFarmhand();
+    if (!fh) return;
+    // ① 代收：熟一畦收一畦，走 harvestCrop 正门（行囊满收不进的那畦照旧留在田里，不蒸发）
+    try {
+        var n = harvestAllReady();
+        if (n > 0 && window.gameLog && window.gameLog.add) window.gameLog.add('🧑‍🌾 长工「' + fh.name + '」替你收了 ' + n + ' 畦灵植，颗粒归仓——人在不在家，田里的活都没停。', 'success');
+    } catch (eHarvest) { console.warn('[静默失败] js/house-system.js · farmhandDaily：代收没收成——熟的灵植可能蔫在地里', eHarvest && eHarvest.message); }
+    // ② 工钱：自动扣账；欠薪三日辞工
+    var paid = false;
+    try {
+        var dm = window.XianXia && window.XianXia.DataManager;
+        if (dm && typeof dm.deductSpiritStones === 'function') paid = !!dm.deductSpiritStones(FARMHAND_WAGE);
+        else if (window.currentCharData && (Number(window.currentCharData.spiritStones) || 0) >= FARMHAND_WAGE) { window.currentCharData.spiritStones -= FARMHAND_WAGE; paid = true; }
+    } catch (eWage) { console.warn('[静默失败] js/house-system.js · farmhandDaily：工钱没扣成，欠薪账没记', eWage && eWage.message); }
+    if (paid) {
+        fh.arrears = 0;
+    } else {
+        fh.arrears = (Number(fh.arrears) || 0) + 1;
+        if (fh.arrears >= FARMHAND_ARREARS_QUIT) {
+            var nm = fh.name, arrearsN = fh.arrears;
+            playerHouse.farmhand = null;
+            if (window.gameLog && window.gameLog.add) window.gameLog.add('🧑‍🌾 长工「' + nm + '」的工钱欠了 ' + arrearsN + ' 日——他把锄头立在田埂上：「东家，灵露喝不饱。」人下山去了。（欠满三日辞工，铺子伙计同款家法）', 'warning');
+            else if (window.showMessage) window.showMessage('🧑‍🌾 工钱欠满三日，长工「' + nm + '」辞工下山了。', 'warning');
+        } else if (window.showMessage) {
+            window.showMessage('🧑‍🌾 长工的工钱（' + FARMHAND_WAGE + ' 灵石/日）没能支出——已欠 ' + fh.arrears + ' 日，欠满 ' + FARMHAND_ARREARS_QUIT + ' 日就辞工。', 'warning');
+        }
+    }
+    saveHouseData();
+}
+(function subscribeFarmhand() {
+    function sub() {
+        if (window.timeSystem && typeof window.timeSystem.onNewDaySubscribe === 'function') {
+            window.timeSystem.onNewDaySubscribe(farmhandDaily);
+        }
+    }
+    if (window.timeSystem && typeof window.timeSystem.onNewDaySubscribe === 'function') sub();
+    else if (typeof window.addEventListener === 'function') window.addEventListener('load', sub);
+})();
+
 /** 洞府面板 HTML（供 app.renderHouseStatus 或直接调用） */
 function getHouseStatusHtml() {
     if (!playerHouse || !playerHouse.type) {
@@ -786,6 +885,16 @@ function getHouseStatusHtml() {
         status += '</div>';
     }
 
+    // v27.1 灵田雇工：长工一行（在工/雇工两个口）
+    var fh = getFarmhand();
+    if (fh) {
+        status += '<p class="text-xs text-gray-400 mt-2 mb-2">🧑‍🌾 长工「' + fh.name + '」在工（日薪 ' + FARMHAND_WAGE + ' 灵石翻日自动支 · 生长期×' + FARMHAND_GROW_MUL + ' · 熟了替你收割，灵植不蔫' + ((Number(fh.arrears) || 0) > 0 ? ' · <span class="text-red-400">工钱已欠 ' + fh.arrears + ' 日（欠满 ' + FARMHAND_ARREARS_QUIT + ' 日辞工）</span>' : '') + '）' +
+            '<button onclick="fireFarmhand()" class="text-xs bg-red-800 hover:bg-red-700 text-white px-2 py-0.5 rounded ml-2">辞工</button></p>';
+    } else {
+        status += '<p class="text-xs text-gray-500 mt-2 mb-2">灵田没雇长工——锄草浇水收割全靠自己，熟了三日不收就蔫。' +
+            '<button onclick="hireFarmhand()" class="text-xs bg-emerald-700 hover:bg-emerald-600 text-white px-2 py-1 rounded ml-2">雇长工（安家 ' + FARMHAND_HIRE + ' 灵石 · 日薪 ' + FARMHAND_WAGE + '）</button></p>';
+    }
+
     // v20.44 家具：置办过的列出来，没置办的摆个小铺
     status += '<p class="text-sm text-amber-400 font-bold mb-1 mt-3">🪑 家具</p>';
     var owned = playerHouse.furniture || [];
@@ -832,6 +941,13 @@ window.applyHouseStorageBonus = applyHouseStorageBonus;
 window.plantCrop = plantCrop;
 window.harvestCrop = harvestCrop;
 window.harvestAllReady = harvestAllReady;
+// v27.1 灵田雇工（洞府面板的雇/辞一行照这四个数说账；「安家 30」「欠满 3 日」不另写在视图里）
+window.getFarmhand = getFarmhand;
+window.FARMHAND_GROW_MUL = FARMHAND_GROW_MUL;
+window.FARMHAND_WAGE = FARMHAND_WAGE;
+window.FARMHAND_HIRE = FARMHAND_HIRE;
+window.FARMHAND_ARREARS_QUIT = FARMHAND_ARREARS_QUIT;
+window.farmhandDaily = farmhandDaily;
 window.getHouseStatusHtml = getHouseStatusHtml;
 window.getHousePlotSlots = getHousePlotSlots;
 window.saveHouseData = saveHouseData;

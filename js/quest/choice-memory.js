@@ -67,8 +67,38 @@ const IMPORTANT_CHOICES = {
     'qi_knock1_returned': { id: 'qi_knock1_returned', questId: 'main_052', description: '把守脉盟的帖子原样退回——门里是日子，门外是世道', tags: ['cautious'] },
     'qi_knock2_escort': { id: 'qi_knock2_escort', questId: 'main_052', description: '提剑护送灯下三百口过了佣军地界——那盏灯还了', stat: 'mercy_count', tags: ['mercy', 'loyal'] },
     'qi_knock2_closed': { id: 'qi_knock2_closed', questId: 'main_052', description: '关上了门——三年前那盏灯，没还', tags: ['selfish'] },
+    // 门缝下的信（qi-arc3.js W.qiLetterChoice）：qi_knock2_closed 之后**必走**的第二拍，
+    // 玩家 100% 会撞上 —— 此前整族三键漏登记，recordChoice 查表落空，直接弹
+    // 「选择记录失败：无效的选择ID」，history 少三条、恩列少三笔。
+    // description 抄 qi-arc3.js:353-355 三个 btn() 的选项原文（去首 emoji），一字未编。
+    // stat 全留空：同族带 stat 的三笔都是交资源/挨一刀的承诺（escort→mercy、knock3_wine→dao_heart），
+    // 读信/压信/烧信三笔既不掏东西也不上战场，比照同族的 qi_knock1_went、qi_knock1_returned 留空。
+    'qi_knock2b_look': { id: 'qi_knock2b_look', questId: 'main_052', description: '举到灯前，再看一遍', tags: ['curious'] },
+    'qi_knock2b_pillow': { id: 'qi_knock2b_pillow', questId: 'main_052', description: '原样折好，压在枕头底下', tags: ['cautious'] },
+    'qi_knock2b_burn': { id: 'qi_knock2b_burn', questId: 'main_052', description: '烧了——门缝里进来的东西，不问来历', tags: ['selfish'] },
     'qi_knock3_wine': { id: 'qi_knock3_wine', questId: 'main_052', description: '接了她的酒——上屋顶陪血海之主坐到天亮', stat: 'dao_heart_count', tags: ['dao_heart', 'brave'] },
     'qi_knock3_window': { id: 'qi_knock3_window', questId: 'main_052', description: '关了窗装睡——窗台上多了一坛没字条的酒', tags: ['cautious'] },
+    // 枯竭年代·上（qi-arc3.js W.qiH04Life / W.qiH04Peddler，main_053）—— 六键补录，此前整族落空。
+    // description 抄 qi-arc3.js:440-442（营生三选）与 :471-473（货郎三买）的 btn() 选项原文；
+    // 末尾（灵石二十/灵石八十）价签按同族既有处理去掉（比照 qi_liu_buy 之于「（灵石三十）」、
+    // qi_chen_stone 之于「塞给他一枚灵石」）。stat 全留空：这三拍是「日子怎么过」，
+    // 同为花钱/赠物的序幕两笔（qi_liu_buy / qi_chen_stone）本来就无 stat，无 stat 即只进 history。
+    'qi_h4_life_farm': { id: 'qi_h4_life_farm', questId: 'main_053', description: '种地——把南坡那块荒了十年的田翻出来', tags: ['helpful'] },
+    'qi_h4_life_trade': { id: 'qi_h4_life_trade', questId: 'main_053', description: '营生——街口支个摊，卖茶也代写家书', tags: ['pragmatic'] },
+    'qi_h4_life_teach': { id: 'qi_h4_life_teach', questId: 'main_053', description: '开蒙——把邻居的孩子们叫来，教认字', tags: ['helpful'] },
+    'qi_h4_peddler_news': { id: 'qi_h4_peddler_news', questId: 'main_053', description: '买南边粮道的消息', tags: ['wise'] },
+    'qi_h4_peddler_sword': { id: 'qi_h4_peddler_sword', questId: 'main_053', description: '把闲着的飞剑卖给他', tags: ['pragmatic'] },
+    'qi_h4_peddler_tea': { id: 'qi_h4_peddler_tea', questId: 'main_053', description: '都不买——留他喝碗茶，听他白说', tags: ['helpful'] },
+    // 枯竭年代·下（qi-arc3.js W.qiH05Fight / W.qiH05Teller，main_054）—— 六键补录，此前整族落空。
+    // description 抄 qi-arc3.js:532-534（河畔三选）与 :580-582（说书人三选）的 btn() 选项原文。
+    // stat 全留空：与 main_053 同理，全是只过日子的拍子；留空即这十二笔不动 stats、
+    // 不动 checkEndingFromChoices 的四项 ratio 与 tendency（结局倾向零漂移）。
+    'qi_h5_fight_part': { id: 'qi_h5_fight_part', questId: 'main_054', description: '劝一句——石头轮流用，一天一家', tags: ['mercy'] },
+    'qi_h5_fight_watch': { id: 'qi_h5_fight_watch', questId: 'main_054', description: '站着听完——世俗的事，世俗自己了', tags: ['cautious'] },
+    'qi_h5_fight_leave': { id: 'qi_h5_fight_leave', questId: 'main_054', description: '打水回家——锅里的粥要糊了', tags: ['selfish'] },
+    'qi_h5_teller_tip': { id: 'qi_h5_teller_tip', questId: 'main_054', description: '赏他十灵石——段子糙，饭碗不糙', tags: ['helpful'] },
+    'qi_h5_teller_fix': { id: 'qi_h5_teller_fix', questId: 'main_054', description: '纠一句——「她不是图痛快」', tags: ['wise'] },
+    'qi_h5_teller_go': { id: 'qi_h5_teller_go', questId: 'main_054', description: '不听——转身去买菜', tags: ['selfish'] },
     'qi_ignore_go': { id: 'qi_ignore_go', questId: 'main_055', description: '灵气之尽那夜去了脉尽头——最后看一眼', tags: ['brave'] },
     'qi_ignore_stay': { id: 'qi_ignore_stay', questId: 'main_055', description: '灵气之尽那夜没去——关上门，日子还长', tags: ['detached'] },
     // v25.0《灵气之尽》批四：追随线（差事三办/点兵两落/夜话/债册/危机拍）

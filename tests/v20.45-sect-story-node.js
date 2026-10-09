@@ -72,6 +72,13 @@ var W4 = makeWorld({ contrib: 0 });
 assert(W4.checkSectStory() === true && W4.__modals.length === 1
     && W4.__modals[0].b.indexOf('灶下旧僧') >= 0,
     'S8 新日开演——弹窗演的是当前该演的折');
+var W4b = makeWorld({ contrib: 0 });
+W4b.currentBattle = { enemy: { name: '蛛妖' } };
+assert(W4b.checkSectStory() === false && W4b.__modals.length === 0,
+    'S8b 战败昏迷跨日时战斗还在——门派戏不叠上去');
+W4b.currentBattle = null;
+assert(W4b.flushPendingSectStory() === true && W4b.__modals.length === 1,
+    'S8c 挂起的戏可以补演，但不该在关战败窗的同一拍硬弹');
 assert(W4._resolveSectStory('少林寺', 0, 0) === true
     && W4.discipleState.contribution === 20
     && W4.currentCharData.luck === 51

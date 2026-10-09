@@ -299,10 +299,13 @@ function loadWorld(opts) {
     w._settings = {};
     // E1 城里搭话：门派专属剧情一桩不响（地点闸天然挡住），纯社交
     eq(w.personalEventGreetGate(leader, 'sect_leader_修罗宫'), false, 'E1 城中相遇只社交不响戏（事件锁在门内）');
-    // E2 进城后（人站在修罗宫里）：链头就绪，交谈即入戏照常工作
+    // E1b 默认档（没写过 socialEventPanel）：清单罗列，面板照常给——总闸不拦（见 tests/npc-private-visible-node.js）
     leader.location = '修罗宫';
     w.currentCharData.location = '修罗宫';
-    eq(w.personalEventGreetGate(leader, 'sect_leader_修罗宫'), true, 'E2 上山之后：v22.0「交谈即入戏」无缝接管');
+    eq(w.personalEventGreetGate(leader, 'sect_leader_修罗宫'), false, 'E1b 默认档：交谈不拦面板（玩家自己点清单）');
+    // E2 进城后（人站在修罗宫里）+ 沉浸模式（玩家显式关掉清单）：链头就绪，交谈即入戏照常工作
+    w._settings.socialEventPanel = false;
+    eq(w.personalEventGreetGate(leader, 'sect_leader_修罗宫'), true, 'E2 上山之后：沉浸模式下 v22.0「交谈即入戏」无缝接管');
 }
 
 // ============ 汇总 ============

@@ -34,7 +34,7 @@
     function settle(spec) {
         try {
             if (window.RewardService && typeof window.RewardService.apply === 'function') {
-                var r = window.RewardService.apply(spec, { source: '澡堂', city: city() });
+                var r = window.RewardService.apply(spec, { facilitySpend: true, source: '澡堂', city: city() });
                 return { ok: !!(r && r.success !== false), note: r && r.messages ? r.messages.join('、') : '' };
             }
         } catch (e) { console.warn('[静默失败] js/city-facilities/bathhouse.js · settle：汤钱和舒坦没落成一笔账', e && e.message); }

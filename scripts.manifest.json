@@ -1,2465 +1,2621 @@
 {
-  "version": 1,
-  "generated": "2026-09-28",
-  "note": "script 加载序列唯一真源。entries 顺序=defer 执行顺序=文档出现顺序。行格式：<script defer src=\"…\"></script> 可带行尾注释；comment 条目=分层注释。改完跑 tools/manifest-scripts.py gen 写回 HTML，check 校验同步。",
-  "stats": {
-    "scripts": 330,
-    "layerComments": 26
+ "version": 1,
+ "generated": "2026-09-28",
+ "note": "script 加载序列唯一真源。entries 顺序=defer 执行顺序=文档出现顺序。行格式：<script defer src=\"…\"></script> 可带行尾注释；comment 条目=分层注释。改完跑 tools/manifest-scripts.py gen 写回 HTML，check 校验同步。",
+ "stats": {
+  "scripts": 356,
+  "layerComments": 25
+ },
+ "entries": [
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " ================================ "
   },
-  "entries": [
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " ================================ "
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 加载顺序：按依赖关系分层排列     "
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " ================================ "
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第0层：全局工具函数（必须先于所有其他文件加载，解决跨文件依赖） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/error-guard.js",
-      "comment": " v20.87 全局异常兜底：最先加载，任何脚本报错都有提示不再静默 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/global-utils.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 重构第4步：事件委托注册表（data-act），须在所有注册者之前——运行时查表故晚注册也安全 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/delegate.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " UI-12：公共空态件（各面板的「为什么空＋下一步」引导卡），须在任何渲染面板的脚本之前 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/empty-state.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/balance-config.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/state-registry.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/panel-lifecycle.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第0.5层：统一 GameState（存档/新游戏/角色键清理） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/game-state.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v12.4 战斗难度条件栏（依赖 StateRegistry，须在 game-state.js 之后、battle.js 之前） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/difficulty-config.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第1层：核心数据（无依赖，最优先） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/data.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/regions.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sects.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-economy.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第2层：命名系统（必须在randomMap、battle之前） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/name-generator.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第3层：生理系统配置（在battle.js之前加载） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/physiology-config.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第4层：地图与战斗 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/qi-environment.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/map/wild-terrain.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/map/world-map.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/map/travel-journal.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/map/randomMap.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/map/lore-shelf.js",
-      "comment": " 第七十五波 游历残页册：拾得的旧事收成一册随时重读（开匣账纯读端，零新存档） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/battle.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/combat-stats.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/battle-injuries.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第3.5层：战利品系统（在battle.js之后，依赖battle的敌人生成逻辑） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/loot-system.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第4层：扩展物品（依赖items.js） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/01-pills.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/02-weapons.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/03-armor.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/04-materials.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/05-talismans.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/06-arts.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/07-food.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/08-special.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " B2：审查报告缺失物品 ID 补齐（在 itemById 合并之后） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/13-missing-ids.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v13.1：绝技秘籍（玩家可学 COMBAT_ABILITIES 绝技的研读渠道，自注册进物品库） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/14-ability-manuals.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.16：重塑灵根丹（后天改命线物品，自注册进物品库） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/15-root-refine.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.85：悬空道具补洞（掉落/地标/挖矿/主线奖励/传书/送货/资源点 25 种，自注册进物品库） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/16-dangling-ids.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.91：主角信物（特殊品级 36 枚，结契时由名册认领，自注册进物品库） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/17-lead-tokens.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.91：品级补阶与毕业装（六品/四品/二品补档 + 一品毕业线，自注册进物品库） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/18-grade-expansion.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.94：奇遇（十段独一份机缘 + 奇物自注册，qiyuOnly 不上货架） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/qiyu-encounters.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第5层：知识系统 + 背包与装备（knowledge 须在 equipment 前） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/knowledge-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/inventory.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/economy/economy-transaction.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/reward-service.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/economy/peddler-service.js",
-      "comment": " 第六十九波 跑单帮贩货：本城行价进货、异地行价出手，价差是脚力的钱 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/equipment.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/qin-arts.js",
-      "comment": " v20.90 音律琴心：琴类兵器战斗加成 + 卖艺打赏账 "
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第6层：核心游戏系统 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/status-effects.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/poison-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/time-system.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v23.0 平衡急救：景点/动作共用闸门（冷却/代价/波动），全景点改造依赖它 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/action-gates.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v23.1 饱食度：吃饭从此存在（吃撑拒食/饿肚子掉心情/辟谷丹真辟谷） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/satiety.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/mood-system.js",
-      "comment": " 第六十七波 心境账：消遣买的开心折进打坐收成，每日向常人底色回落 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/event-system.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " P1：统一事件总线（在 quest-system 之前，供任务系统订阅事件） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/event-bus.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v18.9 世界日历（WorldCalendar）：依赖 EventBus；镜像确定性事件/支持\"闭关至事件\" "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/world-calendar.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v18.9 世界日历 UI 渲染：依赖 world-calendar.js "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/world-calendar-ui.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/dao-bridge.js",
-      "comment": " v20.24 道侣名册的桥：结契落笔/旧档补票/道侣相约（依赖 world-calendar.js） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/festival-bridge.js",
-      "comment": " v20.28 节日的帖：四节定点、每位道侣各一帖、一夜只陪一人（依赖 world-calendar/dao-bridge） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/festival-calendar.js",
-      "comment": " v24·DES-26 节日常历：把四节登记进世界日历（依赖 world-calendar + festival-bridge 的 FESTIVAL_DEFS） "
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v19.0 P0-3 批次 C：年度宗门目标 5 选 1（依赖 sects-system / sect-internal） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-year-goal.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v19.1 P0-4：宗门大比与同门竞争（依赖 sect-year-goal 的 addTournamentWin 钩） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-tournament.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v19.2 P0-5：NPC 自主人生（每日 5~20 NPC 抽样行动；依赖 npc-life-system 寿元 hooks） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/npc-life-actor.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v19.3 P0-6：NPC 婚姻/后代/衣钵（依赖 npc-life-actor 的 newDay 钩子） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/npc-lineage.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/game-scheduler.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/quest/quest-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/crafting.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/crafting/alchemy-compound.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/crafting/forging-compound.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/enhancement.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/cultivation/cultivation.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/cultivation/art-effects.js",
-      "comment": " v20.48 功法掌握通电：秘籍effect/功法字符串 → 战斗/恢复/上限/面板单一真源 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/cultivation/breakthrough-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/cultivation/long-retreat.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/party-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/location-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/travel-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/building-effects.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/achievement-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/map/map-markers.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/enhanced-shop.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/economy/auction-service.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第6.5层：门派深度数据（必须在NPC系统之前，确保秘密数据就绪） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sects-deep-data.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第7层：NPC系统 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/special-npcs.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/item-tags.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/npc-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/skill-transmission.js",
-      "comment": " v20.88 功法传承担系：请教/传授 + 50门功法持有网 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/npc-borrow-service.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " P2：NPC故事线系统（v12.6：旧 npc-storylines.js 已废弃移除，重写为 storylines-v2） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/data.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第8层：NPC扩展（依赖NPC系统） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/npc-emotions.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/npc-daily-life.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/npc-life-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/npc-personal-events.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v12.6 故事线v2·第一批：清虚道人/灵素/铁山（NPC_PERSONAL_EVENTS 格式五段线，须在 npc-personal-events.js 之后） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/storylines-v2/batch1.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/storylines-v2/batch2.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/storylines-v2/batch3.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v13.6 秘密系统2.0·筹码骨架（须在 DEEP_TALK_CATEGORIES/DEEP_TALK_REAL_HANDLERS 与 StateRegistry 之后） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/secret-leverage.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v13.9 物品与NPC联动·行囊系统（须在 StateRegistry 之后；包装 app.js 的赠礼函数，延迟到 DOMContentLoaded） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/npc-inventory.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v14.0 社交页扩展：话题/情报真实数据驱动 + 动态问候（包装最外层getGreeting） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/social-content.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v14.2 16Personalities 五维性格（连续倾向条 + 16型池 + Big5双向桥接；包装 npcManager.getNPC） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/personality16.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.5 P16 性格驱动层：行动权重/社交倾向/相性/传闻失真（纯函数，运行时读 personality16） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/personality-driver.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.5 玩家介入恩怨：居中调停/添油加醋/澄清辟谣（复用关系真源，注入 NPC 对话面板） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/social-intervene.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.6 闭环② 关系边产事件：仇家寻衅/好友回访（概率制，挂世界日历） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/npc-rel-events.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.6 闭环①③ 玩家进传闻网 + 传闻改行为（包装 recruitNPCFromDialog，需在其定义之后） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/player-rumor.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.7 建筑补齐包：试炼塔层数/剑冢剑意/僵尸字段接真消费/黄金宫珍珠货架（毒发订阅世界日历，需在 time-system 之后） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/city-depth.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v12.3 温蘅（百花谷主）感情线：主线事件 / 日常接近事件 / 结局与自动触发系统 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/baihua-events-main.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/baihua-events-extra.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/baihua-personal-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/tianshan-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/wuxian-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/heroine-rivalry.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/heroine-rivalry-bridge.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/heroine-female-context.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/heroine-male-context.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/zhujian-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/yaowang-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/maoshan-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/jingang-events.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.72 第三批扩线：峨眉·夙孤鸿（女主）/ 华山·竺听雨（男主）——独立完整感情线；v20.73 已入吃醋名册 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/emei-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/huashan-events.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.74 第一批扩线：唐门·晏万解（女主）/ 武当·阙守拙（男主）——独立完整感情线，同步入吃醋名册 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/tangmen-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/wudang-events.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.75 第一批扩线（续）：蓬莱·瀛晚照（女主）/ 逍遥·闻人酌（男主）——独立完整感情线，同步入吃醋名册 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/penglai-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/xiaoyao-events.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.76 第二批扩线：恒山·祁清禅 / 泰山·岳清晓 / 青城·幽翠微 / 衡山·奚湘筠（女主）+ 嵩山·逵佩南 / 丐帮·桑拾玖（男主）——独立完整感情线，同步入吃醋名册 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/hengshan-beiyue-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/songshan-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/taishan-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/qingcheng-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/hengshan-nanyue-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/gaibang-events.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.77 第三批反派阵营扩线：阎罗殿·聂明泽（男主）+ 血手门·耿雪衣 / 飞蝎坞·拓银沙 / 烈日教·伏璃茵 / 天龙教·檀望舒（女主）——组织是暗的角色不是，同步入吃醋名册；聂明泽线在男主人册创建（zhujian-events.js）之后加载 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/yanluo-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/xueshou-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/feixie-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/lieri-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/tianlong-events.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.78 第四批奇门扩线：神机门·戚巧机 / 铁掌帮·裘霜莺 / 昆仑派·姬云锦 / 全真教·翀玉衡（女主）+ 霹雳堂·雷惊蛰 / 天书阁·宓书言 / 大隐阁·隗九爻 / 侠隐阁·简知忆 / 天涯海阁·狄长亭 / 大旗门·樊惊筹（男主，守卫式 push 男主人册）——同步入吃醋名册；全部在男主人册创建（zhujian-events.js）之后加载 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/shenji-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/pili-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/tianshu-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/dayin-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/xiayin-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/tianya-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/daqi-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/tiezhang-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/kunlun-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/quanzhen-events.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.79 第五批少林收官：竺照禅（比丘尼戒师，佛相毒舌+双温差，常规 12/6 线）+ 破戒僧·无咎（火头僧，特殊紧凑线 8 事件 3 结局，独立 NPC shaolin_wujiu 不入名册）——三十六派情缘线全覆盖；竺照禅同步入女主人册与吃醋扩容包（三十六人144桩） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/shaolin-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/shaolin-pojie-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/male-lead-rivalry.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/male-lead-reconcile.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.30 吃醋事件扩容包：二十五人×四类（试探/敲打/节日余波/小心眼）——余波全读 festival-bridge 既有账本，零新增存档键；需在全局 detectRivalRomance 就位后加载 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/jealousy-deep.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/male-lead-bridge.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/male-lead-aftermath.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/heroine-aftermath.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.80 吃醋关系网 + 双人交锋一期：见面即结识（npcRelationships 社交真源当场种/写回）、同行即嫌疑（队伍读取）、无咎灶台吃醋九桩、双人高光对局八桩（卷一卷二）——需在全局 detectRivalRomance 与扩容包之后加载 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/jealousy-social.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/wujiu-jealousy.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/duel-showcases-1.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/duel-showcases-2.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/duel-showcases-3.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/duel-showcases-4.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v21.5 空城补人：17 城 34 位具名人物实体 + 进城遇人戏 + 每日轮询接线（须在 npc-personal-events.js 之后） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/city-residents-data.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/city-residents-data2.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/city-residents-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/city-residents-events2.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/city-residents.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v22.1 江湖行：恋爱线掌门按日程下山游历（城中可偶遇结识）+ 外院「求见掌门」三条通传路（须在 npc-personal-events.js 之后） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/leader-excursion.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/jealousy-assembly.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/jealousy-collective.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/relations-panel.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 飞鸽传书系统 v12.0（骨架样式在 styles/panel-mail.css，不再运行时注入） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/mail-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/mail-system-ui.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第9层：门派系统 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sects-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-facilities.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-internal.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-join-flow.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-visit.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-profiles.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-crisis-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-crisis-engine.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-specialties.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-identity.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-signature-arts.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-art-channeling.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-facility-life.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-exclusive-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-story-arc.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/dao-companion-deep.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-kin.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sects-deep-ui.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-resource-actions.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第10层：v6.0+ 新增系统 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/reputation-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/factions/factions.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/factions/faction-stance.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/gameplay/protection-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/factions/faction-invasion.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/beast-taming.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/house-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/weather-effects.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/world-events.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/map/landmark-explore.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第11层：v7.0 深度扩展系统 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/quest/scene-performance.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/quest/choice-memory.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/cultivation/cultivation-bottleneck.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/ui-immersive.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第12层：扩展物品补丁（依赖各自的系统，使用setTimeout延迟合并） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/10-crafting-extensions.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/11-event-extensions.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/items-extended/12-quest-extensions.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/content-validator.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第13层：主逻辑与后置系统 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/gameplay/arena-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/gameplay/talisman-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/talisman-advanced.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/formation-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/puppet-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/dungeon-dynamic.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/map/special-places.js",
-      "comment": " 第一百一十一波 特殊地点册：黑风寨这类「得先打听才知道有没有」的地方改从舆图地区列表进出，不再挂活动页 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/resource-points.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/market-dynamic.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/beast-ecosystem.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/reincarnation.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/reincarnation-integration.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/narrative-consequence.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/cave-facilities.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/codex-tutorial.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/cave-life.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/fengshui.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v25.6 玩家心愿批（第一百四十八批）：望风榜/生平传记/洞府会客/洞府守卫战/押货跑商 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/jianghu-rank.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/biography.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/cave-reception.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/cave-siege.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/economy/caravan-trade.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v25.7 市井烟火批（第一百四十九批）：市井总门/街头闲逛/澡堂/下馆子/赌坊/书肆/施舍（丐帮眼线） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/city-facilities/street-life.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/city-facilities/bathhouse.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/city-facilities/eatery.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/city-facilities/gamble-den.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/city-facilities/bookshop.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/city-facilities/beggar-alms.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v25.8 黑道与人情批（第一百五十批）：威胁·抢劫·通缉追捕·钱庄柜娘·职业黑面 / 街面人物志·打劫街坊 / 还物·邀约·打听·请客·雇镖·占卜·托付秘密·拜师 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/npc-crime.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/city-facilities/citizen-life.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/npc-bond.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/player-sect.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/player-sect-ui.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/player-sect-bootstrap.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/player-sect-world.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/player-sect-venture.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/player-sect-life.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/beast-evolution.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/beast-tide.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第八十七波 · 兽径手记：灵兽栖息地靠打听/亲遇得来，图鉴只写手记里有的 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/beast-lore.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.16 后天改命线：重塑灵根丹服用逻辑（挪饼重归一，依赖 NpcLineage 同一把尺子） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/extensions/root-refine.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v20.0 主循环真集成：newDay → 各模块 tickDay "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/world-loop.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " P0-5 死亡仙侠化：神魂/残魂系统（依赖运行时对象，须在 app.js 之前） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/soul-state.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/app.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/cultivation/breakthrough-ritual.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/cultivation/heavenly-tribulation.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/lifespan-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/endgame/ascension-epilogue.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/reincarnation-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/equipment/bonded-artifact.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/equipment/equipment-sets.js",
-      "comment": " 第七十七波 套装有名有魂：问天/合道/开天三套毕业装——凑齐一身才算个样子 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/crafting/pill-poison.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/map/high-planes.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/cultivation/qi-deviation.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/cultivation/enlightenment-tree.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/combat/build-school.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/collection-system.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/economy/spirit-vein.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/rivalry-chain.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/npcs/marriage-offspring.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/crafting/craft-custom-pill.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/cultivation/divination.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/karma-retribution.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/master-teach.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-war.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-governance.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-passives.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-rooms.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-trade.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-trials.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-shield-errands.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-festival-succession.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-throne.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-court.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-disciple-life.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-standing.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-roster.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-cities.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-gala.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-diplomacy-world.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-doom.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/world/solar-terms.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/auto-save.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/continue-save.js",
-      "comment": " v24·DES-28 续档快照：世界一动就重写 xianxia_save，「继续仙途」不再要玩家先想起按保存 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/quest/main-storyline-arc.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v25.0：终局主线《灵气之尽》（推倒重写 · 旧 endgame-* 五模块已删；设计见 主线大纲·灵气之尽.md，文本见 详稿·第一批） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/quest/qi-world.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/quest/qi-arc1.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/quest/qi-arc2.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/quest/qi-arc3.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/quest/qi-arc4.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/quest/qi-finale.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/quest/qi-street.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/quest/qi-life.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 出身/天赋系统已按需求移除（见 禁止设计.md） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/keyboard-shortcuts.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/crafting/fire-qte.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " v23.0 深水区接线：开放炼丹/词缀炼器/洞府设施/阵法/傀儡的 UI 门户 + 材料实扣账（须在 alchemy/forging-compound 与 formation/puppet/cave 之后） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/crafting/compound-ui.js",
-      "comment": null
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第一百零一波·洞府翻新：布局图+屋子页签的新洞府面板（接管 #house-status 渲染；须在 house-system 与 compound-ui 之后） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/house-panel.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/audio-synth.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/quest/bounty-board.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": "    "
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第14层：v9.0 情境引擎 + 第二批设施 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/world-teeth.js",
-      "comment": " v20.21 世界的牙齿：黑市信用簿/巡夜罚则/本城买价行情 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/scenario-engine.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/city-facilities/bank-service.js",
-      "comment": " v20.18 钱庄账房：存款起息/欠条到期/逾期催收 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/city-facilities/pawn-service.js",
-      "comment": " v20.20 当铺账房：真当票/凭票赎回/过期死当 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/city-facilities/facility-batch2.js",
-      "comment": null
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/city-facilities/facility-batch3.js",
-      "comment": " v20.19 单剧本设施各添第二出戏：报价随行情现算 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/city-facilities/facility-arena-book.js",
-      "comment": " 第六十六波 斗法台台下赌盘：牌面上的赔率终于真开了 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/city-facilities/facility-peddler-contract.js",
-      "comment": " 第六十九波 商行贩货契：契约所柜台上的跑单帮 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/city-facilities/facility-qin-venue.js",
-      "comment": " v20.90 勾栏瓦舍：登台卖艺赚打赏、幕后练音律 "
-    },
-    {
-      "kind": "script",
-      "indent": "",
-      "src": "js/city-facilities/special-features.js",
-      "comment": " v21.4 24处城市特色景致真剧本：免费白嫖印钞机收口 "
-    },
-    {
-      "kind": "script",
-      "indent": "",
-      "src": "js/city-facilities/facility-offices.js",
-      "comment": " v21.4 三司公务剧本：税课司/司法堂/户籍司一点就完的空壳做厚 "
-    },
-    {
-      "kind": "script",
-      "indent": "",
-      "src": "js/city-facilities/city-voices.js",
-      "comment": " v21.5 共享建筑分城口吻：酒楼/客栈/茶馆 19 城各说各的话 "
-    },
-    {
-      "kind": "script",
-      "indent": "",
-      "src": "js/city-facilities/teahouse-leisure.js",
-      "comment": " 第六十四波 茶馆消遣：粗茶/雅座/棋局/题诗/写生——琴棋书画的「棋书画」有了着落 "
-    },
-    {
-      "kind": "script",
-      "indent": "",
-      "src": "js/city-facilities/festival-fair.js",
-      "comment": " 第六十八波 庙会民俗：四时节日城里真开庙会——猜灯谜/放河灯/节令小吃/看花灯 "
-    },
-    {
-      "kind": "script",
-      "indent": "",
-      "src": "js/city-facilities/street-stall.js",
-      "comment": " 第七十波 街边摆摊：行囊里的货卖给出行的过客——比铺子回购公道，耗时辰看天吃饭 "
-    },
-    {
-      "kind": "script",
-      "indent": "",
-      "src": "js/city-facilities/city-lodging.js",
-      "comment": " 第七十一波 赁屋落脚：客栈是过路的地方，不是过日子的地方——按月缴租，心有所寄 "
-    },
-    {
-      "kind": "script",
-      "indent": "",
-      "src": "js/city-facilities/city-jobs.js",
-      "comment": " 第七十二波 城里营生：铺子伙计/蒙馆代课/医馆帮手/更夫巡夜——按日领钱，做久了涨工钱 "
-    },
-    {
-      "kind": "script",
-      "indent": "",
-      "src": "js/city-facilities/city-faces.js",
-      "comment": " 第七十四波 市井花名册：摆摊的过客/当差的东家/赁屋的牙人/贩货的管事，按城定死有名有姓 "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/sects/sect-scenarios.js",
-      "comment": " v20.86 门派设施沉浸层：使用改走进戏，结算回原设施管道 "
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第15层：v9.9 日常事件系统（在 event-system 之后，依赖 showMessage/addItem 等） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/core/daily-events.js",
-      "comment": null
-    },
-    {
-      "kind": "blank",
-      "indent": ""
-    },
-    {
-      "kind": "comment",
-      "indent": "    ",
-      "text": " 第16层：调试面板（Admin 专属，依赖 app.js 中的 currentCharData） "
-    },
-    {
-      "kind": "script",
-      "indent": "    ",
-      "src": "js/debug-panel.js",
-      "comment": null
-    }
-  ]
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 加载顺序：按依赖关系分层排列     "
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " ================================ "
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第0层：全局工具函数（必须先于所有其他文件加载，解决跨文件依赖） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/error-guard.js",
+   "comment": " v20.87 全局异常兜底：最先加载，任何脚本报错都有提示不再静默 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/global-utils.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 重构第4步：事件委托注册表（data-act），须在所有注册者之前——运行时查表故晚注册也安全 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/delegate.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " UI-12：公共空态件（各面板的「为什么空＋下一步」引导卡），须在任何渲染面板的脚本之前 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/empty-state.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/balance-config.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/state-registry.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/panel-lifecycle.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第0.5层：统一 GameState（存档/新游戏/角色键清理） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/game-state.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v12.4 战斗难度条件栏（依赖 StateRegistry，须在 game-state.js 之后、battle.js 之前） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/difficulty-config.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第1层：核心数据（无依赖，最优先） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/data.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/regions.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sects.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-economy.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第2层：命名系统（必须在randomMap、battle之前） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/name-generator.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第3层：生理系统配置（在battle.js之前加载） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/physiology-config.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第4层：地图与战斗 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/qi-environment.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/map/wild-terrain.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/map/world-map.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/map/travel-journal.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/map/randomMap.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/map/lore-shelf.js",
+   "comment": " 第七十五波 游历残页册：拾得的旧事收成一册随时重读（开匣账纯读端，零新存档） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/battle.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/combat-stats.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/battle-injuries.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/battle/beast-part-family.js",
+   "comment": " v27.13 敌人非人形部位族：BS-015 兽图/十五格伤势册/四笔已裁生死口径（battle.js 之后加载，运行时经 window 互查） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/battle/construct-undead-family.js",
+   "comment": " v27.19 敌人非人形部位族·续：构装六格（钝克壳×1.3/斩×0.7·利克节×1.3）+亡灵六骨格（钝×1.2/火×1.3）——生死口径照旧不碰，弱点系数+功能减档+停机窗走伤册 "
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第3.5层：战利品系统（在battle.js之后，依赖battle的敌人生成逻辑） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/loot-system.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第4层：扩展物品（依赖items.js） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/01-pills.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/02-weapons.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/03-armor.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/04-materials.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/05-talismans.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/06-arts.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/07-food.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/08-special.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " B2：审查报告缺失物品 ID 补齐（在 itemById 合并之后） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/13-missing-ids.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v13.1：绝技秘籍（玩家可学 COMBAT_ABILITIES 绝技的研读渠道，自注册进物品库） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/14-ability-manuals.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.16：重塑灵根丹（后天改命线物品，自注册进物品库） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/15-root-refine.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.85：悬空道具补洞（掉落/地标/挖矿/主线奖励/传书/送货/资源点 25 种，自注册进物品库） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/16-dangling-ids.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.91：主角信物（特殊品级 36 枚，结契时由名册认领，自注册进物品库） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/17-lead-tokens.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.91：品级补阶与毕业装（六品/四品/二品补档 + 一品毕业线，自注册进物品库） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/18-grade-expansion.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.94：奇遇（十段独一份机缘 + 奇物自注册，qiyuOnly 不上货架） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/qiyu-encounters.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第5层：知识系统 + 背包与装备（knowledge 须在 equipment 前） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/knowledge-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/inventory.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/economy/economy-transaction.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/reward-service.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/economy/peddler-service.js",
+   "comment": " 第六十九波 跑单帮贩货：本城行价进货、异地行价出手，价差是脚力的钱 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/equipment.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/qin-arts.js",
+   "comment": " v20.90 音律琴心：琴类兵器战斗加成 + 卖艺打赏账 "
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第6层：核心游戏系统 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/status-effects.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/poison-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/time-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/world-ledger.js",
+   "comment": " 世界账簿：市场流水/悬赏基金/掌柜额度/药藏/名气扩散/店铺时辰/钱票（真实小世界专案） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/population-ledger.js",
+   "comment": " v26.5 人口户账（轻账A案）：每城一个人口数、月结丰歉添减、市井烟火消息走 gameLog——须在 state-registry/time-system 之后，与 world-ledger 同族同载 "
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v23.0 平衡急救：景点/动作共用闸门（冷却/代价/波动），全景点改造依赖它 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/action-gates.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v23.1 饱食度：吃饭从此存在（吃撑拒食/饿肚子掉心情/辟谷丹真辟谷） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/satiety.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/mood-system.js",
+   "comment": " 第六十七波 心境账：消遣买的开心折进打坐收成，每日向常人底色回落 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/event-system.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " P1：统一事件总线（在 quest-system 之前，供任务系统订阅事件） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/event-bus.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v18.9 世界日历（WorldCalendar）：依赖 EventBus；镜像确定性事件/支持\"闭关至事件\" "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/world-calendar.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v18.9 世界日历 UI 渲染：依赖 world-calendar.js "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/world-calendar-ui.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/dao-bridge.js",
+   "comment": " v20.24 道侣名册的桥：结契落笔/旧档补票/道侣相约（依赖 world-calendar.js） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/festival-bridge.js",
+   "comment": " v20.28 节日的帖：四节定点、每位道侣各一帖、一夜只陪一人（依赖 world-calendar/dao-bridge） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/festival-calendar.js",
+   "comment": " v24·DES-26 节日常历：把四节登记进世界日历（依赖 world-calendar + festival-bridge 的 FESTIVAL_DEFS） "
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v19.0 P0-3 批次 C：年度宗门目标 5 选 1（依赖 sects-system / sect-internal） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-year-goal.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v19.1 P0-4：宗门大比与同门竞争（依赖 sect-year-goal 的 addTournamentWin 钩） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-tournament.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v19.2 P0-5：NPC 自主人生（每日 5~20 NPC 抽样行动；依赖 npc-life-system 寿元 hooks） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/npc-life-actor.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v19.3 P0-6：NPC 婚姻/后代/衣钵（依赖 npc-life-actor 的 newDay 钩子） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/npc-lineage.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/game-scheduler.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/quest/quest-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/crafting.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/crafting/alchemy-compound.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/crafting/forging-compound.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/enhancement.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/cultivation/cultivation.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/cultivation/art-effects.js",
+   "comment": " v20.48 功法掌握通电：秘籍effect/功法字符串 → 战斗/恢复/上限/面板单一真源 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/cultivation/breakthrough-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/cultivation/long-retreat.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/party-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/location-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/travel-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/building-effects.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/achievement-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/map/map-markers.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/enhanced-shop.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/economy/auction-service.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第6.5层：门派深度数据（必须在NPC系统之前，确保秘密数据就绪） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sects-deep-data.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第7层：NPC系统 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/special-npcs.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/item-tags.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/npc-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/confession-rites.js",
+   "comment": " v26.2 定情之仪场景层：倾诉心意接缝（EMOTION_TYPES.confess 门槛/BOND_DAO_FINAL_CHAPTER 名册皆取自 npc-system.js，故必须在其后） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/skill-transmission.js",
+   "comment": " v20.88 功法传承担系：请教/传授 + 50门功法持有网 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/npc-borrow-service.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " P2：NPC故事线系统（v12.6：旧 npc-storylines.js 已废弃移除，重写为 storylines-v2） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/data.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第8层：NPC扩展（依赖NPC系统） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/npc-emotions.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/npc-daily-life.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/npc-life-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/npc-personal-events.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v12.6 故事线v2·第一批：清虚道人/灵素/铁山（NPC_PERSONAL_EVENTS 格式五段线，须在 npc-personal-events.js 之后） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/storylines-v2/batch1.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/storylines-v2/batch2.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/storylines-v2/batch3.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v13.6 秘密系统2.0·筹码骨架（须在 DEEP_TALK_CATEGORIES/DEEP_TALK_REAL_HANDLERS 与 StateRegistry 之后） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/secret-leverage.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v13.9 物品与NPC联动·行囊系统（须在 StateRegistry 之后；包装 app.js 的赠礼函数，延迟到 DOMContentLoaded） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/npc-inventory.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v14.0 社交页扩展：话题/情报真实数据驱动 + 动态问候（包装最外层getGreeting） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/social-content.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v14.2 16Personalities 五维性格（连续倾向条 + 16型池 + Big5双向桥接；包装 npcManager.getNPC） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/personality16.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.5 P16 性格驱动层：行动权重/社交倾向/相性/传闻失真（纯函数，运行时读 personality16） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/personality-driver.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.5 玩家介入恩怨：居中调停/添油加醋/澄清辟谣（复用关系真源，注入 NPC 对话面板） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/social-intervene.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.6 闭环② 关系边产事件：仇家寻衅/好友回访（概率制，挂世界日历） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/npc-rel-events.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.6 闭环①③ 玩家进传闻网 + 传闻改行为（包装 recruitNPCFromDialog，需在其定义之后） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/player-rumor.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.7 建筑补齐包：试炼塔层数/剑冢剑意/僵尸字段接真消费/黄金宫珍珠货架（毒发订阅世界日历，需在 time-system 之后） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-depth.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v12.3 温蘅（百花谷主）感情线：主线事件 / 日常接近事件 / 结局与自动触发系统 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/baihua-events-main.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/baihua-events-extra.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/baihua-personal-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/tianshan-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/wuxian-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/heroine-rivalry.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/heroine-rivalry-bridge.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/heroine-female-context.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/heroine-male-context.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/zhujian-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/yaowang-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/maoshan-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/jingang-events.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.72 第三批扩线：峨眉·夙孤鸿（女主）/ 华山·竺听雨（男主）——独立完整感情线；v20.73 已入吃醋名册 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/emei-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/huashan-events.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.74 第一批扩线：唐门·晏万解（女主）/ 武当·阙守拙（男主）——独立完整感情线，同步入吃醋名册 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/tangmen-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/wudang-events.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.75 第一批扩线（续）：蓬莱·瀛晚照（女主）/ 逍遥·闻人酌（男主）——独立完整感情线，同步入吃醋名册 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/penglai-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/xiaoyao-events.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.76 第二批扩线：恒山·祁清禅 / 泰山·岳清晓 / 青城·幽翠微 / 衡山·奚湘筠（女主）+ 嵩山·逵佩南 / 丐帮·桑拾玖（男主）——独立完整感情线，同步入吃醋名册 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/hengshan-beiyue-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/songshan-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/taishan-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/qingcheng-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/hengshan-nanyue-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/gaibang-events.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.77 第三批反派阵营扩线：阎罗殿·聂明泽（男主）+ 血手门·耿雪衣 / 飞蝎坞·拓银沙 / 烈日教·伏璃茵 / 天龙教·檀望舒（女主）——组织是暗的角色不是，同步入吃醋名册；聂明泽线在男主人册创建（zhujian-events.js）之后加载 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/yanluo-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/xueshou-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/feixie-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/lieri-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/tianlong-events.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.78 第四批奇门扩线：神机门·戚巧机 / 铁掌帮·裘霜莺 / 昆仑派·姬云锦 / 全真教·翀玉衡（女主）+ 霹雳堂·雷惊蛰 / 天书阁·宓书言 / 大隐阁·隗九爻 / 侠隐阁·简知忆 / 天涯海阁·狄长亭 / 大旗门·樊惊筹（男主，守卫式 push 男主人册）——同步入吃醋名册；全部在男主人册创建（zhujian-events.js）之后加载 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/shenji-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/pili-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/tianshu-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/dayin-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/xiayin-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/tianya-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/daqi-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/tiezhang-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/kunlun-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/quanzhen-events.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.79 第五批少林收官：竺照禅（比丘尼戒师，佛相毒舌+双温差，常规 12/6 线）+ 破戒僧·无咎（火头僧，特殊紧凑线 8 事件 3 结局，独立 NPC shaolin_wujiu 不入名册）——三十六派情缘线全覆盖；竺照禅同步入女主人册与吃醋扩容包（三十六人144桩） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/shaolin-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/shaolin-pojie-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/male-lead-rivalry.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/male-lead-reconcile.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.30 吃醋事件扩容包：二十五人×四类（试探/敲打/节日余波/小心眼）——余波全读 festival-bridge 既有账本，零新增存档键；需在全局 detectRivalRomance 就位后加载 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/jealousy-deep.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/male-lead-bridge.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/male-lead-aftermath.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/heroine-aftermath.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.80 吃醋关系网 + 双人交锋一期：见面即结识（npcRelationships 社交真源当场种/写回）、同行即嫌疑（队伍读取）、无咎灶台吃醋九桩、双人高光对局八桩（卷一卷二）——需在全局 detectRivalRomance 与扩容包之后加载 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/jealousy-social.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/wujiu-jealousy.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/duel-showcases-1.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/duel-showcases-2.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/duel-showcases-3.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/duel-showcases-4.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v21.5 空城补人：17 城 34 位具名人物实体 + 进城遇人戏 + 每日轮询接线（须在 npc-personal-events.js 之后） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/city-residents-data.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/city-residents-data2.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/city-residents-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/city-residents-events2.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/city-residents.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v22.1 江湖行：恋爱线掌门按日程下山游历（城中可偶遇结识）+ 外院「求见掌门」三条通传路（须在 npc-personal-events.js 之后） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/leader-excursion.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/jealousy-assembly.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/jealousy-collective.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/relations-panel.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 飞鸽传书系统 v12.0（骨架样式在 styles/panel-mail.css，不再运行时注入） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/mail-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/mail-system-ui.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第9层：门派系统 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sects-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-facilities.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-internal.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-join-flow.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-visit.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-profiles.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-crisis-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-crisis-engine.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-specialties.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-identity.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-signature-arts.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-art-channeling.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-facility-life.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-exclusive-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-story-arc.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/dao-companion-deep.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-kin.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sects-deep-ui.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-resource-actions.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第10层：v6.0+ 新增系统 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/reputation-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/factions/factions.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/factions/faction-stance.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/gameplay/protection-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/factions/faction-invasion.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/beast-taming.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/house-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/weather-effects.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/world-events.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/map/landmark-explore.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第11层：v7.0 深度扩展系统 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/quest/scene-performance.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/quest/choice-memory.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/cultivation/cultivation-bottleneck.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/ui-immersive.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第12层：扩展物品补丁（依赖各自的系统，使用setTimeout延迟合并） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/10-crafting-extensions.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/11-event-extensions.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/items-extended/12-quest-extensions.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/content-validator.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第13层：主逻辑与后置系统 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/gameplay/arena-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/gameplay/talisman-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/talisman-advanced.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/formation-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/puppet-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/dungeon-dynamic.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/map/special-places.js",
+   "comment": " 第一百一十一波 特殊地点册：黑风寨这类「得先打听才知道有没有」的地方改从舆图地区列表进出，不再挂活动页 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/resource-points.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/market-dynamic.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/beast-ecosystem.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/mount-events.js",
+   "comment": " v27.0 坐骑批：骑乘低频事件——路上兽惊（抵达骰）/名马被贼盯上（翻日骰+五日冷却，三选弹窗） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/family-system.js",
+   "comment": " v27.5 家业批：家业名册——立宗族修族谱/建祠堂（逢节自动祭祖）/收义子（与亲生一本账，托孤福儿免彩礼）/乔迁宴（一处洞府一回）/捡土狗（与灵兽严格分账）/恩仇簿（善举·通缉·断案三本账只读）+一季度一件家事 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/grand-legacy.js",
+   "comment": " v27.6 大业收官：大业名册——仕途线（科举乡试会试殿试三场/捐官当城主月初俸银/称帝建国改国贡）·香火线（设坛传教/受封土地公香火翻倍）·艺业线（自创功法进融合注册表/著经立说/办比武大会三轮真仗）——全一生一回，封神后零日常维护 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/dynasty-court.js",
+   "comment": " v27.7 朝政篇：称帝之后的大剧情——国库明账（月初自动过账，税入+属城岁入-宫室戍饷）·立储（亲子/弟子吃现成账）·征伐邻城（真仗，属城≤3）·三大工程（宫城/城墙/粮仓各一回）·朝堂风波四件（请立储/藩王叛乱/灾年/史官直笔，自动上奏一生各裁一回）·编年史自动记年·终局双路（举国飞升须香火/禅位须储/两无天下鼎沸）·v27.8 长安线（现皇帝的反应：讨逆诏奉表/扣使两断，讨逆军真仗打赢长安不敢东顾）+号召归附（声望明账收城，他派护持的城召不动只能打）+舆图口径（帝都不可犯，仙门不入世争） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/reincarnation.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/reincarnation-integration.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/narrative-consequence.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/cave-facilities.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/codex-tutorial.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/cave-life.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/fengshui.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v25.6 玩家心愿批（第一百四十八批）：望风榜/生平传记/洞府会客/洞府守卫战/押货跑商 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/jianghu-rank.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/biography.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/authoring.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/cave-reception.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/cave-siege.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/economy/caravan-trade.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v25.7 市井烟火批（第一百四十九批）：市井总门/街头闲逛/澡堂/下馆子/赌坊/书肆/施舍（丐帮眼线） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/street-life.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/service-stall.js",
+   "comment": " v27.3 手艺摊引擎：十一门手艺一日一摊（客流单价明账）+ 书院讲学/拆穿假神仙两件一次性街面大事 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/bathhouse.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/eatery.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/gamble-den.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/bookshop.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/beggar-alms.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v25.8 黑道与人情批（第一百五十批）：威胁·抢劫·通缉追捕·钱庄柜娘·职业黑面 / 街面人物志·打劫街坊 / 还物·邀约·打听·请客·雇镖·占卜·托付秘密·拜师 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/npc-crime.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/crime-works.js",
+   "comment": " v27.4 黑道营生名册：扒窃/盗墓/伪造盐引路引/私铸假灵石/夹带私货/落草/卖情报（getGossipInfo 复活）/安暗桩——热度走通缉账正门 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/disguise-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/kidnap-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/citizen-life.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/stone-gamble.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/player-shop.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/guild-climb.js",
+   "comment": " v27.1 商会夺权线：入会→执事→话事人→另立自己的商会（贡献走代售台、月会日过档、会首月初分红） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/city-gate.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/fortune-stall.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/tea-storyteller.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/cricket-fight.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/private-school.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/horse-market.js",
+   "comment": " v27.0 坐骑批：马市——凡马/青骡/骏马（铜钱）、相口齿砍价取名、谜之兽蛋三日破壳 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/npc-bond.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/player-sect.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/player-sect-ui.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/player-sect-bootstrap.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/player-sect-world.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/player-sect-venture.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/player-sect-life.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/beast-evolution.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/beast-tide.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第八十七波 · 兽径手记：灵兽栖息地靠打听/亲遇得来，图鉴只写手记里有的 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/beast-lore.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.16 后天改命线：重塑灵根丹服用逻辑（挪饼重归一，依赖 NpcLineage 同一把尺子） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/extensions/root-refine.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v20.0 主循环真集成：newDay → 各模块 tickDay "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/world-loop.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " P0-5 死亡仙侠化：神魂/残魂系统（依赖运行时对象，须在 app.js 之前） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/soul-state.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/app.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/app-city-bureaus.js",
+   "comment": " v27.13 W-1 拆分：四衙公共设施族自 app.js 迁出（案底见 app.js 原位）——app.js 顶层不调族内函数，故置于其后 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/cultivation/breakthrough-ritual.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/cultivation/heavenly-tribulation.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/lifespan-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/endgame/ascension-epilogue.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/reincarnation-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/equipment/bonded-artifact.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/equipment/equipment-sets.js",
+   "comment": " 第七十七波 套装有名有魂：问天/合道/开天三套毕业装——凑齐一身才算个样子 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/crafting/pill-poison.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/crafting/brewing.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/map/high-planes.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/cultivation/qi-deviation.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/cultivation/enlightenment-tree.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/combat/build-school.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/collection-system.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/economy/spirit-vein.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/rivalry-chain.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/npcs/marriage-offspring.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/crafting/craft-custom-pill.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/cultivation/divination.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/karma-retribution.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/master-teach.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-war.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-governance.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-passives.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-rooms.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-trade.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-trials.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-shield-errands.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-festival-succession.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-throne.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-court.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-disciple-life.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-standing.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-roster.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-cities.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-gala.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-diplomacy-world.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-doom.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/world/solar-terms.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/auto-save.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/continue-save.js",
+   "comment": " v24·DES-28 续档快照：世界一动就重写 xianxia_save，「继续仙途」不再要玩家先想起按保存 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/quest/main-storyline-arc.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v25.0：终局主线《灵气之尽》（推倒重写 · 旧 endgame-* 五模块已删；设计见 主线大纲·灵气之尽.md，文本见 详稿·第一批） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/quest/qi-world.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/quest/qi-arc1.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/quest/qi-arc2.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/quest/qi-arc3.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/quest/qi-arc4.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/quest/qi-finale.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/quest/qi-street.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/quest/qi-life.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 出身/天赋系统已按需求移除（见 禁止设计.md） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/keyboard-shortcuts.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/crafting/fire-qte.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " v23.0 深水区接线：开放炼丹/词缀炼器/洞府设施/阵法/傀儡的 UI 门户 + 材料实扣账（须在 alchemy/forging-compound 与 formation/puppet/cave 之后） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/crafting/compound-ui.js",
+   "comment": null
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第一百零一波·洞府翻新：布局图+屋子页签的新洞府面板（接管 #house-status 渲染；须在 house-system 与 compound-ui 之后） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/house-panel.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/audio-synth.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/quest/bounty-board.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": "    "
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第14层：v9.0 情境引擎 + 第二批设施 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/world-teeth.js",
+   "comment": " v20.21 世界的牙齿：黑市信用簿/巡夜罚则/本城买价行情 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/scenario-engine.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/bank-service.js",
+   "comment": " v20.18 钱庄账房：存款起息/欠条到期/逾期催收 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/pawn-service.js",
+   "comment": " v20.20 当铺账房：真当票/凭票赎回/过期死当 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/facility-batch2.js",
+   "comment": null
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/facility-batch3.js",
+   "comment": " v20.19 单剧本设施各添第二出戏：报价随行情现算 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/facility-arena-book.js",
+   "comment": " 第六十六波 斗法台台下赌盘：牌面上的赔率终于真开了 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/facility-peddler-contract.js",
+   "comment": " 第六十九波 商行贩货契：契约所柜台上的跑单帮 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/city-facilities/facility-qin-venue.js",
+   "comment": " v20.90 勾栏瓦舍：登台卖艺赚打赏、幕后练音律 "
+  },
+  {
+   "kind": "script",
+   "indent": "",
+   "src": "js/city-facilities/special-features.js",
+   "comment": " v21.4 24处城市特色景致真剧本：免费白嫖印钞机收口 "
+  },
+  {
+   "kind": "script",
+   "indent": "",
+   "src": "js/city-facilities/facility-offices.js",
+   "comment": " v21.4 三司公务剧本：税课司/司法堂/户籍司一点就完的空壳做厚 "
+  },
+  {
+   "kind": "script",
+   "indent": "",
+   "src": "js/city-facilities/city-voices.js",
+   "comment": " v21.5 共享建筑分城口吻：酒楼/客栈/茶馆 19 城各说各的话 "
+  },
+  {
+   "kind": "script",
+   "indent": "",
+   "src": "js/city-facilities/teahouse-leisure.js",
+   "comment": " 第六十四波 茶馆消遣：粗茶/雅座/棋局/题诗/写生——琴棋书画的「棋书画」有了着落 "
+  },
+  {
+   "kind": "script",
+   "indent": "",
+   "src": "js/city-facilities/festival-fair.js",
+   "comment": " 第六十八波 庙会民俗：四时节日城里真开庙会——猜灯谜/放河灯/节令小吃/看花灯 "
+  },
+  {
+   "kind": "script",
+   "indent": "",
+   "src": "js/city-facilities/street-stall.js",
+   "comment": " 第七十波 街边摆摊：行囊里的货卖给出行的过客——比铺子回购公道，耗时辰看天吃饭 "
+  },
+  {
+   "kind": "script",
+   "indent": "",
+   "src": "js/city-facilities/city-lodging.js",
+   "comment": " 第七十一波 赁屋落脚：客栈是过路的地方，不是过日子的地方——按月缴租，心有所寄 "
+  },
+  {
+   "kind": "script",
+   "indent": "",
+   "src": "js/city-facilities/city-jobs.js",
+   "comment": " 第七十二波 城里营生：铺子伙计/蒙馆代课/医馆帮手/更夫巡夜——按日领钱，做久了涨工钱 "
+  },
+  {
+   "kind": "script",
+   "indent": "",
+   "src": "js/city-facilities/case-system.js",
+   "comment": " v27.4 断案引擎：验看问人指认三步/冷案上浮/海捕牌缉逃/讼师代讼/递状告人/堂上传票——捕快工牌开案卷权限 "
+  },
+  {
+   "kind": "script",
+   "indent": "",
+   "src": "js/city-facilities/city-faces.js",
+   "comment": " 第七十四波 市井花名册：摆摊的过客/当差的东家/赁屋的牙人/贩货的管事，按城定死有名有姓 "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/sects/sect-scenarios.js",
+   "comment": " v20.86 门派设施沉浸层：使用改走进戏，结算回原设施管道 "
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第15层：v9.9 日常事件系统（在 event-system 之后，依赖 showMessage/addItem 等） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/core/daily-events.js",
+   "comment": null
+  },
+  {
+   "kind": "blank",
+   "indent": ""
+  },
+  {
+   "kind": "comment",
+   "indent": "    ",
+   "text": " 第16层：调试面板（Admin 专属，依赖 app.js 中的 currentCharData） "
+  },
+  {
+   "kind": "script",
+   "indent": "    ",
+   "src": "js/debug-panel.js",
+   "comment": null
+  }
+ ]
 }

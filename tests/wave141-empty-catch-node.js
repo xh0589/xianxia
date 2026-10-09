@@ -10,7 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
-const SKIP = new Set(['node_modules', '.git', '.kilo', '.scratch', '.playwright-mcp', 'html-0bd3fb25-source (1)']);
+const SKIP = new Set(['node_modules', '.git', '.kilo', '.scratch', '.playwright-mcp']);
 
 let 通过 = 0, 失败 = 0;
 function ok(c, m) { if (c) { 通过++; console.log('  ✓ ' + m); } else { 失败++; console.log('  [FAIL] ' + m); } }

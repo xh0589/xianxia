@@ -38,6 +38,15 @@ var WORLD_EVENTS = [
         desc: '灵气潮汐涌动，修炼效率大增！',
         interval: 25, chance: 0.5, duration: 2,
         modifiers: { cultivation: 2.0, qiRestore: 10 }
+    },
+    {
+        // v27.2 善举与声望批：疫年——街面药价腾贵、行路凶险（shopPrice/security 都有真消费者）；
+        // 疫期里善举名册的「疫年施药」才办得成（reputation-system.js 正门），世界事件面板也可直接施药
+        id: 'plague', name: '疫病流行', icon: '🤒',
+        desc: '街市上药铺排起长队，坊间掩口而行——疫气来了。',
+        interval: 25, chance: 0.3, duration: 5,
+        modifiers: {},
+        participate: { label: '施药设棚', action: 'dispense_medicine' }
     }
 ];
 
@@ -112,9 +121,15 @@ function expireWorldEvents(gameDay) {
             expired.push(id);
         }
     }
-    expired.forEach(function(id) {
-        var def = getWorldEventDef(id);
-        delete activeWorldEvents[id];
+expired.forEach(function(id) {
+          var def = getWorldEventDef(id);
+          delete activeWorldEvents[id];
+          // v27.24：世界事件盖棺入册——进行时是新闻，结束时才进年表（没写完的大事不进史书）
+          try {
+              if (def && window.WorldLedger && typeof window.WorldLedger.recordAnnal === 'function') {
+                  window.WorldLedger.recordAnnal('world:' + id, def.icon + ' 「' + def.name + '」尘埃落定：' + def.desc);
+              }
+          } catch (eEvAnnal) {}
         // v20.0：beast_tide 过期时联动关掉 v19.20 兽潮
         if (id === 'beast_tide' && window.BeastTide && typeof window.BeastTide.endTide === 'function') {
             try {
@@ -184,7 +199,28 @@ function activateWorldEvent(ev, gameDay) {
         if (ev.id === 'sect_war') setCityTempModifier(city, { security: 0.5, travelRisk: 1.3, shopPrice: 1.1, days: ev.duration, flag: 'war_scar' });
         if (ev.id === 'market_boom') setCityTempModifier(city, { shopPrice: 0.85, days: ev.duration, flag: 'boom' });
         if (ev.id === 'treasure') setCityTempModifier(city, { encounterRate: 1.2, days: ev.duration, flag: 'treasure_rumor' });
+        // v27.2 疫年：药价腾贵、街面萧条（shopPrice/security 均有真消费者，非死修正）
+        if (ev.id === 'plague') setCityTempModifier(city, { shopPrice: 1.15, security: 0.8, days: ev.duration, flag: 'plague_scar' });
     }
+
+    // v27.13：世界大事进传闻账（行情时滞同批的消息账）——大事在脚下此地立知，外城随商旅隔日到站，
+    // 到时成为那城的「传闻」（客栈夜话等消费面读 WorldLedger.latestRumor/knownRumors）。
+    // 文案自带事发地：传闻传到外地时，听的人得知道事出在哪。
+    try {
+        if (city && window.WorldLedger && typeof window.WorldLedger.noteRumor === 'function') {
+            window.WorldLedger.noteRumor((ev.name || '异变') + '！' + (ev.desc || '') + '（起于' + city + '）', 'world', city);
+        }
+    } catch (eRum) { console.warn('[静默失败] js/world-events.js · activateWorldEvent：大事没进传闻账', eRum && eRum.message); }
+
+    // v27.16：⑤人口联动——灾变事件上报人口账（populationLedger.noteCalamity 是它留的上报口，
+    // 专等外部系统递话）。疫病/正邪大战/兽潮三灾各自折损：下一个月结，这城的人口账如实减丁，
+    // 市井消息会跟着冒出来（「城里少了些人」）。无人口账/上报失败：灾照发，人不减（账缺席按没发生）。
+    try {
+        var _calam16 = { plague: ['瘟疫', 0.06], sect_war: ['兵灾', 0.10], beast_tide: ['兽灾', 0.12] }[ev.id];
+        if (city && _calam16 && window.PopulationLedger && typeof window.PopulationLedger.noteCalamity === 'function') {
+            window.PopulationLedger.noteCalamity(city, _calam16[0], _calam16[1]);
+        }
+    } catch (ePop16) { console.warn('[静默失败] js/world-events.js · 灾变没报进人口账（这次人不减）', ePop16 && ePop16.message); }
 
     // v18.9 世界日历：镜像注册"世界事件开始 + 结束日"（日历 endDay 时归档，触发摘要）
     // oneShot=false 因为事件持续多日，calendar 会在 endDay 自然归档
@@ -341,6 +377,16 @@ function participateWorldEvent(eventId) {
         }
         if (window.timeSystem && window.timeSystem.advanceTime) window.timeSystem.advanceTime(90, '正邪大战');
         return true;
+    }
+
+    if (action === 'dispense_medicine') {
+        // v27.2 善举与声望批：疫年施药（第 31 件）——善举名册的正门代办（每城只记一回，银钱/城望/功德一笔事务）。
+        // 不在城里、本城已施过药、账房不通，都由那本账如实拦下并上屏，本层只递话。
+        if (window.GoodDeeds && typeof window.GoodDeeds.doGoodDeed === 'function') {
+            return window.GoodDeeds.doGoodDeed('medicine');
+        }
+        if (window.showMessage) window.showMessage('🤒 药棚的账房还没开张，改日再来。', 'warning');
+        return false;
     }
 
     return false;

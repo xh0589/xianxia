@@ -526,13 +526,13 @@
         if (global.timeSystem && typeof global.timeSystem.advanceTime === 'function') {
             try { global.timeSystem.advanceTime(60, '奇遇·' + q.name); } catch (e) { console.warn('[静默失败] js/extensions/qiyu-encounters.js:522 · 奇遇时辰：奇遇得手的时辰本该走掉，这里没接住，玩家会察觉时间没扣', e && e && e.message); }
         }
-        // v21.9 机缘值入池：奇遇得手 +10 机缘——攒满 30 可在突破仪式里「燃机缘·破境必成」
+        // v21.9 机缘值入池：奇遇得手 +10 机缘——攒满 30 可在突破仪式里「燃机缘」抵一次失败的跌境
         if (won) {
             try {
                 var cdF = global.currentCharData;
                 if (cdF) {
                     cdF.fortune = Math.min(100, (Number(cdF.fortune) || 0) + 10);
-                    log('🍀 机缘到手——机缘值 +10（现在 ' + cdF.fortune + ' 点；满 30 点可在突破仪式里点燃，换一次破境必成）', 'success');
+                    log('🍀 机缘到手——机缘值 +10（现在 ' + cdF.fortune + ' 点；满 30 点可在突破仪式里点燃，抵一次突破失败的跌境）', 'success');
                 }
             } catch (e) {}
         }

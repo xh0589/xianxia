@@ -94,6 +94,14 @@
         if (!ev) return;
         try { NPC_PERSONAL_EVENTS[ev.id] = ev; } catch (e) { return; }
         setTimeout(function () {
+            // v20.85：座位被占不再静默放弃——改走吃醋线共用排队器（heroine-rivalry.js 导出的
+            // __jealRequestSeat），座位一空立刻补弹，当日仍然有效。
+            // 这一族此前丢得最狠：_fire 静默放弃时，调用点的冷却（led.lastMarket / lastStand /
+            // lanterns[key]）已经先写进账本了——戏没演，冷却却照扣，下次要再等十二日。
+            if (typeof window.__jealRequestSeat === 'function') {
+                window.__jealRequestSeat(ev.id, ev.npcId, '');
+                return;
+            }
             if (_modalOpen()) return;
             var npc = _npc(ev.npcId);
             if (!npc) return;
@@ -581,7 +589,9 @@
         window.timeSystem.onNewDaySubscribe(function () {
             try {
                 if (!window.currentCharData || !window.npcManager) return;
-                if (_modalOpen()) return;
+                // v20.85：原先此处一句 `if (_modalOpen()) return;` 把整个每日钩子连根拔掉——
+                // 跨日那一刻只要别的爱情弹窗开着，风评、大典终局、灯节夜、坊市撞礼全数当日作废，
+                // 而冷却账本照扣。现交给 _fire 的排队器裁决，座位占着就排队，不丢。
                 var today = _today();
                 var led = _cledLoad();
 
@@ -627,7 +637,7 @@
         window.EventBus.on('arena:won', function (payload) {
             try {
                 if (!window.currentCharData || !window.npcManager) return;
-                if (_modalOpen()) return;
+                // v20.85：同上一处——擂台戏不再因座位被占而整段丢弃，交给 _fire 排队。
                 var led = _cledLoad();
                 var today = _today();
                 if (today - led.lastStand <= 7) return;

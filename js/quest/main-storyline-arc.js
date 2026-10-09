@@ -212,6 +212,86 @@ function settleMainStoryBoss(victory) {
     } catch (e) { return false; }
 }
 
+// ===== v26.4 魔教教主：main_033「最终决战」的章节限定遭遇 =====
+// 教主不进随机池，也不由任何掷骰产出——他是这一章那一扇门后面的**唯一一个**人：
+// 名字取自 factions.js 的 leaders（魔教教主·蚩尤），门开在主线面板（app.js 无需改动，
+// 仙侠.html:326 的「📜主线」按钮已有）。三道门依次开：任务已接 → 长老×5 已了结 → 教主那条还没账。
+// 教主斩了就是斩了——第三条门由目标账自己关，不需要另立一个「已败」旗标（存档少一处要同步的账）。
+var DEMON_CULT_LORD = {
+    questId: 'main_033',
+    lordTarget: '魔教教主',
+    elderTarget: '魔教长老',
+    elderNeed: 5,
+    name: '魔教教主·蚩尤',
+    hp: 3000, attack: 290, defense: 185, speed: 125,
+    desc: '万魔窟的主人——五个长老倒下之后，他才从座上站起来'
+};
+function _dcQuest() {
+    // 注册表还没装上时如实说没有，不掷空
+    try {
+        return (window.QuestRegistry && typeof window.QuestRegistry.get === 'function')
+            ? window.QuestRegistry.get(DEMON_CULT_LORD.questId) : null;
+    } catch (eReg) {
+        console.warn('[main-story] 魔教教主：任务注册表读不到（' + (eReg && eReg.message) + '）——门不开');
+        return null;
+    }
+}
+function _dcObjective(q, target) {
+    if (!q || !Array.isArray(q.objectives)) return null;
+    for (var i = 0; i < q.objectives.length; i++) {
+        if (q.objectives[i] && q.objectives[i].target === target) return q.objectives[i];
+    }
+    return null;
+}
+function demonCultLordReady() {
+    var q = _dcQuest();
+    if (!q || !q.accepted || q.completed) return false;
+    var elder = _dcObjective(q, DEMON_CULT_LORD.elderTarget);
+    if (!elder || Number(elder.currentCount || 0) < DEMON_CULT_LORD.elderNeed) return false;
+    var lord = _dcObjective(q, DEMON_CULT_LORD.lordTarget);
+    return !!lord && !lord.completed;
+}
+// 主线面板上那一格：条件没到就是空串（不留空壳，不留「??」）
+function demonCultBossSection() {
+    try {
+        if (!demonCultLordReady()) return '';
+        return '<div class="mt-4 pt-3 border-t border-gray-600 text-left">'
+            + '<p class="text-sm font-bold text-red-400 mb-1">👹 第七章 · 万魔窟</p>'
+            + '<p class="text-xs text-gray-400 mb-2 leading-relaxed">五个长老都倒下了。万魔窟深处传来钟声——'
+            + '魔教教主·蚩尤从座上站了起来。这一战不在随机池里：只有这一扇门后有他。</p>'
+            + '<button onclick="window.startDemonCultLord()" class="w-full bg-red-800 hover:bg-red-700 text-white font-bold py-2 px-3 rounded text-sm">'
+            + '⚔️ 决战魔教教主·蚩尤</button></div>';
+    } catch (eSec) {
+        console.warn('[main-story] 魔教教主入口没挂上（' + (eSec && eSec.message) + '）');
+        return '';
+    }
+}
+function startDemonCultLord() {
+    try {
+        var cd = window.currentCharData;
+        if (!cd) { if (window.showMessage) window.showMessage('请先创建角色进入游戏。', 'info'); return false; }
+        if (!demonCultLordReady()) {
+            if (window.showMessage) window.showMessage('万魔窟的门还没开——先把五个魔教长老了结。', 'info');
+            return false;
+        }
+        if (typeof window.startBattle !== 'function') return false;
+        var d = DEMON_CULT_LORD;
+        // 走既有 boss 底板（synthesizeEnemyAttrs 会把 hp/攻/防/速合成为六维），只补生理类型与旗标
+        var enemy = _makeBossEnemy({ name: d.name, hp: d.hp, attack: d.attack, defense: d.defense, speed: d.speed, element: 'dark', desc: d.desc }, _bossTierMul());
+        enemy.physiologyType = 'humanoid';
+        enemy._isDemonCultLord = true;
+        if (window.gameLog && window.gameLog.add) window.gameLog.add('⚔️ 万魔窟 · ' + d.name + '现身——' + d.desc + '。', 'danger');
+        var battle = window.startBattle(enemy);
+        if (battle) battle._isDemonCultLord = true;
+        var modal = document.getElementById('main-story-modal');
+        if (modal) modal.remove();
+        return !!battle;
+    } catch (eLord) {
+        console.warn('[main-story] 魔教教主这一战开不起来（' + (eLord && eLord.message) + '）');
+        return false;
+    }
+}
+
 // 主线剧情面板
 function openMainStoryPanel() {
     try {
@@ -241,11 +321,13 @@ function openMainStoryPanel() {
                     : '<button disabled class="bg-gray-700 text-gray-500 font-bold py-2 px-4 rounded cursor-not-allowed">玄冥子已退，待飞升后追查天界魔气</button>')
                 : '<button onclick="window.startMainStoryBoss(\'xuanming\'); document.getElementById(\'main-story-modal\').remove();" class="bg-red-700 hover:bg-red-600 text-white font-bold py-2 px-4 rounded">⚔️ 决战玄冥子（三阶段）</button>')
             + '<button onclick="document.getElementById(\'main-story-modal\').remove()" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">关闭</button>'
-            + '</div></div></div>';
+            + '</div>'
+            + demonCultBossSection()   // v26.4 第七章·万魔窟：魔教教主那一扇门（条件不满足时是空串）
+            + '</div></div>';
         var old = document.getElementById('main-story-modal');
         if (old) old.remove();
         document.body.insertAdjacentHTML('beforeend', html);
-    } catch (e) {}
+    } catch (e) {}   // 主线面板开不出来不该掀桌：屏上已有旧面板时保持原样
 }
 
 // 接受主线章节任务
@@ -305,5 +387,9 @@ window.getMainBossProgress = getMainBossProgress;
 window.openMainStoryPanel = openMainStoryPanel;
 window.acceptMainStoryQuest = acceptMainStoryQuest;
 window.MAIN_STORY_ARC = MAIN_STORY_ARC;
+// v26.4 魔教教主（main_033 章节限定遭遇）：只暴露就绪判与开打口，不暴露绕过就绪判的入口
+window.demonCultLordReady = demonCultLordReady;
+window.startDemonCultLord = startDemonCultLord;
+window.DEMON_CULT_LORD = DEMON_CULT_LORD;
 
 })();

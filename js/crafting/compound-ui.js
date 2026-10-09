@@ -164,8 +164,16 @@
             if (picked.length < need) {
                 var avail = window.AlchemyCompound.listAvailableMatsForSlot(r.slots[key], _slots() || []) || [];
                 html += '<div class="flex flex-wrap gap-1">' + (avail.length ? avail.map(function (m) {
+                    // v27.14：药性不明标「？」——没学过的表外药（getProps().unknown），评分数是"你以为的"；
+                    // 学过的（herbLore 明账）标毒值摘要。丹炉上的诚实：不知就说不知。
+                    var _mTag = '';
+                    try {
+                        var _p = window.AlchemyCompound && window.AlchemyCompound.getProps ? window.AlchemyCompound.getProps(m.itemId) : null;
+                        if (_p && _p.unknown) _mTag = ' <span class="text-red-400">药性不明？</span>';
+                        else if (_p && _p.learned) _mTag = ' <span class="text-green-400">已识·毒' + _p.toxic + '</span>';
+                    } catch (eTag) {}
                     return '<button onclick="window._cpPick(\'' + key + '\',\'' + m.itemId + '\')" class="text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 px-2 py-0.5 rounded border border-gray-600">' +
-                        _nameOf(m.itemId) + '×' + m.count + ' <span class="text-amber-400">评' + m.score + '</span></button>';
+                        _nameOf(m.itemId) + '×' + m.count + _mTag + ' <span class="text-amber-400">评' + m.score + '</span></button>';
                 }).join('') : '<span class="text-xs text-gray-500">背包里没有合这槽的药材</span>') + '</div>';
             }
             html += '</div>';
@@ -225,17 +233,23 @@
             '<p class="font-bold text-white text-lg">' + _nameOf(res.itemId) + '</p>' +
             '<p class="text-sm mt-1" style="color:' + (q.color === 'purple' ? '#c084fc' : q.color === 'gold' ? '#fbbf24' : q.color === 'blue' ? '#60a5fa' : '#d1d5db') + '">品质：' + (q.name || '?') + '（评分 ' + Math.round(res.score) + '，毒性 ' + Math.round(res.toxic) + '）</p>' +
             '<p class="text-xs text-gray-400 mt-2">' + (q.id === 'imperial' ? '御品出炉，丹香十里！' : (res.toxic >= 40 ? '毒性偏重——丹成瑕疵，下回选药材长个心眼。' : '丹成，收入囊中。')) +
+            // v27.14：药性不明那味药出锅露真容（暗账重算已把毒性记进这炉；herbLore 已记，下回明账）
+            ((res.revealNotes && res.revealNotes.length) ? '<br><span class="text-red-400">药性露了真容：' + res.revealNotes.join('、') + '——这味药你算是认下了，下回明账。</span>' : '') +
             (res.count != null ? '这一炉收下 ' + res.count + ' 粒' + (res.asked != null && res.count < res.asked ? '（行囊只吞得下这些，另 ' + (res.asked - res.count) + ' 粒没处放）' : '') : '') + '</p>' +
             '<button onclick="openCompoundPilfarUI()" class="mt-4 text-xs px-4 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white">再开一炉</button></div>');
     };
 
     // ============ 词缀炼器（ForgingCompound） ============
-    var _cf = null; // { recipeId, embryo, main:[], assist:[], rune:[] }
+    var _cf = null; // { recipeId, embryo, main:[], assist:[], rune:[], allocation:{key:points} }
     window.openCompoundForgingUI = function () {
         if (!window.ForgingCompound) { if (window.showMessage) window.showMessage('词缀炼器系统未就绪。', 'error'); return; }
         _cf = null;
         var recipes = window.ForgingCompound.COMPOUND_FORGING_RECIPES || [];
-        var html = '<p class="text-xs text-gray-400 mb-3">器胚定形、材料定词缀——每件材料的标签从十九词缀池里抽词，锻造手艺越高留下的越多。主材/辅材必配，铭纹槽（手艺40+）可选。<br>出炉的器有品相（劣质/普通/优良/杰出/极品）：炉火看手艺、工法看词缀铭纹——品相真动数值，极品出炉成双；装了炼器台，品相再抬一段。炉火还能亲手试炼：控火得分替代随机浮动，盯准黄区收火，好手艺配好火才出极品。</p>';
+        var pools = (window.ForgingCompound.POOL_ORDER || []).map(function (pid) {
+            var p = window.ForgingCompound.AFFIX_POOLS[pid];
+            return p ? p.name + '（' + (window.ForgingCompound.AFFIX_BY_POOL[pid] || []).length + '条）' : '';
+        }).filter(Boolean).join('、');
+        var html = '<p class="text-xs text-gray-400 mb-3">器胚定形、材料定池（' + pools + '，另有三条通用补位）、词缀由你挑：同料同技同工，出炉一模一样——<b class="text-amber-300">强度全确定性，不掷骰</b>。<br>主材/辅材必配，铭纹槽（手艺40+）可选。属性点是这一炉的预算：点数＝材料品阶与等级 × 手艺段 × 环境加成；条数与档位都受手艺封顶，手艺不到拿不到仙品。<br>出炉的器有品相（劣质/普通/优良/杰出/极品），品相由手艺与工法定，不看运气；极品出炉成双；装了炼器台，品相再抬一段。炉火还能亲手试炼：控火得分顶手艺的封顶，好手艺配好火才出极品。</p>';
         html += recipes.map(function (r) {
             var sk = r.requiredSkills ? Object.keys(r.requiredSkills).map(function (k) { return k + '≥' + r.requiredSkills[k]; }).join(' ') : '无';
             return '<div class="bg-gray-700/40 p-3 rounded border border-gray-600 mb-2">' +
@@ -244,6 +258,7 @@
                 '<div class="text-xs text-gray-400 mt-1">' + (r.desc || '') + '</div>' +
                 '<div class="text-xs text-gray-500 mt-1">器胚：' + r.slots.embryo.type + ' ｜ 主材' + r.slots.main.count + ' 辅材' + r.slots.assist.count +
                 (r.slots.rune.optional ? ' 铭纹0~' + r.slots.rune.count + '（锻造≥' + r.slots.rune.minForgeSkill + '）' : '') +
+                ' ｜ 词缀槽：手艺决定，上限 ' + r.slots.affixSlots +
                 ' ｜ 门槛：' + sk + ' ｜ 真气 ' + (r.qiCost || 0) + '</div></div>';
         }).join('');
         _modal('🗡️ 词缀炼器 · 自由锻', html);
@@ -251,13 +266,33 @@
     window._cfSelect = function (recipeId) {
         var r = null;
         (window.ForgingCompound.COMPOUND_FORGING_RECIPES || []).forEach(function (x) { if (x.id === recipeId) r = x; });
-        _cf = { recipeId: recipeId, embryo: r ? r.slots.embryo.type : 'sword', main: [], assist: [], rune: [] };
+        _cf = { recipeId: recipeId, embryo: r ? r.slots.embryo.type : 'sword', main: [], assist: [], rune: [], allocation: {} };
         _cfRender();
     };
     function _cfRecipe() {
         var rs = window.ForgingCompound.COMPOUND_FORGING_RECIPES || [];
         for (var i = 0; i < rs.length; i++) if (rs[i].id === _cf.recipeId) return rs[i];
         return null;
+    }
+    function _cfSkill() {
+        return (typeof window.getLifeSkill === 'function') ? Number(window.getLifeSkill('锻造')) || 0 : 0;
+    }
+    function _cfTotals() {
+        var F = window.ForgingCompound, r = _cfRecipe();
+        var env = F.getCurrentForgeEnv();
+        var budget = F.computeForgeBudget(_cf.main, _cf.assist, _cf.rune, _cfSkill(), env);
+        var slotLimit = F.affixSlotLimit(_cfSkill());
+        var cap = Math.min(slotLimit, r && r.slots.affixSlots != null ? r.slots.affixSlots : 3);
+        var spent = 0, used = 0;
+        Object.keys(_cf.allocation).forEach(function (k) {
+            var p = Math.max(0, Math.floor(Number(_cf.allocation[k]) || 0));
+            if (p > 0) { spent += p; used++; }
+        });
+        return {
+            env: env, budget: budget, slotLimit: slotLimit, cap: cap, spent: spent, used: used,
+            maxP: F.maxPointsPerAffix(_cfSkill()),
+            candidates: F.listForgeCandidates(_cf.main, _cf.assist, _cf.rune, _cfSkill())
+        };
     }
     function _taggedMats() {
         var slots = _slots() || [];
@@ -295,13 +330,125 @@
             html += '</div>';
         });
         var forgeFireReady = typeof window._forgingFireBonus === 'number' && window._forgingFireBonus >= 0;
+        // ---- 第七批·候天伺地：把「等阳日再来」变成「选候几日」 ----
+        // 三个按钮就是 forgeHouOptions 给的三档（0/1/2 日），价钱与后果全写在按钮下面；
+        // 候不了的那档**亮锁并写清原因**（禁止设计 #2：不许整栏静默，也不许点了没反应）。
+        var houOpts = (window.ForgingCompound.forgeHouOptions
+            ? window.ForgingCompound.forgeHouOptions({ main: _cf.main, assist: _cf.assist, rune: _cf.rune })
+            : [{ days: 0, label: '今日开炉', lock: null, cadence: '不候', qiMult: 1, sameLight: false, landText: '？' }]);
+        if (_cf.houDays == null) _cf.houDays = 0;
+        var houQi = window.ForgingCompound.houQiCost ? window.ForgingCompound.houQiCost(r.qiCost || 0, _cf.houDays) : (r.qiCost || 0);
+        html += '<div class="mt-2 p-2 rounded border border-amber-700/50 bg-amber-900/10">' +
+            '<p class="text-xs text-amber-300 font-bold mb-1">候天伺地（《吴越春秋》「候天伺地，阴阳同光」——「候」本身就是等的动作）</p>' +
+            '<div class="flex flex-wrap gap-1 mb-1">' + houOpts.map(function (o) {
+                var on = (o.days === _cf.houDays);
+                var cls = on ? 'bg-amber-600 text-white font-bold'
+                    : (o.lock ? 'bg-gray-800 text-gray-500' : 'bg-gray-700 hover:bg-gray-600 text-amber-100');
+                var tip = o.lock ? '🔒 ' : (o.sameLight ? '☀️ ' : '·');
+                return '<button onclick="window._cfHou(' + o.days + ')" class="text-xs px-2 py-1 rounded border border-amber-800 ' + cls + '">'
+                    + tip + o.label + '｜真气 ×' + o.qiMult + '</button>';
+            }).join('') + '</div>';
+        var cur = houOpts.filter(function (o) { return o.days === _cf.houDays; })[0] || houOpts[0];
+        if (cur.lock) {
+            html += '<p class="text-xs text-red-400">🔒 候不了：' + cur.lock + '</p>';
+        } else if (cur.days === 0) {
+            html += '<p class="text-xs text-gray-400">今日开炉：不封炉、不占日子。'
+                + '想拿「阴阳同光」那 15% 炉料份量就候——但候的价钱是真气按倍数付 ＋ 世界真的过那几天'
+                + '（秘境窗口会关、债会到期、日课会走）。</p>';
+        } else {
+            html += '<p class="text-xs text-amber-200">封炉 ' + cur.days + ' 日：第 ' + cur.fromDay + ' → 第 ' + cur.landDay
+                + ' 日（' + cur.landText + '）'
+                + (cur.sameLight ? ' ☀️ 与主材同光 ⇒ 这一炉认下 15% 炉料份量' : ' ⇒ 与主材不同光，那 15% 这一项没算上')
+                + '；真气按 ×' + cur.qiMult + ' 付（这一炉共 ' + houQi + '，原价 ' + (r.qiCost || 0) + '）。</p>';
+        }
+        html += '</div>';
         html += '<div class="flex flex-wrap gap-2 mt-2">' +
             '<button onclick="window._cfFire()" class="text-xs px-3 py-1.5 rounded font-bold ' + (forgeFireReady ? 'bg-yellow-700 text-yellow-100' : 'bg-orange-600 hover:bg-orange-500 text-white') + '">' +
             (forgeFireReady ? '🔥 锻火已试：' + window._forgingFireBonus + '分（开锻即用）' : '🔥 火候试炼（亲可控火，定品相）') + '</button>' +
-            '<button onclick="window._cfRun()" class="text-xs px-3 py-1.5 rounded font-bold bg-purple-600 hover:bg-purple-500 text-white">⚒️ 开锻（真气' + (r.qiCost || 0) + '·耗材料）</button>' +
-            '</div><p class="text-xs text-gray-500 mt-2">没试火也能开锻——炉火按锻造手艺±随机浮动；控火得分顶不了手艺的封顶（手艺+20）。</p>';
+            '<button onclick="window._cfAuto()" class="text-xs px-3 py-1.5 rounded font-bold bg-gray-700 hover:bg-gray-600 text-white">🪓 自动均摊</button>' +
+            '<button onclick="window._cfClear()" class="text-xs px-3 py-1.5 rounded font-bold bg-gray-700 hover:bg-gray-600 text-white">🧹 清空分配</button>' +
+            '<button onclick="window._cfRun()" class="text-xs px-3 py-1.5 rounded font-bold bg-purple-600 hover:bg-purple-500 text-white">⚒️ 开锻（真气' + houQi + '·耗材料）</button>' +
+            '</div>';
+        html += _cfAllocHtml();
+        html += '<p class="text-xs text-gray-500 mt-2">没试火也能开锻——炉火＝锻造手艺+20（封顶100），全由手艺定；控火得分顶不了手艺的封顶。</p>';
         _redraw(html);
     }
+    // ---- 属性点分配面板：池里挑条数、每条自己投点（第六十波） ----
+    function _cfAllocHtml() {
+        var F = window.ForgingCompound;
+        var t = _cfTotals();
+        var sk = _cfSkill();
+        var out = '<div class="mt-3 p-3 rounded border border-purple-700/60 bg-purple-900/20">' +
+            '<p class="text-xs text-amber-300 font-bold mb-1">属性点分配（材料定池 · 你定条数与点数 · 不掷骰）</p>' +
+            '<p class="text-xs text-gray-400 mb-2">锻造 ' + sk + '（' + t.budget.tier.label + '）｜ 总点数 <b class="text-white">' + t.budget.totalPoints + '</b>' +
+            '（炉料 ' + t.budget.rawPoints + ' × 手艺 ' + t.budget.skillMult + ' × 环境 ' + t.budget.envMult.toFixed(2) + '）｜ 已投 <b class="text-white">' + t.spent + '</b>' +
+            (t.budget.totalPoints - t.spent > 0 ? '（溢出 ' + (t.budget.totalPoints - t.spent) + ' 点没处投）' : '') +
+            ' ｜ 条数 <b class="text-white">' + t.used + '/' + t.cap + '</b>（手艺上限 ' + t.slotLimit + '，本方上限 ' + t.cap + '）｜ 每条最多 ' + t.maxP + ' 点</p>';
+        if (t.env.hits.length) {
+            out += '<p class="text-xs text-cyan-400 mb-2">环境加成：' + t.env.hits.map(function (h) {
+                return '<span title="' + String(h.basis).replace(/"/g, '') + '">' + h.label + '（点数+' + Math.round(h.pointMult * 100) + '%'
+                    + Object.keys(h.attrMult).map(function (k) { return '·' + k + (h.attrMult[k] > 0 ? '+' : '') + Math.round(h.attrMult[k] * 100) + '%'; }).join('') + '）</span>';
+            }).join('、') + '</p>';
+        }
+        if (!t.candidates.length) {
+            out += '<p class="text-xs text-gray-500">还没选材——池里没有词缀可选。</p></div>';
+            return out;
+        }
+        out += '<div class="grid grid-cols-1 sm:grid-cols-2 gap-1">' + t.candidates.map(function (c) {
+            var a = c.entry;
+            var pts = Math.max(0, Math.floor(Number(_cf.allocation[a.key]) || 0));
+            var tier = F.resolveAffix(a, pts, sk, t.env);
+            var shownVal = pts > 0 ? tier.attrVal : a.tiers[0].val;
+            var attrTxt = a.proc ? '触发（' + ((F.FORGE_PROCS[a.proc] || {}).name || a.proc) + '·战斗侧待接线）'
+                : (a.attrKey + (shownVal >= 0 ? '+' : '') + shownVal);
+            var locked = t.used >= t.cap && pts === 0;
+            var over = t.spent >= t.budget.totalPoints && pts === 0;
+            return '<div class="flex items-center justify-between gap-1 px-2 py-1 rounded bg-gray-800/60 border border-gray-700">' +
+                '<span class="text-xs ' + (pts > 0 ? 'text-amber-200 font-bold' : 'text-gray-300') + '">' + a.name +
+                '<span class="text-gray-500 font-normal">·' + a.flavor + '</span>' +
+                '<span class="text-gray-500 font-normal"> · ' + attrTxt + (pts > 0 ? '（' + tier.tierName + '）' : '') + '</span></span>' +
+                '<span class="flex items-center gap-1 shrink-0">' +
+                '<button onclick="window._cfAlloc(\'' + a.key + '\',-1)" class="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 text-white text-xs"' + (pts <= 0 ? ' disabled' : '') + '>−</button>' +
+                '<span class="text-xs text-white w-8 text-center">' + pts + '</span>' +
+                '<button onclick="window._cfAlloc(\'' + a.key + '\',1)" class="w-6 h-6 rounded bg-gray-700 hover:bg-gray-600 text-white text-xs"'
+                + (pts >= t.maxP || locked || over ? ' disabled' : '') + '>+</button></span></div>';
+        }).join('') + '</div></div>';
+        return out;
+    }
+    // 投点：受「每条档位上限」「总点数」「条数上限」三道闸管；退点不受闸
+    window._cfAlloc = function (key, delta) {
+        var t = _cfTotals();
+        var cur = Math.max(0, Math.floor(Number(_cf.allocation[key]) || 0));
+        if (delta > 0) {
+            if (cur >= t.maxP) return;
+            if (cur === 0 && t.used >= t.cap) { if (window.showMessage) window.showMessage('条数已满（上限 ' + t.cap + ' 条）——先退掉一条，或提高锻造手艺。', 'info'); return; }
+            if (t.spent >= t.budget.totalPoints) { if (window.showMessage) window.showMessage('总点数已投完（' + t.budget.totalPoints + ' 点）——手艺与材料再高些才铺得开。', 'info'); return; }
+            _cf.allocation[key] = cur + 1;
+        } else {
+            _cf.allocation[key] = Math.max(0, cur - 1);
+            if (_cf.allocation[key] === 0) delete _cf.allocation[key];
+        }
+        _cfRender();
+    };
+    window._cfClear = function () { _cf.allocation = {}; _cfRender(); };
+    // 自动均摊：与引擎同一套算法（轮流加点），所以「按自动均摊开炉」与这里看到的完全一致
+    window._cfAuto = function () {
+        var F = window.ForgingCompound;
+        var res = F.collectForgeAffixes({
+            main: _cf.main, assist: _cf.assist, rune: _cf.rune, skill: _cfSkill(),
+            maxAffixes: (_cfRecipe() && _cfRecipe().slots.affixSlots != null) ? _cfRecipe().slots.affixSlots : 3,
+            allocation: null
+        });
+        _cf.allocation = {};
+        res.affixes.forEach(function (a) { _cf.allocation[a.key] = a.points; });
+        _cfRender();
+    };
+    window._cfHou = function (days) {
+        var F = window.ForgingCompound;
+        if (!F || typeof F.houDaysOf !== 'function') return;
+        _cf.houDays = F.houDaysOf(days);
+        _cfRender();
+    };
     window._cfFire = function () {
         if (typeof window.openForgeFireQTE === 'function') {
             window.openForgeFireQTE();
@@ -318,15 +465,29 @@
         _cf[key].push(itemId);
         _cfRender();
     };
-    window._cfUnpick = function (key, idx) { _cf[key].splice(idx, 1); _cfRender(); };
+    window._cfUnpick = function (key, idx) {
+        var matId = _cf[key][idx];
+        _cf[key].splice(idx, 1);
+        // 材料退炉，这条材料带来的词缀自然不在池里——分配表里顺手摘掉，免得留下点不动的死条目
+        var F = window.ForgingCompound;
+        var live = {};
+        F.listForgeCandidates(_cf.main, _cf.assist, _cf.rune, _cfSkill()).forEach(function (c) { live[c.entry.key] = 1; });
+        Object.keys(_cf.allocation).forEach(function (k) { if (!live[k]) delete _cf.allocation[k]; });
+        _cfRender();
+    };
     window._cfRun = function () {
         var res = window.ForgingCompound.executeCompoundForging(_cf.recipeId, {
-            embryo: _cf.embryo, main: _cf.main, assist: _cf.assist, rune: _cf.rune
+            embryo: _cf.embryo, main: _cf.main, assist: _cf.assist, rune: _cf.rune,
+            allocation: _cf.allocation,
+            // 第七批：候天伺地——这一炉封炉候了几天（0 = 今日开炉，与改前逐字节相同）
+            houDays: (typeof window.ForgingCompound.houDaysOf === 'function') ? window.ForgingCompound.houDaysOf(_cf.houDays) : 0
         });
         if (!res || !res.ok) {
             var reason = (res && res.reason) || '';
             var msgs = { 'empty-embryo': '还没定器胚', 'material-short': '材料不齐', 'qi-low': '真气不足，抡不动锤', 'inventory-full': '背包满了（材料已退回）' };
             var msg = msgs[reason] || reason;
+            // 候天不成：炉没封、天也没过——这一句必须先说，且不许缩成「真气不足」
+            if (res && res.houNote) { if (window.showMessage) window.showMessage('⏳ ' + res.houNote, 'warning'); return; }
             // DES-84：与丹炉同一支笔——退料只成功一半时不许再念「材料已退回」
             if (reason === 'inventory-full' && res && res.refundAsked != null) {
                 // DES-97（第一百四十批）：本处是中段位——后面还接 `+ '（N 件材料已退回）'`，句尾支 addItemFailText 带句号会把句号钉在句子中间（破句）。回退串原为「背包满了，器没地方放」，断言容量违反 DES-90，改用只说事实、不带句号的那一形。
@@ -340,20 +501,41 @@
             if (window.showMessage) window.showMessage('❌ 开锻未成：' + msg, 'warning');
             return;
         }
-        var affTxt = (res.affixes || []).map(function (a) { return a.name || a.key; }).join('、') || '（素器——材料没抽出词缀）';
-        // 第二十六波：出炉的器有品相——品质字头、工评、极品成双都亮给玩家看
+        var affTxt = (res.affixes || []).map(function (a) {
+            return a.name + '·' + (a.tierName || '') + a.points + '点' + (a.attrKey ? '（' + a.attrKey + (a.attrVal >= 0 ? '+' : '') + a.attrVal + '）' : '（触发·战斗侧待接线）');
+        }).join('、') || '（素器——没往任何一条词缀上投点）';
+        var plan = res.plan || {};
         var _qId = (res.quality && res.quality.id) || 'normal';
         var _qColor = { poor: 'text-gray-400', normal: 'text-gray-300', good: 'text-blue-300', excellent: 'text-yellow-300', imperial: 'text-purple-300' }[_qId] || 'text-gray-300';
         // DES-72 同族：件数念实收，「成双」那句要两件真进囊才说出口
         var _outTxt = _qId === 'imperial'
             ? (res.asked != null && res.count != null && res.count < res.asked ? '·极品本该成双，行囊只收下 ' + res.count + '/' + res.asked + ' 件' : '·极品出炉成双，同款多一件')
             : '';
+        // v27.14：③改良「品相制的播报语言」——出炉文案按档走"炉火纹路"（数值照挂括号不动）：
+        // 玩家讲给朋友听的是那句"火先静了一瞬"，不是 ×2.0。劣质也用世界语言（手抖的那一锤），
+        // 不是面板判词。判据：代价/收成要能被讲给朋友听。
+        var _flavor = {
+            poor: '出炉时锤声发闷——你知道这手抖了。',
+            normal: '出炉，器是器，火是火，两不相欠。',
+            good: '淬火那一下水响得干净——这一件有了自己的性子。',
+            excellent: '出炉那一刻膛里的火跳了一下——好东西。',
+            imperial: '出炉那一刻，膛里的火先静了一瞬——你知道成了。'
+        }[_qId] || '';
         _redraw('<div class="text-center py-4">' +
             '<p class="text-3xl mb-2">' + (res.imprint ? '🌟' : '🗡️') + '</p>' +
             '<p class="font-bold text-white text-lg">' + (res.name || _nameOf(res.itemId)) + '</p>' +
             '<p class="text-sm ' + _qColor + ' mt-1">品相：' + ((res.quality && res.quality.name) || '普通') + '（工评 ' + (res.score != null ? res.score : '？') + '/100' + _outTxt + '）</p>' +
+            (_flavor ? '<p class="text-sm ' + _qColor + ' mt-1 opacity-80">' + _flavor + '</p>' : '') +
             '<p class="text-sm text-cyan-300 mt-1">词缀：' + affTxt + '</p>' +
+            '<p class="text-xs text-gray-400 mt-1">这一炉：属性点 ' + plan.points + '/' + plan.totalPoints +
+            ' ｜ 条数 ' + (res.affixes || []).length + '/' + plan.maxAffixes + '（手艺' + plan.skillTier + '上限' + plan.slotLimit + '）' +
+            (plan.overflowPoints > 0 ? ' ｜ 溢出 ' + plan.overflowPoints + ' 点（手艺压不住那么多档）' : '') +
+            (plan.env && plan.env.hits.length ? ' ｜ 环境：' + plan.env.hits.map(function (h) { return h.label; }).join('、') : '')
+            // 第七批：这一炉候了几天、真气按几倍付——当场念出来，玩家不用翻日志
+            + (plan.houDays > 0 ? ' ｜ 候 ' + plan.houDays + ' 日（第 ' + plan.houFromDay + '→' + (window.getAbsoluteDay ? window.getAbsoluteDay() : '?') + ' 日·真气 ×' + plan.houQiMult + '）' : '') + '</p>' +
+            ((plan.notes && plan.notes.length) ? '<p class="text-xs text-amber-400/80 mt-1">' + plan.notes.join('；') + '</p>' : '') +
             (res.imprint ? '<p class="text-xs text-purple-300 mt-1">铭纹入器——这一炉是大活。</p>' : '') +
+            '<p class="text-xs text-gray-500 mt-1">同料同技同分配再开一炉，出炉一模一样（不掷骰）。</p>' +
             '<button onclick="openCompoundForgingUI()" class="mt-4 text-xs px-4 py-2 rounded bg-purple-600 hover:bg-purple-500 text-white">再锻一件</button></div>');
     };
 

@@ -9,6 +9,11 @@
  *
  * 集成方式（零侵入）：包装 window.giveGiftToNPC / confirmGiftToNPC / getSecretDisplayHtml，
  * 全部延迟到 DOMContentLoaded（app.js 在本文件之后加载，届时原生函数才存在）。
+ *
+ * v27.13（NPC 私账·轻账 A 案，账本体在 npc-life-actor.js 的 NPCLife.ledger）：
+ *   - 雇主闸：completeWantQuest 的灵石谢礼从雇主私账里出——账不在册照旧全额，见底付不出改打欠条；
+ *   - 掌柜闸 + 私账日结钩子：本文件订阅 onNewDay（加载序在 enhanced-shop.js 之后，
+ *     必须排在其「预设铺子日结补满货架」之后跑，才能对补好的货架收进货钱/转薄——见 purseDailyHook 处注）。
  */
 (function () {
     'use strict';
@@ -197,6 +202,10 @@
             var npc = window.npcManager && window.npcManager.getNPC ? window.npcManager.getNPC(npcId) : null;
             var payMsg = '';
             var _谢礼没处放 = false;
+            // v27.13：补声明——本函数在 'use strict' 下跑，下面 _谢礼id 是给未声明变量赋值，必抛
+            //   ReferenceError 且被外层 catch 整体吞掉：以物抵礼路径一进就断（愿不结账、冷却不落、谢礼两头悬空）。
+            //   不修这行，本文件要接的雇主闸所在的谢礼结账流程根本走不到钱那一行。
+            var _谢礼id = null;
             if (npc && npc.inventory && Array.isArray(npc.inventory.items)) {
                 var cand = null;
                 for (var i = 0; i < npc.inventory.items.length; i++) {
@@ -226,8 +235,26 @@
             }
             qs.completedQuests.add(qid); // 绕开 completeQuest 的 changeFavor 隐患
             if (!payMsg) {
-                if (window.currentCharData) window.currentCharData.spiritStones = (window.currentCharData.spiritStones || 0) + 40;
-                payMsg = '灵石×40';
+                // v27.13：雇主闸（收货口径的付钱场景）——谢礼从雇主私账里出（NPCLife.ledger.pay 正门）。
+                //   返回 null = 账不在册/账房未载 → 照旧全额 40，一行不差（兼容第一）；
+                //   在册 → 实付 = min(40, purse)，见底付不出时改打亲笔欠条——任务照结、好感照加，只动钱不动流程。
+                var _pay = null;
+                try {
+                    _pay = (window.NPCLife && window.NPCLife.ledger && typeof window.NPCLife.ledger.pay === 'function')
+                        ? window.NPCLife.ledger.pay(npcId, 40)
+                        : null;
+                } catch (ePay) {
+                    console.warn('[静默失败] js/npcs/npc-inventory.js · completeWantQuest：雇主闸查账失败', ePay && ePay.message);
+                    _pay = null;   // 查账炸了按账不在册走，谢礼照付
+                }
+                var _got = _pay ? _pay.paid : 40;
+                if (_got > 0) {
+                    if (window.currentCharData) window.currentCharData.spiritStones = (window.currentCharData.spiritStones || 0) + _got;
+                    payMsg = '灵石×' + _got + ((_pay && _pay.shortfall) ? '（他捏着瘪了半截的钱袋：「先拿这些，余下记我账上」）' : '');
+                } else {
+                    // v27.13：一分掏不出——句子仍接「从行囊里翻出……作为谢礼」的模板，欠条也是谢礼
+                    payMsg = '一张亲笔欠条（他搓着空钱袋：「这几日周转不开，谢礼先欠着——情分照记」）';
+                }
             }
             if (npc && typeof npc.changeAffection === 'function') npc.changeAffection(6);
             window.showMessage('📜 委托达成「捎来：' + itemName(itemId) + '」——' + (npc ? npc.name : '') + ' 从行囊里翻出' + payMsg + '作为谢礼。（好感+6）', 'success');
@@ -254,8 +281,63 @@
         } catch (e) { console.warn('[行囊] 每日消耗失败:', e); }
     }
 
+    // ==================== v27.13：NPC 私账日结 + 掌柜补货闸 ====================
+    // v27.13：时序为什么订在本文件——enhanced-shop.js（加载序在本文件之前）的日结钩子会把预设铺子货架
+    //   补满到 presetStockCap——掌柜闸必须排在它「之后」跑，才能对补好的货架收进货钱、进不起时压薄货架。
+    //   time-system 的 onNewDay 监听按订阅先后顺序执行（_newDayListeners 顺序回调），本文件加载序
+    //   在 enhanced-shop.js 之后 → 这里的订阅天然排在其补货钩子后面，不用碰人家一行代码。
+    function purseDailyHook(oldDay, newDay) {
+        var day = Number(newDay) || ((window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') ? window.timeSystem.getAbsoluteDay() : 0);
+        try {
+            // v27.13：先滴灌收支——掌柜的钱包算的是当日新账，随后掌柜闸才来收进货钱
+            if (window.NPCLife && window.NPCLife.ledger && typeof window.NPCLife.ledger.settle === 'function') {
+                window.NPCLife.ledger.settle(day);
+            }
+        } catch (e) { console.warn('[静默失败] js/npcs/npc-inventory.js · purseDailyHook：私账日结失败', e && e.message); }
+        try { shopRestockGate(day); } catch (e2) { console.warn('[静默失败] js/npcs/npc-inventory.js · purseDailyHook：掌柜补货闸失败', e2 && e2.message); }
+    }
+
+    // v27.13：掌柜闸——铺子进货花掌柜私账。轻账口径：不追单件售出流水（那是世界账 WorldLedger 的地盘，不越界），
+    //   进货钱按「补满后货架现值」小口抽（每件 5% 进价，至少 1），货架越厚账越重，天然自平衡：
+    //   见底压薄 → 货架薄 → 次日进货账变轻 → 攒几天进项货架又回满。
+    // v27.13：兜底铁律——账不在册（无主铺子/owner 查无此人/账房未载）→ 一行不差，货架照旧补满。
+    function shopRestockGate(day) {
+        if (!window.shopManager || !window.shopManager.shops || typeof window.shopManager.shops.forEach !== 'function') return;
+        var 账房 = (window.NPCLife && window.NPCLife.ledger && typeof window.NPCLife.ledger.ensure === 'function')
+            ? window.NPCLife.ledger : null;
+        if (!账房) return;   // 账房未载：全城掌柜照旧进得起货
+        window.shopManager.shops.forEach(function (shop) {
+            if (!shop || !shop.owner || !Array.isArray(shop.inventory)) return;
+            var led = 账房.ensure(shop.owner);
+            if (!led) return;   // v27.13：账不在册 → 这家铺子照旧
+            var bill = 0;
+            for (var i = 0; i < shop.inventory.length; i++) {
+                var it = shop.inventory[i];
+                // v27.13：stock==null 是「不限量货」，不进货不压薄
+                if (it && it.stock != null) bill += it.stock * Math.max(1, Math.round((Number(it.basePrice) || 0) * 0.05));
+            }
+            if (bill <= 0) return;
+            if (led.purse >= bill) { led.purse -= bill; return; }   // v27.13：进得起 → 整架照旧，只扣本钱
+            // v27.13：见底——钱包掏空，货架按「付得出几成」压薄；floor 后保 1 件撑门面，一分掏不出才真卖空
+            var paid = led.purse;
+            var f = paid / bill;
+            led.purse = 0;
+            for (var j = 0; j < shop.inventory.length; j++) {
+                var it2 = shop.inventory[j];
+                if (it2 && it2.stock != null) it2.stock = Math.max(paid > 0 ? 1 : 0, Math.floor(it2.stock * f));
+            }
+            // v27.13：体面文案低频提示——同铺 7 天至多一条（长期进不起货每周提醒一回，不当背景噪音），且只在明显见底时说
+            if (f <= 0.5 && day - (led.lastThinNoticeDay || -9999) >= 7) {
+                led.lastThinNoticeDay = day;
+                if (window.showMessage) window.showMessage('🏪 「' + (shop.name || '铺子') + '」的掌柜翻了翻钱柜：「进不起这批货了，先将就着卖。」——今日货架比往常薄。', 'info');
+            }
+        });
+    }
+
     if (window.timeSystem && typeof window.timeSystem.onNewDaySubscribe === 'function') {
         window.timeSystem.onNewDaySubscribe(dailyConsumeHook);
+        // v27.13：私账日结（收支滴灌 + 掌柜补货闸）——见上方时序说明，必须随本文件订阅（排在 enhanced-shop 补货之后）
+        window.timeSystem.onNewDaySubscribe(purseDailyHook);
     }
 
     // ==================== 行囊面板区（挂在秘密栏同层） ====================

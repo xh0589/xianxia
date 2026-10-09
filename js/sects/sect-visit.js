@@ -620,6 +620,15 @@ function showSectInnerView(sectName) {
             try { window.dailyEvents.tryTriggerDailyEvent('sect', { source: 'sect_enter', skipGlobalCd: false }); } catch (e) {}
         }, 500);
     }
+    // v27.18 修（TA 反馈「不在门派弹门派事件」）：内院也留一道奇遇口（5%）——
+    // 门派弟子在坊市/传送口满世界撞「神秘老人」，进了自家山门反而一场奇遇都遇不上，说不过去。
+    setTimeout(function() {
+        try {
+            if (Math.random() < 0.05 && window.eventSystem && typeof window.eventSystem.triggerRandomEvent === 'function') {
+                window.eventSystem.triggerRandomEvent();
+            }
+        } catch (eE17) {}
+    }, 800);
 }
 
 // ============ 导出 ============

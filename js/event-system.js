@@ -730,6 +730,10 @@ function triggerMasterEncounter(masterType) {
 }
 
 // ============ 进入秘境 ============
+// 这道门通的是**上古遗迹**那一座（裂隙里浮出的上古宗门废墟）。
+// 常驻三座各有各的门，不在这一行里排队：cave 的门在野外图的天然洞窟底下（randomMap.js
+//   poiAction 'realm-cave'），mountain 的门在蓬莱仙岛（location-system.js triggerSpecialFeature
+//   '仙山秘境'）。此处是遗迹那一座的两扇门之一（另一扇是太虚山的「上古遗迹」）。
 function enterSecretRealm() {
     // 优先走完整副本系统
     if (typeof window.openDungeonEntrance === 'function') {

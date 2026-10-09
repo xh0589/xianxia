@@ -148,7 +148,27 @@
                 if (cell) cell.relation = Math.max(-100, Math.min(100, (cell.relation || 0) - 10));
                 if (mySect) standingHit(mySect, false);
                 try { if (typeof W.sectPowerWarMod === 'function') W.sectPowerWarMod(sectId, true); } catch (eW) {}
-                var line2 = '💔 山门被' + sectId + '踏破了一角，库房被搬走一批——这笔账，来日再算。（战败之痛照常：昏迷、旧伤都可能落下）';
+                // v27.13：守山战败的掠夺账——旧码只喊「库房被搬走一批」，账上一枚未动（败方没扣、胜方没进，账实两空）。
+                // 最小守恒刀：败方库房真被搬走 loss（走 SectGov.deductStore 单一真源，扣库不走月账——月账支出侧口径只记自家用度），
+                // 胜方只运回六成、四成折在战火里（折价口径抄 sect-diplomacy-world 兴兵结算：败方−loss、胜方+六成，
+                // 观战捡的「无主辎重」正是那四成的散落）。胜方户部账不在（查无此派）就不动败方的库——
+                // 钱没处去就不许凭空被抢，也不许凭空消失。
+                var line2;
+                try {
+                    var iAtk2 = (W.SECT_INTERNAL || {})[sectId];
+                    if (mySect && iAtk2 && W.SectGov && typeof W.SectGov.deductStore === 'function') {
+                        var loss2 = 60 + Math.floor(Math.random() * 60);
+                        var spoils2 = Math.round(loss2 * 0.6);
+                        W.SectGov.deductStore(mySect, 'stone', loss2);
+                        iAtk2.resources = (Number(iAtk2.resources) || 0) + spoils2;
+                        line2 = '💔 山门被' + sectId + '踏破了一角，库房被搬走灵石' + loss2 + '（对方只运回六成——四成折在战火里）——这笔账，来日再算。（战败之痛照常：昏迷、旧伤都可能落下）';
+                    } else {
+                        line2 = '💔 山门被' + sectId + '踏破了一角——这笔账，来日再算。（战败之痛照常：昏迷、旧伤都可能落下）';
+                    }
+                } catch (ePl) {
+                    line2 = '💔 山门被' + sectId + '踏破了一角——这笔账，来日再算。（战败之痛照常：昏迷、旧伤都可能落下）';
+                    console.warn('[静默失败] js/sects/sect-war.js · settle：守山战败掠夺账没接住，本轮按未劫处理', ePl && ePl.message);
+                }
                 log(line2, 'error'); msg(line2, 'error');
                 // 改造批 · 抚恤：守山战败，可能有具名同门没能回来（葬礼/抚恤出库/编年记殁）
                 try { if (Math.random() < 0.35 && typeof W.sectShieldFuneral === 'function') W.sectShieldFuneral(mySect, '守山那一仗'); } catch (eF) {}
@@ -717,16 +737,21 @@
     try {
         if (W.PlayerSect && typeof W.PlayerSect.addHistory === 'function') {
             var _origAddHistory = W.PlayerSect.addHistory;
-            W.PlayerSect.addHistory = function (sectId, text) {
-                var r = _origAddHistory.apply(this, arguments);
-                try {
-                    if (r && W.WorldJournal && typeof W.WorldJournal.record === 'function') {
-                        var s = (W.PlayerSect.getSect && W.PlayerSect.getSect(sectId)) || null;
-                        W.WorldJournal.record({ type: 'sect', title: '宗门史', text: '「' + ((s && s.name) || '自立宗门') + '」' + String(text) });
-                    }
-                } catch (e) {}
-                return r;
-            };
+W.PlayerSect.addHistory = function (sectId, text) {
+                  var r = _origAddHistory.apply(this, arguments);
+                  try {
+                      if (r && W.WorldJournal && typeof W.WorldJournal.record === 'function') {
+                          var s = (W.PlayerSect.getSect && W.PlayerSect.getSect(sectId)) || null;
+                          W.WorldJournal.record({ type: 'sect', title: '宗门史', text: '「' + ((s && s.name) || '自立宗门') + '」' + String(text) });
+                      }
+                      // v27.24：宗门大事同入天下年表——大事记是玩家亲历账，史册是天下公史（同笔双写）
+                      if (r && W.WorldLedger && typeof W.WorldLedger.recordAnnal === 'function') {
+                          var s2 = (W.PlayerSect.getSect && W.PlayerSect.getSect(sectId)) || null;
+                          W.WorldLedger.recordAnnal('sect', '「' + ((s2 && s2.name) || '自立宗门') + '」' + String(text));
+                      }
+                  } catch (e) {}
+                  return r;
+              };
         }
     } catch (e) {}
 

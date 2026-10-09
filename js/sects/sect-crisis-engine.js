@@ -255,7 +255,16 @@
         var ownSect = ds && ds.isInSect && ds.sectId === sectName;
         if (gains.contribution && ownSect) { ds.contribution = (ds.contribution || 0) + gains.contribution; try { window.sectLedgerNote && window.sectLedgerNote(gains.contribution, '门派危机·善后'); } catch (e) {} msgs.push('贡献+' + gains.contribution); }
         if (gains.points && ownSect) { ds.points = (ds.points || 0) + gains.points; msgs.push('积分+' + gains.points); }
-        if (gains.morale && internal) { internal.morale = Math.max(0, Math.min(100, (internal.morale || 50) + gains.morale)); msgs.push('士气' + (gains.morale > 0 ? '+' : '') + gains.morale); }
+        // 士气读口：与 js/sects/sect-crisis-events.js 的 _moraleVal、js/sects/sect-events.js 的 _moraleOf
+        //   同一套口径，一字不差。旧写法 `internal.morale || 50` —— 士气**正好是 0** 时得 50，
+        //   于是**抉择结算**在谷底加减的是一个不存在的 50：胜 +7 得 57（一键半满）、败 -10 得 40（谷底反涨）。
+        //   对照：上面 :256 的 contribution/points 有 ownSect 判断，morale 是**无条件写本门账**——玩家能点的
+        //   每一条危机抉择，sectName 必等于 ds.sectId（见 sect-visit.js:461 内院门 + :403 wireDaily 只推本门），
+        //   所以这一笔是玩家看得到的账，不是 NPC 侧的暗账。
+        // 士气是**取值**不是「有没有」：null/undefined/非有限数才落 50，0 就是 0。
+        var _moraleNow = (internal.morale == null) ? 50 : Number(internal.morale);
+        if (!isFinite(_moraleNow)) _moraleNow = 50;
+        if (gains.morale && internal) { internal.morale = Math.max(0, Math.min(100, _moraleNow + gains.morale)); msgs.push('士气' + (gains.morale > 0 ? '+' : '') + gains.morale); }
         if (gains.resources && internal) { internal.resources = Math.max(0, (internal.resources || 0) + gains.resources); msgs.push('库存' + (gains.resources > 0 ? '+' : '') + gains.resources); }
         if (gains.influence && internal) { internal.influence = Math.max(0, Math.min(100, (internal.influence || 50) + gains.influence)); msgs.push('影响力' + (gains.influence > 0 ? '+' : '') + gains.influence); }
         if (gains.stones) {

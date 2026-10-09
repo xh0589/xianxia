@@ -176,7 +176,15 @@ function applyBottleneckEffect() {
 // ============ 尝试突破瓶颈 ============
 function attemptBreakBottleneck() {
     if (!playerBottleneck.isInBottleneck) {
-        if (window.showMessage) window.showMessage('你当前没有遇到瓶颈。', 'info');
+        // v27.13：渡劫期没有瓶颈行（BOTTLENECK_CONFIG 止于大乘，是有意设定——渡劫期
+        // 唯一的关口是天劫，不走瓶颈闸）。旧文案「你当前没有遇到瓶颈」对渡劫玩家
+        // 像面板坏了；此境给一句人话，说明这不是缺账而是设定。
+        var _abChar = window.currentCharData;
+        if (_abChar && _abChar.realm === '渡劫') {
+            if (window.showMessage) window.showMessage('渡劫无瓶颈，前路唯天劫耳。', 'info');
+        } else if (window.showMessage) {
+            window.showMessage('你当前没有遇到瓶颈。', 'info');
+        }
         return;
     }
 

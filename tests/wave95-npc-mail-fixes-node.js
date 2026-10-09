@@ -1,7 +1,7 @@
 /**
  * wave95-npc-mail-fixes-node.js — 第九十五波 · NPC/社交/邮件簇缺陷修复验收
  *
- * 验收点（编号=外包测试报告编号）：
+ * 验收点（编号=测试报告编号）：
  *   NEW-39（高）：npcLastMeetGameMinute 对 null/undefined/0 一律判「从未谋面」返回 null；
  *                 关系衰减对从未谋面者跳过；读档迁移把被 Number(null)===0 写脏的好感归零
  *                 （道侣除外、真见过的仇人除外、幂等可重入）

@@ -20,6 +20,144 @@
         { key: 'festival', label: '下次节令（庙会）' }
     ];
 
+    // v27.13：①-漏洞-1 闭关成本恒定——90 日死关=450 灵石，炼气肉痛、化神零钱（灵石贬值了、闭关价没变）。
+    // 修法（主档口径）：costPerDay 挂境界档，"境界×5"档位表——档=window.REALM_ORDER 序（炼气=1…渡劫=9，
+    // 飞升=10、金仙=11），日价=档×5。闭关档位表全值：凡人 5 / 炼气 5 / 筑基 10 / 金丹 15 / 元婴 20 / 化神 25 /
+    // 炼虚 30 / 合体 35 / 大乘 40 / 渡劫 45 / 飞升 50 / 金仙 55（灵石/日）。炼气 5/日与旧价同——主档
+    // "练气肉痛"的原价原样保留，只抬高位面那头。
+    // 争议取舍：取 **A 案（挂境界倍率）**——不跨模块、改动面小；B 案（挂所在城物价，与行情时滞同账）留口：
+    // 全部取价（三档确认弹窗/闭关至事件/UI 报价）都收口在 getRetreatCostPerDay() 这一扇门，
+    // 日后要接 MarketDynamic.priceMul(城,'杂货') 之类只改此一处。
+    // 境界序不手抄第二份（DES-92 单一真源纪律）：主读 window.REALM_ORDER；缺席退 getRealmIndex
+    // （REALM_CONFIG 切点只到渡劫，飞升/金仙返 -1 → max(1,·) 落最低档）；两头皆缺按炼气档照旧，不挡人进关。
+    // 凡人（序 0）与认不出的境界名一律按最低档兜底——阵法只认最低消费，不发免费闭关。
+    // 定档时机：**入关时一次定档，关内不逐日重估**——闭关本就不自动突破（UI 结尾明说"不自动替你突破"），
+    // 且预付/退款必须同一单价账才对得上（runRetreatLoop 的 refund 按 costPerDay 退）；取简单一致的一头。
+    var RETREAT_BASE_COST_PER_DAY = 5; // 炼气档（1 档 × 5），兼作全部兜底价
+    function getRetreatCostPerDay() {
+        var realm = (global.currentCharData && global.currentCharData.realm) || '';
+        try {
+            if (Array.isArray(global.REALM_ORDER)) {
+                var i = global.REALM_ORDER.indexOf(String(realm).trim());
+                return Math.max(1, i) * RETREAT_BASE_COST_PER_DAY; // 凡人/无名 = 0 → 提到最低档 1
+            }
+        } catch (eOrder) {
+            console.warn('[静默失败] js/cultivation/long-retreat.js · getRetreatCostPerDay：REALM_ORDER 读档失败，退旧尺重试', eOrder && eOrder.message);
+        }
+        try {
+            if (typeof global.getRealmIndex === 'function') {
+                var ri = global.getRealmIndex(realm); // 旧尺：炼气=0…渡劫=8；凡人/飞升/金仙=-1
+                return Math.max(1, ri + 1) * RETREAT_BASE_COST_PER_DAY;
+            }
+        } catch (eIdx) {
+            console.warn('[静默失败] js/cultivation/long-retreat.js · getRetreatCostPerDay：getRealmIndex 读档失败，按炼气档计', eIdx && eIdx.message);
+        }
+        return RETREAT_BASE_COST_PER_DAY;
+    }
+
+    // ============ v27.13：①-新增-2 闭关不是保险箱 ============
+    // 主档口径：闭关期间每日按宿敌/恶名档掷打扰；掷中即弹两难——
+    //   「强行出关」＝闭关中止、收成按已过天数折算（多预付的阵法费走既有 refund 账退）、
+    //              当场撞见（接现有宿敌遭遇/夜袭正门：有宿敌走 duelRival（rivalry-chain，挂 _isRivalDuel
+    //              走既有寻仇结算），无宿敌走 startBattle 挂 _isCaveSiege（cave-siege 同一张战后结算桌）——不造新战斗）；
+    //   「闭目不动」＝这一夜过去了，今日收成折损一档（与心魔滋扰同一档折法：减半），
+    //              出关回执里留一句「洞府外的脚印」余味。
+    // 概率档位表（宿敌数/本地已知恶名两本账**取高者**定档；基础率刻意压低——闭关多数日子该是太平的）：
+    //   · 不掷（太平）：无活着的宿敌 且 恶名 <40——没人记得你，山门当然清净；
+    //   · 低档 0.02/日：1 名宿敌 或 恶名 ≥40；
+    //   · 中档 0.04/日：2-3 名宿敌 或 恶名 ≥70；
+    //   · 高档 0.07/日：≥4 名宿敌 或 恶名 ≥100。
+    //   （参照：90 日死关低档期望约 1.8 次；闭关头三日不掷——追三个月也要赶路，脚步声不会第一天就到。）
+    // 冷却：触发过一次（无论两难选哪边）十日内不再扰；冷却日挂 charData._retreatDisturbLastDay
+    //   （运行时态，不入 game-state 存档白名单——读档丢失的后果只是可能多扰一次，方向无害）。
+    // 兜底照旧：getRivals/WorldLedger.knownNotoriety/境界尺缺席一律退 0——打扰不掷＝太平，不挡人进关。
+    //   恶名读「本地已知恶名」（cave-siege v27.13 同款：世界账在册读 knownNotoriety，缺席退全局 notoriety 旧口径）。
+    var RETREAT_DISTURB_TIERS = [
+        { rivals: 4, noto: 100, p: 0.07 },  // 高档
+        { rivals: 2, noto: 70,  p: 0.04 },  // 中档
+        { rivals: 1, noto: 40,  p: 0.02 }   // 低档
+    ];
+    var RETREAT_DISTURB_GRACE_DAYS = 3; // 头三日不掷：找上门要脚程
+    var RETREAT_DISTURB_COOLDOWN = 10;  // 触发过一次，十日内不再扰
+
+    function retreatDisturbInputs() {
+        var cd = global.currentCharData || {};
+        var rivals = 0;
+        try {
+            if (typeof global.getRivals === 'function') {
+                rivals = (global.getRivals() || []).filter(function (n) { return n && !n.isDead && !n.isMissing; }).length;
+            }
+        } catch (eR) {
+            console.warn('[静默失败] js/cultivation/long-retreat.js · retreatDisturbInputs：宿敌名单没调出来，按没有宿敌算（这一夜太平）', eR && eR.message);
+        }
+        var noto = 0;
+        try {
+            if (global.WorldLedger && typeof global.WorldLedger.knownNotoriety === 'function') {
+                noto = Number(global.WorldLedger.knownNotoriety()) || 0; // 本地治安眼中的你（世界账缺席退 0）
+            } else {
+                noto = Number(cd.notoriety) || 0; // 账簿不在册（旧档）：照旧全局口径
+            }
+        } catch (eN) {
+            console.warn('[静默失败] js/cultivation/long-retreat.js · retreatDisturbInputs：恶名账没读出来，按无名之辈算', eN && eN.message);
+        }
+        return { rivals: rivals, noto: noto };
+    }
+
+    // 掷一次闭关打扰。返回 null＝今夜太平；{kind:'rival', npc}＝宿敌摸上山门；{kind:'raider'}＝恶名招来的蒙面人。
+    function rollRetreatDisturbance(dayIndex, today) {
+        var player = global.currentCharData;
+        if (!player) return null;
+        if (dayIndex < RETREAT_DISTURB_GRACE_DAYS) return null;
+        var last = Number(player._retreatDisturbLastDay);
+        if (Number.isFinite(last) && today - last < RETREAT_DISTURB_COOLDOWN) return null;
+        var inp = retreatDisturbInputs();
+        var p = 0;
+        for (var i = 0; i < RETREAT_DISTURB_TIERS.length; i++) {
+            var t = RETREAT_DISTURB_TIERS[i];
+            if (inp.rivals >= t.rivals || inp.noto >= t.noto) { p = t.p; break; }
+        }
+        if (p <= 0) return null; // 无宿敌且恶名不足：不掷＝太平
+        if (Math.random() >= p) return null;
+        // 来的是谁：有宿敌挑恨最深的（cave-siege 同款排序），没有就是恶名招来的蒙面夜袭者
+        var foe = null;
+        try {
+            if (typeof global.getRivals === 'function') {
+                var list = (global.getRivals() || []).filter(function (n) { return n && !n.isDead && !n.isMissing; });
+                if (list.length) foe = list.sort(function (a, b) {
+                    return ((b.relationship && b.relationship.hatred) || 0) - ((a.relationship && a.relationship.hatred) || 0);
+                })[0];
+            }
+        } catch (eF) {}
+        return foe ? { kind: 'rival', npc: foe } : { kind: 'raider' };
+    }
+
+    // 强行出关＝当场撞见：接现有宿敌遭遇/夜袭正门，不造新战斗（本函数在闭关收尾、弹窗都放完之后调）。
+    function triggerRetreatEncounter(dist) {
+        try {
+            var player = global.currentCharData;
+            if (dist && dist.kind === 'rival' && typeof global.duelRival === 'function' && dist.npc && dist.npc.id) {
+                global.duelRival(dist.npc.id); // rivalry-chain 正门：开战挂 _isRivalDuel，胜负走既有寻仇结算
+                return;
+            }
+            if (typeof global.startBattle === 'function') {
+                // 恶名招来的蒙面夜袭者：敌情照 cave-siege 蒙面支捏人，挂 _isCaveSiege 走同一张战后结算桌。
+                // （cave-siege 的煞位/道侣折攻是它自家的战前账，这里不重复抄——蒙面人按裸脸算。）
+                var tier = 3;
+                try { if (typeof global.getRealmTier === 'function') tier = global.getRealmTier(player && player.realm) || 3; } catch (eT) {}
+                var raider = {
+                    name: '蒙面夜袭者', type: 'elite', physiologyType: 'humanoid',
+                    level: tier * 3 + 2, attack: 33 + tier * 5, defense: 16 + tier * 3, speed: 24,
+                    maxDurability: 95 + tier * 15, durabilities: { chest: 95 + tier * 15 }, combatAbilities: []
+                };
+                var b = global.startBattle(raider);
+                if (b) b._isCaveSiege = true;
+                if (global.showMessage) global.showMessage('🥾 你推门而出——门外站的不是宿敌，是几个蒙面人。恶名在外，连闭关都有人惦记。', 'error');
+            }
+        } catch (eDist) {
+            console.warn('[静默失败] js/cultivation/long-retreat.js · triggerRetreatEncounter：这一仗没拉起来，来人堵在山门外', eDist && eDist.message);
+        }
+    }
+
     function getSpiritStones() {
         return Number(global.inventory && global.inventory.currency && global.inventory.currency.spiritStones) || 0;
     }
@@ -169,7 +307,7 @@
      * 跑一次闭关；可在 dueFlag 被设为 true 时提前 break。
      * @param {number} plannedDays 计划闭关天数
      * @param {Object} opts
-     *   - costPerDay 默认 5
+     *   - costPerDay 默认 5（v27.13：入口处按境界档传入，见 getRetreatCostPerDay——本函数不重估）
      *   - maxIterations 安全上限（避免 due 永远不触发）
      *   - getDueFlag 返回 {stop:boolean, reason?:string}
      *   - endDayGetter 每次循环返回当前 endDay（用于摘要）
@@ -177,7 +315,7 @@
      */
     function runRetreatLoop(plannedDays, opts) {
         opts = opts || {};
-        var costPerDay = Number(opts.costPerDay) || 5;
+        var costPerDay = Number(opts.costPerDay) || 5; // v27.13：兜底价=炼气档；真值由入口定档传入
         var maxIterations = Number(opts.maxIterations) || plannedDays;
         var player = global.currentCharData;
         if (!player) return null;
@@ -217,8 +355,11 @@
         var mainSkillId = null;
         var actualDays = 0;
         var stoppedReason = null;
+        // v27.13：强行出关待触发的撞见（闭关收尾后再开战，别让战斗弹窗砸在结算消息前头）
+        var _pendingDisturb = null;
         // v23.1 闭关不是打卡上班：每日有小概率灵光顿悟（当日收成三倍），也有心魔滋扰（紊乱+6、当日折半）
-        var _rtNotes = { enlighten: 0, deviation: 0 };
+        // v27.13：再添一本 disturb 账——闭关不是保险箱（①-新增-2）
+        var _rtNotes = { enlighten: 0, deviation: 0, disturb: 0 };
         var oldRetreat = global._isInLongRetreat;
         var oldSuppress = global._suppressTimeFlowMessages;
         global._isInLongRetreat = true;
@@ -228,6 +369,31 @@
                 if (opts.getDueFlag) {
                     var flag = opts.getDueFlag() || {};
                     if (flag.stop) { stoppedReason = flag.reason || 'due'; break; }
+                }
+                // v27.13：①-新增-2 闭关不是保险箱——每日掷一次打扰，掷中即弹两难（确定=强行出关 / 取消=闭目不动）。
+                //   无确认面的异常环境默认闭目不动：宁折一日收成，不替玩家开战。
+                var _distToday = global.timeSystem.gameTime ? global.timeSystem.gameTime.currentDay : (startDay + actualDays);
+                var _distHalve = false;
+                var _dist = rollRetreatDisturbance(d, _distToday);
+                if (_dist) {
+                    player._retreatDisturbLastDay = _distToday; // 触发即入十日冷却（两支皆然）
+                    _rtNotes.disturb++;
+                    var _foeName = _dist.kind === 'rival' ? ((_dist.npc && _dist.npc.name) || '宿敌') : '不速之客';
+                    var _distGo = false;
+                    if (typeof global.confirm === 'function') {
+                        _distGo = global.confirm('🌫️ 闭关第 ' + (d + 1) + ' 日——洞府外传来脚步声。\n' +
+                            (_dist.kind === 'rival'
+                                ? '「' + _foeName + '」追着风声摸到了山门外，杀气没有收。'
+                                : '几个「' + _foeName + '」绕着山门转了一圈，来意不善。') + '\n\n' +
+                            '【确定】强行出关——当场撞见了断恩怨（闭关就此中止，已闭 ' + d + ' 日收成照算，未跑满的阵法费退回）。\n' +
+                            '【取消】闭目不动——由他在外守一夜（今日收成折损一档，脚印留在洞府外）。');
+                    }
+                    if (_distGo) {
+                        stoppedReason = '洞府外来人，强行出关';
+                        _pendingDisturb = _dist;
+                        break;
+                    }
+                    _distHalve = true; // 闭目不动：这一夜过去了
                 }
                 var y = getRetreatDailyYield();
                 var _dayYield = y.essence;
@@ -240,6 +406,8 @@
                     _dayYield = Math.floor(_dayYield / 2);
                     _rtNotes.deviation++;
                 }
+                // v27.13：闭目不动——今日收成折损一档（与心魔滋扰同一档折法）；顿悟/心魔的账照旧在前
+                if (_distHalve) _dayYield = Math.floor(_dayYield / 2);
                 totalEssence += _dayYield;
                 mainSkillId = y.mainSkillId || mainSkillId;
                 if (y.mainSkillId && typeof global.addProficiencyExp === 'function') {
@@ -295,7 +463,9 @@
             // v25.1·试-28：提前出关退回多预付的灵石——回执如实报退款
             var refundNote = refunded > 0 ? '，阵法未跑满退回灵石' + refunded : '';
             var _rtNote = (_rtNotes.enlighten ? '，途中灵光顿悟×' + _rtNotes.enlighten : '') +
-                (_rtNotes.deviation ? '，心魔滋扰×' + _rtNotes.deviation + '（气机微乱，静养可复）' : '');
+                (_rtNotes.deviation ? '，心魔滋扰×' + _rtNotes.deviation + '（气机微乱，静养可复）' : '') +
+                // v27.13：①-新增-2 闭目不动的余味——出关回执里留一句「洞府外的脚印」
+                (_rtNotes.disturb ? '，途中' + _rtNotes.disturb + '次听见洞府外脚步声——你都闭目未动，山门外绕着一圈脚印' : '');
             // 第七十三波：出关回执报心境折头（平平常常不开口——与打坐结算单同一张嘴）
             var _moodNoteR = '';
             try { if (global.MoodSystem && typeof global.MoodSystem.cultivationNote === 'function') _moodNoteR = global.MoodSystem.cultivationNote(); } catch (eMn) {}
@@ -303,6 +473,8 @@
             var summary = buildRetreatSummary(startDay, endDay);
             if (summary) global.showMessage(summary, 'info');
         }
+        // v27.13：①-新增-2 强行出关＝当场撞见——结算消息放完再开战（宿敌走 duelRival / 蒙面人走 _isCaveSiege）
+        if (_pendingDisturb) triggerRetreatEncounter(_pendingDisturb);
         return { days: actualDays, plannedDays: plannedDays, essence: totalEssence, insight: insightGain, mainSkillId: mainSkillId, cost: netCost, refunded: refunded, stoppedReason: stoppedReason, startDay: startDay, endDay: (global.timeSystem && global.timeSystem.gameTime) ? global.timeSystem.gameTime.currentDay : startDay + actualDays };
     }
 
@@ -310,8 +482,10 @@
         var opt = getOption(days);
         var player = global.currentCharData;
         if (!opt || !player) return false;
-        if (typeof global.confirm === 'function' && !global.confirm('确定' + opt.label + '？\n将消耗灵石' + (opt.days * opt.costPerDay) + '，并让世界真实推进' + opt.days + '天。')) return false;
-        return runRetreatLoop(opt.days, { costPerDay: opt.costPerDay });
+        // v27.13：入关时按境界一次定档（档×5，见 getRetreatCostPerDay 头注），关内不逐日重估
+        var _tierCost = getRetreatCostPerDay();
+        if (typeof global.confirm === 'function' && !global.confirm('确定' + opt.label + '？\n将消耗灵石' + (opt.days * _tierCost) + '，并让世界真实推进' + opt.days + '天。')) return false;
+        return runRetreatLoop(opt.days, { costPerDay: _tierCost });
     }
 
     /**
@@ -370,7 +544,9 @@
 
         // 确认弹窗
         var meta = RETREAT_TARGET_CATEGORIES.find(function (c) { return c.key === category; }) || { label: category };
-        var confirmMsg = '确定闭关至' + meta.label + '？\n目标：第 ' + targetDay + ' 天 · 距今 ' + days + ' 日\n消耗灵石 ' + (days * 5) + (cappedByLifespan ? '\n（已被寿元上限截断）' : '');
+        // v27.13：报价同样走境界档（入关时定档），不再写死 5/日
+        var _tierCostEvt = getRetreatCostPerDay();
+        var confirmMsg = '确定闭关至' + meta.label + '？\n目标：第 ' + targetDay + ' 天 · 距今 ' + days + ' 日\n消耗灵石 ' + (days * _tierCostEvt) + (cappedByLifespan ? '\n（已被寿元上限截断）' : '');
         if (typeof global.confirm === 'function' && !global.confirm(confirmMsg)) {
             if (unsub) try { unsub(); } catch (e) {}
             return null;
@@ -381,7 +557,7 @@
         }
 
         var result = runRetreatLoop(days, {
-            costPerDay: 5,
+            costPerDay: _tierCostEvt, // v27.13：境界档价（入关时定档），此前写死 5
             maxIterations: days + 5, // 安全：实际由 hit.stop 退出
             getDueFlag: function () { return hit; }
         });
@@ -404,7 +580,7 @@
         // 第九十五波·NEW-23：能点的行不再挂装饰锁——旧版每行标题硬拼 '🔒 '，照常生效的档位
         // 看着像没解锁，玩家以为整套闭关被锁死（真锁住的行才保留 🔒 并置灰）
         RETREAT_OPTIONS.forEach(function (o) {
-            var cost = o.days * o.costPerDay;
+            var cost = o.days * getRetreatCostPerDay(); // v27.13：面板报价挂境界档（此前恒 5/日）
             var afford = getSpiritStones() >= cost;
             html += '<button onclick="startLongRetreat(' + o.days + '); this.closest(\'#xianxia-modal-overlay\')?.remove();" class="w-full text-left ' + (afford ? 'bg-indigo-800 hover:bg-indigo-700 border-indigo-600' : 'bg-gray-800 opacity-70 border-gray-600') + ' p-3 rounded border">' +
                 '<span class="' + (afford ? 'text-indigo-200' : 'text-gray-400') + ' font-bold">' + o.label + '</span><br>' +
@@ -423,7 +599,7 @@
                     var dleft = next.dueAbsoluteDay - now;
                     html += '<button onclick="startLongRetreatUntilEvent(\'' + cat.key + '\', 90); this.closest(\'#xianxia-modal-overlay\')?.remove();" class="w-full text-left bg-amber-800 hover:bg-amber-700 p-2 rounded text-xs mb-1">' +
                         '<span class="text-amber-200 font-bold">📅 至' + cat.label + '：第 ' + next.dueAbsoluteDay + ' 天（' + dleft + ' 日后）</span><br>' +
-                        '<span class="text-gray-400">' + next.title + ' · 约 ' + (dleft * 5) + ' 灵石</span></button>';
+                        '<span class="text-gray-400">' + next.title + ' · 约 ' + (dleft * getRetreatCostPerDay()) + ' 灵石</span></button>';
                 }
             });
         } else {
@@ -436,6 +612,7 @@
 
     global.RETREAT_OPTIONS = RETREAT_OPTIONS;
     global.RETREAT_TARGET_CATEGORIES = RETREAT_TARGET_CATEGORIES;
+    global.getRetreatCostPerDay = getRetreatCostPerDay; // v27.13：境界档日价读口（UI/测试/未来 B 案接口）
     global.getRetreatDailyYield = getRetreatDailyYield;
     global.startLongRetreat = startLongRetreat;
     global.startLongRetreatUntilEvent = startLongRetreatUntilEvent;

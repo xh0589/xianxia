@@ -10,6 +10,8 @@ const BUILDING_TYPES = {
     ARMOR_SHOP: { id: 'armor_shop', name: '防具铺', icon: '🛡️', color: 'text-blue-400', category: 'commercial' },
     ART_SHOP: { id: 'art_shop', name: '功法阁', icon: '📚', color: 'text-indigo-400', category: 'commercial' },
     BEAST_SHOP: { id: 'beast_shop', name: '灵兽坊', icon: '🐾', color: 'text-amber-400', category: 'commercial' },
+    // v27.0 坐骑批：马市——凡俗牲口的柜台（凡马/青骡/骏马，铜钱买卖），灵兽坊卖灵兽、马市卖牲口，两本账
+    HORSE_MARKET: { id: 'horse_market', name: '马市', icon: '🐴', color: 'text-orange-300', category: 'commercial' },
     ALCHEMY: { id: 'alchemy', name: '炼丹房', icon: '⚗️', color: 'text-lime-400', category: 'crafting' },
     FORGING: { id: 'forging', name: '铁匠铺', icon: '⚒️', color: 'text-orange-400', category: 'crafting' },
     ENCHANT_SHOP: { id: 'enchant_shop', name: '附魔店', icon: '✨', color: 'text-pink-400', category: 'crafting' },
@@ -18,6 +20,7 @@ const BUILDING_TYPES = {
     TRAINING: { id: 'training', name: '演武场', icon: '⚔️', color: 'text-red-400', category: 'combat' },
     ARENA: { id: 'arena', name: '竞技场', icon: '🏟️', color: 'text-red-500', category: 'combat' },
     TELEPORT: { id: 'teleport', name: '传送阵', icon: '🌀', color: 'text-cyan-400', category: 'travel' },
+    POST_STATION: { id: 'post_station', name: '驿站', icon: '📯', color: 'text-amber-400', category: 'travel' },
     TAVERN: { id: 'tavern', name: '酒楼', icon: '🍶', color: 'text-amber-400', category: 'social' },
     TEA_HOUSE: { id: 'tea_house', name: '茶馆', icon: '🍵', color: 'text-emerald-400', category: 'social' },
     GUILD_HALL: { id: 'guild_hall', name: '公会大厅', icon: '🏛️', color: 'text-yellow-300', category: 'social' },
@@ -72,7 +75,7 @@ const cityData = {
     '帝都·长安': {
         id: 'chang_an',
         region: '中州',
-        buildings: ['shop', 'weapon_shop', 'armor_shop', 'medicine_shop', 'talisman_shop', 'art_shop', 'beast_shop', 'alchemy', 'forging', 'enchant_shop', 'quest', 'inn', 'training', 'teleport', 'tavern', 'temple', 'tea_house', 'library', 'arena', 'guild_hall', 'cultivation', 'spring', 'gathering', 'mining', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'goulan_washe', 'works_bureau', 'salt_iron_office'],
+        buildings: ['shop', 'weapon_shop', 'armor_shop', 'medicine_shop', 'talisman_shop', 'art_shop', 'beast_shop', 'alchemy', 'forging', 'enchant_shop', 'quest', 'inn', 'training', 'teleport', 'tavern', 'temple', 'tea_house', 'library', 'arena', 'guild_hall', 'cultivation', 'spring', 'gathering', 'mining', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'stele_forest', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'goulan_washe', 'works_bureau', 'salt_iron_office', 'horse_market'],
         desc: '九州帝都，天下繁华汇聚。皇宫金碧辉煌，天牢深不可测。',
         accessLevel: 'all',
         specialFeatures: ['皇宫', '天牢', '皇家拍卖行'],
@@ -85,7 +88,7 @@ const cityData = {
     '洛水城': {
         id: 'luoshui',
         region: '中州',
-        buildings: ['shop', 'art_shop', 'tea_house', 'library', 'inn', 'tavern', 'quest', 'training', 'teleport', 'medicine_shop', 'temple', 'gathering', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'goulan_washe', 'works_bureau', 'salt_iron_office'],
+        buildings: ['shop', 'art_shop', 'tea_house', 'library', 'inn', 'tavern', 'quest', 'training', 'teleport', 'medicine_shop', 'temple', 'gathering', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'garden_villa', 'goulan_washe', 'works_bureau', 'salt_iron_office', 'horse_market'],
         desc: '洛水之畔的商贸重镇，画舫笙歌，文人雅士汇聚之地。',
         accessLevel: 'all',
         specialFeatures: ['画舫', '水榭', '诗会'],
@@ -101,7 +104,7 @@ const cityData = {
         buildings: ['cultivation', 'library', 'temple', 'alchemy', 'spring', 'training', 'teleport', 'quest', 'medicine_shop', 'talisman_shop', 'art_shop', 'medical_clinic', 'charity_hall', 'observatory', 'stele_forest', 'oddity_museum'],
         desc: '仙山福地，传闻有上古仙人遗迹。观星台可观测天象。',
         accessLevel: 'all',
-        specialFeatures: ['观星台', '悟道碑', '试炼塔'],
+        specialFeatures: ['观星台', '悟道碑', '试炼塔', '上古遗迹'],
         specialties: ['星辉石', '悟道茶', '天机符'],
         specialNPCs: ['观星老人·天机子', '守塔人·铁剑'],
         events: ['天降星辉', '试炼塔开启'],
@@ -111,7 +114,7 @@ const cityData = {
     '青木城': {
         id: 'qingmu_city',
         region: '东荒',
-        buildings: ['shop', 'medicine_shop', 'alchemy', 'gathering', 'quest', 'inn', 'teleport', 'training', 'tea_house', 'talisman_shop', 'library', 'beast_shop', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'works_bureau', 'salt_iron_office'],
+        buildings: ['shop', 'medicine_shop', 'alchemy', 'gathering', 'quest', 'inn', 'teleport', 'training', 'tea_house', 'talisman_shop', 'library', 'beast_shop', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'works_bureau', 'salt_iron_office', 'horse_market'],
         desc: '东荒门户，木灵之气浓郁。灵药园中奇花异草遍地。',
         accessLevel: 'all',
         specialFeatures: ['灵药园', '百草堂', '木灵塔'],
@@ -127,7 +130,7 @@ const cityData = {
         buildings: ['cultivation', 'spring', 'alchemy', 'temple', 'teleport', 'library', 'medicine_shop', 'quest', 'talisman_shop', 'art_shop', 'medical_clinic', 'observatory', 'stele_forest', 'oddity_museum'],
         desc: '海上仙山，云雾缭绕，传闻有仙人在此渡劫飞升。',
         accessLevel: '筑基以上',
-        specialFeatures: ['渡劫台', '仙雾阁', '灵龟池'],
+        specialFeatures: ['渡劫台', '仙雾阁', '灵龟池', '仙山秘境'],
         specialties: ['仙露', '珊瑚玉', '蓬莱仙芝'],
         specialNPCs: ['蓬莱仙翁·东方朔', '鲛人公主·明珠'],
         events: ['海市蜃楼', '仙缘大会', '渡劫观摩'],
@@ -137,7 +140,7 @@ const cityData = {
     '东海龙宫': {
         id: 'dragon_palace',
         region: '东荒',
-        buildings: ['shop', 'forging', 'cultivation', 'training', 'weapon_shop', 'armor_shop', 'alchemy', 'spring', 'teleport', 'quest', 'medicine_shop', 'bounty_hall', 'medical_clinic', 'auction_house'],
+        buildings: ['shop', 'forging', 'cultivation', 'training', 'weapon_shop', 'armor_shop', 'alchemy', 'spring', 'teleport', 'quest', 'medicine_shop', 'bounty_hall', 'medical_clinic', 'auction_house', 'horse_market'],
         desc: '深海龙宫，珊瑚为柱，明珠为灯，珍宝无数。',
         accessLevel: '金丹以上',
         specialFeatures: ['龙宫宝库', '潮汐殿', '龙魂锻体'],
@@ -150,7 +153,7 @@ const cityData = {
     '炎城': {
         id: 'yan_city',
         region: '南疆',
-        buildings: ['shop', 'forging', 'weapon_shop', 'mining', 'enchant_shop', 'training', 'quest', 'tavern', 'inn', 'teleport', 'armor_shop', 'arena', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'works_bureau', 'salt_iron_office'],
+        buildings: ['shop', 'forging', 'weapon_shop', 'mining', 'enchant_shop', 'training', 'quest', 'tavern', 'inn', 'teleport', 'armor_shop', 'arena', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'works_bureau', 'salt_iron_office', 'horse_market'],
         desc: '建于火山之巅的钢铁之城，熔岩为河，火焰为灯。',
         accessLevel: 'all',
         specialFeatures: ['火山洞穴', '熔岩池', '炎帝像'],
@@ -163,7 +166,7 @@ const cityData = {
     '万毒谷': {
         id: 'poison_valley',
         region: '南疆',
-        buildings: ['alchemy', 'medicine_shop', 'market', 'cultivation', 'temple', 'quest', 'talisman_shop', 'gathering', 'inn', 'training', 'bounty_hall', 'medical_clinic', 'arena_stage', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe'],
+        buildings: ['alchemy', 'medicine_shop', 'market', 'cultivation', 'temple', 'quest', 'talisman_shop', 'gathering', 'inn', 'training', 'bounty_hall', 'medical_clinic', 'arena_stage', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'horse_market'],
         desc: '毒瘴弥漫的神秘山谷，万毒门的宗门所在地。',
         accessLevel: '炼气三层以上',
         specialFeatures: ['毒王洞', '百草园', '毒经阁'],
@@ -177,7 +180,7 @@ const cityData = {
     '凤凰巢': {
         id: 'phoenix_nest',
         region: '南疆',
-        buildings: ['cultivation', 'spring', 'training', 'temple', 'quest', 'medicine_shop', 'gathering', 'inn', 'talisman_shop', 'fire_department', 'bounty_hall', 'medical_clinic', 'arena_stage', 'oddity_museum', 'pawn_shop', 'auction_house'],
+        buildings: ['cultivation', 'spring', 'training', 'temple', 'quest', 'medicine_shop', 'gathering', 'inn', 'talisman_shop', 'fire_department', 'bounty_hall', 'medical_clinic', 'arena_stage', 'oddity_museum', 'pawn_shop', 'auction_house', 'horse_market'],
         desc: '南疆火山口上的凤裔栖地。赤焰不息，熔火成潭，凤鸣一声十里可闻。',
         accessLevel: '筑基以上',
         specialFeatures: ['凤栖台', '熔火渊', '赤羽市'],
@@ -190,7 +193,7 @@ const cityData = {
     '金城': {
         id: 'jin_city',
         region: '西漠',
-        buildings: ['shop', 'mining', 'weapon_shop', 'market', 'inn', 'temple', 'teleport', 'forging', 'quest', 'armor_shop', 'guild_hall', 'tavern', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'works_bureau', 'salt_iron_office'],
+        buildings: ['shop', 'mining', 'weapon_shop', 'market', 'inn', 'temple', 'teleport', 'forging', 'quest', 'armor_shop', 'guild_hall', 'tavern', 'household_registry', 'fire_department', 'bounty_hall', 'tax_bureau', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'contract_hall', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'works_bureau', 'salt_iron_office', 'horse_market'],
         desc: '沙漠中的黄金之城，以灵石矿脉闻名于世。',
         accessLevel: 'all',
         specialFeatures: ['黄金宫', '矿脉', '佛窟'],
@@ -203,7 +206,7 @@ const cityData = {
     '大漠孤城': {
         id: 'desert_fort',
         region: '西漠',
-        buildings: ['quest', 'training', 'inn', 'tavern', 'market', 'weapon_shop', 'mining', 'shop', 'arena', 'teleport', 'household_registry', 'fire_department', 'bounty_hall', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'works_bureau', 'salt_iron_office'],
+        buildings: ['quest', 'training', 'inn', 'tavern', 'market', 'weapon_shop', 'mining', 'shop', 'arena', 'teleport', 'household_registry', 'fire_department', 'bounty_hall', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'works_bureau', 'salt_iron_office', 'horse_market'],
         desc: '大漠中的军事要塞，抵御妖兽的前线阵地。',
         accessLevel: 'all',
         specialFeatures: ['地下集市', '烽火台', '遗迹入口'],
@@ -217,7 +220,7 @@ const cityData = {
     '佛国遗址': {
         id: 'buddha_ruins',
         region: '西漠',
-        buildings: ['temple', 'library', 'cultivation', 'quest', 'medicine_shop', 'inn', 'gathering', 'training', 'bounty_hall', 'exorcist_bureau', 'medical_clinic', 'charity_hall', 'observatory', 'stele_forest', 'oddity_museum', 'black_market'],
+        buildings: ['temple', 'library', 'cultivation', 'quest', 'medicine_shop', 'inn', 'gathering', 'training', 'bounty_hall', 'exorcist_bureau', 'medical_clinic', 'charity_hall', 'observatory', 'stele_forest', 'oddity_museum', 'black_market', 'horse_market'],
         desc: '黄沙半埋的古佛国。塔倾塔倒，风声里仍似有诵经声，夜半偶见佛光。',
         accessLevel: '炼气五层以上',
         specialFeatures: ['大塔遗迹', '经冢', '菩提残林'],
@@ -230,7 +233,7 @@ const cityData = {
     '冰原城': {
         id: 'ice_city',
         region: '北冥',
-        buildings: ['shop', 'forging', 'training', 'inn', 'teleport', 'weapon_shop', 'armor_shop', 'spring', 'quest', 'medicine_shop', 'enchant_shop', 'household_registry', 'fire_department', 'bounty_hall', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'works_bureau', 'salt_iron_office'],
+        buildings: ['shop', 'forging', 'training', 'inn', 'teleport', 'weapon_shop', 'armor_shop', 'spring', 'quest', 'medicine_shop', 'enchant_shop', 'household_registry', 'fire_department', 'bounty_hall', 'granary', 'court', 'exorcist_bureau', 'medical_clinic', 'money_house', 'escort_office', 'charity_hall', 'arena_stage', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'works_bureau', 'salt_iron_office', 'horse_market'],
         desc: '极寒之地的避难所，冰晶筑成的城池。',
         accessLevel: 'all',
         specialFeatures: ['冰晶塔', '寒冰洞', '冰魄锻炉'],
@@ -257,7 +260,7 @@ const cityData = {
     '万剑宗': {
         id: 'ten_thousand_swords',
         region: '北冥',
-        buildings: ['weapon_shop', 'forging', 'training', 'arena', 'library', 'cultivation', 'quest', 'inn', 'teleport', 'medical_clinic', 'arena_stage', 'stele_forest', 'pawn_shop', 'auction_house'],
+        buildings: ['weapon_shop', 'forging', 'training', 'arena', 'library', 'cultivation', 'quest', 'inn', 'teleport', 'medical_clinic', 'arena_stage', 'stele_forest', 'pawn_shop', 'auction_house', 'horse_market'],
         desc: '北境剑修祖地，万剑齐立如林。剑鸣起时，满山皆应，风雪避锋。',
         accessLevel: '炼气七层以上',
         specialFeatures: ['万剑崖', '剑冢', '试剑台'],
@@ -270,7 +273,7 @@ const cityData = {
     '剑阁': {
         id: 'sword_pavilion',
         region: '蜀地',
-        buildings: ['training', 'forging', 'weapon_shop', 'art_shop', 'cultivation', 'quest', 'shop', 'arena', 'library', 'enchant_shop', 'teleport', 'bounty_hall', 'granary', 'medical_clinic', 'money_house', 'arena_stage', 'pawn_shop', 'auction_house', 'black_market'],
+        buildings: ['training', 'forging', 'weapon_shop', 'art_shop', 'cultivation', 'quest', 'shop', 'arena', 'library', 'enchant_shop', 'teleport', 'bounty_hall', 'granary', 'medical_clinic', 'money_house', 'arena_stage', 'pawn_shop', 'auction_house', 'black_market', 'horse_market'],
         desc: '剑修圣地，天下名剑尽藏于此。剑气纵横三万里。',
         accessLevel: 'all',
         specialFeatures: ['剑冢', '藏剑楼', '剑意碑林'],
@@ -309,7 +312,7 @@ const cityData = {
     '鲛人镇': {
         id: 'mermaid_town',
         region: '东南海域',
-        buildings: ['shop', 'inn', 'quest', 'tavern', 'teleport', 'medicine_shop', 'tea_house', 'gathering', 'beast_shop', 'market', 'training', 'household_registry', 'fire_department', 'bounty_hall', 'granary', 'exorcist_bureau', 'medical_clinic', 'money_house', 'escort_office', 'charity_hall', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'works_bureau', 'salt_iron_office'],
+        buildings: ['shop', 'inn', 'quest', 'tavern', 'teleport', 'medicine_shop', 'tea_house', 'gathering', 'beast_shop', 'market', 'training', 'household_registry', 'fire_department', 'bounty_hall', 'granary', 'exorcist_bureau', 'medical_clinic', 'money_house', 'escort_office', 'charity_hall', 'observatory', 'oddity_museum', 'pawn_shop', 'auction_house', 'black_market', 'goulan_washe', 'works_bureau', 'salt_iron_office', 'horse_market'],
         desc: '鲛人与人类共居的港口小镇，珍珠闻名遐迩。',
         accessLevel: 'all',
         specialFeatures: ['珍珠市场', '渔村码头', '灯塔'],
@@ -351,7 +354,7 @@ const cityData = {
     '魔界·九幽深渊': {
         id: 'demon_realm_jiuyou',
         region: '魔界',
-        buildings: ['shop', 'market', 'black_market', 'alchemy', 'library', 'cultivation', 'teleport', 'tavern'],
+        buildings: ['shop', 'market', 'black_market', 'alchemy', 'library', 'cultivation', 'teleport', 'tavern', 'horse_market'],
         desc: '深渊裂谷两侧凿着窟室，魔修在此立市，以魔材换魔功。这里没有官府、没有规矩，只有价码和拳头——以及空气里那种往骨缝里钻的浊气。',
         accessLevel: '化神',
         specialFeatures: ['魔材矿脉', '魔功阁'],
@@ -416,7 +419,7 @@ function saveLocationData() {
 }
 
 // ============ 进入城市 ============
-function enterCity(cityName) {
+function enterCity(cityName, opts) {
     // 标准化城市名（去除空格，兼容HTML中的"帝都 · 长安"→cityData中的"帝都·长安"）
     var normalizedName = cityName.replace(/\s+/g, '');
     var city = cityData[normalizedName] || cityData[cityName];
@@ -435,7 +438,18 @@ function enterCity(cityName) {
             return false;
         }
     }
-    
+
+    // v26.1 城门账：落位置之前的那道关——入城钱与通缉两档盘查归 CityGate 管（账不在位就静默放行）。
+    // opts.skipGate===true 的走法不过这道关：传送阵（法术位移，人直接落在阵上，不走城门）、
+    // 位面渡界、以及「人在城里重开城市面板」——这三种都不是徒步到城门，硬拦会白扣脚程钱。
+    // 徒步/骑马/御剑的走路进城（travelToCityFromList、travel-system walk）才过闸；被挡下时返回 false，
+    // 人还在城外（travelToCityFromList 那支在 enterCity 返回后才结脚程账，挡下不白扣，DES-10 同口径）。
+    try {
+        if (!(opts && opts.skipGate) && window.CityGate && typeof window.CityGate.gateCheck === 'function') {
+            if (window.CityGate.gateCheck(cityName) === false) return false;
+        }
+    } catch (eGate) { console.warn('[静默失败] js/location-system.js · enterCity：城门那道关没查成——按放行算（宁松勿卡死进城路）', eGate && eGate.message); }
+
     // 记录访问
     visitedCities.add(cityName);
     currentLocation = cityName;
@@ -593,7 +607,13 @@ function renderCityBuildings(cityName) {
         buildingList.innerHTML = '';
         const cats = { commercial: '🏪 商业', crafting: '🔨 工坊', cultivation: '🧘 修炼', combat: '⚔️ 武道', social: '🍵 社交', rest: '🛏️ 休憩', quest: '📜 任务', travel: '🌀 交通', gather: '🌿 采集', office: '🏛️ 衙门' };
         const grouped = {};
-        (city.buildings || []).forEach(function(buildingId) {
+        var listed = (city.buildings || []).slice();
+        // 凡人城有客栈就有驿站：雇马换骡。位面城不设驿丞。
+        var isPlaneCity = (typeof window.getPlaneOf === 'function' && window.getPlaneOf(cityName));
+        if (!isPlaneCity && listed.indexOf('inn') >= 0 && listed.indexOf('post_station') < 0) {
+            listed.push('post_station');
+        }
+        listed.forEach(function(buildingId) {
             const buildingType = Object.values(BUILDING_TYPES).find(b => b.id === buildingId);
             if (!buildingType) return;
             const c = buildingType.category || 'other';
@@ -868,6 +888,7 @@ function getBuildingDescription(buildingId) {
         'armor_shop': '防具护甲',
         'art_shop': '功法秘籍',
         'beast_shop': '灵兽交易与图鉴',
+        'horse_market': '凡俗牲口买卖：买马、相口齿、取名，偶尔有来路不明的兽蛋',
         'alchemy': '炼制各种丹药',
         'forging': '锻造和强化装备',
         'enchant_shop': '装备附魔强化',
@@ -999,6 +1020,17 @@ function useBuilding(buildingId) {
         markBuildingUsed(buildingId);
         return;
     }
+    // v27.0 马市：凡兽柜台正门（horse-market.js）——买马相口齿取名、卖回牲口、偶尔有谜之兽蛋
+    if (buildingId === 'horse_market' && typeof window.openHorseMarket === 'function') {
+        window.openHorseMarket();
+        markBuildingUsed(buildingId);
+        return;
+    }
+    if (buildingId === 'post_station' && typeof window.openPostStation === 'function') {
+        window.openPostStation();
+        markBuildingUsed(buildingId);
+        return;
+    }
     // v20.17 情景设施（钱庄/契约所/当铺/拍卖行/黑市暗巷/镖局/善堂/异闻馆/园林/斗法台/观星台/碑林）：
     // 内容早已在情境引擎注册，此前无路由，点击会掉进“打开…建筑”的死路。动态查注册表接上。
     if (window.scenarioEngine && window.scenarioEngine.facilities && window.scenarioEngine.facilities[buildingId] &&
@@ -1061,6 +1093,12 @@ function triggerSpecialFeature(featureName) {
         '矿脉': function() { if (typeof window.mineOre === 'function') window.mineOre(); else showMessage('开采矿脉...', 'info'); },
         '地下集市': function() { openUndergroundMarket(city); },
         '遗迹入口': function() { enterRuinEntrance(city); },
+        // —— 常驻三座秘境各自一扇门（不是同一块石头上三颗钮）——
+        // 上古遗迹：太虚山自己的介绍就写着「传闻有上古仙人遗迹」，门开在这儿说得通；
+        //   另一扇门在奇遇「秘境之门」（event-system），两处通的是同一座。
+        // 仙山秘境：蓬莱是海上仙山，仙人渡劫飞升之处，山就是秘境本身。
+        '上古遗迹': function() { if (window.openDungeonEntrance) window.openDungeonEntrance('ruin'); },
+        '仙山秘境': function() { if (window.openDungeonEntrance) window.openDungeonEntrance('mountain'); },
         '冰晶塔': function() { visitIceTower(city); },
         '寒冰洞': function() { visitIceTower(city); },
         '冰宫': function() { visitIceTower(city); },
@@ -2278,6 +2316,7 @@ function enterSect(sectName) {
     
     currentSect = sectName;
     isInSectPanel = true;
+    window.__inSectScene = true;   // v27.18：门派场景标志（daily-events 的 sect 池判定用——是门派弟子≠人在门派，进面板才算在）
 
     // v20.81：进门派写入角色位置并发到访事件——旧代码 enterSect 从不写 location，
     // 导致所有"在门派日常"的社交/剧情钩子（读 charData.location === 门派名）全部失灵，
@@ -2321,6 +2360,7 @@ function enterSect(sectName) {
 function closeSectPanel() {
     isInSectPanel = false;
     currentSect = null;
+    window.__inSectScene = false;   // v27.18：出门派清场景标志（门派事件不再跟到城里/野外弹）
 
     // v20.81：出门派还原角色位置到最近的城市（与 enterSect 写入配对）
     if (window.currentCharData) {
@@ -2608,3 +2648,88 @@ if (typeof document !== 'undefined') {
         initCityLifeSystem();
     }
 }
+
+// ==================== v27.13 画影册流窜玩法（主档模块⑦）· enterCity 链尾钩 ====================
+// DES-81 链尾追加自己的钩子（此前链上已有：本文件城市氛围钩（:2265）＋ sect-roster 腰牌 ＋
+// sect-cities 城头幡号 ＋ sect-identity 修罗宫注视 ＋ dynasty-court 朝堂钩——只包「当下」的
+// window.enterCity，原样透传返回值，不动链上任何既有钩；本文件加载在后段，此时链上钩子已串好，
+// 后载模块（dynasty-court 等）会再包我一层——同链透传，谁外谁内都算数）。
+// 只读入城结果：false（境界门槛/城门被拒）不盘查——人没进去，街上就没有这张脸；
+// 进了城才掷「识货的老捕快」（闸门/冷却/识破率全在 WantedAlbum.rollCheck，本钩只递话）。
+(function () {
+    'use strict';
+    if (typeof window === 'undefined') return;
+    try {
+        var _origEnter = window.enterCity;
+        if (typeof _origEnter !== 'function' || _origEnter.__huaYingCityWrapped) return;
+        window.enterCity = function (cityName) {
+            var r = _origEnter.apply(this, arguments);
+            try {
+                if (r !== false && window.WantedAlbum && typeof window.WantedAlbum.onEnterCity === 'function') {
+                    window.WantedAlbum.onEnterCity(cityName);
+                }
+            } catch (e) { console.warn('[静默失败] js/location-system.js · enterCity 链尾钩（画影册盘查）：入城盘查没掷成', e && e.message); }
+            return r;
+        };
+        window.enterCity.__huaYingCityWrapped = true;
+    } catch (eHook) { console.warn('[静默失败] js/location-system.js · enterCity 链尾钩（画影册盘查）：钩子没挂上，盘查不掷', eHook && eHook.message); }
+})();
+
+// ===== v27.15：⑦新增-1 江湖的耳语——NPC 记得住你（进城链尾第五钩，画影册同结构） =====
+// 与画影册（官面盘查）的分工：捕快查的是案底，斗笠汉子认的是脸——
+// 你在本地干净，但外地背着大案（knownNotoriety 外城 ≥15），进这座城 5% 掷：
+// 角落里从案底城跑镖来的汉子多看你两眼。他不起哄也不报官，只是把这张脸记在心里
+// （worldLedger.heardOf 暗账挂一年——将来结仇结缘/新案热度可用它；本轮立账留钩，不设当次后果）。
+// 消息跟着人的脚走，不跟着城走——恶名分城是官府的海捕文书，耳语是活人脑子里的记性。
+(function () {
+    'use strict';
+    if (typeof window === 'undefined') return;
+    try {
+        var _origEnter15 = window.enterCity;
+        if (typeof _origEnter15 !== 'function' || _origEnter15.__erYuCityWrapped) return;
+        window.enterCity = function (cityName) {
+            var r = _origEnter15.apply(this, arguments);
+            try {
+                if (r !== false) _erYuOnEnter(cityName);
+            } catch (e15) { console.warn('[静默失败] js/location-system.js · 耳语钩（江湖的耳语）：没掷成——这条街今天没人认得你', e15 && e15.message); }
+            return r;
+        };
+        window.enterCity.__erYuCityWrapped = true;
+    } catch (eHook15) { console.warn('[静默失败] js/location-system.js · 耳语钩没挂上（本城不再掷识脸）', eHook15 && eHook15.message); }
+
+    function _erYuOnEnter(city) {
+        var WL = window.WorldLedger;
+        if (!WL || typeof WL.knownNotoriety !== 'function') return;
+        var here = String(city || '');
+        if (!here) return;
+        // 本地得干净：本城就有案底走画影册的正门，耳语不抢官面的戏
+        if ((Number(WL.knownNotoriety(here)) || 0) >= 5) return;
+        // 外地案底最高的城（他家乡）
+        var worst = '', worstN = 0;
+        try {
+            var md = window.mapData || {};
+            Object.keys(md).forEach(function (rg) {
+                var cs = md[rg] && md[rg].cities;
+                if (!Array.isArray(cs)) return;
+                cs.forEach(function (c) {
+                    if (!c || c === here) return;
+                    var n = Number(WL.knownNotoriety(c)) || 0;
+                    if (n > worstN) { worstN = n; worst = c; }
+                });
+            });
+        } catch (eScan) {}
+        if (worstN < 15 || !worst) return;   // 外地案底不到"抢钱庄"级别，汉子不至于多看两眼
+        if (Math.random() >= 0.05) return;   // 5%：耳语是低概率的偶遇，不是每城都有跑镖的
+        // 暗账：这城有人记得你的脸（一年有效——记性也是会淡的）
+        try {
+            if (WL.noteHeardOf && typeof WL.noteHeardOf === 'function') {
+                WL.noteHeardOf(here, worst, 365);
+            } else if (WL._state && WL._state.heardOf) {
+                WL._state.heardOf[here] = { from: worst, untilDay: (window.WorldCalendar ? (window.WorldCalendar.day || 0) + 365 : 365) };
+            }
+        } catch (eHeard) {}
+        try {
+            if (window.showMessage) window.showMessage('🎋 ' + here + '的茶棚角落，一个戴斗笠的汉子放下茶碗，多看了你两眼——他不像本地人，倒像是常跑「' + worst + '」那条镖路的。他没起身，也没喊人，只是把「' + worst + '那桩大案的影子」和你的脸，一并记在了心里。', 'info');
+        } catch (eMsg) {}
+    }
+})();

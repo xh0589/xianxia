@@ -35,7 +35,9 @@
 //     情敌名字只在「你当夜确实陪了 Ta」时才出现（账本里 spent 为证）。
 //
 // 事件规模（144 桩，三十六位恋爱对象 × 4 类）：
-//   试探  36 桩 · 一次性 · 有情敌 + 好感≥40 + 人在其门派
+//   试探  36 桩 · 十九桩一次性（她那一支永久撤了这件事）+ 十七桩情境可复现
+//           （再演要等她那边重新攒够一段数得出来的日子，各人各的数法，见「再武装分档」）
+//           · 有情敌 + 好感≥40 + 人在其门派
 //   敲打  36 桩 · 一次性 · 试探已发生 + 情敌已成道侣（事实公开才立规矩）
 //   余波  36 桩 · 可重演（每年每节一回到门）· 节前推帖/放鸽子后的次日～十二日内，你在 Ta 门中时
 //   小心眼 36 桩 · 日常小事（ambient，30 日重入）· 有情敌 + 好感≥45，随机偶遇
@@ -83,14 +85,68 @@ function _jealAff(npc) {
     return (npc && npc.relationship && npc.relationship.affection) || 0;
 }
 
-// 统一延迟弹出（与 heroine-rivalry 的 _delayedRivalryFire 同款：门禁二次校验 + 弹窗互斥）
-// onFired：真正弹出成功后才执行（如写节日账本旗）——绝不能在门禁复检前落旗，
+// ============ 弹窗位：座位被占不再静默丢弃 ============
+// 病根（本文件旧写法）：`if (document.querySelector('.personal-event-modal')) return;`
+// 别人的爱情弹窗开着 → 这一桩当场作废，零 pending、零留痕、零降级入口。
+// 上一批（heroine-rivalry.js）已把共用排队器做好并导出 window.__jealRequestSeat，
+// 加载序也更靠前（仙侠.html:2128 早于本文件 2175），所以这里能真复用。
+//
+// ★复用到哪一步，为什么剩下的不能复用（不写在这里就会有人来重写第三份）★
+// 能复用：一次性、无 onFied 回调的桩（敲打、试探首演）。共用队列的 _jealFireOnce
+//   会重过 hasEventTriggered / canPlayerAccessPersonalEvent / triggerPersonalEvent，
+//   语义与本文件原本的单发完全一致，且它自己记 JEAL_MODAL_PENDING 与当日去重。
+// 不能复用（三支，原因各不相同）：
+//   ① 余波/被晾：_jealFire 的 onFired 必须在「真的弹出成功那一刻」写节日账本旗
+//      （旧注释已自陈：绝不能在门禁复检前落旗）。共用队列没有回调位，走它则旗永不落
+//      ⇒ _jealFindWound 每天都判得出同一处伤，每日重复报名，飞鸽补账也判不出「已销」。
+//   ② 小心眼：ambient 可重演，演完 hasEventTriggered 恒为 true。共用队列的 _jealFireOnce
+//      会判 'already-done' 直接丢弃——正是本批要放开的那些桩。
+//   ③ 试探重演：同上，hasEventTriggered 恒为 true（且不能清：清了 relations-panel 会把
+//      「已完成」翻回「可触发」，也会连带解开 _event_cold 的 requireEventDone）。
+// ①②③ 不是「丢了」：它们「该演」这件事本身记在既有账格里（节日伤未销 → 窗口 12 日 /
+// bond.lastMetDay 还欠着 → 无期限 / _ambientLastDay 的日子 → 无期限），改日必然重来，
+// 代价只是让出一日。真·一次性、丢了就没有的桩（敲打）已全部改走共用队列。
+var JEAL_SEAT_DEFER = [];   // 座位被占、这一回先让给别人的（留痕，不落盘）
+var JEAL_SEAT_DEFER_MAX = 40;
+
+// 座位判给共用口径（它导出在本文件之前加载；不在场时用同一条选择器）
+function _jealSeatTaken() {
+    if (typeof window !== 'undefined' && typeof window.__jealModalOpen === 'function') {
+        try { return !!window.__jealModalOpen(); }
+        catch (e) { console.warn('[吃醋扩容] 共用座位判问不出声，改按同一条选择器判：', e && e.message); }
+    }
+    return !!(typeof document !== 'undefined' && document.querySelector
+        && document.querySelector('.personal-event-modal'));
+}
+
+function _jealSeatGiveWay(evId, npcId, name) {
+    JEAL_SEAT_DEFER.push({ evId: evId, npcId: npcId || '', name: name || '' });
+    if (JEAL_SEAT_DEFER.length > JEAL_SEAT_DEFER_MAX) JEAL_SEAT_DEFER.shift();
+}
+
+// 统一延迟弹出（与 heroine-rivalry 的 _delayedRivalryFire 同款：门禁二次校验 + 座位判归共用队列）
+// onFired：真正弹出成功后才执行（如写节日账本旗、再武装的日戳）——绝不能在门禁复检前落旗，
 // 否则 requireFestivalWound 会在 triggerPersonalEvent 复检时把刚标过旗的伤判成「无伤」。
-function _jealFire(evId, npcInst, onFired) {
+// opts.sharedSeat：这一桩是一次性的吗？是则座位判交给共用排队器（抢不到它会排队，不丢）。
+function _jealFire(evId, npcInst, onFired, opts) {
+    opts = opts || {};
     setTimeout(function() {
-        if (document.querySelector && document.querySelector('.personal-event-modal')) return;
         var ev = NPC_PERSONAL_EVENTS[evId];
         if (!ev) return;
+        var npcId = (npcInst && (npcInst.id || npcInst.npcId)) || ev.npcId || '';
+        var nm = (npcInst && npcInst.name) || '';
+        if (opts.sharedSeat && typeof window !== 'undefined' && typeof window.__jealRequestSeat === 'function') {
+            var r = window.__jealRequestSeat(evId, npcId, nm);
+            if (r === 'fired' || r === 'queued') {
+                // 'queued' 也是今天一定要演出去的（共用队列在同一日补弹），账要落
+                if (r === 'fired' && typeof onFired === 'function') onFired();
+                if (typeof opts.onBooked === 'function') opts.onBooked(r);
+                return;
+            }
+            // 共用队列判 drop（门禁不过 / 已演过 / 找不到人）：落回本文件原路再判一次，
+            // 门禁仍只认 canPlayerAccessPersonalEvent，不放宽任何一条。
+        }
+        if (_jealSeatTaken()) { _jealSeatGiveWay(evId, npcId, nm); return; }
         if (typeof canPlayerAccessPersonalEvent === 'function' && !canPlayerAccessPersonalEvent(ev, npcInst)) return;
         if (typeof triggerPersonalEvent === 'function' && triggerPersonalEvent(evId)) {
             if (typeof onFired === 'function') onFired();
@@ -98,8 +154,9 @@ function _jealFire(evId, npcInst, onFired) {
     }, 1200);
 }
 
-// ============ 一、试探（36 桩，一次性） ============
+// ============ 一、试探（36 桩：19 桩一次性 + 17 桩情境可复现） ============
 // 没有证据。他们只是觉出你把时间分成了两半——每个人用各自的本行察觉。
+// 19/17 的分档在下方「再武装分档」处逐桩判出，依据见那一段的注释。
 var JEALOUSY_PROBE_EVENTS = {
     // ---- 温蘅：医者的手不会说谎，脉会 ----
     'bh_event_probe': {
@@ -1578,6 +1635,88 @@ var JEALOUSY_PROBE_EVENTS = {
         }
     }
 };
+
+// ============ 试探的再武装分档：情境可复现、不可预知 ============
+// 病根（实测，不是 flag 本身）：真正把每一桩钉死一辈子的是 hasEventTriggered(evId)
+// ——personalEventFlags[evId]，由 npc-personal-events.js:1419 在事件演完那一刻落 true，
+// 而本文件每日钩子拿它当闸。全套总量因此是「每角色 1~2 次」，与 trigger.random 无关。
+// （`flag: '<prefix>_e_probe_done'` 那个字段全仓没有一处引擎读它，只是十一个路由测试
+//   断言过它的命名——所以 flag 不能删也不能改名，要动的是上面那道一次性判定。）
+//
+// 改法不是「调高概率」也不是「每次必过」：一次演过之后，这一桩不会自己回来，要等
+// 她那边重新数出一段数得出来的日子才成立——判据是世界日头 + 各人自己的数法（散开的），
+// 记在 NPC 记忆里那个既有的 _ambientLastDay 账格（npc-system.js:1469 白名单内，随档走），
+// 零新增存档键、零顶层新账、零配额。
+// 分档不是我拍的，是逐桩读文本判出来的：桩里有分支「永久撤销了本桩赖以成立的那件事」的
+// 留一次性（重演会与它自己的文本打架）；其余的文本自带复现理由。逐桩依据见
+// .scratch/jealousy-deep-fix-progress/10-36桩分类结果.md
+var JEAL_PROBE_ONESHOT = {
+    jg: 1, em: 1, hs: 1, wd: 1, dy: 1, yin: 1, pi: 1, lie: 1,
+    kl: 1, ty: 1, xue: 1, long: 1, sj: 1, shu: 1, heng: 1, gai: 1,
+    shao: 1, tai: 1, xiang: 1
+};
+
+var JEAL_PROBE_GAP_MIN = 12;    // 她数得出的底数（世界日）
+var JEAL_PROBE_GAP_SPREAD = 9;  // 各人自己的数法不同：12~21 日，桩与桩之间错开
+
+function _jealTodayDay() {
+    try {
+        if (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') return Number(window.timeSystem.getAbsoluteDay()) || 0;
+        if (window.timeSystem && window.timeSystem.gameTime) return Number(window.timeSystem.gameTime.currentDay) || 0;
+    } catch (e) { console.warn('[吃醋扩容] 读世界日头失败，改按 0 计：', e && e.message); }
+    return 0;
+}
+
+// 各人自己的数法：同一份代码算出的稳定散值（不落盘、不用计数器、重载后不变），
+// 三十六桩因此各有各的节奏——玩家背不出「哪天一定出」。
+function _jealProbeGapDays(evId) {
+    var h = 0;
+    for (var i = 0; i < evId.length; i++) h = (h * 31 + evId.charCodeAt(i)) % 100003;
+    return JEAL_PROBE_GAP_MIN + (h % (JEAL_PROBE_GAP_SPREAD + 1));
+}
+
+function _jealProbeStamp(npc, evId, day) {
+    if (!npc) return;
+    if (!npc.memory) npc.memory = {};
+    if (!npc.memory._ambientLastDay) npc.memory._ambientLastDay = {};
+    npc.memory._ambientLastDay[evId] = (day || _jealTodayDay() || 0);
+}
+
+// 这一桩此刻能不能演。未演过 = 首演；演过 = 要等账上再攒够一段她数得出的日子。
+// 返回 {ok, why} —— why 逐条写明，why 不出门，但调试面板/测试能看见「今天为什么没有」。
+function _jealProbeRearm(ev, npc) {
+    if (!ev) return { ok: false, why: 'no-event' };
+    if (typeof hasEventTriggered !== 'function' || !hasEventTriggered(ev.id)) return { ok: true, why: 'first' };
+    if (!ev.repeatable) return { ok: false, why: 'one-shot' };
+    var day = _jealTodayDay();
+    var stamp = (npc && npc.memory && npc.memory._ambientLastDay) ? npc.memory._ambientLastDay[ev.id] : null;
+    if (!stamp) {
+        // 玩家是从面板手动点开的那一桩——本文件不知道它是哪一天演的。
+        // 从今天起算：宁可不重演，也不因为缺一个日戳就无限次白送。
+        _jealProbeStamp(npc, ev.id, day);
+        return { ok: false, why: 'stamp-late' };
+    }
+    var gap = day - (Number(stamp) || 0);
+    var need = Number(ev.repeatEvery) || JEAL_PROBE_GAP_MIN;
+    if (gap < need) return { ok: false, why: 'too-soon', gap: gap, need: need };
+    return { ok: true, why: 'rearmed', gap: gap, need: need };
+}
+
+// 给可复现的那批打上标记与各自的数法（不是 ambient：主线链归位、一次相处 20 时辰的代价都留着）
+(function () {
+    var ids = [];
+    for (var id in JEALOUSY_PROBE_EVENTS) {
+        var ev = JEALOUSY_PROBE_EVENTS[id];
+        if (!ev || typeof ev.id !== 'string') continue;
+        var cut = id.indexOf('_event_probe');
+        if (cut <= 0) continue;
+        if (JEAL_PROBE_ONESHOT[id.slice(0, cut)]) { ev.repeatable = false; ids.push(id + '=once'); continue; }
+        ev.repeatable = true;
+        ev.repeatEvery = _jealProbeGapDays(ev.id);
+        ids.push(ev.id + '=repeat/' + ev.repeatEvery);
+    }
+    if (typeof window !== 'undefined') window.JEALOUSY_PROBE_REARM = ids.join(' ');
+})();
 
 // ============ 二、敲打（36 桩，一次性，试探之后） ============
 // 触发门：试探已发生 + 情敌已成道侣（道侣契是阳谋，人尽皆知——不再需要「撞破」）。
@@ -6025,6 +6164,12 @@ if (typeof window !== 'undefined' && window.timeSystem && window.timeSystem.onNe
 
             var roster = _jealRoster();
             if (typeof window.detectRivalRomance !== 'function') return;
+            // 名单先打散：固定顺序下名册第一位永远第一个撞上那 30%——那是「可被背下来的顺序」，
+            // 不是不可预知。洗牌只改「谁先」，不改任何一条概率。
+            for (var sh = roster.length - 1; sh > 0; sh--) {
+                var sj2 = Math.floor(Math.random() * (sh + 1));
+                var st2 = roster[sh]; roster[sh] = roster[sj2]; roster[sj2] = st2;
+            }
             for (var i = 0; i < roster.length; i++) {
                 var r = roster[i];
                 if (!r || !r.id || r.sect !== loc) continue;
@@ -6036,21 +6181,33 @@ if (typeof window !== 'undefined' && window.timeSystem && window.timeSystem.onNe
                 var rival = window.detectRivalRomance(r.id);
                 if (!rival) continue; // 一切吃醋的前提：另有一人真实存在
 
-                // 2) 试探：好感≥40，一次性
+                // 2) 试探：好感≥40。十九桩一辈子一次（她那一支永久撤了这件事，说不出口）；
+                //    十七桩情境可复现——但不是随时，是等她那边再攒够一段数得出来的日子。
                 var probeId = prefix + '_event_probe';
-                if (aff >= 40 && typeof hasEventTriggered === 'function' && !hasEventTriggered(probeId)
-                    && Math.random() < 0.3) {
-                    _jealFire(probeId, npc);
-                    return; // 一天一桩，不连发
+                var probeEv = NPC_PERSONAL_EVENTS[probeId];
+                if (aff >= 40 && typeof hasEventTriggered === 'function' && probeEv) {
+                    var rearm = _jealProbeRearm(probeEv, npc);
+                    if (rearm.ok && Math.random() < 0.3) {
+                        _jealFire(probeId, npc, function () {
+                            _jealProbeStamp(npc, probeId, _jealTodayDay());
+                            return true;
+                        }, {
+                            sharedSeat: true,
+                            onBooked: function () { _jealProbeStamp(npc, probeId, _jealTodayDay()); }
+                        });
+                        return; // 一天一桩，不连发
+                    }
                 }
 
-                // 3) 敲打：试探已过 + 情敌已成道侣（事实公开）——才立规矩
+                // 3) 敲打：试探已过 + 情敌已成道侣（事实公开）——才立规矩。
+                //    这一族是真·一次性（族内文本全是「一生一名」「此生只给一人」「规矩，今日立」），
+                //    丢了就没有，所以座位判一律交给共用排队器，不走本文件的让位留痕。
                 var coldId = prefix + '_event_cold';
                 if (aff >= 40 && rival.isDaoCompanion
                     && typeof hasEventTriggered === 'function'
                     && hasEventTriggered(probeId) && !hasEventTriggered(coldId)
                     && Math.random() < 0.25) {
-                    _jealFire(coldId, npc);
+                    _jealFire(coldId, npc, null, { sharedSeat: true });
                     return;
                 }
 
@@ -6094,8 +6251,23 @@ if (typeof window !== 'undefined') {
     window._jealLetterBody = _jealLetterBody;
     window._jealTrustDiscount = _jealTrustDiscount;
     window._jealNeglectDue = _jealNeglectDue;
+    window.JEAL_PROBE_ONESHOT = JEAL_PROBE_ONESHOT;
+    window._jealProbeRearm = _jealProbeRearm;
+    window._jealProbeGapDays = _jealProbeGapDays;
+    window._jealProbeStamp = _jealProbeStamp;
+    window._jealSeatTaken = _jealSeatTaken;
+    window.__jealDeepSeat = function () {
+        return {
+            deferred: JEAL_SEAT_DEFER.slice(),
+            deferredCount: JEAL_SEAT_DEFER.length,
+            sharedQueueInUse: !!(typeof window !== 'undefined' && typeof window.__jealRequestSeat === 'function'),
+            gapMin: JEAL_PROBE_GAP_MIN,
+            gapSpread: JEAL_PROBE_GAP_SPREAD
+        };
+    };
 }
 console.log('[吃醋扩容] 已加载：试探 ' + Object.keys(JEALOUSY_PROBE_EVENTS).length
+    + '（其中十九桩一次性 · 十七桩情境可复现）'
     + ' + 敲打 ' + Object.keys(JEALOUSY_COLD_EVENTS).length
     + ' + 余波 ' + Object.keys(JEALOUSY_AFTERMATH_EVENTS).length
     + ' + 小心眼 ' + Object.keys(JEALOUSY_SULK_EVENTS).length

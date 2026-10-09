@@ -92,7 +92,8 @@ function enterPlane(plane, sub) {
 
     var ok = false;
     if (window.locationSystem && typeof window.locationSystem.enterCity === 'function') {
-        ok = window.locationSystem.enterCity(target);
+        // v26.1：渡界是破开界膜落进彼界，不经人间城门——skipGate
+        ok = window.locationSystem.enterCity(target, { skipGate: true });
     }
     if (!ok) {
         // 进不去（不该发生：位面地点已入真源）——把真气退回去，别白扣
@@ -120,7 +121,7 @@ function returnToMortal() {
     var dest = cd._mortalOrigin || '帝都·长安';
     var ok = false;
     if (window.locationSystem && typeof window.locationSystem.enterCity === 'function') {
-        ok = window.locationSystem.enterCity(dest);
+        ok = window.locationSystem.enterCity(dest, { skipGate: true });   // v26.1 渡回人间落界，不经城门
     }
     if (!ok) { cd.qi = (Number(cd.qi) || 0) + CROSS_QI; say('界膜未破，你被弹了回来。', 'error'); return false; }
     passTime(CROSS_MINUTES, '跨越位面');
@@ -137,7 +138,8 @@ function planeTravel(dest) {
     if (dest === cd.location) { say('你已在此地。', 'info'); return false; }
     if (!spendQi(20)) return false;
     if (window.locationSystem && typeof window.locationSystem.enterCity === 'function') {
-        if (!window.locationSystem.enterCity(dest)) { cd.qi = (Number(cd.qi) || 0) + 20; return false; }
+        // v26.1：位面内部跋涉，不经人间城门——skipGate
+        if (!window.locationSystem.enterCity(dest, { skipGate: true })) { cd.qi = (Number(cd.qi) || 0) + 20; return false; }
     }
     passTime(90, '位面跋涉');
     say('🚶 你在' + here + '赶路 ' + dest + '——此地一步十里，全凭真元托身。', 'success');

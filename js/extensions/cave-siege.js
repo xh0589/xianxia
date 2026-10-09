@@ -74,7 +74,19 @@
             if (!atHome) return false;
             var house = window.playerHouse;
             if (!house || !house.type || house.type === 'ruin') return false; // 破山洞没人惦记
-            var notoriety = Number(cd.notoriety) || 0;
+            // v27.13 恶名分城：贼跟捕快一样只认本地治安眼中的你——读「本地已知恶名」。
+            // 旧病读全局 notoriety（此城犯案彼城立知，流窜没意义）；现换城谋生初期本地
+            // 没你的档案就不设防，直到通缉文书随商旅传到（world-ledger notoPend 到站）。
+            // 老档语义更新：更新前积累的恶名不回填本地账，夜袭概率回落基础值——那是
+            // 流窜玩法的起点，不是回退；宿敌追杀一线原样保留（仇家不靠官府册子认人）。
+            var notoriety = 0;
+            try {
+                if (window.WorldLedger && typeof window.WorldLedger.knownNotoriety === 'function') {
+                    notoriety = Number(window.WorldLedger.knownNotoriety()) || 0;
+                } else {
+                    notoriety = Number(cd.notoriety) || 0;   // 账簿不在册（旧版本）：照旧全局口径
+                }
+            } catch (eNoto) { notoriety = Number(cd.notoriety) || 0; }
             var rivals = [];
             try { if (typeof window.getRivals === 'function') rivals = (window.getRivals() || []).filter(function (n) { return n && !n.isDead && !n.isMissing; }); } catch (eR) { console.warn('[静默失败] js/extensions/cave-siege.js · maybeCaveSiege：仇家名单没调出来，这一夜只有野狼惦记', eR && eR.message); }
             if (notoriety < SIEGE_NOTORIETY_MIN && !rivals.length) return false;

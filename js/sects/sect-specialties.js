@@ -513,6 +513,9 @@ function _sectSpecialtyNowMinute() {
 }
 
 // ============ 应用Buff（辅助函数） ============
+// W-4（接线五处 · 第四处）：`window.updateBuffUI` 此前全仓无定义，这一行一直是安全空操作——
+//   门派特色增益存进了 window.activeBuffs（含效果与到期时辰），玩家看不见。
+//   下面把 updateBuffUI 实现出来（见本文件末「增益面板」一节），这一行就自动接上了，别删它。
 function applyBuff(buffId, effects, duration) {
     // 存储到全局buff系统
     if (!window.activeBuffs) window.activeBuffs = {};
@@ -521,11 +524,12 @@ function applyBuff(buffId, effects, duration) {
         expiryGameMinute: _sectSpecialtyNowMinute() + duration * 60,
         duration: duration
     };
-    // ⚠️ 第一百四十二批实测：`window.updateBuffUI` **全仓没有定义**，这行一直是安全空操作。
-    // 也就是说：门派特色增益**存进了 window.activeBuffs（含效果与到期时辰），玩家看不见**。
-    // 这不是本批该顺手补的——补一块增益面板属于**新增功能**，是设计决策不是修 BUG，
-    // 已登记待拍板。这里只留注释点明「这一行现在不生效」，免得下个人以为增益 UI 是在线的。
-    // 将来若决定补面板，把 updateBuffUI 实现出来，这一行就自动接上了（别删它）。
+    // 挂上谁给的这枚（useSectSpecialty 事先把门派特色的名号放在 _pendingBuffLabel 里；
+    // 非门派通道进来的增益走 _buffLabelOf 的兜底，不硬造名字）
+    if (_pendingBuffLabel) {
+        _sectBuffLabels[buffId] = _pendingBuffLabel;
+        _pendingBuffLabel = null;
+    }
     if (typeof window.updateBuffUI === 'function') window.updateBuffUI();
 }
 
@@ -586,9 +590,12 @@ function useSectSpecialty(sectName) {
         return;
     }
     
+    // W-4：先把门派特色的名号递给 applyBuff，好让增益条上念得出「烈日焚天」而不是一串 id。
+    //   43 个 applyBuff 调用点一个都没改——只有门派特色这一条路会挂上真名号，其余走兜底。
+    _pendingBuffLabel = { icon: specialty.icon || '🏯', name: specialty.name || sectName, desc: specialty.effect || '' };
     var result = specialty.applyEffect();
-    sectSpecialtyState.lastUseGameMinute[sectName] = now;
-    
+    _pendingBuffLabel = null;
+    sectSpecialtyState.lastUseGameMinute[sectName] = now;    
     if (typeof window.showMessage === 'function') {
         window.showMessage('✨ ' + specialty.name + '：' + result, 'success');
     } else {
@@ -660,6 +667,7 @@ if (window.StateRegistry && typeof window.StateRegistry.register === 'function')
             Object.keys(window.activeBuffs).forEach(function(id) { if (id.indexOf('sect_') === 0) delete window.activeBuffs[id]; });
             Object.assign(window.activeBuffs, data.buffs || {});
             _cleanupExpiredSectBuffs();
+            try { updateBuffUI(); } catch (e) { console.warn('[增益面板] 读档后刷新失败:', e); }
         },
         reset: function() {
             sectSpecialtyState.lastUseGameMinute = {};
@@ -714,6 +722,123 @@ function getSectBuffCultivationMul() {
     return 1 + total;
 }
 
+// ============ 增益面板（W-4：window.updateBuffUI 的实体） ============
+// 落点：#panel-character → #sub-status 里那格 `grid grid-cols-2 md:grid-cols-4 gap-4 mb-6`
+//   （仙侠.html:297，精力/真气/心情、境界、所在地/时间、日程四块并排的那一格网格）。
+//   格子样式照那一带现成的写法抄（bg-gray-700/30 p-3 rounded-lg border border-gray-600），
+//   不新造面板体系；整块铺满一行（见下面 updateBuffUI 里为什么用内联 grid-column）。
+//   ⚠️ 仙侠.html 属禁改清单 ⇒ 容器由本函数运行时建，不动 HTML。
+//   ⚠️ 内层不写死像素高度、不做内滚窗：一行 flex-wrap 排完，宽度不够自己换行。
+// 一枚都不在的时候整块 hidden，不给玩家留一块空板。
+var _sectBuffLabels = {};     // buffId → {icon, name, desc}（只有门派特色这条路会填）
+var _pendingBuffLabel = null; // useSectSpecialty 递给 applyBuff 的一次性名号
+var _BUFF_EFFECT_LABEL = {
+    strength: '体魄', dexterity: '身法', intelligence: '悟性', willpower: '心志',
+    constitution: '根骨', meridian: '经脉',
+    executeThreshold: '斩杀线', cultivationSpeed: '修炼速度'
+};
+// 不走门派特色通道的那几条，名字是定的，直接写死（省得玩家看着一串 id 猜）
+var _BUFF_FIXED_LABELS = {
+    eatery_special: { icon: '🍲', name: '一席温饭' },
+    demonic_flame: { icon: '🔥', name: '魔焰' },
+    sect_holy_land_buff: { icon: '⛩️', name: '圣地参悟' },
+    sect_canteen_meal: { icon: '🍚', name: '门派饭食' },
+    sect_temper_edge: { icon: '🔥', name: '淬火' }
+};
+
+function _buffLabelOf(id) {
+    if (_sectBuffLabels[id]) return _sectBuffLabels[id];
+    if (_BUFF_FIXED_LABELS[id]) return _BUFF_FIXED_LABELS[id];
+    // 兜底：只按前缀说个大概，**不硬造名字**；真 id 放进 title，出问题查得动
+    if (id.indexOf('sect_') === 0) return { icon: '🏯', name: '门派增益' };
+    if (id.indexOf('fxb_') === 0) return { icon: '🎪', name: '门派活动增益' };
+    return { icon: '✨', name: '增益' };
+}
+
+// 效果键 → 人话：六维直用，别名键借 _SECT_BUFF_ATTR_MAP 反查一个念得出的六维名
+function _buffEffectSummary(effects) {
+    if (!effects) return '效果未注明';
+    var out = [];
+    for (var k in effects) {
+        var v = effects[k];
+        if (typeof v !== 'number') continue;
+        var lab = _BUFF_EFFECT_LABEL[k];
+        if (!lab) {
+            var tgt = _SECT_BUFF_ATTR_MAP[k] || [];
+            lab = tgt.length === 1 ? (_BUFF_EFFECT_LABEL[tgt[0]] || k) : k;
+        }
+        out.push(lab + (Math.abs(v) < 1 ? ' +' + Math.round(v * 100) + '%' : (v > 0 ? ' +' : ' ') + v));
+    }
+    return out.length ? out.join('、') : '效果未注明';
+}
+
+// 增益条挂在哪一格网格里
+// ⚠️ headless 兜底：一批 node 套件（tests/sect-identity-node.js 等）在**没有 document** 的沙箱里
+//   真调 applyBuff → updateBuffUI。DOM 不在就老实不画，别把异常抛回玩法那一侧。
+function _buffUIHost() {
+    if (typeof document === 'undefined' || !document || !document.getElementById) return null;
+    var panel = document.getElementById('sub-status');
+    if (!panel) return null;
+    var kids = panel.children || [];
+    for (var i = 0; i < kids.length; i++) {
+        var cls = kids[i].className;
+        if (typeof cls === 'string' && cls.indexOf('grid') >= 0 && cls.indexOf('col-span-4') < 0) return kids[i];
+    }
+    return null;
+}
+
+function updateBuffUI() {
+    var host = _buffUIHost();
+    if (!host) return;
+    var box = document.getElementById('active-buff-strip');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'active-buff-strip';
+        box.className = 'bg-gray-700/30 p-3 rounded-lg border border-gray-600';
+        // 铺满整行用**内联** grid-column，不靠 Tailwind 的 md:col-span-*：
+        // 实机（真 Chrome，1400px 视口，#sub-status 那格网格实测 1309px / 12 条轨道）量过——
+        //   md:col-span-4     → grid-column: span 3 → 只有 315px（比现成的 md:col-span-2 那批还窄）
+        //   md:col-span-full  → grid-column: span 3 → 同样 315px（这条工具类在本构建里也没生效）
+        //   内联 1 / -1       → 1309px，真铺满
+        // 那批格子自身的 md:col-span-2 也被解析成 span 4（426px），是既有现象，没动它们。
+        box.style.gridColumn = '1 / -1';
+        host.appendChild(box);
+    }
+    var buffs = window.activeBuffs || {};
+    var now = _sectSpecialtyNowMinute();
+    var ids = Object.keys(buffs).filter(function (id) {
+        var b = buffs[id];
+        if (!b) return false;
+        if (b.expiryGameMinute != null && now >= Number(b.expiryGameMinute)) return false;
+        return true;
+    });
+    if (!ids.length) {
+        if (box.classList) box.classList.add('hidden');
+        box.innerHTML = '';
+        return;
+    }
+    if (box.classList) box.classList.remove('hidden');
+    var chips = ids.map(function (id) {
+        var b = buffs[id];
+        var meta = _buffLabelOf(id);
+        var left = Math.max(0, Math.ceil(((Number(b.expiryGameMinute) || 0) - now) / 60));
+        var 急 = left <= 1;
+        var soon = left > 1 && left <= 3;
+        var 边 = 急 ? 'border-red-500/60' : (soon ? 'border-yellow-500/50' : 'border-emerald-500/40');
+        var 字 = 急 ? 'text-red-300' : (soon ? 'text-yellow-300' : 'text-emerald-300');
+        return '<span class="text-xs bg-gray-800/60 border ' + 边 + ' rounded px-2 py-1 ' + 字 + '"'
+            + ' title="' + meta.icon + ' ' + meta.name + '｜' + id + '｜' + (meta.desc || _buffEffectSummary(b.effects)) + '">'
+            + meta.icon + ' ' + meta.name + '：' + _buffEffectSummary(b.effects) + '（余 ' + left + ' 时）</span>';
+    });
+    box.innerHTML = '<p class="text-xs text-gray-400 mb-2">⏳ 此刻身上的增益（' + ids.length + '）</p>'
+        + '<div class="flex flex-wrap gap-2">' + chips.join('') + '</div>';
+}
+
+// 时间一走就得跟着走：倒计时与到期都靠这条（到期的清扫 _cleanupExpiredSectBuffs 已挂在同一个事件上）
+if (window.EventBus && typeof window.EventBus.on === 'function') {
+    window.EventBus.on('time:advanced', function () { try { updateBuffUI(); } catch (e) { console.warn('[增益面板] 刷新失败:', e); } });
+}
+
 // ============ 导出 ============
 window.SECT_SPECIALTIES = SECT_SPECIALTIES;
 window.getSectSpecialty = getSectSpecialty;
@@ -722,3 +847,5 @@ window.getSectSpecialtyCooldown = getSectSpecialtyCooldown;
 window.applyBuff = applyBuff;
 window.sectBuffAttrBonus = sectBuffAttrBonus;
 window.getSectBuffCultivationMul = getSectBuffCultivationMul;
+// W-4：门派特色增益面板的真身。此前全仓无定义 ⇒ applyBuff 末尾那行一直是安全空操作。
+window.updateBuffUI = updateBuffUI;

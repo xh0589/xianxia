@@ -211,22 +211,40 @@ class Shop {
         // v24.2 裸格子除根：旧兜底手写「有名字没模板方法」的 plain object 格子（DES-63 死格子同族、
         // FIX-01 定案点名的根病）——inventory.js 必导出 addItem，兜底在真实游戏里是死路，整段撤掉；
         // 收不下如实报失败、分文不扣（扣款在这段之后）。
+        // v27.13：实收数收下来（0=一件没进，真值关系与旧 !! 完全一致）——产出登记要用实收数，不念开价。
         let added = false;
+        let _gotCount = 0;
         if (typeof window.addItem === 'function') {
-            added = !!window.addItem(realId, quantity);
+            _gotCount = Number(window.addItem(realId, quantity)) || 0;
+            added = _gotCount > 0;
         } else if (window.inventory && typeof window.inventory.addItem === 'function') {
-            added = !!window.inventory.addItem(realId, quantity);
+            _gotCount = Number(window.inventory.addItem(realId, quantity)) || 0;
+            added = _gotCount > 0;
         }
         if (!added) {
             showMessage('背包已满，无法购买', 'error');
             return false;
         }
+        // v27.13：产出登记——坊市买入盖「buy」章（记实收件数）。登记失败不拦获得：货照拿，账少一笔。
+        try {
+            if (window.ItemProvenance && typeof window.ItemProvenance.note === 'function') {
+                window.ItemProvenance.note('buy', realId, _gotCount);
+            }
+        } catch (ePrv) { console.warn('[静默失败] js/enhanced-shop.js · Shop.buyItem：产出登记未入簿（物品照常到手）', ePrv && ePrv.message); }
 
         // 第八十二波·ECO-01：扣款走双写口径——旧版只改背包灵石不写角色镜像字段，
         // 坊市买一次货两处钱包就分叉一回（卖出路径 :781-782 早就双写了，买入这条一直没跟上）
         window.inventory.currency.spiritStones = stones - total;
         if (window.currentCharData) window.currentCharData.spiritStones = window.inventory.currency.spiritStones;
         if (item.stock != null) item.stock -= quantity;
+        // 真实小世界·市场流水（world-ledger）：买入也是城里一笔真交易——双向流水
+        // （商税抽成→悬赏基金），买断的货下次再上架时掌柜要加价（需求热度）。
+        try {
+            if (window.WorldLedger && typeof window.WorldLedger.noteBuy === 'function') {
+                var _bCity2 = (window.locationSystem && window.locationSystem.getCurrentLocation && window.locationSystem.getCurrentLocation()) || null;
+                window.WorldLedger.noteBuy(total, _bCity2);
+            }
+        } catch (e) {}
         try {
             if (typeof window.addReputationFromTrade === 'function') {
                 var _c = (window.locationSystem && window.locationSystem.getCurrentLocation && window.locationSystem.getCurrentLocation()) || '';
@@ -294,7 +312,25 @@ class Shop {
         this.priceMultiplier = Math.max(0.5, (this._basePriceMultiplier || this.priceMultiplier || 1.0) * seasonMul);
         if (!this._basePriceMultiplier) this._basePriceMultiplier = 1.0;
 
-        // 特殊限时商品：每日随机最多3件
+        // ★ 节气驱动的当令货单：今天是哪个节气，坊上摆的就是这半个月的货（清明城里挤满踏青的人，
+        //   霜降开炉，芒种抢收）。代价＝不出门——今天这坊不卖那几样，你得等下个节气或者自己进山。
+        //   品名/类型/基价现读物品账（window.itemById），读不到的那几样不摆，不拿编的货名占摊。
+        //   本段**不新增任何倍率**：上面的季节价格系数原样不动，节气只换「摆什么」。
+        let termPool = [];
+        try {
+            if (typeof window !== 'undefined' && window.SolarTerms && typeof window.SolarTerms.termStock === 'function') {
+                termPool = (window.SolarTerms.termStock() || []).map(g => ({
+                    id: g.id,
+                    name: g.name,
+                    type: g.type,
+                    basePrice: Number(g.price) > 0 ? Number(g.price) : 20,
+                    description: g.note || '',
+                    icon: '🌾',
+                    limited: true
+                }));
+            }
+        } catch (eTerm) { termPool = []; }
+        // 通用货架：节气账不在册（老档/测试世界）时的兜底，字面一件没少
         const specialPool = [
             { id: 'foundation_pill', name: '筑基丹', type: 'consumable', basePrice: 150, description: '限时特供筑基丹', icon: '🧪', limited: true },
             { id: 'iron_ore', name: '精铁', type: 'material', basePrice: 20, description: '限时矿石', icon: '⛏️', limited: true },
@@ -302,9 +338,11 @@ class Shop {
             { id: 'vitality_pill', name: '回春丹', type: 'consumable', basePrice: 45, description: '限时丹药', icon: '💊', limited: true },
             { id: 'iron_sword', name: '玄铁剑', type: 'weapon', basePrice: 220, description: '限时兵器', icon: '⚔️', limited: true }
         ];
+        // 真正上架的那一批：节气在册就摆节气当令货单，不在册才落回通用货架
+        const shelfPool = termPool.length ? termPool : specialPool;
         // 清掉旧限时商品
         this.inventory = (this.inventory || []).filter(i => !i.limited);
-        const picks = specialPool.sort(() => Math.random() - 0.5).slice(0, 3).map(s => ({
+        const picks = shelfPool.sort(() => Math.random() - 0.5).slice(0, 3).map(s => ({
             ...s,
             stock: 1 + Math.floor(Math.random() * 2),
             basePrice: Math.round(s.basePrice * (0.9 + Math.random() * 0.3))
@@ -743,7 +781,25 @@ const TradeService = {
         var capUnitPrice = shelfEntry ? shop.getItemPrice(shelfEntry) : basePrice;
         var rawUnitPrice = finalUnitPrice;
         if (capUnitPrice > 0 && finalUnitPrice > capUnitPrice) finalUnitPrice = Math.max(1, capUnitPrice);
-        var totalPrice = finalUnitPrice * quantity;
+        // v27.14：④新增-1「行情的人腿」单次饱和层——柜上吃货有限：一次甩一大笔同款，
+        // 前 20 件照原价，超出部分每 10 件再压一成（封底五折）。
+        // 这不是惩罚性打折：前件的价照旧（分段累加，整单不清零），只压"柜上真吃不动"的那截；
+        // 后市下跌另走 MarketDynamic.notePlayerTrade（v23.2 已接），两层各管各的账。
+        var fullPriceQty = 20;
+        var satUnit = finalUnitPrice;
+        var satTotal = 0;
+        if (quantity > fullPriceQty) {
+            var over = quantity - fullPriceQty;
+            var satSteps = Math.ceil(over / 10);                       // 每超 10 件一档
+            var satMul = Math.max(0.5, 1 - satSteps * 0.1);            // 一成一档，底 5 折
+            satTotal = fullPriceQty * finalUnitPrice + over * Math.round(finalUnitPrice * satMul);
+            satUnit = Math.round(satTotal / quantity);
+        }
+        var saturation = (quantity > fullPriceQty)
+            ? { fullQty: fullPriceQty, overQty: quantity - fullPriceQty, mul: Math.max(0.5, 1 - Math.ceil((quantity - fullPriceQty) / 10) * 0.1) }
+            : null;
+        if (saturation) finalUnitPrice = satUnit;
+        var totalPrice = saturation ? satTotal : (finalUnitPrice * quantity);
         var currency = this.getCurrencyType(template);
         
         // 生成报价ID
@@ -766,6 +822,7 @@ const TradeService = {
             capUnitPrice: capUnitPrice,     // 第六十八批 · DES-11：本柜今天的售价（无此货则行价）＝回购的顶
             rawUnitPrice: rawUnitPrice,     // 封顶前算出来的价，被压下去时屏上要念这一笔
             finalUnitPrice: finalUnitPrice,
+            saturation: saturation,         // v27.14：柜上饱和层（分段压价明细，showQuoteDetail 念这笔）
             totalPrice: totalPrice,
             currency: currency,
             timestamp: Date.now(),
@@ -794,6 +851,19 @@ const TradeService = {
             if (window.showMessage) window.showMessage('报价已过期，请重新询价', 'warning');
             return false;
         }
+
+        // 真实小世界·掌柜收购额度（world-ledger）：掌柜的钱是周转钱，不是无底洞——
+        // 当日还能收多少由昨日该店销售流水定（额度=昨日实收×0.6）。收满今日不再收，
+        // 货放到明天柜台缓过来再谈。谈好的价掌柜也会翻脸——钱包比人情硬。
+        try {
+            if (window.WorldLedger && typeof window.WorldLedger.canShopBuy === 'function') {
+                var _cap = window.WorldLedger.canShopBuy(quote.shopId, quote.totalPrice);
+                if (!_cap.ok) {
+                    if (window.showMessage) window.showMessage(_cap.msg || '掌柜翻了翻钱柜：「今日收货的本钱使完了，客官明日再来罢。」', 'warning');
+                    return false;
+                }
+            }
+        } catch (e) {}
         
         // 查找背包物品
         var slotIdx = -1;
@@ -874,6 +944,15 @@ const TradeService = {
         // 物品进入商店回购列表（用预扣减快照 + currency）
         this._addToBuyback(quote.shopId, itemSnapshot, template, quote.quantity, quote.totalPrice, buybackCurrency);
         
+        // 真实小世界·市场流水（world-ledger）：卖出=城里真有人花了钱——
+        // 记入当日流水（商税抽成→悬赏基金；额度=昨日销售），钱从此在城里转圈不凭空。
+        try {
+            if (window.WorldLedger && typeof window.WorldLedger.noteSale === 'function') {
+                var _sCity = (window.locationSystem && window.locationSystem.getCurrentLocation && window.locationSystem.getCurrentLocation()) || null;
+                window.WorldLedger.noteSale(quote.shopId, quote.totalPrice, _sCity);
+            }
+        } catch (e) {}
+
         // 清理报价
         delete this._quotes[quoteId];
         
@@ -950,6 +1029,12 @@ const TradeService = {
             if (window.showMessage) window.showMessage('回购失败：背包已满或物品错误', 'error');
             return false;
         }
+        // v27.13：产出登记——回购也是一笔「buy」（照买价付钱取货；首源不覆盖，counts 照加）。登记失败不拦获得。
+        try {
+            if (window.ItemProvenance && typeof window.ItemProvenance.note === 'function') {
+                window.ItemProvenance.note('buy', item.templateId, Math.max(1, Number(item.quantity) || 1));
+            }
+        } catch (ePrv) { console.warn('[静默失败] js/enhanced-shop.js · TradeService.buybackItem：产出登记未入簿（物品照常到手）', ePrv && ePrv.message); }
         
         // 扣钱（P1-10: 使用对应货币；第八十二波·ECO-01：扣款同步角色镜像字段，与卖出路径同口径）
         // ⚠️ 字段名认 `currency`（_addToBuyback 写的那一本）：曾读 `currencyType`（全仓无写方）→ 铜钱货回购照旧扣灵石
@@ -1024,6 +1109,10 @@ function showQuoteDetail(quote) {
     var capLine = (quote.capUnitPrice > 0 && quote.finalUnitPrice < quote.rawUnitPrice)
         ? '<div class="flex justify-between"><span class="text-gray-400">柜上封顶</span><span class="text-orange-300">本柜卖 ' + quote.capUnitPrice + '，回购不出高于售价（原算 ' + quote.rawUnitPrice + '）</span></div>'
         : '';
+    // v27.14：行情的人腿（单次饱和）——这笔大单柜上吃不动，超出的按折收
+    var satLine = (quote.saturation)
+        ? '<div class="flex justify-between"><span class="text-gray-400">柜上吃不动</span><span class="text-orange-300">前 ' + quote.saturation.fullQty + ' 件照原价，多出的 ' + quote.saturation.overQty + ' 件按 ' + Math.round(quote.saturation.mul * 100) + ' 折收——要想卖全价，分几家、分几日出手</span></div>'
+        : '';
     var dlg = document.createElement('div');
     dlg.className = 'fixed inset-0 bg-black/50 flex items-center justify-center z-[60]';
     dlg.onclick = function(e) { if (e.target === dlg) dlg.remove(); };
@@ -1039,6 +1128,7 @@ function showQuoteDetail(quote) {
                 <div class="flex justify-between"><span class="text-gray-400">口才修正</span><span class="text-white">×${quote.speechMul.toFixed(2)}</span></div>
                 <div class="flex justify-between"><span class="text-gray-400">声望修正</span><span class="text-white">×${quote.repMul.toFixed(2)}</span></div>
                 ${capLine}
+                ${satLine}
                 <div class="border-t border-gray-600 pt-2 mt-2">
                     <div class="flex justify-between"><span class="text-gray-400">单价</span><span class="text-yellow-400 font-bold">${quote.finalUnitPrice} ${currencyName}</span></div>
                     <div class="flex justify-between"><span class="text-gray-400">数量</span><span class="text-white">${quote.quantity}</span></div>
@@ -1125,7 +1215,7 @@ function _shopGoodsCardHtml(shop, item) {
     const soldOut = item.stock != null && item.stock <= 0;
     const limited = item.limited ? '<span class="text-xs text-red-400">限时</span>' : '';
     return `
-        <div class="flex items-center justify-between bg-gray-800 p-3 rounded border border-gray-600 ${soldOut ? 'opacity-50' : ''}">
+        <div class="flex items-center justify-between bg-gray-800 p-4 rounded border border-gray-600 ${soldOut ? 'opacity-50' : ''}">
             <div class="min-w-0 mr-2">
                 <div class="font-bold text-gray-200">${item.icon || ''} ${item.name} ${limited}</div>
                 <div class="text-xs text-gray-400">${item.description || ''}${item.stock != null ? ` · 库存${item.stock}` : ''}</div>
@@ -1133,7 +1223,7 @@ function _shopGoodsCardHtml(shop, item) {
             <div class="flex items-center gap-2 flex-shrink-0">
                 <span class="text-yellow-500 font-bold">${price} 灵石</span>
                 <button onclick="buyFromEnhancedShop('${shop.id}', '${item.id}')"
-                    class="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded text-sm" ${soldOut ? 'disabled' : ''}>购买</button>
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded text-base" ${soldOut ? 'disabled' : ''}>购买</button>
             </div>
         </div>`;
 }
@@ -1456,7 +1546,7 @@ function showShopDialog(shop) {
         if (_greetLine) _titleGreet = '<div class="text-xs text-gray-400 mb-3">' + _greetLine + '</div>';
     } catch (e) {}
     modal.innerHTML = `
-        <div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-[1100px] w-full mx-4 max-h-[85vh] overflow-y-auto">
+        <div class="bg-gray-800 border-2 border-yellow-500 rounded-xl p-6 max-w-[1440px] mx-4 max-h-[85vh] overflow-y-auto">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-bold text-yellow-500">${shop.name}</h3>
                 <button onclick="this.closest('.fixed').remove()" class="text-gray-400 hover:text-white text-2xl">&times;</button>

@@ -17,7 +17,17 @@
         GO_STAKE: 10, GO_WIN_COPPER: 20, GO_WIN_MOOD: 10, GO_LOSE_MOOD: 5,
         GO_WIN_EXP: 3, GO_LOSE_EXP: 1, GO_EN: 5, GO_MIN: 60,
         INK_EN: 3, INK_MIN: 30,
-        INK_WIN_MOOD: 8, INK_LOSE_MOOD: 4, INK_WIN_EXP: 2, INK_LOSE_EXP: 1
+        INK_WIN_MOOD: 8, INK_LOSE_MOOD: 4, INK_WIN_EXP: 2, INK_LOSE_EXP: 1,
+        // v27.13：打听——瓜子钱 2 铜钱、闲话 10 分钟；只认三日内到站的传闻（到站账龄 age≤3，knownRumors 自带 age）
+        ASK_COPPER: 2, ASK_MIN: 10, ASK_FRESH_DAYS: 3,
+        // v27.13：行商市况报——听资 2 灵石（口径：瓜子钱是茶客的闲钱走铜钱档，市况是买卖人的本钱，
+        // "比瓜子钱贵一档"即铜→石跳档，仍算小额灵石、与雅座茶资齐平）；讲市况一刻钟。
+        // 熟路折半（掺了玩家足迹里认得的行情）、全熟不收（交个朋友）——2/1/0 三档全整数，不动灵石小数。
+        // MKT_DIFF_MIN：与"往常价"（CITY_BASE_BIAS）差不足一成二的行市不值钱，不收录；
+        // MKT_FRESH_DAYS ≤2 日配"前儿刚"话头、MKT_STALE_DAYS ≥10 日（旬以上）配"旬把天前/半月前"话头，
+        // 中间档配"前些日子打某地过"话头；至多讲两条（MKT_MAX_TALK，多了是说书）。
+        MKT_STONES: 2, MKT_MIN: 15, MKT_DIFF_MIN: 0.12,
+        MKT_FRESH_DAYS: 2, MKT_STALE_DAYS: 10, MKT_MAX_TALK: 2
     };
 
     function charData() { return window.currentCharData || null; }
@@ -88,7 +98,7 @@
     function settle(spec) {
         try {
             if (window.RewardService && typeof window.RewardService.apply === 'function') {
-                var r = window.RewardService.apply(spec, { source: '茶馆消遣', city: (charData() || {}).location || '' });
+                var r = window.RewardService.apply(spec, { facilitySpend: true, source: '茶馆消遣', city: (charData() || {}).location || '' });
                 if (r && r.success !== false) return;
             }
         } catch (e) {}
@@ -156,8 +166,22 @@
         var btn = 'class="w-full p-3 rounded mb-2 text-left text-sm text-white hover:opacity-90"';
         var html = '<p class="text-sm text-gray-400 mb-2">茶炉正旺，说书声慢——茶馆里有的是打发时辰的法子：</p>' +
             '<button onclick="TeaHouseLeisure.act(\'story\')" ' + btn.replace('p-3', 'bg-emerald-700 p-3') + '>📖 听说书（10 灵石 · 听近日江湖传闻）</button>' +
+            // v26.1 五路进城批：说书账在位才挂——听别人说，不如登台说自己的书
+            (window.TeaTale ? '<button onclick="window.TeaTale.open()" ' + btn.replace('p-3', 'bg-rose-900 p-3') + '>🎤 登台说自己的书（真本薄利 · 假本厚利带刺——被知情人拆台，本城茶馆拉黑七日）</button>' : '') +
             (typeof window.openJianghuRank === 'function'
                 ? '<button onclick="window.openJianghuRank()" ' + btn.replace('p-3', 'bg-amber-900 p-3') + '>🎋 打听望风榜（口头天骄排名 · 风声不要钱，分文不收）</button>'
+                : '') +
+            // v27.13：茶馆「打听」入口（⑪改良半刀收口）——传闻到站账（WorldLedger.rumorSeen/rumorPend）已建，这里给消费面。
+            // WorldLedger 缺席就不挂按钮，其余消遣照旧；不建新系统、不记第二本账。
+            (window.WorldLedger && typeof window.WorldLedger.knownRumors === 'function'
+                ? '<button onclick="TeaHouseLeisure.act(\'ask\')" ' + btn.replace('p-3', 'bg-slate-700 p-3') + '>👂 向茶客打听（瓜子钱 ' + CFG.ASK_COPPER + ' 铜钱 · 听三日内到站的风声，没新鲜事分文不收）</button>'
+                : '') +
+            // v27.13：④新增「行商市况报」入口——行情时滞账（world-ledger priceHist + knownPriceMul/knownPriceAge 读口）已建，这里挂消费面。
+            // 双守卫照打听先例：WorldLedger 读口与 MarketDynamic 配置任一缺席就不挂按钮；本区现价不卖（没信息差），
+            // 有干货才收钱（先探后付，与打听同礼貌）；价签写足价——熟路折半/全熟不收是行商当场给的面子。
+            (window.WorldLedger && typeof window.WorldLedger.knownPriceMul === 'function' && typeof window.WorldLedger.knownPriceAge === 'function'
+                && window.MarketDynamic && window.MarketDynamic.CITIES && window.MarketDynamic.CATEGORIES && typeof window.MarketDynamic.regionFor === 'function'
+                ? '<button onclick="TeaHouseLeisure.act(\'market\')" ' + btn.replace('p-3', 'bg-yellow-900 p-3') + '>🧳 听行商讲市况（' + CFG.MKT_STONES + ' 灵石 · 外区旧价与路上的行情，没干货分文不收）</button>'
                 : '') +
             '<button onclick="TeaHouseLeisure.act(\'tea\')" ' + btn.replace('p-3', 'bg-emerald-900 p-3') + '>🫖 大厅粗茶（3 铜钱 · 精力+15 心境+6，坐半个时辰）</button>' +
             '<button onclick="TeaHouseLeisure.act(\'room\')" ' + btn.replace('p-3', 'bg-teal-800 p-3') + '>🎋 雅座好茶（2 灵石 · 精力+40 真气+20 心境+10，静坐一个时辰）</button>' +
@@ -171,6 +195,142 @@
     // ============ 各口子的账 ============
     function doStory() {
         if (typeof window.visitTeaHouse === 'function') window.visitTeaHouse();
+    }
+    // v27.13：打听——⑪改良的半刀收口。传闻到站账（world-ledger rumorSeen，商旅按名气同一把尺送话到站）已在，
+    // 这里挂消费面：瓜子钱 2 铜钱，茶客吐一两条三日内到站的传闻；没新鲜事分文不收，体面收场。
+    // 口径：先探后付——账上没货就不收钱（收了钱再说"没有"是讹人）；WorldLedger 缺席读不出账，同样分文不收。
+    function doAsk() {
+        var list = [];
+        try {
+            var WL = window.WorldLedger;
+            if (!WL || typeof WL.knownRumors !== 'function') throw new Error('WorldLedger.knownRumors 缺席');
+            list = WL.knownRumors((charData() || {}).location || '') || [];
+        } catch (e) {
+            console.warn('[静默失败] js/city-facilities/teahouse-leisure.js · doAsk：传闻账没读出来——茶客只能陪笑', e && e.message);
+            say('👂 你想跟邻座打听几句，茶客摆摆手：「近日风声紧，没什么可说的。」', 'info');
+            return;
+        }
+        // 三日内到站的才算新鲜；账面新的在前，至多吐两条（多了就成了说书）
+        var fresh = [];
+        for (var i = 0; i < list.length && fresh.length < 2; i++) {
+            if ((Number(list[i].age) || 0) <= CFG.ASK_FRESH_DAYS) fresh.push(list[i]);
+        }
+        if (!fresh.length) {
+            say('👂 ' + vo('ask', '你跟邻座茶客搭了句话，对面想了半天，摇头失笑：「客官，最近没听着什么新鲜事——要听旧闻，倒能给你说一宿。」'), 'info');
+            return;
+        }
+        if (!payCopper(CFG.ASK_COPPER)) { say('👂 打听也有行情——先给邻座添碟瓜子（' + CFG.ASK_COPPER + ' 铜钱），没有赊账的道理。', 'warning'); return; }
+        spendTime(CFG.ASK_MIN, '茶馆打听');
+        var ageWord = ['今儿才传开的', '昨儿刚传到的', '前儿的事了', '大前儿传来的，还算新鲜'];
+        var lines = [];
+        for (var j = 0; j < fresh.length; j++) {
+            lines.push(String(fresh[j].text) + '（' + (ageWord[Math.min(Number(fresh[j].age) || 0, 3)] || '') + '）');
+        }
+        say('👂 ' + vo('ask', '你把一碟瓜子推过去，茶客压低嗓子：' + lines.join(' 又道：') + ' 说完四下张望一眼，端起茶盏不言语了。'), 'info');
+    }
+    // v27.13：玩家足迹册——location-system 的 visitedCities 不直接外露，但 getAllCities() 每城带
+    // isVisited/region，这是现成的到访记录（无时戳——"近日常跑"判不了严，按"去过=认得这条商路"从宽判熟）。
+    // 城池名经 MarketDynamic.regionFor 折到行情大区再对号（与买卖记账同一把尺）。
+    // 读不到足迹就按无名册处理：一律算生（不白给折让），本区照旧不卖——两头都不亏。
+    function visitedMarketRegions() {
+        var out = {};
+        try {
+            var ls = window.locationSystem;
+            var list = (ls && typeof ls.getAllCities === 'function') ? ls.getAllCities() : [];
+            var MD = window.MarketDynamic;
+            for (var i = 0; i < list.length; i++) {
+                var it = list[i];
+                if (!it || !it.isVisited || !it.name) continue;
+                var reg = (MD && typeof MD.regionFor === 'function') ? MD.regionFor(it.name) : null;
+                if (reg) out[reg] = true;
+            }
+        } catch (e) {
+            console.warn('[静默失败] js/city-facilities/teahouse-leisure.js · visitedMarketRegions：足迹册没读出来——熟路折让这趟不认', e && e.message);
+        }
+        return out;
+    }
+    // v27.13：行商市况报（④新增）——行情时滞账（world-ledger priceHist + knownPriceMul/knownPriceAge 读口）的消费面。
+    // 商旅视角讲外区旧价：本区现价人人眼见为实、没信息差，不卖；讲的"涨跌几成"以 MarketDynamic.CITY_BASE_BIAS
+    // 的"往常价"为基准量差——价史读口只给"已知价"一个数，账上有什么说什么，不编史册里没有的涨跌。
+    // 大区/品类中文名直接取行情配置（CITIES/CATEGORIES 本就是中文），不另造别名表。
+    // 礼貌纪律（与打听同款）：先探后付——账上没干货分文不收、不耗时辰；WorldLedger/MarketDynamic 缺席由菜单双守卫挡在门外。
+    // 冷却不另立账、不掷骰：按价史新鲜度定有没有货（价史日日滚、货日日变）——有真货却掷骰说没有，是砸自己招牌。
+    function doMarket() {
+        var WL = window.WorldLedger, MD = window.MarketDynamic;
+        var hereLoc = (charData() || {}).location || (typeof window.getCurrentCityName === 'function' ? window.getCurrentCityName() : '') || '';
+        try {
+            if (!WL || typeof WL.knownPriceMul !== 'function' || typeof WL.knownPriceAge !== 'function') throw new Error('WorldLedger 行情读口缺席');
+            if (!MD || !MD.CITIES || !MD.CATEGORIES || typeof MD.regionFor !== 'function') throw new Error('MarketDynamic 行情配置缺席');
+        } catch (e) {
+            console.warn('[静默失败] js/city-facilities/teahouse-leisure.js · doMarket：行情账没读出来——行商只能陪笑', e && e.message);
+            say('🧳 行商拱拱手：「对不住，账本压在驮子底下，改日再讲市况。」', 'info');
+            return;
+        }
+        var hereRegion = null;
+        try { hereRegion = MD.regionFor(hereLoc); } catch (eR) {}
+        var visited = visitedMarketRegions();
+        var here = hereLoc || hereRegion; // knownPriceMul/knownPriceAge 认城也认大区——脚下城折不出就退大区
+        // 选条：六大区×六品类全翻一遍，只收「外区×有账龄×与往常差过门槛」的行市
+        var cand = [];
+        try {
+            for (var i = 0; i < MD.CITIES.length; i++) {
+                var region = MD.CITIES[i];
+                if (hereRegion && region === hereRegion) continue; // 本区不卖——脚下现价没信息差
+                for (var j = 0; j < MD.CATEGORIES.length; j++) {
+                    var cat = MD.CATEGORIES[j];
+                    var mul = WL.knownPriceMul(here, region, cat);
+                    var age = WL.knownPriceAge(here, region, cat);
+                    if (!(age > 0) || !(mul > 0)) continue; // age 0=现价、null=从未听闻（退回往常价必无差）——都没话讲
+                    var bias = (MD.CITY_BASE_BIAS[region] && typeof MD.CITY_BASE_BIAS[region][cat] === 'number') ? MD.CITY_BASE_BIAS[region][cat] : 1;
+                    var diff = mul / bias - 1;
+                    if (Math.abs(diff) < CFG.MKT_DIFF_MIN) continue; // 与往常差不了一成二，不值一个灵石价
+                    cand.push({ region: region, cat: cat, age: age, diff: diff, familiar: !!visited[region] });
+                }
+            }
+        } catch (eScan) {
+            console.warn('[静默失败] js/city-facilities/teahouse-leisure.js · doMarket：价史没翻成——今日无可报', eScan && eScan.message);
+        }
+        if (!cand.length) {
+            say('🧳 ' + vo('market', '邻桌风尘仆仆的行商呷了口茶，摇头：「今日无可报的市况——这一路没听着什么价钱上的新鲜事。」'), 'info');
+            return;
+        }
+        // 买卖人的生意眼：先卖你不认得的（生路在前），同组按动静大小排（价差是本钱，新旧只改说法不改次序）
+        cand.sort(function (a, b) {
+            if (a.familiar !== b.familiar) return a.familiar ? 1 : -1;
+            return Math.abs(b.diff) - Math.abs(a.diff);
+        });
+        var picked = cand.slice(0, CFG.MKT_MAX_TALK);
+        var famCnt = 0;
+        for (var f = 0; f < picked.length; f++) if (picked[f].familiar) famCnt++;
+        // 价：全生足价、掺熟折半、全熟不收——三档全整数，不动灵石小数
+        var charge = famCnt === picked.length ? 0 : (famCnt > 0 ? Math.max(1, Math.floor(CFG.MKT_STONES / 2)) : CFG.MKT_STONES);
+        if (charge > 0 && !payStones(charge)) {
+            say('🧳 行商把手一摊：「行情是买卖人的本钱——' + charge + ' 灵石先结，没有赊账的道理。」', 'warning');
+            return;
+        }
+        spendTime(CFG.MKT_MIN, '茶馆听市况');
+        var CN = ['一', '二', '三', '四', '五', '六', '七', '八', '九'];
+        var lines = [];
+        for (var k = 0; k < picked.length; k++) {
+            var it = picked[k];
+            var up = it.diff > 0;
+            var dir = up ? '涨' : '跌';
+            var cheng = (CN[Math.min(9, Math.max(1, Math.round(Math.abs(it.diff) / 0.1))) - 1] || '九') + '成';
+            // 账龄配语气：新鲜（≤2 日）是"前儿刚"的急信，旬以上（≥10 日）只说得个"另一样光景"
+            if (it.age <= CFG.MKT_FRESH_DAYS) {
+                lines.push('「' + it.region + '的' + it.cat + '前儿刚' + dir + '了' + cheng + '，这会儿怕更' + (up ? '高' : '低') + '」');
+            } else if (it.age < CFG.MKT_STALE_DAYS) {
+                lines.push('「前些日子打' + it.region + '过，' + it.cat + '已经' + dir + '了' + cheng + '——如今怕还在' + dir + '」');
+            } else {
+                lines.push('「' + (it.age >= 15 ? '半月前' : '旬把天前') + it.region + '的' + it.cat + '就' + dir + '了——如今怕是另一样光景」');
+            }
+        }
+        var tail;
+        if (charge === 0) tail = '说完自己先笑了：「这行情您比我还熟——罢了，交个朋友，不收钱。」';
+        else if (charge < CFG.MKT_STONES) tail = '说完一拍大腿：「里头有你走过的道，我认得出来——收你一半，' + charge + ' 灵石。」';
+        else tail = '说完把茶一口干了：「两条市况，' + charge + ' 灵石——行里的规矩，童叟无欺。」';
+        say('🧳 ' + vo('market', '邻桌风尘仆仆的行商朝你招招手，压低了嗓门：') + lines.join(' 又道：') + tail, 'info');
+        refresh();
     }
     function doTea() {
         if (!payCopper(CFG.TEA_COPPER)) { say('粗茶也要 ' + CFG.TEA_COPPER + ' 铜钱——茶博士笑呵呵地拎着壶站着，没有赊账的道理。', 'warning'); return; }
@@ -257,6 +417,8 @@
         try { if (typeof window.closeBuildingDialog === 'function') window.closeBuildingDialog(); } catch (e) {}
         switch (kind) {
             case 'story': doStory(); break;
+            case 'ask': doAsk(); break; // v27.13：打听入口（world-ledger 传闻到站账的消费面）
+            case 'market': doMarket(); break; // v27.13：行商市况报入口（world-ledger 行情时滞账的消费面）
             case 'tea': doTea(); break;
             case 'room': doRoom(); break;
             case 'go': doGo(); break;

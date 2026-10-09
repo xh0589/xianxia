@@ -21,6 +21,12 @@
 //   道侣与挚交（好感≥80）下不去手；黑面孝敬里「交东西」类（铁匠/炼丹师）每人终身一次（落档 perks，防印钞）；
 //   灵石走 DataManager 单一真源，铜钱/业障/恶名走 RewardService 正门，声望走 reduceReputation 正门。
 // 杀人不在本批：杀具名 NPC 的连锁（杀孽/仇家/门派追杀）留作另案。
+// ==================== v26.0 六路营生批 · 通缉两档改装（用户点单） ====================
+// 用户口径：「通缉也分类型——对方没看到脸就只能靠特质认，极难；脸被看到过就很麻烦了。」
+//   crimeLedger 添 face 字段：罪行干得干净 → face=0（特质档：官府只有体态口音路数，盘查加档小、
+//   猎人难盯上）；被当场拿住 / 苦主敲锣 / 被扭送 → face=1（画像档：画影图形全城比对）。
+//   销案（缴清 / 风头冷透）→ 画像揭下，face 归零。易容（disguise-system.js）守卫接线：
+//   特质档戴着面具近乎白走，画像档只减半且每日有熟人撞破的险——撞破的账记在那边，本账只认读数。
 (function () {
     'use strict';
     if (typeof window === 'undefined') return;
@@ -49,10 +55,18 @@
         // ③ 通缉追捕链
         WANTED_AT: 30, BOUNTY_BASE: 30, BOUNTY_PER_HEAT: 3, BOUNTY_PER_CRIME: 12,
         HEAT_DECAY: 3, HEAT_MAX: 100,
+        RINSE_QUIET_DAYS: 60,   // v27.13 漂洗（画影册流窜玩法·衰减口）：60 日无新的民愤入账才开始多冷
+        RINSE_EXTRA_COOL: 2,    // v27.13 漂洗：安分期里每日在 coolDaily 之外多冷的热度
         HUNTER_P_BASE: 0.08, HUNTER_P_DIV: 300, HUNTER_P_CAP: 0.45,
         HUNTER_WIN_FRAC: 0.5, HUNTER_WIN_PLUS: 10, HUNTER_WIN_BOUNTY_OFF: 30, HUNTER_WIN_HEAT: 5,
         HUNTER_LOSE_HEAT_OFF: 20, HUNTER_LOSE_SHORT_NOTO: 3, HUNTER_LOSE_SHORT_QI: 20,
         PATROL_BOOST: 15,
+        // v26.0 通缉两档：特质档（脸没露）盘查加档小、猎人难盯；易容守卫接线的乘数
+        PATROL_BOOST_BLIND: 5, HUNTER_BLIND_MUL: 0.3,
+        PATROL_MASK_FACE: 8,     // 画像档戴面具：加档减半（画像对不上，步态还认得出）
+        HUNTER_MASK_FACE: 0.45,  // 画像档戴面具：猎人降到四成半
+        HUNTER_MASK_BLIND: 0.1,  // 特质档戴面具：猎人降到一成
+        COOL_MASK_BONUS: 2,      // 特质档戴面具蛰伏：风头每日多冷 2 点
         // ④ 钱庄柜娘
         TELLER_BASE: 0.25, TELLER_SKILL: 0.004, TELLER_SKILL_CAP: 0.30,
         TELLER_FEAR_BONUS: 0.25, TELLER_WANTED_PEN: 0.15, TELLER_RATE_MIN: 0.05, TELLER_RATE_MAX: 0.90,
@@ -68,7 +82,7 @@
     var TELLER_NAMES = ['柳娘', '苏芸', '阿绣', '万金', '青钱', '朱月'];
     var HUNTER_SURNAMES = ['铁面', '独眼', '快刀', '追风', '夜枭', '索命'];
 
-    var _st = { heat: 0, bounty: 0, log: [], bankBan: {}, tellers: {}, perks: {}, lastCoolDay: -1 };
+    var _st = { heat: 0, bounty: 0, face: 0, log: [], bankBan: {}, tellers: {}, perks: {}, lastCoolDay: -1 };
     var _threatLog = {};   // { npcId: absoluteDay } 运行时账（与摸包同款口径）
     var _robLog = {};
 
@@ -161,22 +175,59 @@
     function wanted() { return _st.heat >= TUNE.WANTED_AT; }
     function heat() { return _st.heat; }
     function bounty() { return _st.bounty; }
+    // v26.0 通缉两档：脸露没露过（0=特质档，1=画像档）
+    function faceKnown() { return !!_st.face; }
+    function wantedTier() { return !wanted() ? 'none' : (_st.face ? 'portrait' : 'trait'); }
 
-    function addHeat(n, why) {
+    function addHeat(n, why, opts) {
         n = Math.max(0, Math.floor(Number(n) || 0));
         if (n <= 0) return;
+        // v27.17：⑦耳语读方 A（新案热度加码）——联案语义：
+        // 这城有人记着你的脸（heardOf 暗账，v27.15 立的口），你又在这里犯案——
+        // 茶棚里那位只说一句「是那张脸」，民愤来得比陌生的贼快（heat +10，上限照旧）。
+        // 案底城来的跑镖人认脸不认案：他不知道你在别处干过什么，但他认得这张脸。
+        try {
+            var _city17 = (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || (window.currentCharData && window.currentCharData.location) || '';
+            var _heard17 = (_city17 && window.WorldLedger && typeof window.WorldLedger.heardOfIn === 'function') ? window.WorldLedger.heardOfIn(_city17) : null;
+            if (_heard17 && n > 0) {
+                n = n + 10;
+                why = String(why || '') + '（这城有人认得你——民愤来得快）';
+            }
+        } catch (eHd17) { console.warn('[静默失败] js/npcs/npc-crime.js · 耳语热度加码没接上（按无耳语算）', eHd17 && eHd17.message); }
         var wasWanted = wanted();
         _st.heat = clamp(_st.heat + n, 0, TUNE.HEAT_MAX);
         if (_st.heat >= TUNE.WANTED_AT) {
             if (!wasWanted) {
                 _st.bounty = TUNE.BOUNTY_BASE + (_st.heat - TUNE.WANTED_AT) * TUNE.BOUNTY_PER_HEAT;
-                log('🪧 民愤沸腾——官府把你的名字挂上了悬赏牌，赏金 ' + _st.bounty + ' 灵石。道上的人开始留意你的脸。', 'danger');
+                log('🪧 民愤沸腾——官府把你的名字挂上了悬赏牌，赏金 ' + _st.bounty + ' 灵石。' + (_st.face ? '画影图形就贴在名字旁边——满城都对着这张脸找你。' : '画影却付阙如：苦主们只说得出你的体态、口音和路数——悬赏牌上没画脸。'), 'danger');
             } else {
                 _st.bounty += TUNE.BOUNTY_PER_CRIME + Math.floor(n * 2);
             }
         }
+        // v26.0：当场被拿 / 敲锣报官 / 被扭送——脸进了官府的册子，此后按画像档走
+        if (opts && opts.faceSeen && !_st.face) {
+            _st.face = 1;
+            log('🪧 你的脸进了官府的册子——画影图形贴上了悬赏牌。往后街上每双眼睛都在对着这张脸比对。', 'danger');
+        }
         _st.log.push({ day: absDay(), why: String(why || '罪行'), n: n });
         if (_st.log.length > 20) _st.log = _st.log.slice(-20);
+    }
+
+    // v27.4 断案批：官司胜诉/认罪销案的减热度正门（CaseSystem 守卫接线）——只减热度不动赏金账；
+    // 冷到通缉线下按 coolDaily 同款口径销案揭画影。
+    function coolHeat(n, why) {
+        n = Math.max(0, Math.floor(Number(n) || 0));
+        if (n <= 0) return 0;
+        var wasWanted = wanted();
+        _st.heat = Math.max(0, _st.heat - n);
+        if (wasWanted && !wanted()) {
+            _st.bounty = 0;
+            _st.face = 0;
+            log('🪧 堂上的官司了结，风头也冷透了——悬赏牌上的画像揭了，官府算你销了案。（热度降到 ' + _st.heat + '）', 'success');
+        } else if (why) {
+            log('🪧 堂上过了这一遭，民愤消了些——热度-' + n + '（现 ' + _st.heat + '）。', 'info');
+        }
+        return n;
     }
 
     function coolDaily() {
@@ -185,11 +236,37 @@
         _st.lastCoolDay = day;
         if (_st.heat <= 0 && _st.bounty <= 0) return;
         var wasWanted = wanted();
-        _st.heat = Math.max(0, _st.heat - TUNE.HEAT_DECAY);
+        var cool = TUNE.HEAT_DECAY;
+        // v26.0：特质档通缉戴着面具蛰伏——体态口音都对不上，风头冷得更快（守卫读易容账）
+        try {
+            if (wasWanted && !_st.face && window.Disguise && typeof window.Disguise.active === 'function' && window.Disguise.active()) cool += TUNE.COOL_MASK_BONUS;
+        } catch (eD) { console.warn('[静默失败] js/npcs/npc-crime.js · coolDaily：易容账没读出来，风头按常速冷', eD && eD.message); }
+        _st.heat = Math.max(0, _st.heat - cool);
         if (wasWanted && !wanted()) {
             _st.bounty = 0;
+            _st.face = 0;   // 案卷销了，画影（若有）也揭了——从头再来的是特质，不是脸
             log('🪧 风头冷了下来——悬赏牌上的画像揭了。蛰伏这些日子，官府算你销了案。（热度降到 ' + _st.heat + '）', 'success');
         }
+    }
+
+    // v27.13 画影册流窜玩法（主档模块⑦）· 漂洗衰减口：「金盆洗手」要可能。
+    // 长期安分（RINSE_QUIET_DAYS 日无任何新的民愤入账——_st.log 末笔日为尺，addHeat 每笔都落账）
+    // 就在 coolDaily 之外每日多冷 RINSE_EXTRA_COOL 点。走 coolHeat 同源合法口（v27.4 断案批立的
+    // 减热度正门，只减热度不动赏金账、跨线下自动销案揭画影）——不直改 _st.heat，两档铁律语义一字不动。
+    // 复犯即停：新笔一落（addHeat 推入当日账），末笔日回到今天，安分期条件立破，多冷自动停。
+    // 返回实际多冷的热度（测试钩子）。
+    function rinseTick() {
+        try {
+            if (_st.heat <= 0) return 0;
+            var last = -1;
+            for (var i = _st.log.length - 1; i >= 0; i--) {
+                var d = Number(_st.log[i] && _st.log[i].day);
+                if (d > last) last = d;
+            }
+            if (last < 0) return 0;                        // 无账可考（老档/异常）：不漂，coolDaily 照旧在冷
+            if (absDay() - last < TUNE.RINSE_QUIET_DAYS) return 0;   // 未满安分期（含复犯当日清零重计）
+            return coolHeat(TUNE.RINSE_EXTRA_COOL);        // why 缺省不刷屏；跨线下销案的话头由 coolHeat 自己说
+        } catch (e) { console.warn('[静默失败] js/npcs/npc-crime.js · rinseTick：漂洗这笔没落成', e && e.message); return 0; }
     }
 
     // 赏金猎人进城堵你（每日新日一掷；通缉中、人在城里、不在自家洞府才算数）
@@ -204,6 +281,11 @@
             try { if (typeof window.isAtHome === 'function' && window.isAtHome()) return false; } catch (eH) { console.warn('[静默失败] js/npcs/npc-crime.js · maybeHunter：在不在家没问清，按在外头算', eH && eH.message); }
             var r = (typeof rng === 'function') ? rng() : Math.random();
             var p = Math.min(TUNE.HUNTER_P_CAP, TUNE.HUNTER_P_BASE + _st.heat / TUNE.HUNTER_P_DIV);
+            // v26.0 通缉两档＋易容守卫：特质档猎人难盯（只有体态口音）；戴着面具再打折
+            var masked = false;
+            try { masked = !!(window.Disguise && typeof window.Disguise.active === 'function' && window.Disguise.active()); } catch (eD2) { console.warn('[静默失败] js/npcs/npc-crime.js · maybeHunter：易容账没读出来，按没戴面具算', eD2 && eD2.message); }
+            if (!_st.face) p *= TUNE.HUNTER_BLIND_MUL;
+            if (masked) p *= _st.face ? TUNE.HUNTER_MASK_FACE : TUNE.HUNTER_MASK_BLIND;
             if (r >= p) return false;
             var tier = playerTier() || 3;
             var hname = '赏金猎人·' + HUNTER_SURNAMES[seedOf(ct + '_' + absDay()) % HUNTER_SURNAMES.length];
@@ -214,8 +296,9 @@
                 defense: 15 + tier * 3, speed: 22,
                 maxDurability: 100 + tier * 15, durabilities: { chest: 100 + tier * 15 }, combatAbilities: []
             };
+            var spotWord = _st.face ? '认得悬赏牌上你的脸' : (masked ? '只拿着你的体态口音——居然还是把你从人堆里择了出来' : '手里只有你的体态口音——对着悬赏牌上的描述把你认了出来');
             var started = startFlaggedBattle(enemyData, { _isBountyHunt: true, _bountyAmt: _st.bounty, _hunterName: hname },
-                '🪧 「' + hname + '」认得悬赏牌上你的脸——当街拦了上来！（赏金 ' + _st.bounty + ' 灵石压在他身上）');
+                '🪧 「' + hname + '」' + spotWord + '——当街拦了上来！（赏金 ' + _st.bounty + ' 灵石压在他身上）');
             return started;
         } catch (e) { console.warn('[静默失败] js/npcs/npc-crime.js · maybeHunter：猎人没能进城，这一天街上太平', e && e.message); return false; }
     }
@@ -246,6 +329,7 @@
                 }
                 _st.heat = Math.max(0, _st.heat - TUNE.HUNTER_LOSE_HEAT_OFF);
                 _st.bounty = 0;
+                _st.face = 1;   // v26.0：被当街拿下扭送——这张脸官府和满城都过了目（案虽销，脸进了册子；再犯就是画像档起步）
                 deed('bad', '你让赏金猎人「' + hname + '」当街拿下，扭送官府缴清了悬赏——画影上你的脸人人都看过了');
                 log('🪧 「' + hname + '」把你按在地上捆了。赏金 ' + amt + ' 灵石' + (paid > 0 ? '从你身上划走 ' + paid : '你身无分文') + (short > 0 ? '，划不够的部分挨了顿好打、真气被震散一截（恶名+' + TUNE.HUNTER_LOSE_SHORT_NOTO + '）' : '') + '。案子就此销了，你的脸也全城都认得了。', 'danger');
                 say('🪧 被「' + hname + '」当街拿下——赏金缴清、案子销了，代价是满城都认得了你的脸。', 'error');
@@ -255,6 +339,15 @@
     }
     window.settleBountyHunt = settleBountyHunt;
 
+    // v26.0：别家黑道账（绑架）报官时追加悬赏的正门——只在通缉档上挂，不凭空造案
+    function addBountyOnReport(n) {
+        n = Math.max(0, Math.floor(Number(n) || 0));
+        if (n <= 0) return false;
+        if (!wanted()) return false;
+        _st.bounty += n;
+        return true;
+    }
+
     // 司法堂缴清悬赏（facility-offices 情境选项守卫接线）
     function payBounty() {
         if (_st.bounty <= 0) return { error: wanted() ? '悬赏牌上有你的脸，但赏金账目待核——先让风头再吹吹。' : '悬赏牌上没有你的脸，无从缴起。' };
@@ -262,6 +355,7 @@
         if (!deductStones(amt)) return { error: '缴清悬赏需 ' + amt + ' 灵石，你手头不足——官府的账不赊。' };
         _st.heat = Math.max(0, _st.heat - (TUNE.WANTED_AT + 10));
         _st.bounty = 0;
+        _st.face = 0;   // v26.0：当堂销案——画影揭下，册子上的脸也勾了（自首缴清，官府图的是结案不是记仇）
         log('🪧 你在司法堂柜上缴清赏金 ' + amt + ' 灵石，书吏当堂销案、揭了画影。「往后安分些。」', 'success');
         say('🪧 赏金缴清，案子当堂销了——悬赏牌上不再有你的脸。（热度大降，恶名可不会跟着销）', 'success');
         refresh();
@@ -269,11 +363,23 @@
     }
 
     // 夜巡盘查加档（daily-events 守卫接线）：通缉之身，兵丁的眼神完全不同
+    // v26.0 两档：画像档 +15 满档；特质档只有 +5（兵丁手里没脸，只能对着体态描述多看两眼）；
+    //   戴着面具（守卫读易容账）：特质档归零（体态步法都改了），画像档减半（画像对不上，步态还认得出）
     function patrolBoost(noto) {
-        try { return wanted() ? (Number(noto) || 0) + TUNE.PATROL_BOOST : (Number(noto) || 0); } catch (e) { return Number(noto) || 0; }
+        try {
+            if (!wanted()) return Number(noto) || 0;
+            var masked = false;
+            try { masked = !!(window.Disguise && typeof window.Disguise.active === 'function' && window.Disguise.active()); } catch (eD3) { console.warn('[静默失败] js/npcs/npc-crime.js · patrolBoost：易容账没读出来，按没戴面具算', eD3 && eD3.message); }
+            var base = Number(noto) || 0;
+            if (_st.face) return base + (masked ? TUNE.PATROL_MASK_FACE : TUNE.PATROL_BOOST);
+            return base + (masked ? 0 : TUNE.PATROL_BOOST_BLIND);
+        } catch (e) { return Number(noto) || 0; }
     }
     function wantedLine() {
-        if (wanted() && _st.bounty > 0) return '\n\n堂外悬赏牌上贴着你的画像——赏金 ' + _st.bounty + ' 灵石。柜上可缴清销案。';
+        if (wanted() && _st.bounty > 0) {
+            if (_st.face) return '\n\n堂外悬赏牌上贴着你的画像——赏金 ' + _st.bounty + ' 灵石，画影图形满城比对。柜上可缴清销案。';
+            return '\n\n堂外悬赏牌上挂着你的名字——赏金 ' + _st.bounty + ' 灵石。画影付阙如：苦主只说得出你的体态口音，兵丁拿着描述满街乱认。柜上可缴清销案。';
+        }
         if (_st.heat > 0) return '\n\n（案卷角落里夹着你的名字——民愤热度 ' + _st.heat + '，还没到画影通缉的线。）';
         return '';
     }
@@ -559,7 +665,7 @@
         try { if (typeof npc.recordPlayerAction === 'function') npc.recordPlayerAction('rob_failed', 'negative'); } catch (eR5) { console.warn('[静默失败] js/npcs/npc-crime.js · doRob：这一笔没记进TA的记忆', eR5 && eR5.message); }
         if (Math.random() < TUNE.ROB_FAIL_SNITCH_P) {
             c.notoriety = Math.min(100, (Number(c.notoriety) || 0) + TUNE.ROB_SNITCH_NOTO);
-            addHeat(TUNE.ROB_SNITCH_NOTO, '抢劫未遂被拿');
+            addHeat(TUNE.ROB_SNITCH_NOTO, '抢劫未遂被拿', { faceSeen: true });   // v26.0：被按在墙上当街过了目——脸进册子
             repDown(TUNE.ROB_SNITCH_REP);
             var paid = deductStones(TUNE.ROB_SNITCH_FINE);
             if (!paid) c.notoriety = Math.min(100, (Number(c.notoriety) || 0) + TUNE.ROB_SNITCH_FINE_SHORT);
@@ -726,7 +832,7 @@
         }
         // 砸了：她敲锣
         c.notoriety = Math.min(100, (Number(c.notoriety) || 0) + TUNE.TELLER_FAIL_NOTO);
-        addHeat(TUNE.TELLER_FAIL_HEAT, '抢钱庄柜台被敲锣');
+        addHeat(TUNE.TELLER_FAIL_HEAT, '抢钱庄柜台被敲锣', { faceSeen: true });   // v26.0：半个城都看见你被堵在柜台前——脸进册子
         repDown(TUNE.TELLER_FAIL_REP);
         var paid = deductStones(TUNE.TELLER_FAIL_FINE);
         if (!paid) c.notoriety = Math.min(100, (Number(c.notoriety) || 0) + TUNE.TELLER_FAIL_FINE_SHORT);
@@ -738,13 +844,21 @@
         return false;
     }
 
-    // ============ 对话面板上的黑道两枚按钮 ============
+    // ============ 对话面板上的黑道两枚按钮（v26.0：绑架账有按钮就并排挂上，守卫接线） ============
     function buildNpcCrimeButtons(npc, npcId) {
         try {
             if (!npc || npc.isDead) return '';
             var btn = 'class="mt-1 flex items-center gap-2 px-3 py-2 rounded text-sm w-full transition-colors border ';
-            return '<button onclick="window.NpcCrime.threaten(\'' + npcId + '\')" ' + btn + 'bg-red-950/60 hover:bg-red-900/60 border-red-900/50 text-red-200"><span>🗡️ 威胁</span><span class="text-xs text-red-300/70">逼TA怕你，挤出灵石——按职业另有一份孝敬</span></button>' +
+            var html = '<button onclick="window.NpcCrime.threaten(\'' + npcId + '\')" ' + btn + 'bg-red-950/60 hover:bg-red-900/60 border-red-900/50 text-red-200"><span>🗡️ 威胁</span><span class="text-xs text-red-300/70">逼TA怕你，挤出灵石——按职业另有一份孝敬</span></button>' +
                 '<button onclick="window.NpcCrime.rob(\'' + npcId + '\')" ' + btn + 'bg-red-950/80 hover:bg-red-900/80 border-red-700/60 text-red-100"><span>💰 抢劫</span><span class="text-xs text-red-300/70">要TA全部家当——可能拔刀相向，业障恶名通缉三本账</span></button>';
+            try {
+                if (window.Kidnap && typeof window.Kidnap.buildButton === 'function') html += window.Kidnap.buildButton(npc, npcId, btn);
+            } catch (eKd) { console.warn('[静默失败] js/npcs/npc-crime.js · buildNpcCrimeButtons：绑架那枚按钮没挂上，威胁抢劫两枚照常', eKd && eKd.message); }
+            // v27.4 黑道批：扒窃（CrimeWorks 账在位就并排挂上——得手无人察觉，被按住当街过目）
+            try {
+                if (window.CrimeWorks && typeof window.CrimeWorks.buildPickButton === 'function') html += window.CrimeWorks.buildPickButton(npc, npcId, btn);
+            } catch (eCw) { console.warn('[静默失败] js/npcs/npc-crime.js · buildNpcCrimeButtons：扒窃那枚按钮没挂上，威胁抢劫照常', eCw && eCw.message); }
+            return html;
         } catch (e) { console.warn('[静默失败] js/npcs/npc-crime.js · buildNpcCrimeButtons：按钮没挂上', e && e.message); return ''; }
     }
     window.buildNpcCrimeButtons = buildNpcCrimeButtons;
@@ -752,10 +866,11 @@
     // ============ 存读档（StateRegistry 正门） ============
     function _export() { return JSON.parse(JSON.stringify(_st)); }
     function _import(d) {
-        var s = { heat: 0, bounty: 0, log: [], bankBan: {}, tellers: {}, perks: {}, lastCoolDay: -1 };
+        var s = { heat: 0, bounty: 0, face: 0, log: [], bankBan: {}, tellers: {}, perks: {}, lastCoolDay: -1 };
         if (d && typeof d === 'object') {
             s.heat = clamp(Math.floor(Number(d.heat) || 0), 0, TUNE.HEAT_MAX);
             s.bounty = Math.max(0, Math.floor(Number(d.bounty) || 0));
+            s.face = Number(d.face) ? 1 : 0;
             s.lastCoolDay = Number.isFinite(Number(d.lastCoolDay)) ? Number(d.lastCoolDay) : -1;
             if (Array.isArray(d.log)) {
                 s.log = d.log.filter(function (e) { return e && typeof e === 'object' && typeof e.why === 'string'; })
@@ -788,20 +903,22 @@
         }
         _st = s;
     }
-    function _reset() { _st = { heat: 0, bounty: 0, log: [], bankBan: {}, tellers: {}, perks: {}, lastCoolDay: -1 }; }
+    function _reset() { _st = { heat: 0, bounty: 0, face: 0, log: [], bankBan: {}, tellers: {}, perks: {}, lastCoolDay: -1 }; }
     if (window.StateRegistry && typeof window.StateRegistry.register === 'function') {
         window.StateRegistry.register('crimeLedger', { version: 1, export: _export, import: _import, reset: _reset });
     }
 
     if (window.timeSystem && typeof window.timeSystem.onNewDaySubscribe === 'function') {
-        window.timeSystem.onNewDaySubscribe(function () { coolDaily(); maybeHunter(); });
+        window.timeSystem.onNewDaySubscribe(function () { coolDaily(); maybeHunter(); rinseTick(); });   // v27.13：漂洗衰减口随日结走
     }
 
     window.NpcCrime = {
         TUNE: TUNE,
-        addHeat: addHeat, wanted: wanted, heat: heat, bounty: bounty,
+        addHeat: addHeat, coolHeat: coolHeat, wanted: wanted, heat: heat, bounty: bounty,
+        faceKnown: faceKnown, wantedTier: wantedTier,
         payBounty: payBounty, patrolBoost: patrolBoost, wantedLine: wantedLine,
-        coolDaily: coolDaily, maybeHunter: maybeHunter,
+        addBountyOnReport: addBountyOnReport,
+        coolDaily: coolDaily, maybeHunter: maybeHunter, rinseTick: rinseTick,
         threaten: threaten, rob: rob, doRob: doRob, settleNpcRobbery: settleNpcRobbery,
         coerceTeller: coerceTeller, tellerDescribe: tellerDescribe, tellerOf: tellerOf,
         bankBanned: bankBanned, bankBanDays: bankBanDays,

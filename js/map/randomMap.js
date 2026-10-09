@@ -185,7 +185,7 @@ let mapContainer = null;
 let currentRegionForMap = null;
 let currentPois = [];           // 本图地标列表
 let wildTravel = null;          // { path:[{x,y}], cost, targetName } 寻路预览
-let wildState = { regions: {} };// 每个地区的差量存档 { fog, dead:{}, gathered:{}, px, py }
+let wildState = { regions: {}, extinctSeen: {} };// 每个地区的差量存档 { fog, dead:{}, gathered:{}, px, py }；v27.13 另有一本「绝种钟已敲章」：兽种 → 1（随档走）
 
 // ============ 种子 ============
 function getMapSeed() {
@@ -208,6 +208,7 @@ function setMapSeed(seed) {
     MAP_SEED = seed;
     try { if (window.saveToStorage) window.saveToStorage(MAP_SEED_KEY, seed); else localStorage.setItem(MAP_SEED_KEY, seed); } catch (e) {}
     wildState.regions = {};   // 换种子 = 换一片山河，旧探索作废
+    wildState.extinctSeen = {};   // v27.13：山河都换了，绝种钟的章也一并作废
     return MAP_SEED;
 }
 
@@ -733,7 +734,9 @@ function scatterEntities(map, pois, rng) {
                 const level = c.ley ? leyEnemyLevel(c.ley, rng) : 1 + Math.floor(rng() * 3);
                 const beastData = generateRandomEnemy(level, 'beast');
                 // 名字跟地皮走：沼泽出毒蟒，雪线出雪狼
-                let beastName = pickFlavorName(habitatFlavor(c).beasts, rng) || beastData.name;
+                // v26.4 例外：头目级（妖兽王）自带名号，地皮闲名不盖它——盖了那一骰就白掷，
+                // 而 combat_002 的目标写的就是「妖兽王」这三个字。
+                let beastName = (beastData._rankName ? beastData.name : pickFlavorName(habitatFlavor(c).beasts, rng)) || beastData.name;
                 if (c.ley) {
                     buffLeyBeast(beastData, c.ley);
                     beastName = beastData.name;
@@ -756,7 +759,9 @@ function scatterEntities(map, pois, rng) {
                         uid: 'e_' + x + '_' + y + '_' + c.entities.length
                     }));
                 } else {
-                    let personType = 'normal', symbol = '🧙', name = pickFlavorName(habitatFlavor(c).persons, rng) || enemyData.name;
+                    let personType = 'normal', symbol = '🧙';
+                    // v26.4 同上：头目级/名册档（山贼头目·X、魔教长老·X、宗门弟子·X）不被地皮闲名盖掉
+                    let name = (enemyData._rankName ? enemyData.name : pickFlavorName(habitatFlavor(c).persons, rng)) || enemyData.name;
                     if (!name) name = enemyData.name;
                     if (c.ley) {
                         // v20.89 灵脉打坐的修士：来抢灵气的，个个不好惹（精英/魔头修饰在生成器里已挂）
@@ -862,6 +867,7 @@ function buildWildMap(region) {
     placeSectPois(region);
 
     smoothShadeField(currentMap);
+    _censusWildSpawns();   // v27.13 产崽清点：撒完活物、滤死账之前整表抄一遍——绝种判定的「满窝」基准
     applyWildState(region);
     pruneWildBands();   // 死册里的成员从队伍里剔掉，免得死了又站起来
     revealAround(playerPos.x, playerPos.y);
@@ -892,18 +898,204 @@ function unpackFog(str) {
     }
 }
 
-// 战斗留下的尸首记进差量，读档后仍是死的
+// v27.13 生态再生账（照采集节点 regrowDay 同一套方子）：死兽账从「uid → 1（永死）」
+// 改为「uid → 复生日」。旧病：markEntityDead 标死后只有黑名单没有回弹，打死一只绝一只
+//（龙龟野外两只一绝种）。现账记复生日，到期即活——兽不必拉旧尸，地图重新撒布时
+// 同 uid 实体自然回位（uid 含坐标与位置序号，重生成稳定）。歇三月（90 日）回弹，
+// 冬季死的再多歇一月（冬歇，开春幼兽才补上）。老档值为 1/true 的永死账视为早已到期。
+const BEAST_RESPAWN_DAYS = 90;
+function _beastRespawnDay() {
+    var d = wildAbsDay() + BEAST_RESPAWN_DAYS;
+    try { if (window.gameTime && window.gameTime.currentSeason === 'winter') d += 30; } catch (e) {}
+    return d;
+}
+// 账还压得住兽吗：值>今天 ⇒ 还该是死的；无账/老档永死账(1)/已到期账 ⇒ 失效
+function _deadAccountHolding(st, uid) {
+    if (!st || !st.dead) return false;
+    var v = Number(st.dead[uid]);
+    return v > wildAbsDay();
+}
+
+// ==================== v27.13 绝种的后果（⑩新增：生态账连市价，与⑤人口账同构） ====================
+// 主档原文：某兽真打绝了，灵兽坊断货涨价、图鉴留"绝迹"页。
+// 判定口径＝活体清零：
+//   ① 产崽清点：每域建图撒完活物后，把「哪种名种兽占哪些 uid」整本抄进 st.spawned
+//     （建图是种子定死的，同域每回重建清点一致；重进即整表重抄，兽潮散后的残页自然冲掉）；
+//   ② 死活：st.dead（上面的死兽再生账，语义原样不动）压住的 uid＝死；
+//   ③ 绝种＝该兽在**所有有清点的域**里，清点表上的 uid 只剩死账压住的，一个活口都没有。
+//     从未清点过的域（没去过）不参与判定——没见过的地方，不敢替它说「还有」，更不敢说「没了」。
+// 复生自愈：死账到期 uid 复活，绝种即自行解除——坊市回货、图鉴摘章，无需补账。
+// 消费方：灵兽坊（beast-taming.js 断供涨价）与灵兽图鉴（app.js renderBeastTemplates 绝迹页）
+// 都走 window.WildEcology 读口；判定缺席（旧档无清点）时两处照常，绝不拦买卖。
+
+// 脚下地图的兽 uid 一览（'uid' → 是否活着）——只点名种：e.data._beastTemplateId 在册的
+function _wildBeastUids() {
+    var out = {};
+    if (typeof currentMap === 'undefined' || !currentMap) return out;
+    for (var y = 0; y < currentMap.length; y++) {
+        var row = currentMap[y];
+        if (!row) continue;
+        for (var x = 0; x < row.length; x++) {
+            var c = row[x];
+            var list = (c && c.entities) || [];
+            for (var i = 0; i < list.length; i++) {
+                var e = list[i];
+                if (!e || !e.uid || !e.data || !e.data._beastTemplateId) continue;
+                out[e.uid] = !isEntityDead(e);
+            }
+        }
+    }
+    return out;
+}
+
+// 产崽清点：建图撒完活物、滤死账之前整表重抄（只在本文件 buildWildMap 写，别处只读）
+function _censusWildSpawns() {
+    if (!currentRegionForMap) return;
+    var st = wildState.regions[currentRegionForMap];
+    if (!st) return;
+    var sp = {};
+    if (typeof currentMap !== 'undefined' && currentMap) {
+        for (var y = 0; y < currentMap.length; y++) {
+            var row = currentMap[y];
+            if (!row) continue;
+            for (var x = 0; x < row.length; x++) {
+                var c = row[x];
+                var list = (c && c.entities) || [];
+                for (var i = 0; i < list.length; i++) {
+                    var e = list[i];
+                    if (!e || !e.uid || !e.data || !e.data._beastTemplateId) continue;
+                    var sid = e.data._beastTemplateId;
+                    (sp[sid] = sp[sid] || {})[e.uid] = 1;
+                }
+            }
+        }
+    }
+    st.spawned = sp;
+}
+
+// 一域一兽种还有没有活口：true=有 / false=全灭 / null=本域清点里没有这种兽
+function _regionSpeciesAlive(st, speciesId, liveUids) {
+    var sp = st && st.spawned && st.spawned[speciesId];
+    if (!sp) return null;
+    for (var uid in sp) {
+        if (liveUids && Object.prototype.hasOwnProperty.call(liveUids, uid)) {
+            if (liveUids[uid]) return true;   // 本域：以脚下地图活体为准（尸首还没进死账的窗口也算死）
+            continue;
+        }
+        if (!_deadAccountHolding(st, uid)) return true;   // 别域：死账没压住＝活着（含复生日已到）
+    }
+    return false;
+}
+
+// 绝种判定：所有有清点的域全灭才算——一域没清点过就替它留着「或许还有」
+function _speciesExtinct(speciesId, liveUids) {
+    var seen = false;
+    for (var rg in wildState.regions) {
+        var alive = _regionSpeciesAlive(wildState.regions[rg], speciesId, (rg === currentRegionForMap) ? liveUids : null);
+        if (alive === null) continue;
+        seen = true;
+        if (alive) return false;
+    }
+    return seen;
+}
+
+// 读口：一次把所有绝迹兽算全（坊市/图鉴整架要用，别一只一扫）。
+// 顺带摘章：判活过来的兽种把「已宣告」章摘了——来日真再绝种，好再敲一次钟。
+function _extinctSpeciesMap() {
+    var out = {}, all = {};
+    for (var rg in wildState.regions) {
+        var sp = wildState.regions[rg].spawned;
+        for (var s in sp) all[s] = true;
+    }
+    var liveUids = _wildBeastUids();
+    for (var s2 in all) {
+        if (_speciesExtinct(s2, liveUids)) out[s2] = true;
+        else if (wildState.extinctSeen && wildState.extinctSeen[s2]) delete wildState.extinctSeen[s2];
+    }
+    return out;
+}
+
+// 绝种钟（罕见事件，文案要有分量）：每兽种只敲一次（extinctSeen 记章，随档走）
+function _announceExtinction(speciesId) {
+    var nm = speciesId;
+    try {
+        var BT = (typeof BEAST_TEMPLATES !== 'undefined' && BEAST_TEMPLATES) || window.BEAST_TEMPLATES || {};
+        if (BT[speciesId] && BT[speciesId].name) nm = BT[speciesId].name;
+    } catch (e) {}
+    var line = '⚰️ ' + nm + '——自此在山野绝迹。最后一只也倒下了，猎户与驯兽人再寻不见它的踪影：'
+        + '灵兽坊断了这类兽的货源，图鉴上只留得下一页存照。';
+    try { if (window.showMessage) window.showMessage(line, 'warning'); } catch (e) {}
+    try { if (window.gameLog && typeof window.gameLog.add === 'function') window.gameLog.add(line, 'warning'); } catch (e) {}
+    try {
+        if (window.WorldJournal && typeof window.WorldJournal.record === 'function') {
+            window.WorldJournal.record({ type: 'beast_extinct', title: '「' + nm + '」绝迹', text: line, refs: { species: speciesId } });
+        }
+    } catch (eJour) { console.warn('[静默失败] js/map/randomMap.js · _announceExtinction：绝迹没进世界大事记——钟声只在当次响起', eJour && eJour.message); }
+}
+
+// 消费方读口（灵兽坊/图鉴；判定缺席=按未绝种放行，坊市照常）
+window.WildEcology = {
+    isExtinct: function (speciesId) {
+        try { return _speciesExtinct(String(speciesId || ''), _wildBeastUids()); }
+        catch (e) { console.warn('[静默失败] js/map/randomMap.js · WildEcology.isExtinct：绝种判定缺席——按未绝种放行', e && e.message); return false; }
+    },
+    extinctMap: function () {
+        try { return _extinctSpeciesMap(); }
+        catch (e) { console.warn('[静默失败] js/map/randomMap.js · WildEcology.extinctMap：绝种判定缺席——按无绝迹渲染', e && e.message); return {}; }
+    },
+    // ===== v27.15：护崽窝账（②新增-2 兽群护崽）——动过崽的窝，半年内同种先动手 =====
+    // 键=兽种显示名（战斗侧唯一稳定口径：跨系统不猜 templateId）；值=记仇到期 absDay（180 日=半年）
+    isGrudged: function (beastName) {
+        try {
+            var g = wildState.grudge || {};
+            var until = g[String(beastName || '')];
+            if (!until) return false;
+            if (wildAbsDay() >= until) { delete g[String(beastName || '')]; return false; }  // 半年过了，窝也散了（自清，无需补账）
+            return true;
+        } catch (e) { return false; }
+    },
+    noteGrudge: function (beastName) {
+        try {
+            if (!wildState.grudge) wildState.grudge = {};
+            wildState.grudge[String(beastName || '')] = wildAbsDay() + 180;
+        } catch (e) { /* 记不上不拦战斗——这窝记性差，下回照样护崽 */ }
+    }
+};
+// 到期账清扫（回图/读档时做一次；热路径 uidIsDead 只做 O(1) 判断不清扫）
+function _sweepDeadAccount(st) {
+    if (!st || !st.dead) return;
+    var day = wildAbsDay();
+    for (var u in st.dead) {
+        if (!(Number(st.dead[u]) > day)) delete st.dead[u];
+    }
+}
+
+// 战斗留下的尸首记进差量，读档后仍是死的；v27.13 起记的是复生日，到期自然回弹
 function syncDeadUids() {
     const st = wildState.regions[currentRegionForMap];
     if (!st) return;
+    // v27.13 绝种钟线：新落的死账里有名种，就点名清一遍活口（杂兽无名不入钟）
+    var _diedSpecies = {};
     for (let y = 0; y < currentMap.length; y++) {
         for (let x = 0; x < currentMap[0].length; x++) {
             const list = currentMap[y][x].entities || [];
             for (let i = 0; i < list.length; i++) {
                 const e = list[i];
-                if (e && e.uid && !st.dead[e.uid] && isEntityDead(e)) st.dead[e.uid] = 1;
+                if (e && e.uid && isEntityDead(e) && !_deadAccountHolding(st, e.uid)) {
+                    st.dead[e.uid] = _beastRespawnDay();
+                    var _spNew = (e.data && e.data._beastTemplateId) || null;
+                    if (_spNew) _diedSpecies[_spNew] = true;
+                }
             }
         }
+    }
+    // v27.13 绝种钟：新亡的名种逐个判定——真全灭了就敲钟（每兽种只敲一次；判定缺席时一字不发）
+    for (var _spId in _diedSpecies) {
+        if (!_speciesExtinct(_spId, null)) continue;
+        if (wildState.extinctSeen && wildState.extinctSeen[_spId]) continue;
+        wildState.extinctSeen = wildState.extinctSeen || {};
+        wildState.extinctSeen[_spId] = 1;
+        _announceExtinction(_spId);
     }
 }
 
@@ -925,6 +1117,7 @@ function saveWildState() {
         nemesis: prev.nemesis || null,   // v51 具名响马宿敌：一域一个在世仇家（{name,wins,born,last}）
         notes: prev.notes || {},         // v52 粉笔笔记：'x,y' → 粉笔样 id
         ruinDug: prev.ruinDug || {},     // DES-31 遗迹搜刮账：poiId → 已掘遍数（枯了就在世界里枯，换图重开也算）
+        spawned: prev.spawned || {},    // v27.13 产崽清点：兽种 → {uid:1}（绝种判定的「满窝」基准，随档走）
         px: playerPos.x,
         py: playerPos.y
     };
@@ -933,7 +1126,7 @@ function saveWildState() {
 function applyWildState(region) {
     // v20.89：新域默认坐标记 -1——此前默认 (0,0) 会把初次进域的人从出生点挪到地图角落
     if (!wildState.regions[region]) wildState.regions[region] = { fog: '', dead: {}, gathered: {}, visited: {}, leySeen: {}, oasis: {}, pool: {}, grotto: {}, grottoUse: {}, grottoLoot: {}, ruinDug: {},   // DES-31 遗迹搜刮账
-        nemesis: null, notes: {}, px: -1, py: -1 };
+        nemesis: null, notes: {}, spawned: {}, px: -1, py: -1 };   // v27.13：spawned=产崽清点（老档缺键自动补空）
     const st = wildState.regions[region];
     st.visited = st.visited || {};
     st.leySeen = st.leySeen || {};
@@ -947,11 +1140,13 @@ function applyWildState(region) {
     st.ruinDug = st.ruinDug || {};   // DES-31 遗迹搜刮账老档自动补空（同法，零迁移脚本）
     if (!st) return;
     unpackFog(st.fog);
-    // 已死的不再出现（uid 含坐标，重生成的实体位置序号稳定）
+    // 已死且复生日未到的不再出现（uid 含坐标，重生成的实体位置序号稳定）。
+    // v27.13 生态再生：账记复生日，到期先清账再放行——兽群歇三月回弹，不再绝种。
+    _sweepDeadAccount(st);
     for (let y = 0; y < currentMap.length; y++) {
         for (let x = 0; x < currentMap[0].length; x++) {
             const c = currentMap[y][x];
-            c.entities = (c.entities || []).filter(e => !(e && e.uid && st.dead[e.uid]));
+            c.entities = (c.entities || []).filter(e => !(e && e.uid && _deadAccountHolding(st, e.uid)));
             const g = st.gathered[x + ',' + y];
             if (c.node && g !== undefined) c.node.regrowDay = g;
         }
@@ -971,17 +1166,19 @@ function applyWildState(region) {
 if (typeof window !== 'undefined' && window.StateRegistry && typeof window.StateRegistry.register === 'function') {
     window.StateRegistry.register('wildMap', {
         version: 1,
-        export: function () { return JSON.parse(JSON.stringify({ regions: wildState.regions })); },
+        export: function () { return JSON.parse(JSON.stringify({ regions: wildState.regions, extinctSeen: wildState.extinctSeen || {}, grudge: wildState.grudge || {} })); },
         import: function (data) {
             if (!data || !data.regions) return;
             wildState.regions = data.regions;
+            wildState.extinctSeen = data.extinctSeen || {};   // v27.13：绝种钟的章随档走（老档缺=没敲过钟，自动补空）
+            wildState.grudge = data.grudge || {};             // v27.15：护崽窝账（种名→记仇到期 absDay，随档走；老档缺=没结过仇）
             if (currentRegionForMap && currentMap.length) {
                 applyWildState(currentRegionForMap);
                 revealAround(playerPos.x, playerPos.y);
                 if (mapContainer) renderMap(mapContainer, currentMap, viewportOffset.x, viewportOffset.y);
             }
         },
-        reset: function () { wildState.regions = {}; }
+        reset: function () { wildState.regions = {}; wildState.extinctSeen = {}; }   // v27.13：绝种钟的章一并清
     });
 }
 
@@ -1805,6 +2002,13 @@ function tileActions(cell) {
         }
         if (poi.type === 'market') out.push({ act: 'shop', label: '🛒 逛' + (poi.variantName || '坊市'), primary: true });
         if (poi.type === 'cave') out.push({ act: 'cultivate', label: '🧘 入' + (poi.variantName || '洞') + '修炼', primary: true });
+        // 幽暗洞穴那扇门：静室是给闭关人备的，静室底下那道向下的裂口不是。
+        // 只给「前人遗府」与「天然洞窟」两种来历——「兽居改洞」原是妖兽的窝，底下没有秘境；
+        // 天界那两座是仙府云宫，本来就不见天日，更不该挂着一条通向地底裂隙的缝。
+        if (poi.type === 'cave' && currentRegionForMap !== '天界' && poi.variant
+            && (poi.variant.key === 'heritage' || poi.variant.key === 'natural')) {
+            out.push({ act: 'realm-cave', label: '🕳️ 摸进' + (poi.variantName || '静室') + '底下的裂口（秘境 · 灵石 30）' });
+        }
         if (poi.type === 'ruin') out.push(ruinIsDry(poi)
             ? { act: 'explore', label: '🕳️ 翻' + ruinTitleOf(poi) + '——已被搜空（只剩瓦砾）' }
             : { act: 'explore', label: '🔍 探' + ruinTitleOf(poi), primary: true });
@@ -1824,6 +2028,10 @@ function tileActions(cell) {
     // v36 路上也有路上的活法：绿洲可歇脚、灵池可淬体（一日一回的账在函数里）
     if (!poi && cell.terrainKey === 'OASIS') out.push({ act: 'oasis-rest', label: '🏝️ 在绿洲边歇脚（两个时辰）' });
     if (!poi && cell.terrainKey === 'QIPOOL') out.push({ act: 'pool-bathe', label: '🛁 灵池淬体（四个时辰）' });
+    // v27.0 郊外温泉：灵泉地皮的水天生是热的——没有 POI 的灵泉格泡得（汲灵口是汲灵口，泡汤是泡汤）
+    if (!poi && cell.terrainKey === 'SPRING') out.push({ act: 'hotspring-bathe', label: '♨️ 泡一泡温泉（一个时辰）' });
+    // v27.5 深山打猎：没有 POI 的山林格猎得（人迹多的去处野兽早躲光了）
+    if (!poi && (cell.terrainKey === 'MOUNTAIN' || cell.terrainKey === 'FOREST')) out.push({ act: 'hunt-wild', label: '🏹 深山打猎（两个时辰 · 精力 15）' });
     // v49 崖壁洞天：发现过的石室才开这条缝（账在差量存档里，重开图也在）
     if (!poi && cell.terrainKey === 'MOUNTAIN' && grottoAt(playerPos.x, playerPos.y)) out.push({ act: 'grotto-enter', label: '🕳️ 入崖壁洞天（行功四个时辰）', primary: true });
     // v38 扎营：没有正经落脚处（POI）的野地才风餐露宿（v46 水面上扎不了营也坐不住；v47 冬天封冻的冰面是实地，照扎照坐）
@@ -2115,7 +2323,8 @@ function rollWildEncounter(overrideCell, force) {
     if (!wantBeast && leyTier) foeType = leyTier >= 3 ? 'boss' : 'elite';
     const foe = generateRandomEnemy(tier, foeType, leyTier ? { leyTier: leyTier } : undefined);   // v20.95 灵蕴随生成递进掉落账
     const flavor = habitatFlavor({ terrainKey: t });
-    const name = pickFlavorName(wantBeast ? flavor.beasts : flavor.persons);
+    // v26.4 头目级/名册档自带名号，地皮闲名不盖它（同上两处同一口径）
+    const name = foe._rankName ? foe.name : pickFlavorName(wantBeast ? flavor.beasts : flavor.persons);
     if (name && !leyTier) foe.name = name;
     if (!wantBeast && !leyTier) foe._wildFoe = true;   // v51 野外人形：打赢了才可能结仇（灵脉精英/魔头另有账，不掺和）
     if (wantBeast && leyTier) buffLeyBeast(foe, leyTier);
@@ -2485,6 +2694,112 @@ function poolBathe() {
     try {
         if (window.TravelJournal) window.TravelJournal.markOnce('pool_' + (currentRegionForMap || '') + '_' + k, 1, '初次自灵池中出定——灵液洗心，心镜澄明');
     } catch (e) {}
+    saveWildState();
+    renderWildSidebar();
+}
+
+// ============ v27.0 郊外温泉（第8件·用户裁定：放野外地图，不并入城里澡堂） ============
+// 灵泉地皮的水天生是热的：无 POI 的 SPRING 格可泡汤——洗尘回气血精力（真气那口留给汲灵的正经活），
+// 每格每日一回（st.hotspring 差量存档，与绿洲/灵池同法）；头一回泡到的泉，见闻账记一笔。
+// 泡汤有小概率遇见同泡的贵人——只给小谢仪不给大好处（温泉不是印钞路，是路上的舒服事）。
+function hotSpringBathe() {
+    const row = currentMap[playerPos.y];
+    const cell = row ? row[playerPos.x] : null;
+    if (!cell || cell.terrainKey !== 'SPRING') { showMessage('此处没有温汤水。', 'warning'); return; }
+    if (cell.poiId) { showMessage('这里是灵泉的汲灵口——泉眼边桶罐排着队，泡汤去寻野泉子吧。', 'info'); return; }
+    const used = wildDayMap('hotspring');
+    const k = playerPos.x + ',' + playerPos.y;
+    if (used && used[k] === wildAbsDay()) { showMessage('♨️ 今日已在这处温泉泡过了——泉眼要到明日才重新烧热。', 'info'); return; }
+    if (used) used[k] = wildAbsDay();
+    advanceWildTime(120, '泡温泉');
+    healChar(25, 35, Math.round(8 * (cell.qi || 2)));
+    try {
+        if (window.currentCharData) window.currentCharData.mood = Math.min(100, (window.currentCharData.mood ?? 50) + 6);
+    } catch (eMood) {}
+    // 同泡的贵人（12%）：行脚商人给小谢仪 / 老江湖聊旧事 / 走方修士留灵草——全是小意思
+    let meet = '';
+    if (Math.random() < 0.12) {
+        const r = Math.random();
+        if (r < 0.4) {
+            try {
+                const _dmHs = window.XianXia && window.XianXia.DataManager;
+                if (_dmHs && typeof _dmHs.addSpiritStones === 'function') {
+                    _dmHs.addSpiritStones(2);
+                    if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI();
+                    meet = '泉边同泡的行脚商人认你是同路客，谢你让了个好泡位，塞来 2 枚灵石。';
+                }
+            } catch (eGift) {}
+        } else if (r < 0.75) {
+            try { if (window.currentCharData) window.currentCharData.mood = Math.min(100, (window.currentCharData.mood ?? 50) + 4); } catch (eMood2) {}
+            meet = '泉边一位泡汤的老江湖与你搭了半刻话——说的都是各处旧事，出汤时心里比进来时亮堂。';
+        } else {
+            let gotGrass = 0;
+            try { gotGrass = (typeof window.addItemToInventory === 'function') ? (Number(window.addItemToInventory('mat_spirit_grass', 2)) || 0) : 0; } catch (eHerb) {}
+            meet = gotGrass > 0
+                ? '一位泡完汤的走方修士在泉边石头上留下两株灵草——他说泉水洗乏，这是谢泉的。'
+                : '一位走方修士在泉边冲你点了点头，没说话。';
+        }
+    }
+    showMessage('♨️ 你就着灵泉泡了个汤——泉水温热得刚刚好，一路的风尘洗下去，骨头都松了。' + (meet ? meet : ''), 'success');
+    // 头一回泡到这眼泉，见闻账记一笔（灵池同款）
+    try {
+        if (window.TravelJournal) window.TravelJournal.markOnce('hotspring_' + (currentRegionForMap || '') + '_' + k, 1, '初次泡到这眼野温泉——洗尘解乏，浑身轻了二两');
+    } catch (eJournal) {}
+    // 野外动作的奇遇钩照挂（采集/挖矿同口径）
+    if (window.QiyuEncounters && typeof window.QiyuEncounters.maybeTrigger === 'function') { try { window.QiyuEncounters.maybeTrigger('wild'); } catch (eQiyu) {} }
+    saveWildState();
+    renderWildSidebar();
+}
+
+// ============ v27.5 深山打猎（第7件 · 野外探索动作） ============
+// 无 POI 的山林格猎得——每格每日一回（st.hunt 差量存档，绿洲/温泉同法）；精力 15、两个时辰。
+// 猎账四档明写在结果里：好收获（五成）/小猎（两成半）/空手（一成三）/大家伙反扑（一成二，带伤换肉）——
+// 打猎不是印钞路：猎物是野味与皮子（food_roast_meat / mat_beast_skin 现成货，addItemToInventory 正门）。
+const HUNT_EN = 15;
+function huntWild() {
+    const row = currentMap[playerPos.y];
+    const cell = row ? row[playerPos.x] : null;
+    if (!cell || (cell.terrainKey !== 'MOUNTAIN' && cell.terrainKey !== 'FOREST')) { showMessage('此处不是山林——没处下套子。', 'warning'); return; }
+    if (cell.poiId) { showMessage('🏹 这一带人迹多，野兽早躲光了——打猎要寻没开发的野山。', 'info'); return; }
+    if ((window.currentCharData?.energy ?? 100) < HUNT_EN) { showMessage('🏹 你乏得拉不开弓——打猎是力气活，先歇足了再来。', 'warning'); return; }
+    const used = wildDayMap('hunt');
+    const k = playerPos.x + ',' + playerPos.y;
+    if (used && used[k] === wildAbsDay()) { showMessage('🏹 今日这片山头已经猎过——套子都下过了，野兽学乖了，明日再来。', 'info'); return; }
+    if (used) used[k] = wildAbsDay();
+    advanceWildTime(120, '深山打猎');
+    harmChar(0, HUNT_EN, 0);
+    // 猎物入囊走唯一全局入库口——行囊接不住就实话实说（拖不回来）
+    const bag = (id, n) => {
+        try { return (typeof window.addItemToInventory === 'function') ? (Number(window.addItemToInventory(id, n)) || 0) : 0; } catch (e) { return 0; }
+    };
+    const r = Math.random();
+    let msg;
+    if (r < 0.50) {
+        const meat = bag('food_roast_meat', 2), skin = bag('mat_beast_skin', 1);
+        msg = '🏹 你在溪边下套、顺风摸进林子——半日后套着两只肥硕的野物，还循着蹄印寻到一窝。晚来风紧，你就地收拾了猎物：野味' + (meat ? '×' + meat : '没背回来') + (skin ? '、兽皮×' + skin : '') + '。（精力-' + HUNT_EN + '）';
+    } else if (r < 0.75) {
+        const meat = bag('food_roast_meat', 1);
+        // 零收那一档问账上那支说话手，缘由由 addItem 写进 addItemFailReason 的账决定，
+        // 视图层不自己断言满包——「查无此号」与「行囊已满」是两回事，猜错了玩家就白找格子。
+        // ⚠️ 这一句是从句（缘由后面还要接「，兔子只能…」），所以吃**从句支** addItemFailPhrase，
+        //   不吃句尾支 addItemFailText：句尾支带句号，拼进去就是「再来。，兔子…」（DES-97）。
+        msg = '🏹 蹲守了两个时辰，只等到一只落单的野兔——聊胜于无。' + (meat ? '野味×1 入了行囊。'
+            : '可惜' + ((typeof window.addItemFailPhrase === 'function' && window.addItemFailPhrase('那只野兔')) || '这一件先还留在原处')
+            + '，兔子只能拎在手上啃了半只。') + '（精力-' + HUNT_EN + '）';
+    } else if (r < 0.88) {
+        msg = '🏹 林子里转了半天——套子空着，蹄印是昨天的。山里的野物比你想的机灵，空手而回。（精力-' + HUNT_EN + '）';
+    } else {
+        harmChar(15, 0, 0);
+        const meat = bag('food_roast_meat', 2), skin = bag('mat_beast_skin', 2);
+        msg = '🏹 你摸到了一头大家伙——野猪獠牙挑破了你的小腿，你拼着挨了一下把它撂倒。伤换肉，值不值山里人自有算盘：野味' + (meat ? '×' + meat : '没背回来') + (skin ? '、兽皮×' + skin : '') + '。（精力-' + HUNT_EN + ' 气血-15）';
+    }
+    showMessage(msg, r < 0.88 ? (r < 0.75 ? 'success' : 'info') : 'warning');
+    // 头一回在这片山里开猎，见闻账记一笔（温泉/绿洲同口径）
+    try {
+        if (window.TravelJournal) window.TravelJournal.markOnce('hunt_' + (currentRegionForMap || ''), 1, '初进这片深山下套打猎——山里的规矩：猎三分，留七分，套子不下绝户');
+    } catch (eJournal) {}
+    // 野外动作的奇遇钩照挂（采集/泡汤同口径）
+    if (window.QiyuEncounters && typeof window.QiyuEncounters.maybeTrigger === 'function') { try { window.QiyuEncounters.maybeTrigger('wild'); } catch (eQiyu) {} }
     saveWildState();
     renderWildSidebar();
 }
@@ -3710,6 +4025,11 @@ function poiAction(act, arg) {
         case 'shop': wildShop(); break;
         case 'cultivate': wildCultivate(poi); break;
         case 'explore': if (poi) exploreWildRuin(poi); break;
+        // 常驻秘境·幽暗洞穴：只这一条路把野外洞府接到秘境那张脸上（另两座的门在城里与奇遇里）。
+        case 'realm-cave':
+            if (typeof window.openDungeonEntrance === 'function') { window.openDungeonEntrance('cave'); break; }
+            showMessage('缝里的风是死的——今日下不去。', 'info');
+            break;
         case 'spring': springRitual(); break;
         case 'harvest': if (poi) harvestWildResource(poi); break;
         case 'dungeon': if (poi) enterWildDungeon(poi); break;
@@ -3719,6 +4039,8 @@ function poiAction(act, arg) {
         case 'sect-visit': if (poi) visitSectPoi(poi); break;
         case 'oasis-rest': oasisRest(); break;
         case 'pool-bathe': poolBathe(); break;
+        case 'hotspring-bathe': hotSpringBathe(); break;
+        case 'hunt-wild': huntWild(); break;
         case 'grotto-enter': grottoEnter(); break;
         case 'note-menu': renderNoteOptions(); return;   // v52 粉笔面板自己画侧栏，不走通用收尾
         case 'note-set': setNoteHere(arg); return;
@@ -4023,8 +4345,9 @@ function makeBandMember(bandId, idx, kind, name, cell, data) {
 }
 
 function uidIsDead(u) {
+    // v27.13 生态再生：判账不再判真值——复生日到期即活（老档 1/true 视为早已到期）
     const st = wildState.regions[currentRegionForMap];
-    return !!(st && st.dead && st.dead[u]);
+    return _deadAccountHolding(st, u);
 }
 
 // ---- 撒活物：古道成网才有人走，兽群从已撒的兽里聚起来 ----

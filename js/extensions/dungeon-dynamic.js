@@ -94,6 +94,91 @@
         { id:'dgn_chaos_sea',     name:'混沌潮眼', env:'5e',      region:'中原深处', appearMonths:[3,6,9,12], appearChance:0.2,  duration:30, suggestedRealm:'大乘', roomCount:12, solutions:{sword:0.7, formation:1.6, talisman:0.8, spiritRoot:1.2, alchemy:0.6, spiritBeast:0.5}, rewards:{materials:['mat_five_element_essence','mat_chaos_stone']} }
     ];
 
+    // ============== 3.5 宝藏产地账（第七批：《吴越春秋·阖闾内传》） ==============
+    // 「赤堇之山★已令无云★，若耶之溪深而莫测，★群臣上天，欧冶死矣★」
+    //   —— 干将莫邪之所以无价，**不是属性高**，是那座矿「已令无云」（找不到路）＋那手铸法绝传。
+    //   所以「稀有」该由**标签**表达，不是由掉率表达：掉率一改就是全局数值调整（禁改簿第一条不许）。
+    //
+    // ★ 先答那个前置问题：**秘境掉落现在是不是平铺？**（结论见 .scratch/forge-materials-progress/20-事2秘境.md）
+    //   出现这一侧**不平铺**：appearChance 0.02~0.7（35 倍差）、appearMonths 限季、duration 7~30 天开窗、
+    //   且一窗一走（enter() 第 190 行：history 里本窗口期有完成账就不放人二次刷）——曲线是真的。
+    //   掉落这一侧**平铺**：每个 env 的 ROOM_TEMPLATES 只有**一条** treasure 模板（8 个 env 共 8 条），
+    //   于是同一座秘境里第 1 房与第 12 房给的是**同一味料**，房号不换料（roomCount 只线性加期望件数）；
+    //   而且掉落值只挂在 env 上，**不挂 suggestedRealm**——大乘的混沌潮眼与金丹的五行禁地同给一味五行精华。
+    //   ⇒ 要治的正是后者。**掉落表一个数都不动**，只给它挂上「这处产地还剩多少」的标签。
+    //
+    // ★ 绝迹度**不是另编的一套稀有度**：它就由本文件表里已有的四个数算出来，
+    //   每个档都写得出 basis，玩家/验收都能自己核回去——标签与曲线同源，两者不可能互相打脸。
+    //     appearChance ≤ 0.1  ⇒ 产地绝迹（几十年未必再开一窗）
+    //     0.1 < chance ≤ 0.3   ⇒ 产地稀见
+    //     chance > 0.3         ⇒ 产地在产
+    var EXTINCT_BANDS = [
+        { max: 0.1,  key: 'extinct', label: '产地绝迹' },
+        { max: 0.3,  key: 'rare',    label: '产地稀见' },
+        { max: 1,    key: 'flowing', label: '产地在产' }
+    ];
+    function extinctBandOf(chance) {
+        var c = Number(chance);
+        for (var i = 0; i < EXTINCT_BANDS.length; i++) if (!(c > EXTINCT_BANDS[i].max)) return EXTINCT_BANDS[i];
+        return EXTINCT_BANDS[EXTINCT_BANDS.length - 1];
+    }
+    // 一座秘境一处宝藏产地（逐条：秘境 → 地域 → 绝迹标签 → 料 → 炼器出口）
+    // ★ forgeable 现读 window.ForgingCompound.MATERIAL_GRADE：炼不了的料如实标 false，
+    //   **不悄悄留下一个玩家永远炼不了的掉落**（实测 12 座里有 6 座给的是炼不了的料，见报告）。
+    function treasureLedger() {
+        var F = window.ForgingCompound || null;
+        var grade = (F && F.MATERIAL_GRADE) ? F.MATERIAL_GRADE : null;
+        var out = [];
+        for (var i = 0; i < DUNGEON_TEMPLATES.length; i++) {
+            var t = DUNGEON_TEMPLATES[i];
+            var pool = ROOM_TEMPLATES[t.env] || [];
+            for (var j = 0; j < pool.length; j++) {
+                if (pool[j].type !== 'treasure') continue;
+                var band = extinctBandOf(t.appearChance);
+                var mats = (pool[j].reward && pool[j].reward.materials) || [];
+                for (var k = 0; k < mats.length; k++) {
+                    var g = grade ? grade[mats[k]] : null;
+                    out.push({
+                        dungeonId: t.id, dungeonName: t.name, env: t.env, region: t.region || '秘境',
+                        suggestedRealm: t.suggestedRealm, roomName: pool[j].name,
+                        appearChance: t.appearChance, appearMonths: (t.appearMonths || []).length,
+                        duration: t.duration, roomCount: t.roomCount,
+                        extinct: band.key, extinctLabel: band.label,
+                        matId: mats[k], grade: g ? g.grade : null,
+                        materialLevel: g ? g.level : null,
+                        forgeable: !!g,
+                        basis: '本文件 DUNGEON_TEMPLATES「' + t.name + '」（' + (t.region || '秘境') + '·建议' + t.suggestedRealm
+                            + '）：appearChance ' + t.appearChance + '、一年开 ' + (t.appearMonths || []).length
+                            + ' 个月、开窗 ' + t.duration + ' 天、一窗一走（enter() 第 190 行：history 里本窗口期有完成账就不再放人进去）'
+                            + ' ⇒ 判「' + band.label + '」。宝藏模板「' + pool[j].name + '」出自 ROOM_TEMPLATES[' + t.env + ']'
+                            + '（同一 env 只此一条 treasure 模板 ⇒ 一座秘境里第 1 房与第 ' + t.roomCount + ' 房给的是同一味料）'
+                            + (g ? '' : '　★该料不在炼器账 MATERIAL_GRADE 里 ⇒ 打进背包也炼不了')
+                    });
+                }
+            }
+        }
+        return out;
+    }
+    function treasureLedgerOf(dungeonIdOrName) {
+        var k = String(dungeonIdOrName || '');
+        return treasureLedger().filter(function (r) { return r.dungeonId === k || r.dungeonName === k; });
+    }
+    // 绝迹度分布（面板/测试读这张；不是新数值，是表里 appearChance 的分段计数）
+    function extinctSummary() {
+        var rows = treasureLedger(), by = { extinct: [], rare: [], flowing: [] }, mats = {};
+        for (var i = 0; i < rows.length; i++) {
+            if (by[rows[i].extinct].indexOf(rows[i].dungeonName) < 0) by[rows[i].extinct].push(rows[i].dungeonName);
+            mats[rows[i].matId] = (mats[rows[i].matId] || 0) + 1;
+        }
+        return {
+            bands: by,
+            forgeable: rows.filter(function (r) { return r.forgeable; }).length,
+            unforgeable: rows.filter(function (r) { return !r.forgeable; }).length,
+            rows: rows.length,
+            sharedMats: Object.keys(mats).filter(function (m) { return mats[m] > 1; })
+        };
+    }
+
     // ============== 4. 模块级状态 ==============
     var _state = {
         active: [],          // {id, openedDay, closeDay, region, ...}
@@ -288,6 +373,11 @@
         EVENT_TYPES: EVENT_TYPES,
         DUNGEON_TEMPLATES: DUNGEON_TEMPLATES,
         ROOM_TEMPLATES: ROOM_TEMPLATES,
+        EXTINCT_BANDS: EXTINCT_BANDS,
+        extinctBandOf: extinctBandOf,
+        treasureLedger: treasureLedger,
+        treasureLedgerOf: treasureLedgerOf,
+        extinctSummary: extinctSummary,
         generateDaily: generateDaily,
         listActive: listActive,
         getScoutChanceMul: getScoutChanceMul,

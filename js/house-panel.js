@@ -19,6 +19,9 @@
  *   子 占山：置产铺子头一张卡「破山洞·免费占山」——灵田一畦储物五格，修炼不加成一分
  *   丑 修缮图样：换购改修缮——灵石（补差价）+工料（材料存够几个报几个）+工期（动工真耗时），一级一级修不许跳
  *   寅 破山洞的冷落：阵工坊插不住阵旗（先修缮）；静室一睁眼就看见图样；设施安置也要真材料（工料单在设施账上）
+ *
+ * 洞府雇工接回新面板（原先那对按钮只写在 getHouseStatusHtml 整页里，被 app.renderHouseStatus 短路后玩家从来看不见）：
+ *   巳 灵田圃里加雇/辞一行——onclick 直调 house-system 现成的 hireFarmhand / fireFarmhand，账（安家钱/日薪/欠薪辞工/代收成）一个也不复制
  */
 (function () {
     'use strict';
@@ -488,8 +491,12 @@
             html += '<p class="x-meta mb-3">打坐账未就绪：修炼系统还没把打坐时长单挂上来，这一间此刻没有格子可点——稍后再来。</p>';
         }
         // 突破 / 引导灵气 / 长期闭关 / 洒扫
+        // ★静室「尝试突破」与 app.js:1649 同病同源，原先也是直调 _performBreakthroughNew，
+        //   把 breakthrough-ritual.js:790 那个「唯一突破路由」跳过了⇒大境界圆满进不了仪式，
+        //   突破丹加成与心魔加成都读不到（读点只有 ritual:258）。一并改成先路由。
+        //   静室没有自己的弹窗要关（act() 走的是本面板内联），所以不用像 app.js 那处先 remove()。
         html += '<div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">' +
-            '<button onclick="' + act("if(typeof window._performBreakthroughNew==='function')window._performBreakthroughNew(); else if(typeof performBreakthrough==='function')performBreakthrough();") + '" class="x-btn x-tile' + dim + '">' +
+            '<button onclick="' + act("if(typeof performBreakthrough==='function'){performBreakthrough();} else if(typeof window._performBreakthroughNew==='function'){window._performBreakthroughNew();}") + '" class="x-btn x-tile' + dim + '">' +
             '<span class="x-tile-t">⬆️ 尝试突破</span><span class="x-dim">真元达标+历练达标+真气≥80%</span></button>' +
             '<button onclick="' + act("if(window.openGuideQiMiniGame)openGuideQiMiniGame(); else if(window.guideQiCultivation)guideQiCultivation();") + '" class="x-btn x-tile' + dim + '">' +
             '<span class="x-tile-t">🌊 引导灵气</span><span class="x-dim">提升本次修炼效率</span></button>' +
@@ -589,6 +596,36 @@
             '<button onclick="' + act('harvestAllReady()') + '" class="x-btn x-btn--sm' + (readyN > 0 && home ? _cta() : (readyN > 0 ? '' : dim)) + '">✨ 一键收获' + (readyN > 0 ? '（' + readyN + ' 畦）' : '（此刻无熟）') + '</button>' +
             '<button onclick="upgradeHouse(\'herb\')" class="x-btn x-btn--sm' + _cta() + '">⬆️ 开新畦（灵石 ' + _num(upCost) + '）</button>' +
             '</div>';
+        html += _farmhandRow(day, act, dim);
+        return html;
+    }
+
+    // 雇工一行：花钱买人手看田——安家钱/日薪/欠薪辞工/代收成的账都在 house-system，这里只开门
+    // （行恒在：没雇显示雇、在工显示辞；灵石不够点了由 hireFarmhand 自己说缘由，不亮锁也不藏栏）
+    function _farmhandRow(day, act, dim) {
+        var fh = null;
+        try { fh = (typeof window.getFarmhand === 'function') ? window.getFarmhand() : null; } catch (eFh) {}
+        var wage = n(window.FARMHAND_WAGE, 2);
+        var growMul = n(window.FARMHAND_GROW_MUL, 0.75);
+        var quitN = n(window.FARMHAND_ARREARS_QUIT, 3);
+        var hireN = n(window.FARMHAND_HIRE, 30);
+        var html = '<div class="x-card mb-3 flex flex-wrap items-center justify-between gap-3"><div class="flex-1">';
+        if (fh) {
+            var worked = Math.max(0, day - n(fh.hiredDay, day));
+            var arrear = n(fh.arrears, 0);
+            html += '<p class="x-val">🧑‍🌾 长工「' + fh.name + '」在工 <span class="x-chip x-chip--flat">上工 ' + worked + ' 日</span></p>' +
+                '<p class="x-meta mt-1">锄草松土：生长期×' + growMul + ' · 熟了替你收割，灵植不蔫 · 日薪 ' + _num(wage) + ' 灵石翻日自动支' +
+                (arrear > 0 ? ' · <span class="x-bad">工钱已欠 ' + arrear + ' 日（欠满 ' + quitN + ' 日他就辞工下山）</span>' : '') + '</p>';
+        } else {
+            html += '<p class="x-val">🧑‍🌾 灵田没雇长工</p>' +
+                '<p class="x-meta mt-1">锄草浇水收割全靠自己，熟后 ' + n(window.CROP_GRACE_DAYS, 3) + ' 日不采就蔫。' +
+                '雇一个看田：安家 ' + _num(hireN) + ' 灵石，日薪 ' + _num(wage) + ' 灵石翻日自动支，欠薪 ' + quitN + ' 日辞工——田里多一双手，灵植便不再蔫在地里。</p>';
+        }
+        html += '</div><div class="shrink-0">' +
+            (fh
+                ? '<button onclick="' + act('fireFarmhand()') + '" class="x-btn x-btn--sm' + dim + '">辞工（结清工钱送他下山）</button>'
+                : '<button onclick="' + act('hireFarmhand()') + '" class="x-btn x-btn--sm' + dim + '">雇长工（安家 ' + _num(hireN) + ' 灵石）</button>') +
+            '</div></div>';
         return html;
     }
 

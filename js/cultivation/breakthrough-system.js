@@ -97,6 +97,51 @@ function getBaseSuccessRate(tempering, requiredTempering) {
     return 0.60;
 }
 
+// ============ 突破丹加成表 ============
+// ★键名为什么是 pill_*，而不是从前的 peiyuan_dan★
+// 全仓唯一写突破丹的地方是 items-extended/01-pills.js:25-38，id 一律 pill_peiyuan / pill_zhuji / …
+// 而这张表原来写的是「培元丹 → peiyuan_dan」这类简写键，两边从来对不上：
+// 即便真把丹名传进来也是 +0，而且**一声不响**（静默失配，比报错更坏）。
+// 现表以真物品 id 为键；数值一个都没动，与改前逐项相同。
+// ★这张表现在仍是死路，但不是错的路★
+// 服丹的账走 charData._breakthroughPillBonus，唯一读点是突破仪式的 breakthrough-ritual.js:258；
+// 小境界突破走本文件（仪式只管大境界跃迁，见 breakthrough-ritual.js:176），
+// 所以标准突破这条路刻意不吃丹——tests/pill-usable-node.js:321 把「第二个参数恒空数组」
+// 当设计契约钉着。键名对齐是修「静默失配」这个陷阱，不是把小境界改成吃丹。
+const BREAKTHROUGH_PILL_BONUS = {
+    'pill_peiyuan': 0.10,
+    'pill_zhuji': 0.12,
+    'pill_ningyuan': 0.15,
+    'pill_jieying': 0.18,
+    'pill_huashen': 0.20,
+    'pill_pojing': 0.10,
+    'pill_wudao': '5~15%随机'  // 字符串档：与物品表 effect.breakthrough_bonus 同形，取用时摇一次
+};
+
+// 旧键名 → 真 id 的同值别名。这些名字全仓没有任何物品在用（不是第二套系统，是没改全的化石），
+// 唯一还在传它的是 tests/wave73-mood-spine-node.js:191-196（拿它们把成功率顶到 0.95 验封顶）。
+// 删掉别名会把那条已通过的断言打红，故原样留着。
+const BREAKTHROUGH_PILL_LEGACY_ALIAS = {
+    'peiyuan_dan': 'pill_peiyuan',
+    'zhuji_dan': 'pill_zhuji',
+    'ningyuan_dan': 'pill_ningyuan',
+    'jieying_dan': 'pill_jieying',
+    'huashen_dan': 'pill_huashen',
+    'pojing_dan': 'pill_pojing',
+    'wudao_dan': 'pill_wudao'
+};
+
+// 取一张突破丹的加成：数值直接给；字符串档（悟道丹）摇一次 5~15%。
+// 只在真把这张丹传进来时才摇——此前那句 Math.random 写在表字面量里，
+// 每进一次函数就白摇一颗，与有没有吃丹无关。
+function breakthroughPillBonusOf(pillId) {
+    const id = BREAKTHROUGH_PILL_LEGACY_ALIAS[pillId] || pillId;
+    const v = BREAKTHROUGH_PILL_BONUS[id];
+    if (typeof v === 'number') return v;
+    if (typeof v === 'string') return 0.05 + Math.random() * 0.10;
+    return 0;
+}
+
 // 计算最终成功率
 function calculateBreakthroughRate(charData, pills) {
     const realmIndex = getRealmIndex(charData.realm);
@@ -108,19 +153,10 @@ function calculateBreakthroughRate(charData, pills) {
     // 1. 基础成功率
     let rate = getBaseSuccessRate(tempering, requiredTempering);
 
-    // 2. 丹药加成
-    const pillBonuses = {
-        'peiyuan_dan': 0.10,
-        'zhuji_dan': 0.12,
-        'ningyuan_dan': 0.15,
-        'jieying_dan': 0.18,
-        'huashen_dan': 0.20,
-        'pojing_dan': 0.10,
-        'wudao_dan': 0.05 + Math.random() * 0.10  // 5~15%随机
-    };
+    // 2. 丹药加成（键 = 真物品 id）
     if (pills) {
         for (const pill of pills) {
-            rate += (pillBonuses[pill] || 0);
+            rate += breakthroughPillBonusOf(pill);
         }
     }
 
@@ -212,9 +248,25 @@ function performBreakthrough() {
     // 计算成功率
     const rate = calculateBreakthroughRate(charData, []);
     const ratePercent = Math.round(rate * 100);
+    const maxLayers = window.REALM_CONFIG.realms[realmIndex]?.layers || 9;
+
+    // ★突破丹的口径必须印在屏上★
+    // 服丹的账走 charData._breakthroughPillBonus，全仓唯一读点在仪式的 breakthrough-ritual.js:258；
+    // 小境界突破走的是本文件，仪式只管大境界跃迁（breakthrough-ritual.js:176）⇒ 这里的丹账既不读也不消耗。
+    // 此前这里只印一个成功率数字：玩家照着服丹那行「下次突破成功率 +X%」一路吃丹，
+    // 到这一步数字纹丝不动，屏上没有一个字说明为什么——这才是「突破不吃丹」的真相。
+    // 禁止设计第 2 条：锁要亮锁、写清原因，不许让玩家自己猜。
+    const bankedPill = Number(charData._breakthroughPillBonus) || 0;
+    const crossesRealm = (layer + 1) > maxLayers;
+    const pillNote = crossesRealm
+        ? '突破丹：此门不兑现丹账——大境界跃迁请从面板走「尝试突破」（仪式才读丹账）'
+        : '突破丹：小境界突破服丹无效'
+          + (bankedPill > 0
+              ? '（你已服的 +' + Math.round(bankedPill * 100) + '% 仍挂账，留到本境圆满时的境界跃迁才兑现）'
+              : '，丹要留到本境圆满时的境界跃迁才兑现');
 
     // 显示突破确认
-    if (!confirm('突破 ' + charData.realm + ' 第 ' + layer + ' 层？\n成功率：' + ratePercent + '%\n失败惩罚：真元损失 ' + Math.round((1 - rate) * 100) + '%，真气溃散')) {
+    if (!confirm('突破 ' + charData.realm + ' 第 ' + layer + ' 层？\n成功率：' + ratePercent + '%\n' + pillNote + '\n失败惩罚：真元损失 ' + Math.round((1 - rate) * 100) + '%，真气溃散')) {
         return false;
     }
 
@@ -232,7 +284,6 @@ function performBreakthrough() {
 
         // 层数+1
         const newLayer = layer + 1;
-        const maxLayers = window.REALM_CONFIG.realms[realmIndex]?.layers || 9;
         if (newLayer > maxLayers) {
             // 境界提升
             const nextRealm = window.REALM_CONFIG.realms[realmIndex + 1];
@@ -356,6 +407,10 @@ window.addTempering = addTempering;
 window.addEssence = addEssence;
 window.getBaseSuccessRate = getBaseSuccessRate;
 window.calculateBreakthroughRate = calculateBreakthroughRate;
+// 突破丹加成两张表挂上 window：键名与物品表的对应关系要能被断言读回（否则又是一张查不到的死表）
+window.BREAKTHROUGH_PILL_BONUS = BREAKTHROUGH_PILL_BONUS;
+window.BREAKTHROUGH_PILL_LEGACY_ALIAS = BREAKTHROUGH_PILL_LEGACY_ALIAS;
+window.breakthroughPillBonusOf = breakthroughPillBonusOf;
 // 使用不同名称导出，避免被 app.js 旧代码覆盖
 window._performBreakthroughNew = performBreakthrough;
 window.cultivateQi = cultivateQi;

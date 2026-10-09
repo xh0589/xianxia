@@ -29,7 +29,10 @@ scenarioEngine.register('money_house', {
                     { text: '💰 存入100灵石（月息五，起息今日）', next: null, require: { stones: 100 }, effects: { bank: { op: 'deposit' , amount: 100 }, time: 5 } },
                     { text: '🏦 存入500灵石（月息五，利随本清）', next: null, require: { stones: 500 }, effects: { bank: { op: 'deposit', amount: 500 }, time: 5 } },
                     { text: '🧳 取出存款（利息一并结清）', next: null, effects: { bank: { op: 'withdraw' }, time: 5 } },
+                    { text: '🎫 开一张钱票（1000，大额免重随身轻）', next: null, require: { stones: 1000 }, effects: { bank: { op: 'ticket_buy', amount: 1000 }, time: 5 } },
+                    { text: '💱 兑现手里的钱票（异地分号通兑）', next: null, effects: { bank: { op: 'ticket_redeem' }, time: 5 } },
                     { text: '💳 借贷灵石（欠条会传出去）', next: 'loan_borrow', effects: { time: 5 } },
+                    { text: '💸 放印子钱（柜上作保 · 月息二分）', next: 'loan_lend', effects: { time: 5 } },
                     { text: '🧾 还清欠柜上的账', next: null, effects: { bank: { op: 'repay' }, time: 10 } },
                     { text: '🔪 柜台后的姑娘……（威胁她出卖钱庄）', next: null, hint: '大罪', effects: { teller: { op: 'coerce' } } },
                     { text: '👋 暂时不需要', next: null }
@@ -40,6 +43,26 @@ scenarioEngine.register('money_house', {
                 choices: [
                     { text: '✅ 签下欠条，领100灵石', next: null, effects: { bank: { op: 'borrow', amount: 100 }, karma: -3, noto: 2, msg: '你按下手印领了100灵石——欠条是会走路的东西，行商圈里从此多了一句你的闲话。', msgType: 'warning', time: 10 } },
                     { text: '❌ 利息太高了', next: null }
+                ]
+            },
+            // v27.1 营生扩展批：放印子钱——玩家做放贷那头，钱庄居中作保（明账：一月期二成息，
+            // 十之八九如约、十之一五求宽限、余下跑路——追债人追十五日，六成追回本金四成坏账）
+            loan_lend: {
+                desc: function () {
+                    var t = '掌柜取出作保的格式欠条："客官有余钱，柜上居中说合——借主都是柜上的熟客。一月期、二成息，单笔一百起、五百封顶，在外的欠条至多两张。"\n\n他压低声音："十之八九如约还来；也有苦求宽限十日的；至于卷铺盖跑路的——柜上追债人自会出门，追回算你的本金，追不回，销在你账上。风险写在小字里，客官看清楚再画押。"';
+                    try {
+                        var s = (window.BankService && typeof window.BankService.summary === 'function') ? window.BankService.summary() : null;
+                        if (s && (s.outActive > 0 || s.outChase > 0)) {
+                            t += '\n\n你在外的欠条：' + s.outActive + ' 张（本金 ' + s.outPrincipal + ' 灵石）' + (s.outChase > 0 ? '，另有 ' + s.outChase + ' 张跑路的、追债人在外头追着' : '') + '。';
+                        }
+                    } catch (eLendSum) {}
+                    return t;
+                },
+                choices: [
+                    { text: '💸 放100灵石（一月后收120）', next: null, require: { stones: 100 }, effects: { bank: { op: 'lend', amount: 100 }, time: 5 } },
+                    { text: '💸 放300灵石（一月后收360）', next: null, require: { stones: 300 }, effects: { bank: { op: 'lend', amount: 300 }, time: 5 } },
+                    { text: '💸 放500灵石（单笔封顶 · 一月后收600）', next: null, require: { stones: 500 }, effects: { bank: { op: 'lend', amount: 500 }, time: 5 } },
+                    { text: '❌ 钱还是攥在自己手里踏实', next: null }
                 ]
             }
         }
@@ -125,6 +148,7 @@ scenarioEngine.register('charity_hall', {
                     { text: '🌾 捐赠粮食（消耗50灵石）', next: null, effects: { stones: -50, rep: 5, karma: 2, msg: '你捐赠了粮食，粥棚当日起灶。功德簿上记了你一笔，业障若负，便消减二分。', msgType: 'success', time: 10 } },
                     { text: '💊 捐赠药材（消耗30灵石）', next: null, effects: { stones: -30, rep: 3, karma: 1, msg: '你捐赠了药材，病棚的人有药可煎了。功德簿上记了你一笔。', time: 10 } },
                     { text: '🙏 捐赠大量物资（消耗200灵石）', next: 'do_generous', effects: { time: 10 } },
+                    { text: '📜 善举名册（施茶、修桥、打井……笔笔明账）', next: null, effects: { deeds: { op: 'open' }, time: 5 } },
                     { text: '🚶 四处散步看看', next: null, effects: { msg: '你在善堂外随意走动，感受冬日的寒风。', time: 5 } }
                 ]
             },
@@ -376,7 +400,17 @@ scenarioEngine.register('auction_house', {
                     { text: '💰 奋力跟价，志在必得', next: null, effects: { time: 15, roll: {
                         prob: 0.55,
                         win: {
-                            stones: function () { return -auctionHammerPrice(); },
+                            stones: function () {
+                                var _p = -auctionHammerPrice();
+                                // v27.13 拍卖流水入城市账本（④改良）：情景拍卖会的落槌也是城里一笔真交易——
+                                // 钱从玩家流向市面走 noteBuy 正门入流水，行情正门照走（拍走一枚筑基丹，价该抬）。
+                                // 副作用放结算价现算处（_resolveVals 每笔结算只现算一次），报价/文案处不动。
+                                try {
+                                    if (window.WorldLedger && typeof window.WorldLedger.noteBuy === 'function') window.WorldLedger.noteBuy(-_p);
+                                    if (window.MarketDynamic && typeof window.MarketDynamic.notePlayerTrade === 'function') window.MarketDynamic.notePlayerTrade('pill_foundation', 1, true);
+                                } catch (eLed) { console.warn('[静默失败] js/city-facilities/facility-batch2.js · auction_house：落槌价没入城市账', eLed && eLed.message); }
+                                return _p;
+                            },
                             items: [{ itemId: 'pill_foundation', count: 1 }],
                             msg: function () {
                                 return '几轮拉锯，对手终于放下了牌——"' + auctionHammerPrice() + '灵石，成交！"锤音落定，筑基丹送入你手中。';
@@ -391,7 +425,15 @@ scenarioEngine.register('auction_house', {
                     { text: '🤏 按兵不动，等个冷场捡漏', next: null, effects: { time: 20, roll: {
                         prob: 0.3,
                         win: {
-                            stones: function () { return -Math.round(500 * (window.facilityBuyMod ? window.facilityBuyMod() : 1) * 0.9); },
+                            stones: function () {
+                                var _p2 = -Math.round(500 * (window.facilityBuyMod ? window.facilityBuyMod() : 1) * 0.9);
+                                // v27.13 拍卖流水入城市账本（④改良）：捡漏落槌同口径——noteBuy 入流水 + 行情正门。
+                                try {
+                                    if (window.WorldLedger && typeof window.WorldLedger.noteBuy === 'function') window.WorldLedger.noteBuy(-_p2);
+                                    if (window.MarketDynamic && typeof window.MarketDynamic.notePlayerTrade === 'function') window.MarketDynamic.notePlayerTrade('pill_foundation', 1, true);
+                                } catch (eLed) { console.warn('[静默失败] js/city-facilities/facility-batch2.js · auction_house：捡漏落槌没入城市账', eLed && eLed.message); }
+                                return _p2;
+                            },
                             items: [{ itemId: 'pill_foundation', count: 1 }],
                             msg: '场子竟真冷了下来——你慢悠悠报出底价，无人再跟。"成交！"拍卖师的槌子敲得有些不甘心。（捡漏价拿下）',
                             msgType: 'success'
@@ -426,6 +468,8 @@ scenarioEngine.register('black_market', {
                     { text: '💰 买下禁术残卷（500灵石）', next: 'bl_buy', effects: { time: 10 } },
                     { text: '🕯️ 问一句：柜底可有真货', next: 'bl_hidden', effects: { time: 5 } },
                     { text: '🔍 仔细看看，别是假货', next: 'bl_check', effects: { time: 10 } },
+                    // v27.4 黑道批：后巷营生名册（伪造/盗墓/夹带/落草/卖情报/暗桩——crime-works.js 正门）
+                    { text: '🌙 摸进后巷，寻条黑道营生的门路', next: null, effects: { crimeworks: { op: 'open' }, time: 5 } },
                     { text: '🚫 举报给镇邪司', next: null, effects: { rep: 8, karma: 2, noto: 2, fence: { op: 'trust', delta: -2, kind: 'snitch' }, msg: '镇邪司连夜抄了这批禁术，你得了嘉奖；但黑市最恨黑吃黑——告示墙上贴了你的名号，信用簿上记了重重一笔（黑市信用 -2）。', msgType: 'warning', time: 15 } },
                     { text: '🕯️ 托中间人说和（100灵石）', next: null, effects: { cost: { stones: 100 }, fence: { op: 'settle' }, msg: '银子过了三道手，墙上条子揭了。黑市重新接你的单——下次做事留三分余地。', msgType: 'info', time: 15 } },
                     { text: '👋 不碰这种脏东西', next: null }
@@ -556,7 +600,7 @@ function saltBuyCharter() {
     var res = window.RewardService.apply({
         stones: -80, items: [{ itemId: 'mat_salt_charter', count: 1 }],
         msg: '你按官价 80 灵石领了一张官盐引。引纸盖着盐铁局的朱印——拿去贵地出手，盐路上的利自己挣。', msgType: 'success'
-    }, { source: 'salt_iron', city: (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || '' });
+    }, { facilitySpend: true, source: 'salt_iron', city: (typeof window.getCurrentCityName === 'function' && window.getCurrentCityName()) || '' });
     if (!res || res.success === false) {
         if (window.showMessage) window.showMessage('领引需官价 80 灵石，手头不足。', 'warning');
         return false;

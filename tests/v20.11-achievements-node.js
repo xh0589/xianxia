@@ -2,14 +2,15 @@
  * v20.11-achievements-node.js — 成就墙做实（v20.11）
  *
  * 覆盖：
- *   A 结构：≥30 枚、id 唯一、奖励键白名单
+ *   A 结构：≥30 枚（实测 52）、id 唯一、奖励键只剩 exp 一格
  *   B 防幽灵键全表校验：每条达成条件路径在档案快照上有定义且为数值
  *   C 白送回归锁：空世界一次检查不得点亮任何成就；每日钩子已挂
- *   D 满配世界：32/33 点亮（善恶业障天然互斥）、积分=完成集重算、
- *     奖励金额=完成集应发和、二次检查不重复发奖
+ *   D 满配世界：50/52 点亮（善恶业障天然互斥）、积分=完成集重算、
+ *     铜钱/灵石/名气/业障分文不动、历练=按稀有度分档的直和、二次检查不重复发奖
  *   E 并档：版本新增成就对旧档可见、完成状态保留、积分重算一致
  *   F 面板渲染：分类标题 + 隐藏成就 ??? + 汇总行
  *   G 静态：初始化无 serialize 回环；击杀计数写入点/持久化字段/页面入口齐备
+ *   H 弹窗：至多一条、**只报成就名不念钱**（H4d 反证发奖能力仍在）
  *
  * 运行：node tests/v20.11-achievements-node.js
  */
@@ -93,12 +94,18 @@ for (var i = 0; i < presets.length; i++) {
     ids[presets[i].id] = 1;
 }
 assert(dup === null, 'A2 id 全表唯一（重复: ' + dup + '）');
-var ALLOWED_REWARD = { exp: 1, gold: 1, copper: 1, stones: 1, fame: 1, karma: 1, items: 1, special: 1 };
+// A3 奖励键白名单：预设表只许写 exp（历练）一格。
+// 旧版这张表写的是 exp/gold/stones/fame/karma 一把抓，点亮一枚就弹一串钱袋数字，
+// 既破沉浸又吵；现在钱袋那一栏在预设表里已经清空（发奖能力仍留在 applyReward 里）。
+var ALLOWED_REWARD = { exp: 1 };
 var badReward = null;
 presets.forEach(function (a) {
     Object.keys(a.reward || {}).forEach(function (k) { if (!ALLOWED_REWARD[k]) badReward = a.id + '.' + k; });
 });
-assert(badReward === null, 'A3 奖励键全在发放器支持范围内（越界: ' + badReward + '）');
+assert(badReward === null, 'A3 奖励键只剩 exp（越界: ' + badReward + '）');
+var noReward = presets.filter(function (a) { return !(a.reward && a.reward.exp > 0); }).map(function (a) { return a.id; });
+assert(noReward.length === 0, 'A3b 每条成就都发历练，一枚都不白给（漏发: ' + noReward.join(',') + '）');
+assert(presets.length === 52, 'A3c 预设条数 52（五档称号的门槛按这个数分档）');
 
 // ============ B: 防幽灵键全表校验 ============
 mockWindow.currentCharData = {};
@@ -170,20 +177,31 @@ assert(mgr.getAchievement('benevolent').isCompleted === false, 'D2 业障 -80 �
 var expectPts = 0;
 mgr.getAllAchievements().forEach(function (a) { if (a.isCompleted) expectPts += a.points; });
 assert(mgr.totalPoints === expectPts, 'D3 成就积分=完成集直和（' + mgr.totalPoints + '/' + expectPts + '）');
-// 奖励金额 = 完成集应发和，且二次检查不重复
-var expectCopper = 0, expectStones = 0, expectFame = 0;
+// 奖励账 = 完成集的历练直和；铜钱/灵石/名气/业障一律不涨（D4~D6）
+var EXP_BY_RARITY = { common: 5, uncommon: 10, rare: 15, epic: 25, legendary: 40 };
+var expectTemper = 0, offRarity = null, walletDrift = null;
 mgr.getAllAchievements().forEach(function (a) {
     if (!a.isCompleted) return;
-    expectCopper += (a.reward.gold || 0) + (a.reward.copper || 0);
-    expectStones += (a.reward.stones || 0);
-    expectFame += (a.reward.fame || 0);
+    if (a.reward.exp !== EXP_BY_RARITY[a.rarity]) offRarity = a.id + ' ' + a.rarity + '=' + a.reward.exp;
+    expectTemper += (a.reward.exp || 0);
+    if (a.reward.gold || a.reward.copper || a.reward.stones || a.reward.fame || a.reward.karma || a.reward.items) {
+        walletDrift = walletDrift || a.id;
+    }
 });
-assert(copperPool - copperSeed === expectCopper, 'D4 铜钱奖励=完成集应发和（' + (copperPool - copperSeed) + '/' + expectCopper + '）');
-assert(stonesPool - stonesSeed === expectStones, 'D5 灵石奖励=完成集应发和（' + (stonesPool - stonesSeed) + '/' + expectStones + '）');
-assert(rsLog.fame === expectFame, 'D6 名气奖励经统一发放通道且只发一次（' + rsLog.fame + '/' + expectFame + '）');
+assert(walletDrift === null, 'D4 点亮一枚不涨钱袋——预设表里没有一枚带铜钱/灵石/名气/业障/物品（残留: ' + walletDrift + '）');
+assert(copperPool === copperSeed, 'D5 铜钱分文不动（' + (copperPool - copperSeed) + '）');
+assert(stonesPool === stonesSeed, 'D6 灵石分毫不动（' + (stonesPool - stonesSeed) + '）');
+assert(rsLog.fame === 0 && rsLog.karma === 0, 'D6b 名气与业障没走统一发放通道，一分没加（' + rsLog.fame + '/' + rsLog.karma + '）');
+assert(mockWindow.currentCharData.fame === 90 && mockWindow.currentCharData.karma === -80,
+    'D6c 名气/业障两格原值未动（' + mockWindow.currentCharData.fame + '/' + mockWindow.currentCharData.karma + '）');
+assert(offRarity === null, 'D7 历练按稀有度分档（九品5/七品10/五品15/三品25/一品40），不越档（越档: ' + offRarity + '）');
+assert(mockWindow.currentCharData.tempering === 500 + expectTemper,
+    'D8 历练进账 = 完成集应发和（' + mockWindow.currentCharData.tempering + '/' + (500 + expectTemper) + '）');
 var copperBefore = copperPool;
+var temperBefore = mockWindow.currentCharData.tempering;
 AS.checkAchievementsNow();
-assert(copperPool === copperBefore && rsLog.fame === expectFame, 'D7 重复检查不二次发奖');
+assert(copperPool === copperBefore && mockWindow.currentCharData.tempering === temperBefore,
+    'D9 重复检查不二次发奖（铜钱与历练都不再动）');
 
 // ============ E: 并档（版本新增成就对旧档可见） ============
 var snap = mockWindow.StateRegistry.exportAll();
@@ -213,8 +231,8 @@ assert(mgr.getAchievement('benevolent').isCompleted === true, 'H1a 业障转善�
 assert(toasts.length === 1 && toasts[0].indexOf('成就解锁') >= 0 && toasts[0].indexOf('仁者寿') >= 0,
     'H1b 单枚检查恰好弹一条且含成就名（实际 ' + toasts.length + ' 条）');
 // H2 多枚同刻点亮：合并为一条汇总，不逐条轰炸
-mgr.addAchievement(new AS.Achievement('test_bulk1', '批量甲', '', { category: 'general', requirements: { killCount: 400 }, reward: { gold: 1 } }));
-mgr.addAchievement(new AS.Achievement('test_bulk2', '批量乙', '', { category: 'general', requirements: { killCount: 399 }, reward: { gold: 1 } }));
+mgr.addAchievement(new AS.Achievement('test_bulk1', '批量甲', '', { category: 'general', requirements: { killCount: 400 }, reward: { exp: 1 } }));
+mgr.addAchievement(new AS.Achievement('test_bulk2', '批量乙', '', { category: 'general', requirements: { killCount: 399 }, reward: { exp: 1 } }));
 toasts.length = 0;
 AS.checkAchievementsNow();
 assert(mgr.getAchievement('test_bulk1').isCompleted && mgr.getAchievement('test_bulk2').isCompleted, 'H2a 两枚同刻点亮');
@@ -228,15 +246,19 @@ toasts.length = 0;
 mockWindow.StateRegistry.importAll(snap2);
 assert(mgr.getAchievement('test_bulk9') && mgr.getAchievement('test_bulk9').isCompleted, 'H3a 读档即静默补课点亮（战斗时不再补爆）');
 assert(toasts.every(function (t) { return t.indexOf('批量') < 0 || t.indexOf('🏅 成就解锁') >= 0; }), 'H3b 补课不逐条轰炸（' + toasts.join(' | ') + '）');
-// H4 单枚+奖励只弹一条：解锁名与奖励合并（v20.15 残留通道——旧版单枚点亮弹"解锁"+"奖励"两条）
+// H4 单枚只弹一条，且**只报成就名**：工资条从提示里撤了（历练进账只写日志）
+// 这里的 test_solo 故意留一条 gold 奖励——用来说明「发奖能力还在，只是不念了」
+var soloCopper0 = copperPool;
 mgr.addAchievement(new AS.Achievement('test_solo', '孤峰独步', '', { category: 'general', requirements: { notoriety: 77 }, reward: { gold: 4 } }));
 mockWindow.currentCharData.notoriety = 80;
 toasts.length = 0;
 AS.checkAchievementsNow();
 assert(mgr.getAchievement('test_solo').isCompleted === true, 'H4a 孤峰独步点亮');
-assert(toasts.length === 1, 'H4b 单枚点亮含奖励播报也只弹一条（旧版两条；实际 ' + toasts.length + ' 条）');
-assert(toasts[0].indexOf('孤峰独步') >= 0 && toasts[0].indexOf('奖励') >= 0 && toasts[0].indexOf('铜钱+4') >= 0,
-    'H4c 一条提示里解锁名与奖励都在（' + toasts[0] + '）');
+assert(toasts.length === 1, 'H4b 单枚点亮只弹一条（旧版两条；实际 ' + toasts.length + ' 条）');
+assert(toasts[0].indexOf('孤峰独步') >= 0 && toasts[0].indexOf('铜钱+') < 0 && toasts[0].indexOf('灵石+') < 0 &&
+    toasts[0].indexOf('名气') < 0 && toasts[0].indexOf('业障') < 0 && toasts[0].indexOf('奖励') < 0,
+    'H4c 提示里只有成就名，不念「铜钱+/灵石+/名气+/业障+」，也不挂工资条（' + toasts[0] + '）');
+assert(copperPool - soloCopper0 === 4, 'H4d 发奖能力没被删：表里真写了 gold，钱照发（铜钱 ' + soloCopper0 + '→' + copperPool + '）——H4c 只是不念');
 // H5 用户现象路径复现：连续多场战斗逐场点亮（每场跨一档）——旧版每场弹 2 条、越打越刷屏
 var kb = mockWindow.currentCharData._killCount || 0;
 var dripIds = [];

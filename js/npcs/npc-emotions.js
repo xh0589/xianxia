@@ -220,23 +220,25 @@ function checkSocialConditions(npc, actionName, options) {
     }
 
     // 4. 同一动作反复缠人——对方会腻、会乏（现实式后果链，不弹「次数已用完」；v23.3 宪法清账）
+    // v27.21（sol 审 B-2，P1·判例尺对齐）：删除每日 3 次硬限额——TA 宪法级判例「对话用厌烦不限额」
+    // （与世界不迁就玩家的精神一致：烦不烦由 NPC 的厌烦账说了算，不由系统数帽子）。
+    // 旧硬限在第 4 次直接拒动作，跟厌烦值机制（同系统）双轨打架。日计数账保留（观察用），不再做闸。
     if (!window._socialDailyCounts) window._socialDailyCounts = {};
     var currentDay = window.timeSystem?.gameTime?.currentDay || 0;
     var dailyKey = 'daily_' + actionName + '_' + (npc ? npc.id : 'all') + '_' + currentDay;
     if (!window._socialDailyCounts[dailyKey]) window._socialDailyCounts[dailyKey] = 0;
-    var dailyLimit = window.BALANCE_CONFIG?.social?.dailyLimitPerNpcAction ?? 3;
-    if (window._socialDailyCounts[dailyKey] >= dailyLimit) {
-        if (window.showMessage) window.showMessage(npc.name + ' 被你闹得没了脾气，连连摆手：「今日饶了我吧——再这般，我可要躲着你了。明日再说，明日再说。」', 'info');
-        return { pass: false, msg: '对方乏了' };
-    }
 
     // 5. 冷却检查（同一动作对同一NPC的冷却）
     if (!window._socialCooldowns) window._socialCooldowns = {};
     var cdKey = cooldownKey + '_' + npc.id;
-    var lastTime = window._socialCooldowns[cdKey] || 0;
+    // v27.21（sol 审 B-1，P1）：旧读法 `|| 0` + 判 `> 0`——新局 totalMinutes=0 时首动作写进 0，
+    // 第二次读出 0 被当成"没有历史"，30 分钟冷却被整段绕过。改哨兵值：没记过=-1e9（任意时刻差都巨大），
+    // 记过（含 0）都参与冷却判定。
+    var lastTime = (window._socialCooldowns[cdKey] === undefined || window._socialCooldowns[cdKey] === null)
+        ? -1e9 : window._socialCooldowns[cdKey];
     var currentTime = window.timeSystem?.gameTime?.totalMinutes || 0;
     var cooldownMinutes = options.cooldownMinutes || 30; // 默认30分钟冷却
-    if (lastTime > 0 && currentTime - lastTime < cooldownMinutes) {
+    if (lastTime >= 0 && currentTime - lastTime < cooldownMinutes) {   // v27.21：>=0——0 是合法的游戏时刻
         var remaining = Math.ceil((cooldownMinutes - (currentTime - lastTime)) / 10) * 10;
         if (window.showMessage) window.showMessage(actionName + '还需要冷却' + remaining + '分钟。', 'warning');
         return { pass: false, msg: '冷却中' };
@@ -465,6 +467,17 @@ function getEmotionAffectedResponse(npc, baseResponse) {
 // 在 showNPCDialog 中添加情绪状态显示和交互按钮
 // 通过修改 npc-system.js 中的 showNPCDialog 函数实现
 // 这里定义注入函数
+//
+// W-2 实测（接线五处 · 第二处，动手前逐条查过）：
+//   ⚠️ 这个函数**不是**漏掉的调用点，它是 npc-system.js 内联情绪块的重复实现，不该接。
+//   对话面板 js/npcs/npc-system.js:3926-3948 早就内联了一份同形状的情绪块（情绪名＋心情条＋压力条，
+//   走 window.getEmotionState 取图标与配色），:3911-3913 也把三枚「安慰／鼓励／陪伴」按钮接到了本文件
+//   的 comfortNPC／encourageNPC／accompanyNPC 上。实测这三个函数各在 npc-system.js 有 1 处调用、
+//   getEmotionState 有 4 处、executeEmotionAction 有 2 处（AI 调度）⇒ **玩家在对话里本来就看得见情绪**，
+//   「两个渲染钩子没人调所以玩家看不到任何情绪表现」这个前提对对话面板不成立。
+//   把本函数接进 showNPCDialog 的后果是那一块被印两遍。保留函数与导出（离线审计/新面板仍可复用），
+//   但**不作为对话面板的接线点**。
+//   真正补上的缺口在 NPC 卡片：见 js/npcs/city-residents.js 的 getCityResidentCards（城中人物卡）。
 
 function injectEmotionToDialog(npcId) {
     const npc = window.npcManager?.getNPC(npcId);

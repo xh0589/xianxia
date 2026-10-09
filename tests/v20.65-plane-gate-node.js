@@ -234,8 +234,8 @@ console.log('\n[G5] 源码哨兵');
 assert(fnTravel.indexOf('getPlaneOf') >= 0, 'travelToCityFromList 带位面闸门');
 assert(fnTravel.indexOf('enterCity(cityName)') < fnTravel.indexOf('chargeFootJourney(cityName)'),
     '先进城后结账（enterCity 在结账那一支之前；第一百一十四波把账记进共用脚程笔，这条次序不许变）');
-assert(fnTravel.indexOf('advanceTime') < 0 && /advanceTime\(30, '前往' \+ destName\)/.test(fnFoot),
-    '路上那本账只有一支笔：城市行体内不再自己 advanceTime（数额与句式随搬家原样带走）');
+    assert(fnTravel.indexOf('advanceTime') < 0 && /advanceTime\(footMinutes, '前往' \+ destName\)/.test(fnFoot) && /footMinutes = 30/.test(fnFoot) && /getTravelDistance/.test(fnFoot),
+    '路上那本账只有一支笔：城市行体内不再自己 advanceTime（近城底账 30 分钟，远路按里数拉长）');
 assert(fnTeleport.indexOf('getPlaneOf') >= 0, 'teleportToCity 带位面闸门');
 assert(fnTeleportUI.indexOf('getPlaneOf') >= 0, 'showTeleportUI 过滤位面地点');
 var wmSrc = fs.readFileSync(path.join(ROOT, 'js/map/world-map.js'), 'utf8');

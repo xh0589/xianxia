@@ -968,13 +968,13 @@ function showEndingScreen(endingId) {
             
             <!-- 继续游戏按钮 -->
             <div class="flex flex-col items-center gap-3">
-                <button onclick="this.closest('.fixed').remove(); window.showMessage('继续你的修仙之旅…', 'info');"
+                <button onclick="this.closest('.fixed').remove(); window.showMessage('收下了。日子还长——账在世界身上。', 'info');"
                     class="px-8 py-3 bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500
                            text-white font-bold rounded-xl text-lg transition-all duration-300 transform hover:scale-105"
                     style="box-shadow: 0 4px 20px rgba(234,179,8,0.3);">
-                    📖 继续游戏
+                    📖 收下这一页
                 </button>
-                <p class="text-gray-500 text-xs">结局已保存，你可以继续探索这个世界</p>
+                <p class="text-gray-500 text-xs">判词已记入结局史（xianxia_endings）——这一页只在真终局给</p>
             </div>
         </div>
     `;
@@ -991,6 +991,118 @@ function showEndingScreen(endingId) {
         `;
         document.head.appendChild(style);
     }
+}
+
+// ============ 【终局并轨·第一批】谁在何时给「那一页」 ============
+//
+// 实测三套结局（2026-10-05，按 仙侠.html 真实 script 顺序 eval 352 个脚本）：
+//
+//   套  定义处                          触发点                       主线位置            改不改世界
+//   ──  ─────────────────────────────  ──────────────────────────  ─────────────────  ────────────────────────
+//   A   quest-system.js GAME_ENDINGS    turnInQuest('main_035')        数组第 20 / 面板第 33  ✗ 只弹屏 + 写账号级结局史
+//   B   dynasty-court.js onAscend       window.onAscension（渡劫成功） 与 A 同期            ✓ 国祚化香火 / 城望 / 国碎
+//   C   js/quest/qi-finale.js          main_056~058（需渡劫）         数组第 46~48（链尾）   ✓ restoreWorldQi + WorldJournal endgame
+//
+// 判定：**玩家走到头该看的是 C**。三条理由都是实测的，不是设计意图猜测——
+//   ① C 在链尾，A 在它前面 15 章；A 弹屏时 C 的三章一个字都还没演。
+//   ② C 真的改世界（灵气总量、世界大事记 endgame、末法时代/仙路终结），A 只弹屏不改任何账。
+//   ③ C 的四结局互斥且带尾声账单；A 的五结局会在 B 飞升的同一刻被再判一次。
+//
+// 因此本批的并轨口径：
+//   A → 降级为「章节点过场」（showChapterInterlude）：中段给，一页判词，不自称结局、不入结局史。
+//   B → 保留它改世界的正文（那三笔本身是对的），但与 C 互斥（见 dynasty-court.js onAscend 开头）。
+//   C → 唯一真终局；它在账单页末尾挂一个「这一生的判词」按钮，玩家点才弹 A 的判词屏
+//        （showGrandVerdict），**不自动叠**——这是「不连弹三套屏」的关键：一次点击，不是三屏齐飞。
+
+// 灵气之尽是否已经落定（真终局是否已决）。旗在 eventFlags，随档存。
+function qiFinaleDecided() {
+    try {
+        var f = window.eventFlags || {};
+        return !!(f['qi_ending'] || f['qi_verdict_shown']);
+    } catch (e) { return false; }
+}
+
+// 终局判词是否已经给过（一次性）。与 qi_ending 分开记：判词可回望，但只给第一次。
+function grandVerdictShown() {
+    try { return !!(window.eventFlags || {})['qi_verdict_shown']; } catch (e) { return false; }
+}
+
+// 主线中段的章节点过场。判词原文一字不改（仍是 GAME_ENDINGS 的正文），
+// 改的是**它在叙事里的身份**：从「结局·游戏结束」改成「渡劫之前，一页判词」。
+// 不写 xianxia_endings——那本账是结局史，一页中段过场混进去会把结局史洗成假的。
+function showChapterInterlude(endingId) {
+    var ending = GAME_ENDINGS[endingId];
+    if (!ending) return false;
+    // 灵气之尽已落 ⇒ 真终局那一页已经给过判词了，这一页不再出现（否则同一生给两次判词）。
+    if (qiFinaleDecided()) {
+        try { console.log('[终局并轨] 灵气之尽已决，主线中段的判词过场跳过——真终局已经给过那一页'); } catch (e1) {}
+        return false;
+    }
+
+    var em = window._endingModifiers || null;
+    var road = '';
+    if (em && em.totalChoices > 0) {
+        road = '<p class="text-xs text-gray-400 leading-relaxed">此生 ' + em.totalChoices + ' 笔记录在案的抉择：仁慈 '
+            + Math.round(em.mercyRatio * 100) + '% · 助人 ' + Math.round(em.helperRatio * 100)
+            + '% · 道心 ' + Math.round(em.daoRatio * 100) + '% · 明智 ' + Math.round(em.wisdomRatio * 100) + '%。</p>';
+    }
+
+    var modal = document.createElement('div');
+    modal.className = 'fixed inset-0 z-[100] flex items-center justify-center';
+    modal.style.background = 'linear-gradient(135deg, rgba(0,0,0,0.92) 0%, rgba(0,0,0,0.82) 100%)';
+    modal.innerHTML =
+        '<div class="text-center max-w-2xl mx-auto px-6 py-8 animate-fadeIn" style="animation: fadeIn 1.2s ease;">'
+        + '<p class="text-xs text-gray-500 mb-4">渡劫之前 · 一页判词</p>'
+        + '<div class="text-6xl mb-4">' + ending.icon + '</div>'
+        + '<h1 class="text-4xl font-bold ' + ending.color + ' mb-4 text-glow" style="text-shadow: 0 0 30px currentColor;">'
+        + ending.title + '</h1>'
+        + '<div class="bg-gray-900/70 ' + ending.borderColor + ' border-2 rounded-xl p-6 mb-5 max-w-lg mx-auto">'
+        + '<p class="text-gray-200 leading-relaxed whitespace-pre-line text-base">' + ending.description + '</p>'
+        + '</div>'
+        + '<div class="max-w-lg mx-auto bg-gray-900/60 border border-gray-700/50 rounded-lg p-4 text-left mb-6">'
+        + '<p class="text-sm text-amber-300 mb-2">📜 这是判词，不是结局</p>'
+        + road
+        + '<p class="text-xs text-gray-500 mt-2">天劫还没落，天上的镰刀还没走。你身后的账还没算完——'
+        + '这一页只记你走到这儿是什么样的人。</p>'
+        + '</div>'
+        + '<button onclick="this.closest(\'.fixed\').remove()" '
+        + 'class="px-8 py-3 bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-500 hover:to-amber-500 '
+        + 'text-white font-bold rounded-xl text-lg transition-all duration-300">📖 收下这一页</button>'
+        + '</div>';
+    document.body.appendChild(modal);
+
+    if (!document.getElementById('ending-anim-style')) {
+        var style = document.createElement('style');
+        style.id = 'ending-anim-style';
+        style.textContent = '@keyframes fadeIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }';
+        document.head.appendChild(style);
+    }
+    return true;
+}
+
+// 唯一终局判词口。只在《灵气之尽》落定后由 qi-finale.js 的账单页按钮调，不自动弹。
+// 双重闸：① 灵气之尽必须已落定（否则这是主线中段，不给）② 一次性（给过就只让玩家回望账单页）。
+function showGrandVerdict() {
+    if (!qiFinaleDecided()) {
+        try { console.log('[终局并轨] 灵气之尽未决——终局判词不发。旧五结局那一页已降级为章节点过场（见 showChapterInterlude）'); } catch (e) {}
+        if (typeof showMessage === 'function') showMessage('账还没写到那一页。这一页要等真结局。', 'info');
+        return false;
+    }
+    if (grandVerdictShown()) {
+        if (typeof showMessage === 'function') showMessage('这一页已经给过了——回终局面板「回望那一页」里翻。', 'info');
+        return false;
+    }
+    var ending = checkEndingCondition();
+    if (!ending) {
+        try { console.warn('[终局并轨] 灵气之尽已决，但 checkEndingCondition() 判不出结局——判词这一页跳过'); } catch (e) {}
+        return false;
+    }
+    try {
+        window.eventFlags = window.eventFlags || {};
+        window.eventFlags['qi_verdict_shown'] = true;
+    } catch (e) {}
+    showEndingScreen(ending);
+    return true;
 }
 
 // 在主线最后一环交付时触发结局
@@ -1069,12 +1181,19 @@ function turnInQuest(questId) {
     updateMainQuestUI();
     updateDailyQuestUI();
     
-    // 检查是否是主线最后一环（main_035），触发结局
+    // 【终局并轨·第一批】此处原本在这里弹旧五结局屏，当的是「游戏结束」。
+    // 实测（2026-10-05，仙侠.html 真实加载 352 脚本）：main_035 是旧正典 main_021~035 的收尾，
+    //   在 mainQuestChain 数组里排第 20 位、在任务面板里排第 33 位（_qgMainOrdered 按 id 数字段排序），
+    //   全链 48 章——它身后还压着 15 章（main_040~045 / main_050~055 / main_056~058），
+    //   其中 main_056~058《灵气之尽》才是真正改世界的终局。
+    // ⇒ 飞升屏在主线中段自称「结局·继续游戏」是假的。改为：这里只给一章节点过场（一页判词），
+    //   判词一个字都不删（仍是 GAME_ENDINGS 的原文），但不再自称结局、不入 xianxia_endings 结局史；
+    //   且灵气之尽一旦落定，这一页完全不再出现（真终局已经给过判词了）。
     if (questId === 'main_035') {
         setTimeout(function() {
             var ending = checkEndingCondition();
             if (ending) {
-                showEndingScreen(ending);
+                showChapterInterlude(ending);
             }
         }, 500);
     }
@@ -2053,6 +2172,12 @@ window.GAME_ENDINGS = GAME_ENDINGS;
 window.checkEndingCondition = checkEndingCondition;
 window.selectEnding = selectEnding;
 window.showEndingScreen = showEndingScreen;
+// 【终局并轨·第一批】三出口分权：showEndingScreen=真终局判词屏（只由终局给）；
+// showChapterInterlude=主线中段的章节点过场（main_035 那一环，不再自称结局）；
+// showGrandVerdict=唯一自动判词口（带「灵气之尽已决」与一次性两道闸，由 qi-finale 账单页按钮调）。
+window.showChapterInterlude = showChapterInterlude;
+window.showGrandVerdict = showGrandVerdict;
+window.qiFinaleDecided = qiFinaleDecided;
 // v10.0 任务追踪导出
 window.initQuestTracker = initQuestTracker;
 window.toggleTrackQuest = toggleTrackQuest;

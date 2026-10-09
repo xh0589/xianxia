@@ -286,6 +286,22 @@ const pilferRecipes = [
 
 // ============ 锻造配方（v5.0 使用扩展新材料） ============
 const forgingRecipes = [
+    // v27.19：机关臂（②断肢的江湖的义体线——配方走合成正门）：
+    // 机关件×4（构装敌解剖的残件）+精铁×5——「有缘遇到炼器的师承，配一具机关臂」。
+    // 锻造 25：不是入门活，但断臂者够得着。产出走 02-weapons 的机关臂模板（攻+16/命中-5/钝伤砸壳顺手）。
+    {
+        id: 'recipe_mechanism_arm',
+        name: '机关臂',
+        category: CRAFTING_CATEGORIES.FORGING,
+        requiredSkills: { 锻造: 25 },
+        materials: [
+            { itemId: 'special_mechanism', count: 4 },
+            { itemId: 'mat_refined_iron', count: 5 }
+        ],
+        result: { itemId: 'wpn_mechanism_arm', count: 1 },
+        qiCost: 60, timeCost: 30,
+        desc: '构装残件拼的机关义体兵器——比真臂硬，但不如真臂稳'
+    },
     {
         id: 'recipe_iron_sword',
         name: '玄铁剑',
@@ -959,6 +975,13 @@ function executeCrafting(recipeId) {
         if (typeof window.showMessage === 'function') window.showMessage('背包空间不足或成品创建失败，本次合成已回滚', 'error');
         return false;
     }
+    // v27.13：产出登记——合成出炉盖「craft」章（记实收件数；章盖在调用点而非 addResultItem 内，
+    // 因为悬赏领赏等非炉中货也走那根管，首源必须各认各的）。登记失败不拦获得。
+    try {
+        if (window.ItemProvenance && typeof window.ItemProvenance.note === 'function') {
+            window.ItemProvenance.note('craft', recipe.result.itemId, gotCount);
+        }
+    } catch (ePrv) { console.warn('[静默失败] js/crafting.js · executeCrafting：产出登记未入簿（物品照常到手）', ePrv && ePrv.message); }
     
     // 第九十五波·NEW-42：丹方图鉴此前零生产者——炼成一炉也从没往 codex_recipe 写过一条
     try {
@@ -1003,6 +1026,14 @@ function finishCrafting(result) {
         // DES-72（第一百三十批）：旧写法把实收数丢在地上——炉子成了东西，囊里进没进屏上从不报
         var 要数 = Math.max(1, result.count || 1);
         var 得数 = addResultItem(result.itemId, 要数);
+        // v27.13：产出登记——炉火收势这条异步出炉路同盖「craft」章（实收>0 才记，登记失败不拦获得）
+        if (得数 > 0) {
+            try {
+                if (window.ItemProvenance && typeof window.ItemProvenance.note === 'function') {
+                    window.ItemProvenance.note('craft', result.itemId, 得数);
+                }
+            } catch (ePrv) { console.warn('[静默失败] js/crafting.js · finishCrafting：产出登记未入簿（物品照常到手）', ePrv && ePrv.message); }
+        }
         var 成品名 = (window.itemById && window.itemById[result.itemId] && window.itemById[result.itemId].name) || result.itemId;
         if (typeof window.showMessage === 'function') {
             window.showMessage(得数 > 0

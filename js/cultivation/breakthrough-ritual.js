@@ -95,13 +95,72 @@ const BREAKTHROUGH_SIDE_EFFECTS = [
 ];
 
 // 突破所需材料
+// ★这张表为什么必须写满九道门★
+// 此前只写到 元婴→化神，化神以上四关全部落进 default { items: [], minEnergy: 50, minQi: 40 }：
+// 越往高境界越便宜——合体→大乘 材料一件不用、只要 50 精力 40 真气，
+// 比筑基→金丹（凝金丹 ×1 + 70 精力 60 真气）还松。这既不合逻辑（合体期哪来那么多闲真气冲关），
+// 也让"越修越难"这条坡在最后四关整个塌掉：真正难的关卡反而最省。
+// 四条高境材料全部取自材料表里已有的物品（天外玄铁/星辰铁/龙晶，天外陨铁、星辰矿、
+// 古神葬地、裂隙巢底都掉），不新造物品、不新开一条获得路径。
 const BREAKTHROUGH_MATERIALS = {
     '炼气→筑基': { items: [{ id: 'pill_foundation', name: '筑基丹', count: 1 }], minEnergy: 60, minQi: 50 },
     '筑基→金丹': { items: [{ id: 'pill_golden_core', name: '凝金丹', count: 1 }], minEnergy: 70, minQi: 60 },
     '金丹→元婴': { items: [{ id: 'pill_primordial', name: '元婴丹', count: 1 }], minEnergy: 80, minQi: 70 },
     '元婴→化神': { items: [{ id: 'pill_divine', name: '化神丹', count: 1 }], minEnergy: 85, minQi: 80 },
+    '化神→炼虚': { items: [{ id: 'mat_sky_iron', name: '天外玄铁', count: 1 }], minEnergy: 88, minQi: 82 },
+    '炼虚→合体': { items: [{ id: 'mat_star_iron', name: '星辰铁', count: 1 }], minEnergy: 90, minQi: 85 },
+    '合体→大乘': { items: [{ id: 'mat_dragon_crystal', name: '龙晶', count: 1 }], minEnergy: 92, minQi: 88 },
+    '大乘→渡劫': { items: [{ id: 'mat_dragon_crystal', name: '龙晶', count: 1 }, { id: 'mat_star_iron', name: '星辰铁', count: 1 }], minEnergy: 95, minQi: 90 },
     'default': { items: [], minEnergy: 50, minQi: 40 }
 };
+
+// ============ 突破丹·按境界索引 ============
+// 此前 10 张突破丹都写了 breakthroughRealm 字段，全仓**零消费者**——纯死字段。
+// 死字段的代价不是"多占一行"：化神丹这类"已定义、desc 写着 +20%、却没人掉"的丹，
+// 没有任何一处校验会发现它拿不到。这里给该字段第一个读取方。
+//
+// ★为什么只有 9 境而不是 12★
+// REALM_ORDER（global-utils.js:899）是 12 项，多出 凡人/飞升/金仙；
+// 但突破门只认 REALM_CONFIG.realms（data.js:171-179）的 9 境：
+// 飞升走 heavenly-tribulation.js 的天劫链、金仙走 ascension-epilogue.js 的二段飞升，
+// 两条链都不经突破门、不吃突破丹。渡劫是突破门末位（下方 realmList 末位即拦下），
+// 渡劫往上没有"突破"可买，所以渡劫不配专属丹。
+const BREAKTHROUGH_REALM_ORDER = ['炼气', '筑基', '金丹', '元婴', '化神', '炼虚', '合体', '大乘', '渡劫'];
+
+// 突破仪式的基准成功率（:195 那行 0.8 - 境界序×0.05）。抽成函数是为了让
+// 「这一境吃哪张丹、服药后落到多少成功率」可被面板与断言共用同一份口径。
+function getBreakthroughRitualBaseRate(realm) {
+    const idx = BREAKTHROUGH_REALM_ORDER.indexOf(realm);
+    if (idx < 0) return null;
+    return 0.8 - (idx * 0.05);
+}
+
+// 列出某一境（= 当前所在、即将突破的那一境）真正吃得上的突破丹。
+// 判据与 inventory.js 的吞丹口对齐：subtype==='breakthrough' 且 effect.breakthrough_bonus
+// 是数值或字符串（字符串一律按 5~15% 随机roll）；implemented/deprecated 一律排除。
+function getBreakthroughPillsForRealm(realm) {
+    const out = [];
+    const seen = new Set();
+    const pools = [];
+    if (Array.isArray(window.extendedBreakthroughPills)) pools.push(...window.extendedBreakthroughPills);
+    for (const p of pools) {
+        if (!p || !p.id || seen.has(p.id)) continue;
+        if (p.subtype !== 'breakthrough') continue;
+        if (p.implemented === false || p.deprecated === true) continue;
+        const bb = p.effect && p.effect.breakthrough_bonus;
+        if (typeof bb !== 'number' && typeof bb !== 'string') continue;
+        if (p.breakthroughRealm !== realm && p.breakthroughRealm !== '通用') continue;
+        seen.add(p.id);
+        out.push({
+            id: p.id, name: p.name, realm: p.breakthroughRealm, bonus: bb,
+            quality: p.quality, level: p.level,
+            random: typeof bb === 'string'
+        });
+    }
+    out.sort((a, b) => (a.level || 0) - (b.level || 0) || String(a.id).localeCompare(String(b.id)));
+    return out;
+}
+
 
 // ============ 玩家突破状态 ============
 let breakthroughState = {
@@ -205,12 +264,34 @@ function startBreakthroughRitual() {
         window._bottleneckBonus = 0;
     }
     // F-14：突破丹加成（服用时累加，此处读取并消耗——一次性，成败皆耗）
+    // ★第二刀·丹加成封顶：这一关的丹最多把基础率抬高一倍的一半★
+    // 基础斜线是 0.8 − 境界序×0.05：越往后越低（渡劫前的大乘只剩 45%），
+    // 而各丹是 +10% ~ +27% 的**固定**百分点——两者相加等于"境界越高，丹的相对分量越重"，
+    // 大乘 45% + 大乘丹 27% = 72%。丹是外物，不该主导一场跨境生死。
+    // 封顶取「加丹前的基础率 × 0.5」：越往后基础率越低，同样的丹能抬的绝对值就越小
+    // （大乘最多再加 22.5% → 67.5%，化神 60% + 化神丹 20% 不触顶仍照旧 80%）。
+    // 各丹自己的数字一个都没改，只加这一层「这一关丹能抬多少」。
+    const _baseBeforePill = baseRate;
     var _cd14 = window.currentCharData || charData;
     if (_cd14) {
         if (_cd14._breakthroughPillBonus) { baseRate += _cd14._breakthroughPillBonus; _cd14._breakthroughPillBonus = 0; }
         // perm_pill 类突破丹（foundation/core/primordial/divine_bonus）按目标境界匹配读取（值 30/20/15/10 为百分点→/100）
         var _realmBonusKey = { '筑基': '_foundationBonus', '金丹': '_coreBonus', '元婴': '_primordialBonus', '化神': '_divineBonus' }[nextRealm];
         if (_realmBonusKey && _cd14[_realmBonusKey]) { baseRate += _cd14[_realmBonusKey] / 100; _cd14[_realmBonusKey] = 0; }
+    }
+    const _pillGain = baseRate - _baseBeforePill;
+    const _pillCap = Math.max(0, _baseBeforePill) * 0.5;
+    breakthroughState._baseRateBeforePill = _baseBeforePill;
+    breakthroughState._pillCap = _pillCap;
+    if (_pillGain > 0) {
+        if (_pillGain > _pillCap) {
+            baseRate = _baseBeforePill + _pillCap;
+            if (window.showMessage) {
+                // 22.5% 不许印成 23%——封顶数字是玩家判断"这丹值不值"的唯一依据
+                var _capPct = Math.round(_pillCap * 1000) / 10;
+                window.showMessage('🧪 丹力再厚也只能推你一半的路——这一关的丹药加成封顶 +' + _capPct + '%。', 'warning');
+            }
+        }
     }
     // 第二十四波：洞府「闭关室」的 breakthroughBoost 此前是死账——设施建了、加成没人读。接进成功率。
     try {
@@ -228,12 +309,18 @@ function startBreakthroughRitual() {
     } catch (eMoodBT) {}
     breakthroughState.successRate = Math.min(0.95, Math.max(0.1, baseRate));
 
-    // v21.9 燃机缘·破境必成：fortune（奇遇得手攒下的机缘值）≥30 可烧掉换这次突破必定成功。
-    // fortune 字段的注释两年前就承诺「可消耗破机缘（必成突破）」，此前全库零读零写。
+    // v21.9 燃机缘：fortune（奇遇得手攒下的机缘值）≥30 可烧掉。
+    // ★第一刀·必成 → 抵一次失败★：此前烧掉是把 successRate 顶成 1，成功率封顶闸 [0.1, 0.95]
+    // 从此为死码——大乘 45% + 大乘丹 27% = 72%，再烧 30 点机缘就成 100%，
+    // 也就是跨境突破最险的一关反倒有"必成"按钮。机缘不该买命，该买一次跌境的余地：
+    // 现在烧掉只抵"跌境"——失败不扣层，也不再抽到「修为倒退」那条副作用；
+    // 经脉受损 / 真气反噬 / 心神消耗照旧会来（烧掉的是命，不是伤）。
     breakthroughState._fortuneBurnAvailable = false;
+    breakthroughState._fortuneBurned = false;
+    breakthroughState._fortuneShield = false;
     try {
         var _cdFb = window.currentCharData;
-        if (_cdFb && (Number(_cdFb.fortune) || 0) >= 30 && breakthroughState.successRate < 1) {
+        if (_cdFb && (Number(_cdFb.fortune) || 0) >= 30 && !breakthroughState._fortuneBurned) {
             breakthroughState._fortuneBurnAvailable = true;
         }
     } catch (e) {}
@@ -275,6 +362,40 @@ function consumeRitualItems(items) {
         if (remaining > 0) return false;
     }
     return true;
+}
+
+// ============ 显示突破仪式UI ============
+// 突破丹这一行：把「本境吃哪张丹、身上有几颗、这一关吃了真能加多少」摊在面板上。
+// 加成是真的（读 _breakthroughPillBonus 加进 baseRate 并清零），
+// 这里只负责让玩家看见它——此前这个加成只有服丹时的一行 toast，突破面板上是查不出来的。
+// ★封顶也必须印出来★：印 +27% 而实际只给 22.5%，屏上就是在说谎（面板是玩家唯一的手册）。
+function realmPillRows(currentRealm) {
+    let pills = [];
+    try { pills = getBreakthroughPillsForRealm(currentRealm) || []; } catch (e) { return ''; }
+    if (!pills.length) return '';
+    const cap = typeof breakthroughState._pillCap === 'number' ? breakthroughState._pillCap : Infinity;
+    const pct = function (v) { return Math.round(v * 1000) / 10; };
+    const rows = pills.map(p => {
+        const owned = hasItemInInventory(p.id, 1);
+        let gain, capped = false;
+        if (p.random) {
+            const parts = p.bonus.replace(/[^0-9~%]/g, '').split('~').map(s => parseFloat(s) || 0);
+            const lo = (parts[0] || 0) / 100, hi = (parts[1] || 0) / 100;
+            const useHi = Math.min(hi, cap);
+            capped = useHi < hi;
+            gain = '+' + pct(lo) + '~' + pct(useHi) + '%';
+        } else {
+            const use = Math.min(p.bonus, cap);
+            capped = use < p.bonus;
+            gain = '+' + pct(use) + '%';
+        }
+        const mark = capped ? '<span class="text-yellow-500">（封顶）</span>' : '';
+        return `<div class="flex justify-between">
+                    <span class="text-gray-400">${p.name}</span>
+                    <span class="${owned ? 'text-green-400' : 'text-gray-500'}">${owned ? '✅' : '·'} ${gain} ${mark}</span>
+                </div>`;
+    }).join('');
+    return `<div class="mt-1 pt-1 border-t border-gray-700/60 text-[11px] text-gray-500">可用突破丹（先服丹再突破）</div>` + rows;
 }
 
 // ============ 显示突破仪式UI ============
@@ -322,6 +443,7 @@ function showBreakthroughUI(charData, currentRealm, nextRealm, cost, requirement
                             <span class="${has ? 'text-green-400' : 'text-red-400'}">${has ? '✅' : '❌'} ×${item.count}</span>
                         </div>`;
                     }).join('')}
+                    ${realmPillRows(currentRealm)}
                 </div>
             </div>
 
@@ -338,11 +460,11 @@ function showBreakthroughUI(charData, currentRealm, nextRealm, cost, requirement
             </div>
 
             ${breakthroughState._fortuneBurnAvailable ? `
-            <!-- v21.9 燃机缘·破境必成 -->
+            <!-- v21.9 燃机缘：抵一次跌境，不抵命 -->
             <div class="mb-6 bg-purple-900/30 border border-purple-600/50 rounded-lg p-3" id="fortune-burn-box">
                 <div class="flex items-center justify-between gap-2">
-                    <div class="text-xs text-gray-300">🍀 机缘值 ${(window.currentCharData && Number(window.currentCharData.fortune)) || 0}——奇遇里得手攒下的机缘，可以烧掉照亮这一关</div>
-                    <button onclick="burnFortuneForBreakthrough()" class="px-3 py-1 bg-purple-700 hover:bg-purple-600 text-white text-xs rounded font-bold whitespace-nowrap">🔥 燃 30 机缘 · 必成</button>
+                    <div class="text-xs text-gray-300">🍀 机缘值 ${(window.currentCharData && Number(window.currentCharData.fortune)) || 0}——奇遇里得手攒下的机缘，可以烧掉垫住这一关的跌境</div>
+                    <button onclick="burnFortuneForBreakthrough()" class="px-3 py-1 bg-purple-700 hover:bg-purple-600 text-white text-xs rounded font-bold whitespace-nowrap">🔥 燃 30 机缘 · 此关失败不跌境</button>
                 </div>
             </div>` : ''}
 
@@ -359,7 +481,9 @@ function showBreakthroughUI(charData, currentRealm, nextRealm, cost, requirement
     document.body.appendChild(modal);
 }
 
-// v21.9 燃机缘·破境必成：烧 30 点机缘值，把这次突破的成功率顶到 100%
+// v21.9 燃机缘：烧 30 点机缘值，换这次突破**失败不跌境**
+// 成功率一个数都不动——机缘买的不是命，是一次重来的余地。
+// 门槛（≥30）、一次只燃一回（_fortuneBurned）、不足不扣、照扣 30 点，都与改前同。
 function burnFortuneForBreakthrough() {
     var cd = window.currentCharData;
     if (!cd || (Number(cd.fortune) || 0) < 30) {
@@ -368,16 +492,12 @@ function burnFortuneForBreakthrough() {
     }
     if (breakthroughState._fortuneBurned) return false;
     cd.fortune = (Number(cd.fortune) || 0) - 30;
-    breakthroughState.successRate = 1;
     breakthroughState._fortuneBurned = true;
+    breakthroughState._fortuneShield = true;
     breakthroughState._fortuneBurnAvailable = false;
     var box = document.getElementById('fortune-burn-box');
-    if (box) box.innerHTML = '<p class="text-xs text-purple-300">🔥 机缘已燃——这一关，必过！（剩余机缘 ' + cd.fortune + '）</p>';
-    var rateText = document.getElementById('bt-rate-text');
-    if (rateText) rateText.textContent = '100%';
-    var rateBar = document.getElementById('bt-rate-bar');
-    if (rateBar) rateBar.style.width = '100%';
-    if (window.showMessage) window.showMessage('🔥 你烧掉了 30 点机缘——冥冥中那一线机会，被你攥成了十分。', 'success');
+    if (box) box.innerHTML = '<p class="text-xs text-purple-300">🔥 机缘已燃——这一关若失败，不跌境、不倒修为（伤还得照受）。剩余机缘 ' + cd.fortune + '</p>';
+    if (window.showMessage) window.showMessage('🔥 你烧掉了 30 点机缘——换来的不是必过，是万一失败时脚下那一层还站得住。', 'success');
     if (typeof window.updateCharacterStatus === 'function') { try { window.updateCharacterStatus(); } catch (e) {} }
     return true;
 }
@@ -545,6 +665,10 @@ function showBreakthroughResult() {
     const phenomena = BREAKTHROUGH_PHENOMENA[nextRealm] || BREAKTHROUGH_PHENOMENA['default'];
     const phenomenon = phenomena[Math.floor(Math.random() * phenomena.length)];
 
+    // v27.13：突破异象进世界账（①-新增-1 瞒不住的事，走样的传话）——本城名气即时涨 + 外地挂走样在途传闻 + 本地写实 log。
+    // 唯一挂点：此处（仪式成功结算）。小境界升层是常事、不挂账，免得传闻账被层数刷成流水；大境界跨境一辈子的稀罕事，才有异象可传。
+    noteBreakthroughPhenomenon(nextRealm, nextIndex, phenomenon);
+
     // 境界质变效果
     let realmEffectHtml = '';
     if (typeof window.getRealmEffectDescription === 'function') {
@@ -622,9 +746,18 @@ function showBreakthroughFailure() {
     const modal = document.querySelector('.breakthrough-ritual-modal');
     if (!modal) return;
 
-    // 随机副作用
-    const sideEffect = BREAKTHROUGH_SIDE_EFFECTS[Math.floor(Math.random() * BREAKTHROUGH_SIDE_EFFECTS.length)];
+    // 随机副作用。燃过机缘的那一关不再抽「修为倒退」——烧掉的就是这条。
+    // 经脉受损 / 真气反噬 / 心神消耗照旧会来：烧掉的是命，不是伤。
+    let pool = BREAKTHROUGH_SIDE_EFFECTS;
+    if (breakthroughState._fortuneShield) {
+        const kept = pool.filter(function (e) { return !(e.effect && e.effect.layerLoss); });
+        if (kept.length > 0) pool = kept;
+    }
+    const sideEffect = pool[Math.floor(Math.random() * pool.length)];
     let sideEffectHtml = `<p class="text-red-400 text-sm">副作用：${sideEffect.name} — ${sideEffect.desc}</p>`;
+    if (breakthroughState._fortuneShield) {
+        sideEffectHtml += '<p class="text-xs text-purple-300 mt-1">🔥 机缘垫住了脚下——修为未退、层数未跌。</p>';
+    }
 
     // 应用副作用
     applySideEffect(charData, sideEffect);
@@ -683,8 +816,8 @@ function applySideEffect(charData, sideEffect) {
     const effect = sideEffect.effect;
     if (!effect) return;
 
-    // 修为倒退
-    if (effect.layerLoss) {
+    // 修为倒退（燃过机缘的那一关不跌境：即使抽到这条也不落账）
+    if (effect.layerLoss && !breakthroughState._fortuneShield) {
         const newLayer = (charData.layer || 1) - effect.layerLoss;
         charData.layer = Math.max(1, newLayer);
     }
@@ -742,4 +875,53 @@ if (typeof window !== 'undefined') {
     window.BREAKTHROUGH_PHASES = BREAKTHROUGH_PHASES;
     window.BREAKTHROUGH_STAGES = BREAKTHROUGH_STAGES;
     window.BREAKTHROUGH_PHENOMENA = BREAKTHROUGH_PHENOMENA;
+    window.BREAKTHROUGH_REALM_ORDER = BREAKTHROUGH_REALM_ORDER;
+    window.BREAKTHROUGH_MATERIALS = BREAKTHROUGH_MATERIALS;
+    window.getBreakthroughPillsForRealm = getBreakthroughPillsForRealm;
+    window.getBreakthroughRitualBaseRate = getBreakthroughRitualBaseRate;
+}
+
+// ============ v27.13：突破异象进世界账（①-新增-1 瞒不住的事，走样的传话） ============
+// 只被 showBreakthroughResult 调用一次（唯一挂点，别处不重复记账）。
+// 两笔账各走各的正门，互不代笔：
+//   ① 名气走 noteFameChange——同城当日立知、外城随商旅按 2/7 天到站。
+//      量级 = 8 + 目标境界序×5，夹逼 [12, 50]：一趟悬赏 fame 2~10（bounty-board count/2）、
+//      说书 1~2 的尺度下，跨境突破是一辈子的动静——筑基 13 起、渡劫 48 顶，境界越高动静越大；
+//      全程 ≥8，必过世界账簿「大名自动成谣」的线（名号一条、异象一条，各说各的，不算重复记账）。
+//   ② 异象故事走 noteRumor——本地知真相（modal 异象 + 下方写实 log），外地听玄乎版（传闻越传越玄）。
+//      fromCity 传当前城：让「同城立知」落在真城，本城茶馆「打听」才翻得到这一条。
+// WorldLedger 缺席整段跳过：突破零影响（函数顶部 return，try/catch 兜底）。
+function noteBreakthroughPhenomenon(nextRealm, nextIndex, phenomenon) {
+    try {
+        var WL = window.WorldLedger;
+        if (!WL || typeof WL.noteFameChange !== 'function' || typeof WL.noteRumor !== 'function') return;
+        // ① 本城名气即时涨（正门记账，只记账不动属性 fame——异象的名声走世界账簿）
+        WL.noteFameChange(Math.max(12, Math.min(50, 8 + nextIndex * 5)));
+        // ② 外地听玄乎版（同一笔 noteRumor 也让本地账立知——本城茶客说的已是走样版，当事人自己知道真相）
+        var from = '';
+        try {
+            if (window.locationSystem && typeof window.locationSystem.getCurrentLocation === 'function') from = window.locationSystem.getCurrentLocation() || '';
+        } catch (e0) {}
+        if (!from) from = (window.currentCharData && window.currentCharData.location) || '';
+        // 走样夸张版：本地是雷云压城/紫气东来的实底，出了城就成了雷滚三里、星斗三亮
+        var TALL = {
+            '筑基': '「{c}」昨夜雷声滚了三里地，半空金光炸开——茶客赌咒说是有人筑基成了仙，也有人说天狗过境。',
+            '金丹': '「{c}」城外七彩霞光罩了半宿，老人们都说是金丹大成、霞光万里——小道消息，信不信由你。',
+            '元婴': '「{c}」那晚有人瞧见天上坐着个小人影，一坐一宿——茶馆里吵翻了，都说是元婴出世的吉兆。',
+            '化神': '「{c}」一夜之间满城的鸡都不叫——说是有位化神前辈神游过境，连畜生都噤了声。',
+            '炼虚': '「{c}」有人瞧见一口活人凭空散作青烟、又原样聚了回来——炼虚合道，凡胎换仙骨，错不了！',
+            '合体': '「{c}」那天地动了一震、井水倒流了半炷香——合体期大能的天地共鸣，老辈人说的，不会假。',
+            '大乘': '「{c}」夜里满天星斗齐齐亮了三亮，紫气东来三百里——大乘老祖降世了！',
+            '渡劫': '「{c}」九道天雷劈了一宿，劈完天上还落仙乐——有人渡劫飞升，就在「{c}」！',
+            'default': '「{c}」那夜天光异动，雷声滚了三里地——有大人物破了境界。'
+        };
+        var line = String(TALL[nextRealm] || TALL['default']).replace('{c}', from || '此地');
+        WL.noteRumor(line, 'breakthrough', from || undefined);
+        // 本地写实：异象实底进日志——「本地知真相」的那一半
+        if (phenomenon && window.gameLog && typeof window.gameLog.add === 'function') {
+            window.gameLog.add('✨ ' + phenomenon + '——异象瞒不住：当夜满城皆见，明日准上茶桌。', 'info');
+        }
+    } catch (e) {
+        console.warn('[静默失败] js/cultivation/breakthrough-ritual.js · noteBreakthroughPhenomenon：异象没进世界账——突破照旧', e && e.message);
+    }
 }

@@ -410,7 +410,17 @@
             try { if (window.CityEatery && typeof window.CityEatery.specialDish === 'function') dish = '「' + window.CityEatery.specialDish(city()).name + '」'; } catch (eD) { console.warn('[静默失败] js/npcs/npc-bond.js · treat：招牌菜名没问到，按老店招牌上', eD && eD.message); }
         }
         log('🍶 你请 ' + npc.name + ' 在酒楼同席，上了' + dish + '。' + (liked ? '——正合TA的口味，TA吃得眉眼都弯了。' : 'TA吃得很开心，连道了三声谢。') + '（好感+' + affGain + ' 信任+1，' + cost + ' 铜）', 'success');
-        say('🍶 ' + npc.name + (liked ? ' 一上桌就认出了爱吃的——眉眼都弯了。（好感+' + affGain + '，信任+1）' : ' 吃得很开心，连道了三声谢。（好感+' + affGain + '，信任+1）'), 'success');
+        // v27.13：①-新增-4 辟谷赴宴豁免——请客的人情照旧、属性照吃（饱食闸对全辟不设，见 satiety.js canEat）；
+        //   全辟走「陪坐不进食」文案，半辟一句轻话；账一分不动，只把仙凡之别说出口。
+        var _fastLine = '';
+        try {
+            if (window.satietySystem && typeof window.satietySystem.fastingTier === 'function') {
+                var _ft = window.satietySystem.fastingTier();
+                if (_ft >= 2) _fastLine = '你举杯陪坐，箸没动几回——肚子的需求没了，人情的规矩还在。';
+                else if (_ft === 1) _fastLine = '你陪着吃了小半桌——辟谷之人，饭量比情面小。';
+            }
+        } catch (eFt) { console.warn('[静默失败] js/npcs/npc-bond.js · treat：辟谷档没读出来，同席照旧', eFt && eFt.message); }
+        say('🍶 ' + npc.name + (liked ? ' 一上桌就认出了爱吃的——眉眼都弯了。（好感+' + affGain + '，信任+1）' : ' 吃得很开心，连道了三声谢。（好感+' + affGain + '，信任+1）') + (_fastLine ? ' ' + _fastLine : ''), 'success');
         refresh();
         return true;
     }
@@ -676,7 +686,25 @@
                 var left = borrowDaysLeft(rec);
                 rows.push('<button onclick="NpcBond.returnItem(\'' + sid + '\')" class="w-full mt-1 flex items-center gap-2 bg-amber-900/50 hover:bg-amber-800/50 border border-amber-700/50 px-3 py-2 rounded text-sm text-amber-200 transition-colors"><span>📦 归还「' + (rec.itemName || '借物') + '」</span><span class="text-xs text-amber-300/70">' + (rec.overdue ? '已逾期——快还！' : (left > 0 ? '还剩 ' + left + ' 日到期' : '今日到期')) + '</span></button>');
             }
+            // ===== v27.16：⑦破产者的体面——钱契两颗钮（借/还）+ 穷态可见 =====
             var aff = Number(npc.relationship && npc.relationship.affection) || 0;
+            var moneyRec = null, purseNow = null;
+            try {
+                var _recs16 = (window.NPCBorrowService && window.NPCBorrowService.getRecords) ? window.NPCBorrowService.getRecords() : [];
+                moneyRec = _recs16.find(function (r) { return r && r.npcId === npcId && r.kind === 'money' && !r.returned && !r.deadbeated; }) || null;
+                purseNow = (window.NPCLife && window.NPCLife.ledger && typeof window.NPCLife.ledger.purse === 'function') ? window.NPCLife.ledger.purse(npcId) : null;
+            } catch (eMr16) {}
+            if (moneyRec) {
+                var owe16 = (moneyRec.amount || 0) + (moneyRec.overdue ? Math.ceil((moneyRec.amount || 0) * 0.1) : 0);
+                rows.push('<button onclick="NpcBond.returnMoney(\'' + sid + '\')" class="w-full mt-1 flex items-center gap-2 bg-emerald-900/50 hover:bg-emerald-800/50 border border-emerald-700/50 px-3 py-2 rounded text-sm text-emerald-200 transition-colors"><span>💰 还钱 ' + owe16 + ' 灵石' + (moneyRec.overdue ? '（含一成辛苦钱）' : '') + '</span><span class="text-xs text-emerald-300/70">' + (moneyRec.collected ? 'TA 的兄弟已经上过门了' : (moneyRec.overdue ? '已逾期——七日后有人上门' : '说好的日子还没到')) + '</span></button>');
+            } else if (aff >= 60 && purseNow !== null) {
+                if (purseNow < 10) {
+                    rows.push('<div class="w-full mt-1 px-3 py-2 rounded bg-slate-800/60 border border-slate-700/50 text-xs text-slate-400 text-left">🙇 TA 眼下手头紧——' + (npc.gender === '女' ? '她当掉了嫁妆银镯，铺子里也赊着账' : '他当掉了随身的旧物，铺子里也赊着账') + '。等 TA 的日子缓过来，再开口借钱不迟。</div>');
+                } else {
+                    var maxL16 = Math.min(Math.floor(purseNow), 10 + Math.floor(aff / 10));
+                    rows.push('<button onclick="NpcBond.borrowMoney(\'' + sid + '\')" class="w-full mt-1 flex items-center gap-2 bg-amber-900/40 hover:bg-amber-800/40 border border-amber-800/50 px-3 py-2 rounded text-sm text-amber-100 transition-colors"><span>🤲 借点灵石周转（至多 ' + maxL16 + '）</span><span class="text-xs text-amber-300/70">从 TA 的真钱包里出——按时还，TA 的日子不受影响</span></button>');
+                }
+            }
             if (aff >= TUNE.DATE_AFF_AT) {
                 rows.push('<button onclick="NpcBond.openDate(\'' + sid + '\')" class="w-full mt-1 flex items-center gap-2 bg-rose-900/40 hover:bg-rose-800/40 border border-rose-800/50 px-3 py-2 rounded text-sm text-rose-200 transition-colors"><span>🌸 邀约</span><span class="text-xs text-rose-300/70">请TA出门走走——两情与好感同涨</span></button>');
             }
@@ -726,10 +754,39 @@
         window.StateRegistry.register('npcBond', { version: 1, export: _export, import: _import, reset: _reset });
     }
 
+    // ===== v27.16：钱契两颗钮的执行口（borrow-money 族，NPCBorrowService 正门代办） =====
+    function borrowMoney(npcId) {
+        try {
+            var npc = (window.npcManager && typeof window.npcManager.getNPC === 'function') ? window.npcManager.getNPC(npcId) : null;
+            if (!npc) { say('这位不在眼前。', 'warning'); return false; }
+            var r = (window.NPCBorrowService && typeof window.NPCBorrowService.borrowMoneyFromNPC === 'function')
+                ? window.NPCBorrowService.borrowMoneyFromNPC(npc) : null;
+            if (!r) { say('这条借路走不通。', 'info'); return false; }
+            say(r.msg, r.success ? 'success' : 'warning');
+            if (r.success) { try { if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI(); } catch (eU) {} }
+            return !!(r.success);
+        } catch (eBm16) { console.warn('[静默失败] js/npcs/npc-bond.js · borrowMoney：这笔钱没借成', eBm16 && eBm16.message); return false; }
+    }
+    function returnMoney(npcId) {
+        try {
+            var recs = (window.NPCBorrowService && window.NPCBorrowService.getRecords) ? window.NPCBorrowService.getRecords() : [];
+            var rec = recs.find(function (r) { return r && r.npcId === npcId && r.kind === 'money' && !r.returned && !r.deadbeated; }) || null;
+            if (!rec) { say('没有待还的钱契。', 'info'); return false; }
+            var r = (window.NPCBorrowService && typeof window.NPCBorrowService.returnBorrowedMoney === 'function')
+                ? window.NPCBorrowService.returnBorrowedMoney(rec.id) : null;
+            if (!r) { say('还钱口缺席。', 'warning'); return false; }
+            say(r.msg, r.success ? 'success' : 'warning');
+            if (r.success) { try { if (typeof window.updateCurrencyUI === 'function') window.updateCurrencyUI(); } catch (eU2) {} }
+            return !!(r.success);
+        } catch (eRm16) { console.warn('[静默失败] js/npcs/npc-bond.js · returnMoney：这笔钱没还成', eRm16 && eRm16.message); return false; }
+    }
+
     window.NpcBond = {
         TUNE: TUNE,
         pendingBorrow: pendingBorrow,
         returnItem: returnItem,
+        borrowMoney: borrowMoney,
+        returnMoney: returnMoney,
         openDate: openDate,
         date: date,
         propose: propose,

@@ -62,7 +62,7 @@
     function settle(spec) {
         try {
             if (window.RewardService && typeof window.RewardService.apply === 'function') {
-                var r = window.RewardService.apply(spec, { source: '赁屋', city: city() });
+                var r = window.RewardService.apply(spec, { facilitySpend: true, source: '赁屋', city: city() });
                 return { ok: !!(r && r.success !== false), note: r && r.messages ? r.messages.join('、') : '' };
             }
         } catch (e) {}

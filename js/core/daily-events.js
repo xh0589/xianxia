@@ -8,7 +8,7 @@ var dailyEventState = {
     lastTriggerTotalMin: -9999,
     lastById: {},       // id -> totalMinutes
     history: [],        // 最近记录
-    globalCooldownMin: 35
+    globalCooldownMin: 60   // v27.18：35→60 分钟（TA 反馈弹得稍高——冷却拉长，日常事件该是低频呼吸不是街坊喇叭）
 };
 
 var _dailyEventById = {};
@@ -40,6 +40,18 @@ function _deAddCopper(n) {
     if (!p) return;
     p.copper = (p.copper || 0) + n;
     if (p.copper < 0) p.copper = 0;
+}
+
+function _deTakeCopper(n) {
+    // v27.13：季节事件要花钱（凉茶/野味/炭钱）——进钱有 _deAddCopper，支出一直没有对面的口。
+    // 补一个「够才扣」的小闸，记账层级与 _deAddCopper 相同（零钱直记 currentCharData.copper，
+    // 不动灵石总闸 RewardService——灵石才是大钱，铜板是市井零花）。
+    var p = window.currentCharData;
+    if (!p) return false;
+    n = Number(n) || 0;
+    if ((p.copper || 0) < n) return false;
+    p.copper = (p.copper || 0) - n;
+    return true;
 }
 
 function _deAddItem(id, count) {
@@ -153,9 +165,33 @@ function _deIsRaining() {
     return false;
 }
 
+function _deGetSeason() {
+    // v27.13：季节真源=timeSystem.gameTime.currentSeason（time-system.updateSeason 按月序刷新，
+    // 仙历一月春首）；读不到时按真季节轴自推（月序=floor((绝对日-1)/30)%12，每三月一季，
+    // 与 time-system.js:158 同一条轴）。两头都断则回 'spring'——季节事件池见 spring 起码不是错季，
+    // 且 condition 拿到值就不再走「全池无差别」的旧路。
+    try {
+        var gt = window.timeSystem && window.timeSystem.gameTime;
+        if (gt && gt.currentSeason) return gt.currentSeason;
+    } catch (e) {}
+    try {
+        var d = 1;
+        if (window.timeSystem && typeof window.timeSystem.getAbsoluteDay === 'function') d = window.timeSystem.getAbsoluteDay();
+        else if (window.gameTime && typeof window.gameTime.currentDay === 'number') d = window.gameTime.currentDay;
+        var mi = Math.floor((Math.max(1, d) - 1) / 30) % 12;
+        return ['spring', 'summer', 'autumn', 'winter'][Math.floor(mi / 3)];
+    } catch (e2) {}
+    return 'spring';
+}
+
 function _deInSect() {
+    // v27.18 修：旧读法 discipleState.isInSect——那是「是门派弟子」不是「人在门派」。
+    // 弟子在野外赶路时 time 推进也吃 sect 池（野外弹门派事件）；人在门派（门派在城里）又因 inCity 优先弹城事件（门派里不弹门派事件）。
+    // 两向都错。真在场判定：门派场景标志（enterSect 挂 / closeSectPanel 清）优先；
+    // 野外地图在屏（playerPos+currentMap）时哪怕你是门派弟子也按不在门派算。
+    if (window.__inSectScene) return true;
     var ds = window.discipleState || {};
-    return !!(ds.isInSect && ds.sectId);
+    return !!(ds.isInSect && ds.sectId && !(window.playerPos && window.currentMap));
 }
 
 function _deSectRank() {
@@ -177,6 +213,7 @@ function getDailyEventContext(options) {
         source: options.source || 'unknown',
         minutes: options.minutes || 0,
         period: _deGetPeriod(),
+        season: _deGetSeason(),
         raining: _deIsRaining(),
         inSect: _deInSect(),
         sectRank: _deSectRank(),
@@ -404,7 +441,11 @@ var DAILY_EVENT_LIST = [
                     try { if (window.NpcCrime && typeof window.NpcCrime.patrolBoost === 'function') noto = window.NpcCrime.patrolBoost(noto); } catch (eNpB2) { console.warn('[静默失败] js/core/daily-events.js · night_patrol：通缉加档没算成，按原恶名盘查', eNpB2 && eNpB2.message); }
                     if (noto > 60) {
                         _deMsg('你一进小巷，身后灯笼齐刷刷转过来——「那个站住！」夜巡最恨躲的。你绕了三条街才甩脱，巡逻队记了脸：躲夜巡等于心虚。', 'warning');
-                        if (window.currentCharData) window.currentCharData.notoriety = Math.min(100, noto + 1);
+                        if (window.currentCharData) {
+                            window.currentCharData.notoriety = Math.min(100, noto + 1);
+                            // v27.13 恶名分城：直写后同步记进世界账簿
+                            try { if (window.WorldLedger && typeof window.WorldLedger.noteNotorietyChange === 'function') window.WorldLedger.noteNotorietyChange(1); } catch (eWN1) {}
+                        }
                     } else if (noto > 25) {
                         _deMsg('你转入小巷，隐约听见兵丁嘟囔：「那人怎么看着眼熟……」', 'warning');
                     } else {
@@ -432,6 +473,8 @@ var DAILY_EVENT_LIST = [
                     _deMsg('你把孩子送到城卫处，家人感激地塞来一点谢礼。（铜钱+3，耗时）', 'success');
                     if (window.currentCharData) {
                         window.currentCharData.notoriety = Math.max(0, (window.currentCharData.notoriety || 0) - 1);
+                        // v27.13 恶名分城：直写后同步记进世界账簿（善行洗名，本地先行）
+                        try { if (window.WorldLedger && typeof window.WorldLedger.noteNotorietyChange === 'function') window.WorldLedger.noteNotorietyChange(-1); } catch (eWN2) {}
                     }
                 }
             },
@@ -841,6 +884,403 @@ var DAILY_EVENT_LIST = [
                 }
             }
         ]
+    },
+
+    // ==================== v27.13：季节事件池（过堂⑤/⑪「季节挂接面窄」最轻补法） ====================
+    // 给世界加呼吸：春耕/夏汛/秋收/冬雪各两三出小戏。全走既有触发节奏——tryTriggerDailyEvent
+    // 的概率/权重/冷却/弹窗一道不改，只在 condition 里看 ctx.season（_deGetSeason 真源同款）。
+    // 纪律：季节读不到时本池一律不冒（保守面），其余日常事件照旧；奖励与老事件同档
+    // （铜钱个位数/修为个位数/一顿饭），cooldown 拉到 400+ 让节气成稀罕事，不是新任务链。
+    {
+        id: 'spring_plowing',
+        pool: 'wilderness',
+        weight: 6,
+        cooldownMin: 500,
+        condition: function(ctx) { return ctx.season === 'spring'; },
+        title: '春耕',
+        icon: '🌾',
+        description: '田埂上农人吆喝着春牛犁地，新翻的泥腥味混着草籽香。田头搁着半壶井水浸的粗茶。',
+        choices: [
+            {
+                id: 'help',
+                text: '搭把手扶一把犁',
+                effect: function() {
+                    _deAdvance(40, '帮农春耕');
+                    _deAddCopper(4);
+                    _deSetFlag('daily_spring_plow_help');
+                    _deMsg('一口气犁到日头偏西，农家塞来几块铜钱谢你。（铜钱+4）', 'success');
+                }
+            },
+            {
+                id: 'tea',
+                text: '讨碗粗茶解乏',
+                effect: function() {
+                    var p = window.currentCharData;
+                    if (p) p.health = (p.health || 0) + 3;
+                    _deMsg('农人笑着舀来一碗粗茶。一口下去，春乏散了三分。', 'success');
+                    if (window.updateStatusPanel) window.updateStatusPanel();
+                }
+            },
+            {
+                id: 'pass',
+                text: '赶路要紧',
+                effect: function() {
+                    _deMsg('你沿着田埂绕了过去，惊起两只斑鸠。', 'info');
+                }
+            }
+        ]
+    },
+    {
+        id: 'spring_fair',
+        pool: 'city',
+        weight: 6,
+        cooldownMin: 500,
+        condition: function(ctx) { return ctx.season === 'spring'; },
+        title: '春社戏台',
+        icon: '🎭',
+        description: '城郊社坛搭起戏台，锣鼓喧天——春社祭土地，求一年风调雨顺。四乡的人把台子围了个半圆。',
+        choices: [
+            {
+                id: 'watch',
+                text: '看一场社戏',
+                effect: function() {
+                    _deAdvance(60, '看社戏');
+                    var p = window.currentCharData;
+                    if (p) p.essence = (p.essence || 0) + 3;
+                    _deSetFlag('daily_spring_fair_seen');
+                    _deMsg('台上唱的是丰年还愿的老戏。散场时你只觉心口松快，灵台清明了几分。', 'success');
+                }
+            },
+            {
+                id: 'bet',
+                text: '押个社戏彩头（3 铜钱）',
+                effect: function() {
+                    if (!_deTakeCopper(3)) {
+                        _deMsg('你摸了摸钱袋，凑不齐 3 个铜钱的彩头。', 'warning');
+                        return;
+                    }
+                    if (Math.random() < 0.45) {
+                        _deAddCopper(10);
+                        _deMsg('彩头叫你押中了——社东家当众发彩，10 个铜钱落袋，四邻喝彩。', 'success');
+                    } else {
+                        _deMsg('彩头落在别人名下。你就着热闹白看了一场戏，也不算亏。', 'info');
+                    }
+                }
+            },
+            {
+                id: 'pass',
+                text: '不凑热闹',
+                effect: function() {
+                    _deMsg('锣鼓声渐渐落在身后。', 'info');
+                }
+            }
+        ]
+    },
+    {
+        id: 'summer_dike',
+        pool: 'wilderness',
+        weight: 6,
+        cooldownMin: 500,
+        condition: function(ctx) { return ctx.season === 'summer'; },
+        title: '夏汛守堤',
+        icon: '🌊',
+        description: '连日暴雨，河水眼看着往堤顶爬。村里敲锣聚人，一担担土石往堤上挑。',
+        choices: [
+            {
+                id: 'help',
+                text: '帮着挑土石',
+                effect: function() {
+                    _deAdvance(50, '夏汛守堤');
+                    _deAddCopper(6);
+                    _deSetFlag('daily_summer_dike_help');
+                    _deMsg('堤上熬到雨歇水退，里正硬塞给你几个铜钱：「这堤有你一担土。」（铜钱+6）', 'success');
+                }
+            },
+            {
+                id: 'avoid',
+                text: '远远绕开河湾',
+                effect: function() {
+                    _deAdvance(10, '绕行河湾');
+                    _deMsg('你绕了二里旱路。身后堤上号子声隐隐传来。', 'info');
+                }
+            }
+        ]
+    },
+    {
+        id: 'summer_tea',
+        pool: 'city',
+        weight: 6,
+        cooldownMin: 400,
+        condition: function(ctx) { return ctx.season === 'summer'; },
+        title: '凉茶棚',
+        icon: '🫖',
+        description: '街口支起凉茶棚，大瓦缸里浸着薄荷甘草，暑气蒸得青石板直冒白烟。',
+        choices: [
+            {
+                id: 'buy',
+                text: '花 2 铜钱买碗凉茶',
+                effect: function() {
+                    if (!_deTakeCopper(2)) {
+                        _deMsg('你翻遍口袋凑不出 2 个铜钱，茶棚老板摆摆手：「下回罢。」', 'warning');
+                        return;
+                    }
+                    var p = window.currentCharData;
+                    if (p) p.energy = (p.energy || 0) + 10;
+                    _deMsg('一碗凉茶见底，暑气顿消，浑身又是力气。', 'success');
+                    if (window.updateStatusPanel) window.updateStatusPanel();
+                }
+            },
+            {
+                id: 'listen',
+                text: '坐下听脚夫说商路',
+                effect: function() {
+                    _deSetFlag('daily_summer_caravan_rumor');
+                    _deMsg('脚夫们说入夏以来北边河道好走，跑货的多绕那条线——你记下了。', 'success');
+                }
+            },
+            {
+                id: 'pass',
+                text: '忍忍就过去了',
+                effect: function() {
+                    _deMsg('你抹了把汗，接着赶路。', 'info');
+                }
+            }
+        ]
+    },
+    {
+        id: 'summer_night_tales',
+        pool: 'city',
+        weight: 6,
+        cooldownMin: 500,
+        condition: function(ctx) { return ctx.season === 'summer' && (ctx.period === 'night' || ctx.period === 'dusk'); },
+        title: '夏夜讲古',
+        icon: '🌙',
+        description: '晚风终于凉了。老人们搬着竹床在巷口摇扇讲古，说的正是本城百年前的旧事。',
+        choices: [
+            {
+                id: 'listen',
+                text: '蹲下来听一段',
+                effect: function() {
+                    _deAdvance(30, '听老人讲古');
+                    var p = window.currentCharData;
+                    if (p) p.essence = (p.essence || 0) + 4;
+                    _deSetFlag('daily_summer_tales_heard');
+                    _deMsg('老人的故事里有座早已封了的山洞。你若有所思——修仙百艺，听闻也是修行。', 'success');
+                }
+            },
+            {
+                id: 'leave',
+                text: '摇着扇子自去',
+                effect: function() {
+                    _deMsg('蒲扇声与蝉鸣一起留在巷口。', 'info');
+                }
+            }
+        ]
+    },
+    {
+        id: 'autumn_harvest',
+        pool: 'wilderness',
+        weight: 6,
+        cooldownMin: 500,
+        condition: function(ctx) { return ctx.season === 'autumn'; },
+        title: '秋收',
+        icon: '🍂',
+        description: '满坡稻谷黄透了，割稻的人手不够，田主望见你，直起腰招了招手。',
+        choices: [
+            {
+                id: 'work',
+                text: '下田帮割半日',
+                effect: function() {
+                    _deAdvance(90, '秋收帮工');
+                    _deAddCopper(10);
+                    _deSetFlag('daily_autumn_harvest_help');
+                    _deMsg('半日下来腰都直不起来，田主却痛快：农忙工钱当面结清。（铜钱+10）', 'success');
+                }
+            },
+            {
+                id: 'meal',
+                text: '帮灶换顿饱饭',
+                effect: function() {
+                    _deAdvance(30, '田头帮灶');
+                    var p = window.currentCharData;
+                    if (p) p.energy = (p.energy || 0) + 20;
+                    _deSetFlag('daily_autumn_harvest_meal');
+                    _deMsg('新米焖饭、腊肉一碟。吃饱了，手脚都是劲。', 'success');
+                    if (window.updateStatusPanel) window.updateStatusPanel();
+                }
+            },
+            {
+                id: 'pass',
+                text: '过路不歇',
+                effect: function() {
+                    _deMsg('稻香里你加快了脚步。', 'info');
+                }
+            }
+        ]
+    },
+    {
+        id: 'autumn_game',
+        pool: 'city',
+        weight: 6,
+        cooldownMin: 450,
+        condition: function(ctx) { return ctx.season === 'autumn'; },
+        title: '猎户回城',
+        icon: '🏹',
+        description: '几个猎户挑着猎物进城，秋膘正肥。篝火上现烤的一条野味，油星滋滋作响。',
+        choices: [
+            {
+                id: 'buy',
+                text: '花 5 铜钱买一份烤味',
+                effect: function() {
+                    var p = window.currentCharData;
+                    if (!p || (p.copper || 0) < 5) {
+                        _deMsg('你摸了摸钱袋——5 个铜钱也没有，猎户笑道：「闻闻不要钱。」', 'info');
+                        return;
+                    }
+                    // DES-86 同款纪律（第一百三十批）：先验货落袋，再付钱
+                    var 收 = _deAddItem('food_roast_meat', 1);
+                    if (!收.got) {
+                        _deMsg('猎户把纸包递过来，' + _de货没处放(收) + '他咂咂嘴，自己啃了。', 'warning');
+                        return;
+                    }
+                    _deTakeCopper(5);
+                    _deMsg('秋膘最肥的时节，这份 ' + 收.name + ' 值回票价。（铜钱-5）', 'success');
+                }
+            },
+            {
+                id: 'ask',
+                text: '问问山里动静',
+                effect: function() {
+                    _deSetFlag('daily_autumn_beast_hint');
+                    _deMsg('猎户咂着烟锅：「膘上来了，兽群也贴着村子转了——这几日进山，最好结伴。」', 'success');
+                }
+            },
+            {
+                id: 'pass',
+                text: '路过',
+                effect: function() {
+                    _deMsg('肉香追着你走了半条街。', 'info');
+                }
+            }
+        ]
+    },
+    {
+        id: 'winter_snow_road',
+        pool: 'wilderness',
+        weight: 6,
+        cooldownMin: 500,
+        condition: function(ctx) { return ctx.season === 'winter'; },
+        title: '大雪封路',
+        icon: '❄️',
+        description: '一夜大雪没了脚踝。官道上骡车陷在雪窝里，赶车的老汉拉着辕，喘出的白气一团接一团。',
+        choices: [
+            {
+                id: 'push',
+                text: '帮着推一把车',
+                effect: function() {
+                    _deAdvance(30, '雪道推车');
+                    _deAddCopper(5);
+                    _deSetFlag('daily_winter_cart_help');
+                    _deMsg('车轮出了雪窝，老汉千恩万谢，塞给你几个铜钱买酒暖暖身。（铜钱+5）', 'success');
+                }
+            },
+            {
+                id: 'trudge',
+                text: '自顾自踩雪过去',
+                effect: function() {
+                    _deAdvance(15, '雪中跋涉');
+                    _deMsg('雪没到小腿，你深一脚浅一脚地走过去了。', 'info');
+                }
+            }
+        ]
+    },
+    {
+        id: 'winter_charcoal',
+        pool: 'city',
+        weight: 6,
+        cooldownMin: 500,
+        condition: function(ctx) { return ctx.season === 'winter'; },
+        title: '寒夜街头',
+        icon: '🔥',
+        description: '炭火贵起来的时候，墙根下蜷着个衣衫单薄的流民，冻得嘴唇发乌。',
+        choices: [
+            {
+                id: 'charcoal',
+                text: '买一角炭送给他（4 铜钱）',
+                effect: function() {
+                    if (!_deTakeCopper(4)) {
+                        _deMsg('你摸遍全身，凑不出 4 个铜钱的炭钱，只能脱下外氅披在他肩上。', 'info');
+                        return;
+                    }
+                    _deMsg('你在街角买了角炭，替他生起来。他冻僵的手拢着火，朝你重重磕了个头。', 'success');
+                    if (window.currentCharData) {
+                        window.currentCharData.notoriety = Math.max(0, (window.currentCharData.notoriety || 0) - 1);
+                        // v27.13 恶名分城：直写后同步记进世界账簿（善行洗名，本地先行）——与 lost_child 同一把尺
+                        try { if (window.WorldLedger && typeof window.WorldLedger.noteNotorietyChange === 'function') window.WorldLedger.noteNotorietyChange(-1); } catch (eWC1) {}
+                    }
+                }
+            },
+            {
+                id: 'coins',
+                text: '丢下两个铜板',
+                effect: function() {
+                    if (!_deTakeCopper(2)) {
+                        _deMsg('你口袋里连两个铜板都没有，只能对他点了点头。', 'info');
+                        return;
+                    }
+                    _deMsg('铜板落在他脚边的破碗里。他抬起头，眼里的光比炭火还亮了一瞬。', 'success');
+                }
+            },
+            {
+                id: 'pass',
+                text: '低头快走',
+                effect: function() {
+                    _deMsg('你裹紧衣领快步走过。寒夜里，谁都不容易。', 'info');
+                }
+            }
+        ]
+    },
+    {
+        id: 'winter_beast_village',
+        pool: 'wilderness',
+        weight: 6,
+        cooldownMin: 500,
+        condition: function(ctx) { return ctx.season === 'winter'; },
+        title: '饿兽进村',
+        icon: '🐺',
+        description: '大雪封山，饿急的野狼夜里贴着村子转。村民在村口堆起火堆，敲着铜盆壮胆。',
+        choices: [
+            {
+                id: 'guard',
+                text: '帮村里守一夜',
+                effect: function() {
+                    _deAdvance(120, '守村驱兽');
+                    _deAddCopper(8);
+                    _deSetFlag('daily_winter_beast_driven');
+                    _deMsg('火堆添到天亮，狼嚎终于远了。里正捧来几块铜钱：「有你这一夜，村子睡得踏实。」（铜钱+8）', 'success');
+                }
+            },
+            {
+                id: 'reinforce',
+                text: '指点村民加固栅栏',
+                effect: function() {
+                    _deAdvance(20, '加固栅栏');
+                    _deSetFlag('daily_winter_fence_up');
+                    _deMsg('你顺手给栅栏加了三道斜撑。老猎人蹲在旁边看了半天：「是个懂行的。」', 'success');
+                }
+            },
+            {
+                id: 'lodge',
+                text: '借宿一晚再走',
+                effect: function() {
+                    _deAdvance(180, '村舍借宿');
+                    var p = window.currentCharData;
+                    if (p) p.health = (p.health || 0) + 5;
+                    _deMsg('热炕、姜汤、还有听不懂的乡音。一觉睡到鸡叫，风寒散了大半。', 'success');
+                    if (window.updateStatusPanel) window.updateStatusPanel();
+                }
+            }
+        ]
     }
 ];
 
@@ -920,6 +1360,11 @@ function resolveDailyLocation(location, ctx) {
             }
         } catch (e) { inCity = false; }
         // 在门派且不在城市 → 门派（如果 inSect 但 time 推进）
+        // v27.18 修：真在场判定重排——门派场景标志（enterSect/closeSectPanel 配对）最优先；
+        // 野外地图在屏（playerPos+currentMap）短路成 wilderness（人在野外赶路，location 还挂着旧城名也不再骗池子）；
+        // 「是门派弟子」只在人不在城也不在野外地图时兜底成 sect（宗门驻地附近的生活感）。
+        if (window.__inSectScene) return 'sect';
+        if (window.playerPos && window.currentMap) return 'wilderness';
         if (ctx && ctx.inSect && !inCity) return 'sect';
         // 不在城市且不在门派 → 野外（时间推进也可能在野外赶路）
         if (!inCity && !(ctx && ctx.inSect)) return 'wilderness';
@@ -934,6 +1379,26 @@ function resolveDailyLocation(location, ctx) {
  * @param {object} options { source, minutes, forceChance, skipGlobalCd }
  * @returns {boolean} 是否弹出事件
  */
+// v27.13：大业连锁（模块⑫）——学识/话头两类事件的既有权重乘区。
+// 读 GrandLegacy.chainBoost 正门（grand-legacy.js 连锁表：两件大业均完成态才生效，同类取最高一档）；
+// 只乘池内权重（纪律 ≤1.5，连锁表实配 1.15~1.25），不碰触发率/冷却——世界的脾气，不是数值外挂。
+// 读口缺席（grand-legacy 没加载/老档无此件）=×1 无修正；学识类=碑文/讲道/残页/请教，话头类=茶馆/讲古/闲话。
+var DE_CHAIN_KINDS = {
+    stone_stele: 'scholar', elder_lecture_daily: 'scholar', hidden_manual: 'scholar', junior_ask: 'scholar',
+    teahouse_rumor: 'tale', summer_night_tales: 'tale', sect_gossip: 'tale'
+};
+function _deChainW(ev) {
+    var base = (ev && ev.weight) || 10;
+    try {
+        var kind = ev && DE_CHAIN_KINDS[ev.id];
+        if (!kind) return base;
+        var b = (typeof window !== 'undefined' && window.GrandLegacy && typeof window.GrandLegacy.chainBoost === 'function')
+            ? window.GrandLegacy.chainBoost(kind) : 1;
+        if (b > 1) return Math.round(base * b);
+    } catch (e) { /* 连锁读口缺席/坏账：照旧基础权重，不炸触发 */ }
+    return base;
+}
+
 function tryTriggerDailyEvent(location, options) {
     options = options || {};
     try {
@@ -953,12 +1418,13 @@ function tryTriggerDailyEvent(location, options) {
             }
         }
 
-        // 基础概率（v12.0：野外移动降至2%，城市/门派维持5%，控制触发频率）
+        // 基础概率（v12.0：野外移动降至2%，城市/门派维持5%；v27.18 TA 反馈"弹出概率稍高"——
+        // 城/门派 5%→3%，全局冷却 35→60 分钟：一天约 1440 分钟，旧账一天最多两件、体感到处弹；新账一天≈0.7 件，世界还在呼吸但不吵）
         var chance = options.forceChance;
         if (chance == null) {
             if (poolName === 'wilderness') chance = 0.02;
-            else if (poolName === 'sect') chance = 0.04;
-            else chance = 0.05;
+            else if (poolName === 'sect') chance = 0.03;
+            else chance = 0.03;
             // 时间推进：分钟越多略提高，封顶
             if (options.source === 'time' && options.minutes) {
                 chance = Math.min(0.10, chance * (0.6 + Math.min(options.minutes, 60) / 80));
@@ -981,13 +1447,14 @@ function tryTriggerDailyEvent(location, options) {
         }
         if (available.length === 0) return false;
 
-        // 权重抽取
+        // 权重抽取（v27.13：大业连锁·模块⑫——学识/话头两类事件的既有权重乘区走 _deChainW，
+        // 触发率与冷却一概不动，只改池内的相对权重）
         var totalW = 0;
-        for (var j = 0; j < available.length; j++) totalW += (available[j].weight || 10);
+        for (var j = 0; j < available.length; j++) totalW += _deChainW(available[j]);
         var r = Math.random() * totalW;
         var picked = available[0];
         for (var k = 0; k < available.length; k++) {
-            r -= (available[k].weight || 10);
+            r -= _deChainW(available[k]);
             if (r <= 0) { picked = available[k]; break; }
         }
 
@@ -1099,12 +1566,14 @@ window.handleDailyEventChoice = handleDailyEventChoice;
 window.closeDailyEventModal = closeDailyEventModal;
 window.dailyEvents = {
     tryTriggerDailyEvent: tryTriggerDailyEvent,
+    resolveDailyLocation: resolveDailyLocation,   // v27.18：场景解析读口（诊断/测试用——池名在哪定的，得看得见）
     showDailyEventDialog: showDailyEventDialog,
     handleDailyEventChoice: handleDailyEventChoice,
     initDailyEvents: initDailyEvents,
     saveDailyEventState: saveDailyEventState,
     DAILY_EVENTS: DAILY_EVENTS,
-    dailyEventState: dailyEventState
+    dailyEventState: dailyEventState,
+    chainWeight: _deChainW   // v27.13 测试钩子：大业连锁的池内权重读口（base×chainBoost，读口缺席=base）
 };
 
 // ==================== v12.1：借物逾期兼容检查 ====================

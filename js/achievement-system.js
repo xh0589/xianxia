@@ -16,6 +16,8 @@
  *   - 成就条件只允许写档案快照上存在的路径（tests/v20.11 有防幽灵键全表校验）。
  *   - 奖励发放复用真源：历练→tempering、钱→DataManager、灵石→DataManager、
  *     名气/业障→RewardService（不可用就地钳位兜底）。
+ *   - 预设表只写 exp 一格（落在历练），铜钱/灵石/名气/业障一律不写：
+ *     成就墙只记名分，发钱破沉浸；发放能力留着，将来真有表要发再调。
  *   - StateRegistry 读档改「并档」：存档状态覆盖定义，定义新增项保留默认，
  *     总积分按完成集重算（单一真源，不随存档漂移）。
  */
@@ -328,8 +330,14 @@ class Achievement {
         if (this.reward.special) {
             this.reward.special();
         }
-        if (!silent && window.showMessage && paid.length > 0) {
-            window.showMessage('成就奖励：' + paid.join(' '), 'success');
+        // 回执一律只落日志，不上屏：解锁提示由调用方汇总，那边只报成就名。
+        // （旧版在此弹「成就奖励：铜钱+N 灵石+N …」，与汇总那条叠起来就是两条钱话——工资条已撤。）
+        if (paid.length > 0) {
+            try {
+                if (window.gameLog && typeof window.gameLog.add === 'function') {
+                    window.gameLog.add('🏅 ' + this.name + '·' + paid.join(' '), 'achievement');
+                }
+            } catch (eLg) {}
         }
         return paid;
     }
@@ -422,18 +430,22 @@ class AchievementManager {
             if (paid && paid.length) allPaid = allPaid.concat(paid);
         }
         if (typeof showMessage === 'function') {
-            var rewardLine = '';
+            // 提示只报成就名：历练进账只写日志，不在这里念工资条。
+            // （旧版把 paid 拼成「（奖励 铜钱+N 灵石+N …）」挂在提示尾巴上，一枚成就念一串钱袋数字——
+            //   成就墙是记名分的地方，弹钱条既破沉浸又吵。现在 paid 落进日志页，玩家要查账去查账。）
             if (allPaid.length > 0) {
-                var rs = allPaid.slice(0, 6).join(' ');
-                if (allPaid.length > 6) rs += ' 等';
-                rewardLine = '（奖励 ' + rs + '）';
+                try {
+                    if (window.gameLog && typeof window.gameLog.add === 'function') {
+                        window.gameLog.add('🏅 成就历练：' + allPaid.join(' '), 'achievement');
+                    }
+                } catch (eL) {}
             }
             if (newly.length === 1) {
-                showMessage('🏅 成就解锁：' + newly[0].name + rewardLine, 'success');
+                showMessage('🏅 成就解锁：' + newly[0].name, 'success');
             } else {
                 var names = newly.map(function (a) { return a.name; }).slice(0, 5).join('、');
                 if (newly.length > 5) names += ' 等';
-                showMessage('🏅 成就解锁 ' + newly.length + ' 枚：' + names + rewardLine, 'success');
+                showMessage('🏅 成就解锁 ' + newly.length + ' 枚：' + names, 'success');
             }
         }
         return newly;
@@ -532,231 +544,239 @@ class AchievementManager {
 }
 
 // ==================== 预设成就（v20.11 全表对齐档案快照） ====================
-// 约定：requirements 的路径必须存在于 buildAchievementProfile() 返回值上；
-// reward 仅允许 exp/gold(copper)/stones/fame/karma，由 applyReward 经真源发放。
+// 约定：requirements 的路径必须存在于 buildAchievementProfile() 返回值上。
+//
+// 奖励口径（用户裁定「成就的名气不该加，最多加历练与经验对应冒险增加的阅历」）：
+//   **预设表里只写 exp 一格，且 exp 落在历练（tempering），不是真·经验条。**
+//   铜钱/灵石/名气/业障/物品一律不写——成就墙是记名分的地方，发钱会破坏沉浸感，
+//   且一条 +30～+1500 的历练能把整本历练账撑歪。量级按稀有度压小：
+//   九品 5 / 七品 10 / 五品 15 / 三品 25 / 一品 40（满打满算 52 枚全亮共 895 点历练）。
+//   applyReward 的发放能力（钱→DataManager、灵石→DataManager、名气/业障→RewardService、
+//   物品→addItem）原样留着，只是不再有哪张表去调它。
+//   积分 points 只进成就墙，不进钱袋。
 const PresetAchievements = [
     // —— 战阵 ——
     new Achievement('first_blood', '旗开得胜', '赢下第一场生死斗', {
         category: 'combat', requirements: { killCount: 1 },
-        reward: { exp: 50, gold: 100 }, icon: '⚔️', rarity: 'common', points: 10
+        reward: { exp: 5 }, icon: '⚔️', rarity: 'common', points: 10
     }),
     new Achievement('kill_50', '百战不却', '阵斩 50 敌', {
         category: 'combat', requirements: { killCount: 50 },
-        reward: { exp: 100, gold: 400 }, icon: '🗡️', rarity: 'uncommon', points: 25
+        reward: { exp: 10 }, icon: '🗡️', rarity: 'uncommon', points: 25
     }),
     new Achievement('kill_300', '杀透三界', '阵斩 300 敌', {
         category: 'combat', requirements: { killCount: 300 },
-        reward: { exp: 300, stones: 150 }, icon: '💀', rarity: 'epic', points: 75
+        reward: { exp: 25 }, icon: '💀', rarity: 'epic', points: 75
     }),
     // —— 修行 ——
     new Achievement('level_10', '初窥门径', '寻得气感，踏入筑基', {
         category: 'cultivation', requirements: { realmIdx: 1 },
-        reward: { exp: 100, gold: 200 }, icon: '📈', rarity: 'common', points: 15
+        reward: { exp: 5 }, icon: '📈', rarity: 'common', points: 15
     }),
     new Achievement('level_50', '金丹大成', '凝结金丹', {
         category: 'cultivation', requirements: { realmIdx: 2 },
-        reward: { exp: 500, gold: 800 }, icon: '🏅', rarity: 'uncommon', points: 30
+        reward: { exp: 10 }, icon: '🏅', rarity: 'uncommon', points: 30
     }),
     new Achievement('realm_yuanying', '元婴坐镇', '碎丹结婴', {
         category: 'cultivation', requirements: { realmIdx: 3 },
-        reward: { exp: 800, stones: 80 }, icon: '🧘', rarity: 'rare', points: 50
+        reward: { exp: 15 }, icon: '🧘', rarity: 'rare', points: 50
     }),
     new Achievement('realm_huashen', '化神游天', '元神出窍，化神之境', {
         category: 'cultivation', requirements: { realmIdx: 4 },
-        reward: { exp: 1500, stones: 200 }, icon: '☁️', rarity: 'epic', points: 80
+        reward: { exp: 25 }, icon: '☁️', rarity: 'epic', points: 80
     }),
     new Achievement('ascension', '名登紫府', '举霞飞升', {
         category: 'cultivation', requirements: { ascended: { operator: 'eq', value: 1 } },
-        reward: { fame: 20, stones: 500 }, icon: '🌈', rarity: 'legendary', points: 200, hidden: true
+        reward: { exp: 40 }, icon: '🌈', rarity: 'legendary', points: 200, hidden: true
     }),
     new Achievement('temper_body', '百战淬体', '历练累积 300', {
         category: 'cultivation', requirements: { tempering: 300 },
-        reward: { gold: 300 }, icon: '💪', rarity: 'uncommon', points: 20
+        reward: { exp: 10 }, icon: '💪', rarity: 'uncommon', points: 20
     }),
     new Achievement('arts_10', '百家兵库', '习得 10 门功法绝技', {
         category: 'cultivation', requirements: { arts: 10 },
-        reward: { gold: 350 }, icon: '📜', rarity: 'uncommon', points: 20
+        reward: { exp: 10 }, icon: '📜', rarity: 'uncommon', points: 20
     }),
     new Achievement('master', '一代宗师', '习得 20 门功法绝技', {
         category: 'cultivation', requirements: { arts: 20 },
-        reward: { exp: 1000, gold: 1500, stones: 150 }, icon: '👑', rarity: 'epic', points: 100
+        reward: { exp: 25 }, icon: '👑', rarity: 'epic', points: 100
     }),
     // —— 门派 ——
     new Achievement('sect_join', '名列仙班', '拜入一家门派', {
         category: 'sect', requirements: { sectJoined: { operator: 'eq', value: 1 } },
-        reward: { gold: 100 }, icon: '🏴', rarity: 'common', points: 10
+        reward: { exp: 5 }, icon: '🏴', rarity: 'common', points: 10
     }),
     new Achievement('sect_elder', '一柱擎天', '位至长老以上', {
         category: 'sect', requirements: { sectRankId: { operator: 'lte', value: 2 } },
-        reward: { stones: 200 }, icon: '🎐', rarity: 'epic', points: 80
+        reward: { exp: 25 }, icon: '🎐', rarity: 'epic', points: 80
     }),
     new Achievement('sect_devote', '功在宗门', '门派贡献攒满 500', {
         category: 'sect', requirements: { contribution: 500 },
-        reward: { gold: 800 }, icon: '🧾', rarity: 'rare', points: 45
+        reward: { exp: 15 }, icon: '🧾', rarity: 'rare', points: 45
     }),
     // —— 人事 ——
     new Achievement('social_butterfly', '广结善缘', '与 10 位侠客交好', {
         category: 'social', requirements: { friends: 10 },
-        reward: { exp: 200, gold: 500 }, icon: '🤝', rarity: 'rare', points: 40
+        reward: { exp: 15 }, icon: '🤝', rarity: 'rare', points: 40
     }),
     new Achievement('friends_30', '高朋满座', '与 30 位侠客交好', {
         category: 'social', requirements: { friends: 30 },
-        reward: { stones: 120, fame: 5 }, icon: '🍵', rarity: 'epic', points: 70
+        reward: { exp: 25 }, icon: '🍵', rarity: 'epic', points: 70
     }),
     // 第一百零六波：知己档——交好之上还有一道更高的槛（好感≥60，关系面板「知己」同槛）
     new Achievement('friends_close', '海内存知己', '与 5 位侠客处成知己（好感 ≥60）', {
         category: 'social', requirements: { closeFriends: 5 },
-        reward: { stones: 150, fame: 6 }, icon: '🎐', rarity: 'epic', points: 65
+        reward: { exp: 25 }, icon: '🎐', rarity: 'epic', points: 65
     }),
     // —— 队伍（第一百零七波）：同行的人此前没有一枚成就 ——
     new Achievement('party_first', '同道中人', '招募第一位队友同行', {
         category: 'social', requirements: { partySize: 1 },
-        reward: { gold: 200 }, icon: '🧭', rarity: 'common', points: 10
+        reward: { exp: 5 }, icon: '🧭', rarity: 'common', points: 10
     }),
     new Achievement('party_full', '四人成众', '队伍满员——四人同行', {
         category: 'social', requirements: { partySize: 4 },
-        reward: { stones: 120, fame: 4 }, icon: '👥', rarity: 'rare', points: 40
+        reward: { exp: 15 }, icon: '👥', rarity: 'rare', points: 40
     }),
     new Achievement('dao_join', '凤求凰', '与有情人结为道侣', {
         category: 'social', requirements: { daoBond: 1 },
-        reward: { gold: 200, fame: 2 }, icon: '💞', rarity: 'common', points: 15
+        reward: { exp: 5 }, icon: '💞', rarity: 'common', points: 15
     }),
     new Achievement('dao_deep', '情深似海', '道侣位分修至三档', {
         category: 'social', requirements: { daoBond: 3 },
-        reward: { stones: 150, fame: 5 }, icon: '💍', rarity: 'epic', points: 60
+        reward: { exp: 25 }, icon: '💍', rarity: 'epic', points: 60
     }),
     new Achievement('child_first', '血脉相承', '诞下第一个灵胎', {
         category: 'social', requirements: { children: 1 },
-        reward: { gold: 500, fame: 3 }, icon: '👶', rarity: 'rare', points: 40
+        reward: { exp: 15 }, icon: '👶', rarity: 'rare', points: 40
     }),
     new Achievement('child_three', '兰阶玉盈', '子嗣满堂（3 人）', {
         category: 'social', requirements: { children: 3 },
-        reward: { stones: 200, fame: 8 }, icon: '🏮', rarity: 'epic', points: 70, hidden: true
+        reward: { exp: 25 }, icon: '🏮', rarity: 'epic', points: 70, hidden: true
     }),
     // —— v20.16 后天改命线 ——
     new Achievement('root_refine_1', '破而后立', '服丹重塑一次灵根', {
         category: 'cultivation', requirements: { rootRefines: 1 },
-        reward: { stones: 100, fame: 2 }, icon: '🌈', rarity: 'rare', points: 40
+        reward: { exp: 15 }, icon: '🌈', rarity: 'rare', points: 40
     }),
     new Achievement('root_refine_3', '洗尽铅华', '三次重塑灵根，凡骨渐化仙胎', {
         category: 'cultivation', requirements: { rootRefines: 3 },
-        reward: { stones: 300, fame: 6 }, icon: '✨', rarity: 'epic', points: 80, hidden: true
+        reward: { exp: 25 }, icon: '✨', rarity: 'epic', points: 80, hidden: true
     }),
     // —— 游历 ——
     new Achievement('collector', '收藏家', '库房收进 10 种名目', {
         category: 'exploration', requirements: { uniqueItems: 10 },
-        reward: { gold: 300 }, icon: '🎒', rarity: 'uncommon', points: 20
+        reward: { exp: 10 }, icon: '🎒', rarity: 'uncommon', points: 20
     }),
     new Achievement('curator', '包罗万象', '库房收进 40 种名目', {
         category: 'exploration', requirements: { uniqueItems: 40 },
-        reward: { stones: 150 }, icon: '🏺', rarity: 'epic', points: 70
+        reward: { exp: 25 }, icon: '🏺', rarity: 'epic', points: 70
     }),
     new Achievement('tower_5', '平步青云', '试炼塔登至 5 层', {
         category: 'exploration', requirements: { towerBest: 5 },
-        reward: { gold: 400 }, icon: '🗼', rarity: 'uncommon', points: 20
+        reward: { exp: 10 }, icon: '🗼', rarity: 'uncommon', points: 20
     }),
     new Achievement('tower_15', '重霄之上', '试炼塔登至 15 层', {
         category: 'exploration', requirements: { towerBest: 15 },
-        reward: { stones: 180 }, icon: '🌩️', rarity: 'epic', points: 70
+        reward: { exp: 25 }, icon: '🌩️', rarity: 'epic', points: 70
     }),
     new Achievement('sword_heart', '剑心通明', '剑冢参得 10 点剑意', {
         category: 'exploration', requirements: { swordIntent: 10 },
-        reward: { gold: 600, fame: 3 }, icon: '⚔️', rarity: 'rare', points: 45
+        reward: { exp: 15 }, icon: '⚔️', rarity: 'rare', points: 45
     }),
     // —— 货殖 ——
     new Achievement('wealthy', '腰缠万贯', '持有 10000 铜钱', {
         category: 'wealth', requirements: { copper: 10000 },
-        reward: { exp: 300 }, icon: '💰', rarity: 'rare', points: 35
+        reward: { exp: 15 }, icon: '💰', rarity: 'rare', points: 35
     }),
     new Achievement('stone_lord', '陶朱之富', '持有 2000 灵石', {
         category: 'wealth', requirements: { spiritStones: 2000 },
-        reward: { fame: 5 }, icon: '💎', rarity: 'epic', points: 60, hidden: true
+        reward: { exp: 25 }, icon: '💎', rarity: 'epic', points: 60, hidden: true
     }),
     // —— 因果 ——
     new Achievement('benevolent', '仁者寿', '善名远播（业障 +50）', {
         category: 'karma', requirements: { karma: 50 },
-        reward: { gold: 800, fame: 5 }, icon: '🕊️', rarity: 'rare', points: 40
+        reward: { exp: 15 }, icon: '🕊️', rarity: 'rare', points: 40
     }),
     new Achievement('dark_path', '魔焰滔天', '杀孽深重（业障 -50）', {
         category: 'karma', requirements: { karma: { operator: 'lte', value: -50 } },
-        reward: { gold: 1000 }, icon: '🔥', rarity: 'rare', points: 40, hidden: true
+        reward: { exp: 15 }, icon: '🔥', rarity: 'rare', points: 40, hidden: true
     }),
     new Achievement('infamous', '恶名震八荒', '恶名积至 50', {
         category: 'karma', requirements: { notoriety: 50 },
-        reward: { gold: 700 }, icon: '👹', rarity: 'rare', points: 35
+        reward: { exp: 15 }, icon: '👹', rarity: 'rare', points: 35
     }),
     new Achievement('lucky', '天眷之人', '气运浓得能拧出水（气运 ≥85）', {
         category: 'karma', requirements: { luck: 85 },
-        reward: { gold: 200 }, icon: '🍀', rarity: 'uncommon', points: 25, hidden: true
+        reward: { exp: 10 }, icon: '🍀', rarity: 'uncommon', points: 25, hidden: true
     }),
     // —— 御兽 ——
     new Achievement('beast_first', '伙伴在侧', '收服第一头灵兽', {
         category: 'beasts', requirements: { beasts: 1 },
-        reward: { gold: 150 }, icon: '🐾', rarity: 'common', points: 10
+        reward: { exp: 5 }, icon: '🐾', rarity: 'common', points: 10
     }),
     new Achievement('beast_pack', '猛兽如栏', '身边灵兽达 5 头', {
         category: 'beasts', requirements: { beasts: 5 },
-        reward: { gold: 800 }, icon: '🦁', rarity: 'rare', points: 40
+        reward: { exp: 15 }, icon: '🦁', rarity: 'rare', points: 40
     }),
     new Achievement('beast_alpha', '灵兽上驷', '任一灵兽养成 15 级', {
         category: 'beasts', requirements: { beastMaxLevel: 15 },
-        reward: { stones: 120 }, icon: '🐉', rarity: 'epic', points: 60
+        reward: { exp: 25 }, icon: '🐉', rarity: 'epic', points: 60
     }),
     // —— 江湖 ——
     new Achievement('fame_local', '名动一方', '名气积至 30', {
         category: 'general', requirements: { fame: 30 },
-        reward: { gold: 400 }, icon: '📯', rarity: 'uncommon', points: 20
+        reward: { exp: 10 }, icon: '📯', rarity: 'uncommon', points: 20
     }),
     new Achievement('fame_world', '名震寰宇', '名气积至 80', {
         category: 'general', requirements: { fame: 80 },
-        reward: { gold: 2000, stones: 300 }, icon: '🌟', rarity: 'legendary', points: 120, hidden: true
+        reward: { exp: 40 }, icon: '🌟', rarity: 'legendary', points: 120, hidden: true
     }),
     new Achievement('year_of_cult', '一岁寒暑', '在山中走过一整年', {
         category: 'general', requirements: { day: 365 },
-        reward: { exp: 100, gold: 200 }, icon: '🗓️', rarity: 'uncommon', points: 15
+        reward: { exp: 10 }, icon: '🗓️', rarity: 'uncommon', points: 15
     }),
     // —— 游历见闻（v39）：账全读 _travel 派生快照，脚程换来的名分，一生一次 ——
     new Achievement('travel_100', '初出茅庐', '野外步行满一百里', {
         category: 'exploration', requirements: { travelSteps: 100 },
-        reward: { exp: 30, stones: 50 }, icon: '👣', rarity: 'uncommon', points: 15
+        reward: { exp: 10 }, icon: '👣', rarity: 'uncommon', points: 15
     }),
     new Achievement('travel_landmarks', '百闻不如一见', '亲至六处有名有姓的大地标', {
         category: 'exploration', requirements: { travelLandmarks: 6 },
-        reward: { stones: 80, fame: 5 }, icon: '🗺️', rarity: 'rare', points: 25
+        reward: { exp: 15 }, icon: '🗺️', rarity: 'rare', points: 25
     }),
     new Achievement('travel_regions5', '行走山河', '足迹踏过五域山河', {
         category: 'exploration', requirements: { travelRegions: 5 },
-        reward: { stones: 120, fame: 8 }, icon: '🧭', rarity: 'rare', points: 30
+        reward: { exp: 15 }, icon: '🧭', rarity: 'rare', points: 30
     }),
     new Achievement('travel_regions9', '踏遍九州', '九州内外（含灵界魔界）无一处未曾亲至', {
         category: 'exploration', requirements: { travelRegions: 9 },
-        reward: { stones: 200, fame: 15 }, icon: '🌏', rarity: 'epic', points: 60
+        reward: { exp: 25 }, icon: '🌏', rarity: 'epic', points: 60
     }),
     new Achievement('travel_8000', '万里独行', '野外步行满八千里——九州都踩在脚下', {
         category: 'exploration', requirements: { travelSteps: 8000 },
-        reward: { exp: 150, stones: 200 }, icon: '🥾', rarity: 'legendary', points: 100
+        reward: { exp: 40 }, icon: '🥾', rarity: 'legendary', points: 100
     }),
     // —— 手艺（第一百零六波）：采集线此前零名分——账读角色身上的生活技能，练了就有，一生一次 ——
     new Achievement('gather_60', '老于山林', '采伐的手艺练到 60', {
         category: 'exploration', requirements: { gatherSkill: 60 },
-        reward: { gold: 400, stones: 50 }, icon: '⛏️', rarity: 'rare', points: 30
+        reward: { exp: 15 }, icon: '⛏️', rarity: 'rare', points: 30
     }),
     new Achievement('gather_100', '手识山河', '采伐的手艺练到圆满（100）', {
         category: 'exploration', requirements: { gatherSkill: 100 },
-        reward: { stones: 200, fame: 6 }, icon: '🏔️', rarity: 'epic', points: 70, hidden: true
+        reward: { exp: 25 }, icon: '🏔️', rarity: 'epic', points: 70, hidden: true
     }),
     // —— 洞府（第一百零五波）：占山→修缮→安置的营造之路，此前整条线没有一枚成就 ——
     new Achievement('house_first', '安身立命', '占下一处洞府（哪怕只是破山洞）', {
         category: 'dwelling', requirements: { hasHouse: { operator: 'eq', value: 1 } },
-        reward: { gold: 150 }, icon: '🏠', rarity: 'common', points: 10
+        reward: { exp: 5 }, icon: '🏠', rarity: 'common', points: 10
     }),
     new Achievement('house_facilities', '百工居肆', '洞府里安置起 4 处设施', {
         category: 'dwelling', requirements: { houseFacilities: 4 },
-        reward: { stones: 100, gold: 300 }, icon: '🧰', rarity: 'rare', points: 40
+        reward: { exp: 15 }, icon: '🧰', rarity: 'rare', points: 40
     }),
     new Achievement('house_palace', '琼楼玉宇', '把洞府一路修缮成仙府', {
         category: 'dwelling', requirements: { houseTier: 4 },
-        reward: { stones: 300, fame: 8 }, icon: '🏰', rarity: 'epic', points: 80
+        reward: { exp: 25 }, icon: '🏰', rarity: 'epic', points: 80
     })
 ];
 

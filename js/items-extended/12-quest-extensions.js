@@ -97,12 +97,12 @@
         // 灵素 - 身患奇毒的真相
         'npc_healer_01': { accept: '灵素咳嗽了几声，脸色苍白。\n「你来了…我最近身体越来越差了。」', progress: '灵素透露她身患奇毒，需要寻找解毒药材…', complete: '你了解了灵素的病情，决定帮她寻找解药…' },
         'npc_healer_02': { accept: '灵素虚弱地说：\n「要解毒需要三种药材：千年灵芝、龙涎草、凤凰血。」', progress: '收集三种解毒药材：千年灵芝、龙涎草、凤凰血…', complete: '药材收集齐了，可以开始炼制解药…' },
-        'npc_healer_03': { accept: '灵素服下解药后，脸色渐渐恢复红润。\n「我感觉好多了…谢谢你救了我的命！」', progress: '陪伴灵素恢复，帮她调理身体…', complete: '灵素完全康复了！她感激地表示愿意成为你的专属治疗师…' },
+        'npc_healer_03': { accept: '灵素服下解药后，脸色渐渐恢复红润。\n「我感觉好多了…谢谢你救了我一命！」', progress: '陪伴灵素恢复，帮她调理身体…', complete: '灵素完全康复了！她感激地表示愿意成为你的专属治疗师…' },
         // 铁山 - 神秘对手的身份
         'npc_warrior_01': { accept: '铁山擦着汗，神情凝重。\n「我一直在找那个打败我的人…」', progress: '铁山讲述了他当年败给神秘对手的经过…', complete: '你决定帮铁山调查这个神秘对手的身份…' },
-        'npc_warrior_02': { accept: '调查发现，铁山的对手是魔教的一名护法。\n「原来是他…难怪当年我败得那么惨。」', progress: '找到魔教护法的藏身之处，准备决战…', complete: '找到了魔教护法的老巢…' },
+        'npc_warrior_02': { accept: '调查发现，铁山的对手是魔教的一名护法。\n「原来是他…难怪当年我败得那么惨。」', progress: '找到魔教护法的藏身之处，准备决战…', complete: '你找到了魔教护法的老巢…' },
         'npc_warrior_03': { accept: '铁山站在魔教护法面前，战意高昂。\n「来吧，当年的恩怨，今日了结！」', progress: '与铁山一起击败魔教护法…', complete: '魔教护法被击败！铁山终于解开了多年的心结…' },
-        'npc_warrior_04': { accept: '铁山感激地拍了拍你的肩膀。\n「多谢你了！这套拳法是我毕生所学，传授给你。」', progress: '学习铁山传授的战斗技巧…', complete: '你学会了铁山的独门拳法！' },
+        'npc_warrior_04': { accept: '铁山感激地拍了拍你的肩膀。\n「多谢你了！这套拳法是我毕生所学，传授给你。」', progress: '学习铁山传授的战斗技巧…', complete: '你学会了铁山传授的独门拳法！' },
         // 贾有道 - 禁品交易的背后
         'npc_merchant_01': { accept: '贾有道神秘地压低声音。\n「兄弟，我这里有一批好货，要不要看看？」', progress: '贾有道展示了他的禁品交易网络…', complete: '你了解了贾有道的禁品交易，决定深入调查…' },
         'npc_merchant_02': { accept: '贾有道交给你一个任务。\n「帮我把这批货运到金城，报酬少不了你的。」', progress: '帮贾有道完成一次禁品运输任务…', complete: '运输完成，你发现了交易背后的更大阴谋…' },
@@ -114,8 +114,8 @@
         'npc_mysterious_03': { accept: '老者的实力恢复了大半。\n「现在，是时候去找他了。你愿意陪我走这一趟吗？」', progress: '与老者一起前往魔教禁地，面对魔教始祖…', complete: '一场惊天动地的大战…' },
         'npc_mysterious_04': { accept: '击败魔教始祖后，老者终于放下了执念。\n「我这一生，所求不过是一个公道。如今心愿已了。」', progress: '老者决定将毕生修为传授给你…', complete: '你获得了上古大能的完整传承！' },
         // 柳随风 - 魔教卧底的身份
-        'npc_rival_01': { accept: '柳随风风度翩翩地走来，但眼神中有一丝不易察觉的阴郁。\n「又见面了。你最近在调查我？」', progress: '你发现柳随风行踪可疑，经常深夜出入魔教据点…', complete: '你确认了柳随风是魔教卧底的身份…' },
-        'npc_rival_02': { accept: '柳随风坦然承认了身份。\n「没错，我是魔教的人。但事情不是你想的那样。」', progress: '柳随风讲述了他的故事——他从小被魔教收养，身不由己…', complete: '你了解了柳随风的苦衷…' },
+        'npc_rival_01': { accept: '柳随风风度翩翩地走来，但眼神中有一丝不易察觉的阴郁。\n「又见面了。我最近在调查我？」', progress: '你发现柳随风行踪可疑，经常深夜出入魔教据点…', complete: '你确认了柳随风是魔教卧底的身份…' },
+        'npc_rival_02': { accept: '柳随风坦然承认了身份。\n「没错，我是魔教的人。但事情不是你想的那样。」', progress: '柳随风讲述了他的故事——他从小被魔教收养，身不由己…', complete: '你了解了柳随手的苦衷…' },
         'npc_rival_03': { accept: '柳随风面临抉择：继续为魔教效力，还是背叛魔教。\n「你说…我该怎么办？」', progress: '选择：劝他归顺正道，或支持他继续卧底，或举报他…', complete: '柳随风做出了他的选择…' },
         'npc_rival_04': { accept: '（根据你的选择，柳随风的结局不同）\n如果归顺：他成了正道的重要情报来源。\n如果继续卧底：他成了双面间谍。\n如果举报：他被囚禁，但保住了性命…', progress: '柳随风的命运已定…', complete: '柳随风的故事告一段落…' }
     };
@@ -183,7 +183,12 @@
           storyDialogue: NPC_STORY_DIALOGUES['npc_merchant_01'], accepted: false, completed: false, turnedIn: false },
         { id: 'npc_merchant_02', title: '运货', type: 'npc_story', npcId: 'merchant_01', priority: { id: 'medium', name: '重要', color: 'text-blue-400' },
           description: '帮贾有道完成一次禁品运输…', minAffection: 40,
-          objectives: [{ type: 'deliver', count: 1, completed: false }],
+          // 原为 { type: 'deliver' }：全工程无 deliver 事件、无 deliver 目标匹配分支（quest-system.js
+          // questObjectiveMatches 14 类事件里没有它，事件桥也没听）⇒ 进度恒 0，这条 NPC 故事线第二步永锁。
+          // 改成已接通的 escort：接 dialogue 原话「帮我把这批货运到金城」——运货＝跑一趟镖，
+          // randomMap.js:3501 escortDeliverHere「送达」那一步 emit('escort:completed')，桥认 { type: 'escort' }。
+          // 顺带把这条链唯一的「出力气」一环坐实（本链其余三步都是 talk_to_npc，不改就整链点几下就完）。
+          objectives: [{ type: 'escort', count: 1, completed: false, description: '把货送达镖局（完成一次护送）' }],
           rewards: { exp: 1000, spiritStones: 800, affection: 10 },
           storyDialogue: NPC_STORY_DIALOGUES['npc_merchant_02'], accepted: false, completed: false, turnedIn: false },
         { id: 'npc_merchant_03', title: '抉择', type: 'npc_story', npcId: 'merchant_01', priority: { id: 'high', name: '紧急', color: 'text-yellow-400' },
@@ -204,7 +209,8 @@
           storyDialogue: NPC_STORY_DIALOGUES['npc_mysterious_01'], accepted: false, completed: false, turnedIn: false },
         { id: 'npc_mysterious_02', title: '恢复实力', type: 'npc_story', npcId: 'mysterious_01', priority: { id: 'medium', name: '重要', color: 'text-blue-400' },
           description: '帮助老者寻找恢复实力的方法…', minAffection: 40,
-          objectives: [{ type: 'explore_dungeon', dungeon: 'mountain', count: 1, completed: false }],
+          // 与 main_021 同病：mountain 玩家进不去（入口三处全写死 ruin），这条 NPC 故事线第二步同样永远锁死。改指 ruin。
+          objectives: [{ type: 'explore_dungeon', dungeon: 'ruin', count: 1, completed: false, description: '闯进上古遗迹最深处（第 5 层），替老者找那半块阵眼' }],
           rewards: { exp: 3000, spiritStones: 1500, affection: 10 },
           storyDialogue: NPC_STORY_DIALOGUES['npc_mysterious_02'], accepted: false, completed: false, turnedIn: false },
         { id: 'npc_mysterious_03', title: '最终对决', type: 'npc_story', npcId: 'mysterious_01', priority: { id: 'high', name: '紧急', color: 'text-yellow-400' },
@@ -243,9 +249,20 @@
     // 主线扩展（15个新增，总计35个，覆盖全部9境界→飞升）
     var extraMain = [
         // === 第四章：金丹大道（main_021-023）===
+        // 【死秘境 id·第一批·2026-10-05 实测定案】main_021 原写 dungeon:'mountain'（仙山秘境）。
+        // 真相不是「写错了表」——mountain/cave/ruin 三座都真在 app.js 的 DUNGEON_DEFS 里，
+        // app.js 也确实 emit('dungeon:completed', {dungeonId:'mountain'})，事件桥按 obj.dungeon===data.dungeonId
+        // 判得中（vm 沙箱实测：发 mountain 一次，main_021 的目标立刻 completed）。
+        // 病根在**入口**：全工程三处秘境入口（app.js:4478 建筑交互、app.js:4716 interactBuilding、
+        // event-system.js:736 enterSecretRealm）全部硬写 openDungeonEntrance('ruin')，
+        // 由 travel-system.js:131「发现遗迹」与 event-system.js:148「秘境之门」两条活路喂它。
+        // ⇒ DUNGEON_DEFS 的 cave/mountain 是玩家**永远进不去**的死内容，main_021 卡在这一格永远交不掉。
+        // 本批按主线正文的原话改口：'main_021'.accept 第一句就是「你来到古遗迹前，石门缓缓打开」
+        // ——古遗迹＝ruin（上古遗迹），本来就该指 ruin，指 mountain 才是与自己的剧情打架。
+        // 另给 objective 补 description：没有它，卡片上印的是裸 id「ruin 0/1」（_objectiveLabel 直接回 obj.dungeon）。
         { id: 'main_021', title: '金丹传承', type: 'main', priority: { id: 'critical', name: '主线', color: 'text-red-500' },
           description: STORY_DIALOGUES['main_021'].accept,
-          objectives: [{ type: 'explore_dungeon', dungeon: 'mountain', count: 1, completed: false }],
+          objectives: [{ type: 'explore_dungeon', dungeon: 'ruin', count: 1, completed: false, description: '闯进那座上古遗迹，走到最深处（第 5 层）' }],
           rewards: { exp: 10000, spiritStones: 8000, items: [{ itemId: 'pill_golden_core', count: 3 }] },
           storyDialogue: STORY_DIALOGUES['main_021'], accepted: false, completed: false, turnedIn: false },
         { id: 'main_022', title: '灵脉修炼', type: 'main', priority: { id: 'critical', name: '主线', color: 'text-red-500' },
@@ -275,9 +292,15 @@
           rewards: { exp: 30000, spiritStones: 20000, items: [{ itemId: 'wpn_xu_yuan', count: 1 }, { itemId: 'pill_primordial', count: 3 }] },
           storyDialogue: STORY_DIALOGUES['main_026'], accepted: false, completed: false, turnedIn: false },
         // === 第六章：化神之秘（main_027-029）===
+        // 同上：main_027 原写 ruin ×3。id 本身对得上（实测 ruin 连发三次 → 3/3 → turnIn 为真），
+        // 但 ×3 是个**无叙事依据的人为计数器**（强制规则第一条禁的那类）：
+        // 同一座五层秘境连刷三趟，每次都从第 1 层重来（app.js:10340 通关后 dungeonProgress 归 1）；
+        // 且走战斗通关那条路（app.js:10130 onDungeonBattleResolved）会记 dungeonClearedAt，
+        // 于是 7 日灵气复涌冷却（app.js:10004 DUNGEON_COOLDOWN_DAYS）生效——三趟＝两周起步的死重。
+        // 正文只说「探索上古战场遗迹，收集散落的记忆碎片」，一趟遗迹走到底正是这一章要的事。
         { id: 'main_027', title: '上古真相', type: 'main', priority: { id: 'critical', name: '主线', color: 'text-red-500' },
           description: STORY_DIALOGUES['main_027'].accept,
-          objectives: [{ type: 'explore_dungeon', dungeon: 'ruin', count: 3, completed: false }],
+          objectives: [{ type: 'explore_dungeon', dungeon: 'ruin', count: 1, completed: false, description: '走进上古战场遗迹，走到底（第 5 层），把记忆碎片拼齐' }],
           rewards: { exp: 40000, spiritStones: 25000, items: [{ itemId: 'mat_chaos_stone', count: 1 }] },
           storyDialogue: STORY_DIALOGUES['main_027'], accepted: false, completed: false, turnedIn: false },
         { id: 'main_028', title: '五行本源', type: 'main', priority: { id: 'critical', name: '主线', color: 'text-red-500' },
@@ -331,19 +354,43 @@
         { id: 'random_004', title: '护送商队', type: 'random', priority: { id: 'medium', name: '重要', color: 'text-blue-400' }, description: '护送商队安全穿越危险区域…', objectives: [{ type: 'escort', count: 1, completed: false }], rewards: { exp: 200, spiritStones: 150 }, accepted: false, completed: false, turnedIn: false },
         { id: 'random_005', title: '探索洞穴', type: 'random', priority: { id: 'medium', name: '重要', color: 'text-blue-400' }, description: '探索未知洞穴带回宝物…', objectives: [{ type: 'explore', count: 1, completed: false }], rewards: { exp: 150, spiritStones: 120 }, accepted: false, completed: false, turnedIn: false },
         { id: 'random_006', title: '击败山贼头目', type: 'random', priority: { id: 'medium', name: '重要', color: 'text-blue-400' }, description: '教训山贼头目…', objectives: [{ type: 'kill', target: '山贼头目', count: 1, completed: false }], rewards: { exp: 250, spiritStones: 200 }, accepted: false, completed: false, turnedIn: false },
-        { id: 'random_007', title: '传递消息', type: 'random', priority: { id: 'low', name: '普通', color: 'text-gray-400' }, description: '将信件送到邻近城市…', objectives: [{ type: 'deliver', count: 1, completed: false }], rewards: { exp: 50, spiritStones: 80 }, accepted: false, completed: false, turnedIn: false },
+        // 「传递消息」原为 { type: 'deliver' }：同 npc_merchant_02，deliver 类目标全工程无事件可推（进度恒 0）。
+        // 描述是「将信件送到邻近城市」，已接通的动作里只有 visit（location-system.js:461 enterCity emit
+        // 「location:visited」，桥认 { type: 'visit' }）。count 由 1 提到 2：location:visited 在
+        // 「进城」与「入门派」（location-system.js:2309）都发，单次到访近乎白捡；两次到访才够一趟送信的量。
+        { id: 'random_007', title: '传递消息', type: 'random', priority: { id: 'low', name: '普通', color: 'text-gray-400' }, description: '将信件送到邻近城市…', objectives: [{ type: 'visit', count: 2, completed: false, description: '把信送到邻近城镇（到访 2 处）' }], rewards: { exp: 50, spiritStones: 80 }, accepted: false, completed: false, turnedIn: false },
         { id: 'random_008', title: '清理遗迹', type: 'random', priority: { id: 'medium', name: '重要', color: 'text-blue-400' }, description: '遗迹中有魔物盘踞…', objectives: [{ type: 'kill', target: '魔物', count: 8, completed: false }], rewards: { exp: 300, spiritStones: 250, items: [{ itemId: 'mat_five_element_essence', count: 2 }] }, accepted: false, completed: false, turnedIn: false },
         { id: 'random_009', title: '炼丹委托', type: 'random', priority: { id: 'medium', name: '重要', color: 'text-blue-400' }, description: '炼制一批回春丹…', objectives: [{ type: 'craft', item: 'pill_spring_recovery', count: 3, completed: false }], rewards: { exp: 200, spiritStones: 300 }, accepted: false, completed: false, turnedIn: false },
         { id: 'random_010', title: '锻造武器', type: 'random', priority: { id: 'medium', name: '重要', color: 'text-blue-400' }, description: '锻造一把青钢剑…', objectives: [{ type: 'craft', item: 'wpn_steel_sword', count: 1, completed: false }], rewards: { exp: 300, spiritStones: 400 }, accepted: false, completed: false, turnedIn: false },
         { id: 'random_011', title: '灵泉取水', type: 'random', priority: { id: 'low', name: '普通', color: 'text-gray-400' }, description: '去灵泉取一瓶灵泉水…', objectives: [{ type: 'collect', item: 'spec_spring_water', count: 1, completed: false }], rewards: { exp: 100, spiritStones: 100 }, accepted: false, completed: false, turnedIn: false },
         { id: 'random_012', title: '妖兽巢穴', type: 'random', priority: { id: 'high', name: '紧急', color: 'text-yellow-400' }, description: '彻底清除妖兽巢穴…', objectives: [{ type: 'kill', target: '妖兽', count: 15, completed: false }], rewards: { exp: 500, spiritStones: 400, items: [{ itemId: 'mat_demon_beast_core', count: 3 }] }, accepted: false, completed: false, turnedIn: false },
-        { id: 'random_013', title: '寻找失踪修士', type: 'random', priority: { id: 'medium', name: '重要', color: 'text-blue-400' }, description: '在秘境中寻找失踪修士…', objectives: [{ type: 'explore_dungeon', dungeon: 'cave', count: 1, completed: false }], rewards: { exp: 400, spiritStones: 300 }, accepted: false, completed: false, turnedIn: false },
+        // 同上：cave（幽暗洞穴）同样玩家进不去（入口全写死 ruin），这条布告委托永远 0/1。改指 ruin。
+        { id: 'random_013', title: '寻找失踪修士', type: 'random', priority: { id: 'medium', name: '重要', color: 'text-blue-400' }, description: '在秘境中寻找失踪修士…', objectives: [{ type: 'explore_dungeon', dungeon: 'ruin', count: 1, completed: false, description: '在秘境内寻到那批失踪的修士' }], rewards: { exp: 400, spiritStones: 300 }, accepted: false, completed: false, turnedIn: false },
         { id: 'random_014', title: '收集兽皮', type: 'random', priority: { id: 'low', name: '普通', color: 'text-gray-400' }, description: '收集妖兽皮制作装备…', objectives: [{ type: 'collect', item: 'mat_demon_beast_skin', count: 10, completed: false }], rewards: { exp: 80, spiritStones: 150 }, accepted: false, completed: false, turnedIn: false },
         { id: 'random_015', title: '雪莲采集', type: 'random', priority: { id: 'medium', name: '重要', color: 'text-blue-400' }, description: '去雪山采集天山雪莲…', objectives: [{ type: 'collect', item: 'mat_snow_lotus', count: 5, completed: false }], rewards: { exp: 200, spiritStones: 250 }, accepted: false, completed: false, turnedIn: false },
         { id: 'random_016', title: '符箓绘制', type: 'random', priority: { id: 'medium', name: '重要', color: 'text-blue-400' }, description: '绘制火球符用于防御…', objectives: [{ type: 'craft', item: 'tal_fireball', count: 5, completed: false }], rewards: { exp: 150, spiritStones: 200 }, accepted: false, completed: false, turnedIn: false },
         { id: 'random_017', title: '竞技挑战', type: 'random', priority: { id: 'medium', name: '重要', color: 'text-blue-400' }, description: '在竞技场中连胜3场…', objectives: [{ type: 'arena_win', count: 3, completed: false }], rewards: { exp: 400, spiritStones: 500 }, accepted: false, completed: false, turnedIn: false },
         { id: 'random_018', title: '驱逐邪修', type: 'random', priority: { id: 'high', name: '紧急', color: 'text-yellow-400' }, description: '驱逐作乱的邪修…', objectives: [{ type: 'kill', target: '邪修', count: 3, completed: false }], rewards: { exp: 600, spiritStones: 500, items: [{ itemId: 'mat_purple_gold', count: 2 }] }, accepted: false, completed: false, turnedIn: false },
-        { id: 'random_019', title: '守护灵田', type: 'random', priority: { id: 'medium', name: '重要', color: 'text-blue-400' }, description: '守护灵田不被妖兽破坏…', objectives: [{ type: 'defend', count: 1, completed: false }], rewards: { exp: 200, spiritStones: 150 }, accepted: false, completed: false, turnedIn: false },
+        // 「守护灵田」原为 { type: 'defend' }：quest-system.js questObjectiveMatches 的 13 类事件里
+        // 没有 defend 支，事件桥也听不到任何「防守」事件 ⇒ 进度恒 0，这条永远交不了（同 deliver 那两条）。
+        // 查过了——**防守玩法其实是有真入口的，不缺玩法，缺的是能推动目标的类型**：
+        //   · js/extensions/player-sect-ui.js:555 _defendSectRaid（「护宗战」/「进山演阵」按钮，:366 挂的）
+        //     :560-566 生成的敌人是 { name:'攻山妖兽', type:'beast', species:'beast' }；
+        //   · js/sects/sect-war.js:329-341 buildTideEnemy「兽潮·叩门兽群」（species:'beast'，:343 startTideSiege
+        //     真打这场仗），:340 自己写着「兽潮改了道，正扑着山门来…今日这道门必须守住」；
+        //   · js/extensions/beast-ecosystem.js:284 猎杀妖兽入口同样带 species:'beast'；
+        //   · js/factions/faction-invasion.js:4-37 敌对势力入侵 → openBattleWithEntity。
+        // 这几条全都汇到同一处：js/battle.js:4720 emit('enemy:defeated', { enemyType, species, … })，
+        // 而 quest-system.js:2098 有一条**专给「妖兽」写死的特例**（v25.1·P25 加的）——
+        // 野外妖兽叫赤炎狼/幽冥虎，名字里没有「妖兽」二字，字符串互contain 永远失配，
+        // 那条判的就是 target==='妖兽' 时看 data.enemyType/data.species 是否为 'beast'。
+        // 所以改成已接通的 { type:'kill', target:'妖兽' }：语义正对描述里那句「不被妖兽破坏」，
+        // 且走的是当初为「猎杀妖兽」专修的那条判据，不需要给桥补第 14 类事件
+        // （tests/wave140-quest-event-bridge-node.js:141-143 的 A2 断言「没有多余注册」）。
+        // count 由 1 提到 5：一只怪就交差与「守护」二字不合。量价按同册同奖档校过——
+        // 本条奖励 exp200/灵石150，而同为 kill 的 random_008 魔物×8 给 300/250（≈37 exp/只）、
+        // random_012 妖兽×15 给 500/400（≈33 exp/只），200÷33~37 ≈ 5~6 只，取 5。
+        { id: 'random_019', title: '守护灵田', type: 'random', priority: { id: 'medium', name: '重要', color: 'text-blue-400' }, description: '守护灵田不被妖兽破坏…', objectives: [{ type: 'kill', target: '妖兽', count: 5, completed: false, description: '击退侵田妖兽（斩妖兽 5 只）' }], rewards: { exp: 200, spiritStones: 150 }, accepted: false, completed: false, turnedIn: false },
         { id: 'random_020', title: '深海寻珠', type: 'random', priority: { id: 'high', name: '紧急', color: 'text-yellow-400' }, description: '去深海寻找灵源珠…', objectives: [{ type: 'collect', item: 'spec_spirit_source_pearl', count: 1, completed: false }], rewards: { exp: 500, spiritStones: 800, items: [{ itemId: 'pill_marrow_wash', count: 1 }] }, accepted: false, completed: false, turnedIn: false }
     ];
 

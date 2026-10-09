@@ -70,12 +70,15 @@ function 装沙箱(战利品改写) {
     }
     try { vm.runInContext(load('js/inventory.js'), sb, { filename: 'js/inventory.js' }); }
     catch (e) { env.loadFails.push('js/inventory.js: ' + e.message); }
-    let src = load('js/items-extended/09-loot-sources.js');
-    if (战利品改写) src = 战利品改写(src);
-    try { vm.runInContext(src, sb, { filename: 'js/items-extended/09-loot-sources.js' }); }
-    catch (e) { env.loadFails.push('09-loot-sources.js: ' + e.message); }
-    try { vm.runInContext(load('js/loot-system.js'), sb, { filename: 'js/loot-system.js' }); }
+    // W-1：宝箱货单与开箱手已从 09-loot-sources.js（已废弃不挂载）迁进 js/loot-system.js，
+    //   故「改前复现」要按死的那一刀锚点改到 loot-system.js 上；09 那本仍在同一沙箱里装载
+    //   （它还导出 EXTENDED_LOOT_TABLES／WEAPON_SHOP_ITEMS／ARMOR_SHOP_ITEMS，Ⓐ 段要逐枚过池）。
+    let lsrc = load('js/loot-system.js');
+    if (战利品改写) lsrc = 战利品改写(lsrc);
+    try { vm.runInContext(lsrc, sb, { filename: 'js/loot-system.js' }); }
     catch (e) { env.loadFails.push('js/loot-system.js: ' + e.message); }
+    try { vm.runInContext(load('js/items-extended/09-loot-sources.js'), sb, { filename: 'js/items-extended/09-loot-sources.js' }); }
+    catch (e) { env.loadFails.push('09-loot-sources.js: ' + e.message); }
     env.sb = sb;
     return env;
 }
@@ -311,7 +314,7 @@ function 清包() {
 // ============ 🲐 改前复现：把筛池那一刀按死，幽灵就该掷得中 ============
 (function () {
     const 锚 = 'table.items.filter(function (id) { return !!lib[id]; })';
-    const 原码 = load('js/items-extended/09-loot-sources.js');
+    const 原码 = load('js/loot-system.js');
     ok(原码.indexOf(锚) >= 0, '🅕 改前复现的锚点在源码里找得到（形状变了要跟着改尺）');
     const F = 装沙箱(src => src.replace(锚, 'table.items.filter(function (id) { return true; })'));
     const fw = F.sb.window;

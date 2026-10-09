@@ -259,7 +259,18 @@
         }
         if (beat === 'yu') {
             if (win) {
-                flags()['_qi_yu'] = 'guard';
+                var yf = flags();
+                // 幂等闸：赢了之后这一拍已落定，二次结算直接返回。
+                // 位置与作用对齐 qi-arc3.js:326 _qiSettleExtraB（if (f['qi_knock2']) return;）——
+                // 缺了它，settleQiBattle(true,'yu') 被调第二次会再记一笔 qi_yu_guard、
+                // 再插一条恩列、再把第四场重弹一遍（qiSceneChoice 顶上的 f['_qi_yu'] 闸只拦场景入口，拦不住结算）。
+                if (yf['_qi_yu']) return;
+                yf['_qi_yu'] = 'guard';
+                // 「守住阵眼」此前只写旗不写抉择记忆：qi_yu_guard 在 IMPORTANT_CHOICES 里在册，
+                // 却全仓无人 recordChoice 它 —— 序幕四场戏里只有「没有上山」那笔入册。
+                // 位置对齐 qi-arc3.js _qiSettleExtraB（旗 → record → addQiGrace → log）。
+                // 只在 win 分支写：败北分支只把 qi_scene 拨回 'yu' 让玩家再战，那一刻选择尚未做出。
+                record('qi_yu_guard');
                 W.addQiGrace('七霞派掌门虞松子：你替他守住了阵眼最后小半块灵石。他说——阵记得，老道也记得。');
                 log('🏔️ 你把脉贼赶下了山。老道转身，整了整那件洗得发白的道袍，向你行了个全礼：「七霞派，虞松子。道友今日守的不是阵——是七霞派最后一口气。」他说得很平静，「这阵守不住的，灵石就剩小半块，撑不过三日。但今日守过，阵记得，老道也记得。」（恩列记账：虞松子）', 'success');
                 _scene('zhou');

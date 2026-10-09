@@ -1206,6 +1206,13 @@ class NPC {
         if (rel.affection >= 60 && rel.respect >= 60) return { type: 'follower', name: '追随者', color: 'text-purple-400' };
         // v20.37 威压轨露出：怕你到这份上，关系形态就叫畏惧（情深者不受此判——前面几档先接住）
         if (rel.fear >= 60) return { type: 'intimidated', name: '畏惧', color: 'text-red-300' };
+        // v26.2·死接线批：旧阶梯在「畏惧」之下只分得出一个负向档（affection<20 && respect<30 → 路人），
+        // affection 一路沉到 -100 也还叫「路人」。人脉面板同一张卡上另一行按 affection 分档会写「仇人」，
+        // 于是一个恨你入骨的人被系统判成「路人」——玩家看到的和判定用的不是一回事。
+        // 这里补上 厌恶/仇人 两档，边界对齐面板旧七档的 -20 / -50。
+        // 放在 畏惧 之后：怕到那份上的人先由 畏惧 接住；放在 路人 之前：不再被它吞掉。
+        if (rel.affection < -50 && rel.hatred < 60) return { type: 'nemesis', name: '仇人', color: 'text-red-600' };
+        if (rel.affection < -20 && rel.hatred < 60) return { type: 'hated', name: '厌恶', color: 'text-orange-400' };
         if (rel.affection < 20 && rel.respect < 30) return { type: 'stranger', name: '路人', color: 'text-gray-400' };
         if (rel.respect >= 60) return { type: 'awe', name: '敬畏', color: 'text-yellow-400' };
         return { type: 'neutral', name: '普通', color: 'text-blue-400' };
@@ -1321,8 +1328,11 @@ class NPC {
     // ==================== P2：故事线进度管理 ====================
     // 检查是否可以触发某个故事线阶段
     canTriggerStorylineStage(npcId, storyId, stageIndex) {
-        if (!window.NPC_STORYLINES[storyId]) return false;
-        
+        // v27.13：守卫补刀——npc-storylines.js 有意不挂载（P1 遗产废弃），旧守卫
+        // `!window.NPC_STORYLINES[storyId]` 对 undefined 取属性自身必抛 TypeError
+        //（守卫写法就是雷：谁以后接线谁炸）。先验表存在再查条目。
+        if (!window.NPC_STORYLINES || !window.NPC_STORYLINES[storyId]) return false;
+
         const storyline = window.NPC_STORYLINES[storyId];
         const stage = storyline.story[stageIndex];
         if (!stage) return false;
@@ -1357,6 +1367,10 @@ class NPC {
     
     // 推进故事线阶段
     advanceStorylineStage(npcId, storyId, stageIndex, choiceResult) {
+        // v27.13：守卫补刀（同 canTriggerStorylineStage）——表未挂载/查无此线时安静退出，
+        // 不留半写进度（守卫放 progress 初始化之前，避免"账开了一半故事线没影"）。
+        if (!window.NPC_STORYLINES || !window.NPC_STORYLINES[storyId]) return;
+
         if (!this.storylineProgress[storyId]) {
             this.storylineProgress[storyId] = { stage: 0, completedStages: [] };
         }
@@ -3164,6 +3178,9 @@ var BOND_DAO_FINAL_CHAPTER = {
     'sect_leader_少林寺': '终章「骂不出」',
     'shaolin_wujiu': '终章「第五百零一条」'
 };
+// v26.2 定情场景层（npcs/confession-rites.js）要整册排除这 37 人——他们的道侣由各自终章定局，
+// 场景层不得给平价后门。名册此前是本文件私变量，别处读不到，这里挂一次供场景层核账。
+window.BOND_DAO_FINAL_CHAPTER = BOND_DAO_FINAL_CHAPTER;
 
 // 辅助：情感互动（爱情类）
 function executeEmotionInteraction(npcId, interactionType) {
@@ -3212,6 +3229,10 @@ switch (interactionType) {
             else { showMessage(name + ' 婉拒：「下次吧。」', 'warning'); }
             break;
         case 'confess':
+        // v26.2 定情场景层：亲密度过了这道门（aff>=60，与上面那道门同一个数）就改走场景——
+        // 多幕、多结局、伦常与名分当场判定。场景层缺席（未挂载／存档来自旧局）时，
+        // 下面那行单行实现原样执行，一个字不改：v20.25 的 E1~E5 是直接抽本函数在 vm 里跑的。
+        if (window.ConfessionRites && typeof window.ConfessionRites.offer === 'function' && window.ConfessionRites.offer(npc)) break;
         if (aff >= 60) { showMessage('💕 ' + name + ' 怔住了，随后低声道：「我……我需要时间考虑。」好感度+5', 'success'); npc.changeAffection(5); npc.changeLove(8); npc.memory._loveAccepted_confess = true; _markLoveCd(); }
         else { if (typeof npc.changeAffection === 'function') npc.changeAffection(-2); showMessage(name + ' 摇头：「我们不合适。」——这话砸在地上，两个人都僵了一瞬。（情面-2）', 'warning'); }
         break;
@@ -4946,7 +4967,7 @@ if (typeof window !== 'undefined') {
         const npc = window.npcManager.getNPC(npcId);
         if (!npc || !window.NPC_STORYLINES[npcId]) return false;
         
-        const storyline = NPC_STORYLINES[npcId];
+        const storyline = window.NPC_STORYLINES[npcId];
         const charData = window.currentCharData;
         
         // 加载该NPC的故事线进度（如果之前保存过）
@@ -5039,7 +5060,16 @@ if (typeof window !== 'undefined') {
     }
     
     function handleStorylineChoice(npcId, choiceIndex, buttonElement) {
+        // v27.13：守卫补刀——npc-storylines.js 有意不挂载（P1 遗产），旧版对 undefined
+        // 取属性（window.NPC_STORYLINES[npcId]）必抛 TypeError；弹窗按钮是 inline onclick，
+        // 异常会把"关闭弹窗"一并炸掉。表未挂载/查无此线/NPC 已不在册时安静退出并照常关弹窗，
+        // storylines-v2 接线后自然恢复。
         const npc = window.npcManager.getNPC(npcId);
+        if (!window.NPC_STORYLINES || !window.NPC_STORYLINES[npcId] || !npc) {
+            const _deadModal = buttonElement && buttonElement.closest ? buttonElement.closest('.fixed') : null;
+            if (_deadModal) _deadModal.remove();
+            return;
+        }
         const storyline = window.NPC_STORYLINES[npcId];
         
         // 找到当前触发的阶段

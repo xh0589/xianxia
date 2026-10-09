@@ -8,6 +8,8 @@
 //     日上限按天落档（StateRegistry 正门），防上头也防刷钱；
 //   · 连赢六把，庄家把你列入黑名单：**禁入三日**（落档），街面上还会传你的名（传闻池一笔）。
 // 骰面/净账/连赢全部现算展示——赌坊不藏账。
+// v27.13：设施联动（⑤改良）——单把大赢（铜桌≥50/雅间≥3）当日牌面冒「请全场喝一轮」勾子
+//   （真扣铜钱走设施回流，心境/城望小额+）；酒楼侧读 GambleDen.state 认这一天递一句承接文案。
 (function () {
     'use strict';
     if (typeof window === 'undefined') return;
@@ -22,7 +24,16 @@
         COPPER_WIN_CAP: 500,  // 每日铜桌净赢上限
         STONE_LOSS_CAP: 30,
         STONE_WIN_CAP: 50,
-        BET_MIN: 5            // 每把耗时（分钟）
+        BET_MIN: 5,           // 每把耗时（分钟）
+        // v27.13：设施联动（⑤改良——「赌坊赢了钱→酒楼消费」的市井气）。大赢阈值：
+        // 铜桌单把净赢 ≥ TREAT_WIN_COPPER（= 封顶注 50 一把赢，翻倍的钱在手才有请客的底气），
+        // 雅间单把净赢 ≥ TREAT_WIN_STONE（3 灵石=中高档一把赢；雅间注小钱贵，同算大赢）。
+        // 大赢当日牌面冒「请全场喝一轮」勾子：花销/心境/城望三枚旋钮如下，钱真扣走设施回流。
+        TREAT_WIN_COPPER: 50,
+        TREAT_WIN_STONE: 3,
+        TREAT_COST: 20,
+        TREAT_MOOD: 3,
+        TREAT_REP: 1
     };
 
     var DICE_GLYPH = ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
@@ -31,6 +42,8 @@
         day: -1, copperNet: 0, stoneNet: 0,
         streak: 0, bestStreak: 0, plays: 0,
         bannedUntil: -1, vip: false,
+        treatHotDay: -1,  // v27.13 大赢当日（牌面冒「请全场喝一轮」勾子的日子）
+        treatDay: -1,     // v27.13 已请客当日（勾子每成一次，酒楼文案口也认这一天）
         lastRoll: null    // {dice:[..], pick:'big'|'small', triple:bool, win:bool, amt:n, cur:'copper'|'stone'}（现展示用，落档无害）
     };
 
@@ -53,7 +66,7 @@
     function settle(spec) {
         try {
             if (window.RewardService && typeof window.RewardService.apply === 'function') {
-                var r = window.RewardService.apply(spec, { source: '赌坊', city: city() });
+                var r = window.RewardService.apply(spec, { facilitySpend: true, source: '赌坊', city: city() });
                 return { ok: !!(r && r.success !== false), note: r && r.messages ? r.messages.join('、') : '' };
             }
         } catch (e) { console.warn('[静默失败] js/city-facilities/gamble-den.js · settle：这把赌账没落成一笔', e && e.message); }
@@ -134,6 +147,11 @@
         if (_state.streak > _state.bestStreak) _state.bestStreak = _state.streak;
         _state.lastRoll = { dice: dice, pick: pick, triple: triple, win: win, amt: amt, cur: cur };
 
+        // v27.13：设施联动（⑤改良）——大赢判定：铜桌≥封顶注（50）/雅间≥中高档（3）的单把净赢。
+        // 只立当日旗，不自动花钱——请客的勾子摆在牌面上（render 的按钮→treatRound），玩家自己顺手点。
+        var bigWin = win && (cur === 'stone' ? amt >= CFG.TREAT_WIN_STONE : amt >= CFG.TREAT_WIN_COPPER);
+        if (bigWin) _state.treatHotDay = day;
+
         try { if (window.timeSystem && typeof window.timeSystem.advanceTime === 'function') window.timeSystem.advanceTime(CFG.BET_MIN, '赌坊掷骰'); } catch (eT) { console.warn('[静默失败] js/city-facilities/gamble-den.js · bet：掷骰的时辰没扣', eT && eT.message); }
 
         var face = DICE_GLYPH[dice[0] - 1] + DICE_GLYPH[dice[1] - 1] + DICE_GLYPH[dice[2] - 1];
@@ -141,6 +159,10 @@
             (win ? '赢了 ' + amt + ' ' + moneyWord(cur) + '！' : '输了 ' + amt + ' ' + moneyWord(cur) + '。');
         log('🎲 ' + msg + '（今日净' + (cur === 'stone' ? (_state.stoneNet >= 0 ? '赢 ' + _state.stoneNet : '输 ' + (-_state.stoneNet)) + ' 灵石' : (_state.copperNet >= 0 ? '赢 ' + _state.copperNet : '输 ' + (-_state.copperNet)) + ' 铜钱') + '，连赢 ' + _state.streak + '）', win ? 'success' : 'info');
 
+        // v27.13：大赢的市井气——当场一句满堂喝彩，勾子在牌面上（当日可点，见 treatRound）。
+        if (bigWin && _state.treatDay !== day) {
+            msg += '\n🏮 满堂喝彩，邻座的赌客直嚷要沾沾手气——趁兴请全场喝一轮？（酒钱 ' + CFG.TREAT_COST + ' 铜钱，牌面上点）';
+        }
         // 连赢三把：雅间开门（一次性，落档）
         if (win && _state.streak >= CFG.VIP_STREAK && !_state.vip) {
             _state.vip = true;
@@ -160,6 +182,24 @@
         return true;
     }
 
+    // ============ v27.13 请全场喝一轮（设施联动勾子：大赢的市井气） ============
+    // 钱不许凭空生：TREAT_COST 铜真扣——settle 带 facilitySpend 标记走 RewardService 正门，
+    // 六成入本城悬赏基金、四成回世界市面池，与既有设施回流同一口径；心境/城望小额+由 RewardService 发。
+    // 每日一回（treatDay 当日旗）；没大赢过（treatHotDay 不在今日）庄家好言挡回去，勾子不是常驻。
+    function treatRound() {
+        var day = rollDay();
+        if (_state.treatDay === day) { say('🏮 跑堂的摆手：「今日已经扰过一轮了——客官再请，我们就不好意思了。」', 'info'); return false; }
+        if (_state.treatHotDay !== day) { say('🏮 庄家陪你笑：「客官说笑了——今日这手气，该全场请您才对。」', 'info'); return false; }
+        var r = settle({ copper: -CFG.TREAT_COST, mood: CFG.TREAT_MOOD, rep: CFG.TREAT_REP });
+        if (!r.ok) { say('🏮 你摸遍口袋——请客的钱还凑不齐，豪气当场收了三分。', 'warning'); return false; }
+        _state.treatDay = day;
+        log('🏮 你把 ' + CFG.TREAT_COST + ' 铜钱往桌上一拍：「今日我请，全场都满上！」满堂喝彩里，跑堂的把好酒都抱了出来。' + (r.note ? '（' + r.note + '）' : ''), 'success');
+        say('🏮 铜钱拍在桌上——「今日我请！」满堂喝彩，赌坊里一时人声鼎沸。' + (r.note ? '（' + r.note + '）' : ''), 'success');
+        try { if (typeof window.playerPushDeed === 'function') window.playerPushDeed('good', '你在' + (city() || '城里') + '的赌坊手气正旺，当场请全场喝了一轮——市井传为美谈'); } catch (eP) { console.warn('[静默失败] js/city-facilities/gamble-den.js · treatRound：请客的美谈没递进传闻池', eP && eP.message); }
+        render();
+        return true;
+    }
+
     // ============ 牌面（每把重渲，账全摊开） ============
     function render() {
         var day = rollDay();
@@ -175,6 +215,10 @@
         html += '<p class="text-xs text-gray-400 mb-2">今日净账：铜桌 <span class="' + (_state.copperNet >= 0 ? 'text-emerald-300' : 'text-red-300') + '">' + (_state.copperNet >= 0 ? '+' : '') + _state.copperNet + '</span> 铜钱' +
             (_state.vip ? ' · 雅间 <span class="' + (_state.stoneNet >= 0 ? 'text-emerald-300' : 'text-red-300') + '">' + (_state.stoneNet >= 0 ? '+' : '') + _state.stoneNet + '</span> 灵石' : '') +
             ' · 连赢 <span class="text-amber-300">' + _state.streak + '</span>（最高 ' + _state.bestStreak + '）</p>';
+        // v27.13：大赢勾子——大赢当日且今日还没请过，牌面上挂「请全场喝一轮」（真扣钱，见 treatRound）。
+        if (_state.treatHotDay === day && _state.treatDay !== day) {
+            html += '<button onclick="GambleDen.treatRound()" class="w-full bg-amber-700 hover:bg-amber-600 text-white px-3 py-2 rounded text-sm mb-2">🏮 请全场喝一轮（' + CFG.TREAT_COST + ' 铜钱 · 心境+' + CFG.TREAT_MOOD + ' 城望+' + CFG.TREAT_REP + '）</button>';
+        }
         var btn = 'px-3 py-2 rounded text-sm mr-1 mb-1 ';
         html += '<div class="mb-2"><p class="text-xs text-gray-500 mb-1">街桌（铜钱）押：</p>';
         for (var i = 0; i < CFG.COPPER_BETS.length; i++) {
@@ -227,13 +271,16 @@
         _state.plays = Number(s.plays) || 0;
         _state.bannedUntil = Number.isFinite(Number(s.bannedUntil)) ? Number(s.bannedUntil) : -1;
         _state.vip = !!s.vip;
+        // v27.13：设施联动旗（老档缺键自动 -1——大赢勾子/请客当日都是当日旗，跨天自然作废）
+        _state.treatHotDay = Number.isFinite(Number(s.treatHotDay)) ? Number(s.treatHotDay) : -1;
+        _state.treatDay = Number.isFinite(Number(s.treatDay)) ? Number(s.treatDay) : -1;
         _state.lastRoll = (s.lastRoll && Array.isArray(s.lastRoll.dice) && s.lastRoll.dice.length === 3) ? s.lastRoll : null;
     }
     function _reset() {
-        _state = { day: -1, copperNet: 0, stoneNet: 0, streak: 0, bestStreak: 0, plays: 0, bannedUntil: -1, vip: false, lastRoll: null };
+        _state = { day: -1, copperNet: 0, stoneNet: 0, streak: 0, bestStreak: 0, plays: 0, bannedUntil: -1, vip: false, treatHotDay: -1, treatDay: -1, lastRoll: null };
     }
     if (window.StateRegistry && typeof window.StateRegistry.register === 'function') {
-        window.StateRegistry.register('gambleDen', { version: 1, export: _export, import: _import, reset: _reset });
+        window.StateRegistry.register('gambleDen', { version: 2, export: _export, import: _import, reset: _reset });  // v27.13：version 2——增 treatHotDay/treatDay
     }
 
     window.GambleDen = {
@@ -243,6 +290,7 @@
         open: open,
         render: render,
         panelHtml: panelHtml,
+        treatRound: treatRound,   // v27.13 大赢勾子：「请全场喝一轮」（牌面按钮走这里）
         state: _export
     };
     window.openGambleDen = function () { return open(); };
